@@ -476,9 +476,8 @@ where
                     .is_none_or(|locking| locking.round() < certificate.round)
                 {
                     let value = ValidatedBlock::new(block.clone());
-                    let below = certificate.justification.clone();
-                    if let Some(quorum) = certificate.clone().with_value(value) {
-                        let certificate = ValidatedBlockCertificate::from_parts(quorum, below);
+                    if let Some(certificate) = certificate.clone().into_validated_certificate(value)
+                    {
                         self.update_locking(LockingBlock::Regular(certificate), blobs.clone())?;
                     }
                 }

@@ -8,7 +8,6 @@ use allocative::Allocative;
 use linera_base::{
     crypto::{ValidatorPublicKey, ValidatorSignature},
     data_types::{Epoch, Round},
-    ensure,
     identifiers::ChainId,
 };
 use linera_execution::committee::Committee;
@@ -108,57 +107,29 @@ impl ConfirmedBlockCertificate {
 
     /// Verifies the certificate's signatures and justification chain: the quorum of
     /// `ConfirmedBlock` votes, that the justification chain is itself a valid chain of quorums,
-    /// and that — if present — it heads at the confirmation round.
+    /// and that — if present — it heads at the confirmation round. Delegates to
+    /// [`LiteCertificate::check`], the single source of truth for the quorum-to-chain binding.
     ///
     /// An *absent* chain is accepted only when the quorum carries the first-round attestation
     /// (a fast-round confirmation always does, since the fast round is a chain's first round):
     /// the attestation asserts that no lower round exists, so any conflicting confirmation is
     /// attributable without this block's chain — via the other block's chain if it is higher, or
     /// via the attestation itself if it is lower (see `EquivocationProof::FirstRoundViolation`).
-    /// The attestation is also sanity-checked here against the round — it can only be set in a
-    /// round that could be a chain's first one. Whether it is the *actual* first round depends on
-    /// the chain's ownership at that height, which a committee-only check cannot know; that, and
-    /// the obligation of a later-round block to carry its chain, rest on honest block
-    /// construction (see `finalize_block`), full-execution verification, and the per-signature
-    /// justifications retained by the commitment scheme.
+    /// The attestation is also sanity-checked against the round — it can only be set in a round
+    /// that could be a chain's first one. Whether it is the *actual* first round depends on the
+    /// chain's ownership at that height, which a committee-only check cannot know; that, and the
+    /// obligation of a later-round block to carry its chain, rest on honest block construction
+    /// (see `finalize_block`), full-execution verification, and the per-signature justifications
+    /// retained by the commitment scheme.
     pub fn check(&self, committee: &Committee) -> Result<(), ChainError> {
-        self.quorum.check(committee)?;
-        self.justification.verify(self.hash(), committee)?;
-        // The first-round attestation can only be set in a round that could be a chain's first:
-        // the fast round, or the index-0 round of whichever round type the chain starts with —
-        // a single- or multi-leader chain begins at `SingleLeader(0)`/`MultiLeader(0)`, and a
-        // validators-only chain at `Validator(0)`.
-        if self.quorum().first_round() {
-            ensure!(
-                matches!(
-                    self.round(),
-                    Round::Fast
-                        | Round::MultiLeader(0)
-                        | Round::SingleLeader(0)
-                        | Round::Validator(0)
-                ),
-                ChainError::FalseFirstRoundAttestation
-            );
-        }
-        match self.justification().top_unlocking_round() {
-            // An absent chain is allowed only for a first-round confirmation.
-            None => ensure!(
-                self.quorum().first_round(),
-                ChainError::JustificationUnlockingRoundMismatch
-            ),
-            // Otherwise the chain's top link is the validation in the confirmation round.
-            Some(top_round) => ensure!(
-                top_round == self.round(),
-                ChainError::JustificationUnlockingRoundMismatch
-            ),
-        }
+        self.lite_certificate().check(committee)?;
         Ok(())
     }
 
-    /// Returns the [`LiteCertificate`] corresponding to this certificate, carrying the chain.
+    /// Returns the [`LiteCertificate`] corresponding to this certificate, borrowing the chain.
     pub fn lite_certificate(&self) -> LiteCertificate<'_> {
-        let mut lite = self.quorum.lite_certificate();
-        lite.justification = self.justification.clone();
+        let mut lite = self.quorum.lite_certificate_without_justification();
+        lite.justification = Cow::Borrowed(&self.justification);
         lite
     }
 }

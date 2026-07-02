@@ -797,26 +797,19 @@ where
             .ok_or(WorkerError::MissingCertificateValue)?;
         let block = CacheArc::unwrap_or_clone(block);
 
-        let justification = certificate.justification.clone();
         match certificate.value.kind {
-            linera_chain::types::CertificateKind::Confirmed => {
-                let quorum = certificate
-                    .with_value(block)
-                    .ok_or(WorkerError::InvalidLiteCertificate)?;
-                Ok(Either::Left(ConfirmedBlockCertificate::from_parts(
-                    quorum,
-                    justification,
-                )))
-            }
+            linera_chain::types::CertificateKind::Confirmed => Ok(Either::Left(
+                certificate
+                    .into_confirmed_certificate(block)
+                    .ok_or(WorkerError::InvalidLiteCertificate)?,
+            )),
             linera_chain::types::CertificateKind::Validated => {
                 let value = ValidatedBlock::from_hashed(block.into_inner());
-                let quorum = certificate
-                    .with_value(value)
-                    .ok_or(WorkerError::InvalidLiteCertificate)?;
-                Ok(Either::Right(ValidatedBlockCertificate::from_parts(
-                    quorum,
-                    justification,
-                )))
+                Ok(Either::Right(
+                    certificate
+                        .into_validated_certificate(value)
+                        .ok_or(WorkerError::InvalidLiteCertificate)?,
+                ))
             }
             _ => Err(WorkerError::InvalidLiteCertificate),
         }

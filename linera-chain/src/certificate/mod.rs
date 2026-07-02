@@ -90,7 +90,7 @@ impl<T: CertificateValue> Certified for GenericCertificate<T> {
     }
 
     fn lite_certificate(&self) -> LiteCertificate<'_> {
-        GenericCertificate::lite_certificate(self)
+        GenericCertificate::lite_certificate_without_justification(self)
     }
 
     fn check(&self, committee: &Committee) -> Result<(), ChainError> {

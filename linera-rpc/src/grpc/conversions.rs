@@ -402,7 +402,8 @@ impl TryFrom<api::LiteCertificate> for HandleLiteCertRequest<'_> {
             certificate.first_round,
             signatures,
         );
-        lite.justification = deserialize_justification(&certificate.justification)?;
+        lite.justification =
+            std::borrow::Cow::Owned(deserialize_justification(&certificate.justification)?);
         Ok(Self {
             certificate: lite,
             wait_for_outgoing_messages: certificate.wait_for_outgoing_messages,

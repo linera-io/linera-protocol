@@ -615,11 +615,8 @@ impl ValidatorNode for GrpcClient {
                             let block = bcs::from_bytes::<ConfirmedBlock>(&confirmed_block)
                                 .map_err(|_| NodeError::UnexpectedCertificateValue)?;
 
-                            let validated = cert.justification.clone();
-                            let quorum = cert
-                                .with_value(block)
-                                .ok_or(NodeError::UnexpectedCertificateValue)?;
-                            Ok(ConfirmedBlockCertificate::from_parts(quorum, validated))
+                            cert.into_confirmed_certificate(block)
+                                .ok_or(NodeError::UnexpectedCertificateValue)
                         },
                     )
                     .collect::<Result<_, _>>()?;

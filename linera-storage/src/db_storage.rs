@@ -1684,11 +1684,9 @@ where
         let block = bcs::from_bytes::<ConfirmedBlock>(confirmed_block_bytes)?;
         let hash = block.hash();
         self.caches.confirmed_block.insert(&hash, block.clone());
-        let validated = lite.justification.clone();
-        let quorum = lite
-            .with_value(block)
+        let certificate = lite
+            .into_confirmed_certificate(block)
             .ok_or(ViewError::InconsistentEntries)?;
-        let certificate = ConfirmedBlockCertificate::from_parts(quorum, validated);
         let arc = self.caches.certificate.insert(&hash, certificate);
         Ok(Some(arc))
     }

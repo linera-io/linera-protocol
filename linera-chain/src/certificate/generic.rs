@@ -185,8 +185,18 @@ impl<T: CertificateValue> GenericCertificate<T> {
         Ok(())
     }
 
-    /// Returns the `LiteCertificate` corresponding to this certificate, without the value.
-    pub fn lite_certificate(&self) -> crate::certificate::LiteCertificate<'_>
+    /// Returns the `LiteCertificate` corresponding to this certificate, without the value and
+    /// with an *empty* justification chain.
+    ///
+    /// Named explicitly because a block certificate's real chain lives on its wrapper
+    /// ([`ConfirmedBlockCertificate`]/[`ValidatedBlockCertificate`]), not on the inner quorum:
+    /// calling this on the quorum would silently produce a chainless lite certificate that fails
+    /// verification at the receiver. The wrappers use it and then attach their chain; `Timeout`
+    /// certificates carry no chain, so for them it is complete on its own.
+    ///
+    /// [`ConfirmedBlockCertificate`]: crate::certificate::ConfirmedBlockCertificate
+    /// [`ValidatedBlockCertificate`]: crate::certificate::ValidatedBlockCertificate
+    pub fn lite_certificate_without_justification(&self) -> crate::certificate::LiteCertificate<'_>
     where
         T: CertificateValue,
     {
@@ -195,7 +205,9 @@ impl<T: CertificateValue> GenericCertificate<T> {
             round: self.round,
             unlocking_round: self.unlocking_round,
             first_round: self.first_round,
-            justification: crate::justification::JustificationChain::default(),
+            justification: std::borrow::Cow::Owned(
+                crate::justification::JustificationChain::default(),
+            ),
             signatures: std::borrow::Cow::Borrowed(&self.signatures),
         }
     }

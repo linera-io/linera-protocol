@@ -13,8 +13,11 @@ use linera_base::{
 use linera_execution::committee::Committee;
 use serde::{Deserialize, Serialize};
 
-use super::{CertificateValue, GenericCertificate};
+use super::{
+    CertificateValue, ConfirmedBlockCertificate, GenericCertificate, ValidatedBlockCertificate,
+};
 use crate::{
+    block::{ConfirmedBlock, ValidatedBlock},
     data_types::{check_signatures, LiteValue, LiteVote},
     justification::JustificationChain,
     types::CertificateKind,
@@ -43,8 +46,9 @@ pub struct LiteCertificate<'a> {
     /// The justification chain attached to this certificate: for a `ValidatedBlock` certificate
     /// it is the chain of validated quorums in rounds below `round`; for a `ConfirmedBlock`
     /// certificate it is the full chain of validated quorums up to and including the confirm
-    /// round. Empty for `Timeout` certificates and for blocks needing no justification.
-    pub justification: JustificationChain,
+    /// round. Empty for `Timeout` certificates and for blocks needing no justification. Borrowed,
+    /// like `signatures`, so building a lite certificate from a full one never clones the chain.
+    pub justification: Cow<'a, JustificationChain>,
     /// Signatures on the value.
     pub signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
 }
@@ -55,7 +59,7 @@ impl Allocative for LiteCertificate<'_> {
         visitor.visit_field(Key::new("LiteCertificate_round"), &self.round);
         visitor.visit_field(
             Key::new("LiteCertificate_justification"),
-            &self.justification,
+            self.justification.as_ref(),
         );
         if matches!(self.signatures, Cow::Owned(_)) {
             for (public_key, signature) in self.signatures.deref() {
@@ -67,37 +71,9 @@ impl Allocative for LiteCertificate<'_> {
 }
 
 impl LiteCertificate<'_> {
-    /// Creates a new lite certificate from a value, round and list of signatures.
-    pub fn new(
-        value: LiteValue,
-        round: Round,
-        signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
-    ) -> Self {
-        Self::new_with_unlocking_round(value, round, None, signatures)
-    }
-
-    /// Creates a new lite certificate that also records the unlocking round its `ValidatedBlock`
-    /// voters signed (see [`VoteValue`]).
-    ///
-    /// [`VoteValue`]: crate::data_types::VoteValue
-    pub fn new_with_unlocking_round(
-        value: LiteValue,
-        round: Round,
-        unlocking_round: Option<Round>,
-        signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
-    ) -> Self {
-        Self::new_with_unlocking_round_and_first_round(
-            value,
-            round,
-            unlocking_round,
-            false,
-            signatures,
-        )
-    }
-
-    /// Creates a new lite certificate that also records the unlocking round its `ValidatedBlock`
+    /// Creates a new lite certificate that records the unlocking round its `ValidatedBlock`
     /// voters signed and the first-round attestation its `ConfirmedBlock` voters signed (see
-    /// [`VoteValue`]).
+    /// [`VoteValue`]), with an empty justification chain.
     ///
     /// [`VoteValue`]: crate::data_types::VoteValue
     pub fn new_with_unlocking_round_and_first_round(
@@ -109,14 +85,13 @@ impl LiteCertificate<'_> {
     ) -> Self {
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
 
-        let signatures = Cow::Owned(signatures);
         Self {
             value,
             round,
             unlocking_round,
             first_round,
-            justification: JustificationChain::default(),
-            signatures,
+            justification: Cow::Owned(JustificationChain::default()),
+            signatures: Cow::Owned(signatures),
         }
     }
 
@@ -242,33 +217,62 @@ impl LiteCertificate<'_> {
             && self.value.value_hash == value.hash()
     }
 
-    /// Returns the [`GenericCertificate`] with the specified value, if it matches.
+    /// Returns the [`GenericCertificate`] with the specified value, if it matches. The
+    /// justification chain is dropped; use [`into_confirmed_certificate`](Self::into_confirmed_certificate)
+    /// or [`into_validated_certificate`](Self::into_validated_certificate) to keep it.
     pub fn with_value<T: CertificateValue>(self, value: T) -> Option<GenericCertificate<T>> {
-        if self.value.chain_id != value.chain_id()
-            || T::KIND != self.value.kind
-            || self.value.value_hash != value.hash()
-        {
-            return None;
-        }
-        Some(
-            GenericCertificate::new_with_unlocking_round_and_first_round(
-                value,
-                self.round,
-                self.unlocking_round,
-                self.first_round,
-                self.signatures.into_owned(),
-            ),
-        )
+        Some(self.into_quorum_and_chain(value)?.0)
     }
 
-    /// Returns a [`LiteCertificate`] that owns the list of signatures.
+    /// Consumes this lite certificate into the full [`ConfirmedBlockCertificate`] for `value`,
+    /// carrying the justification chain across (never cloning it). Returns `None` if the value
+    /// does not match.
+    pub fn into_confirmed_certificate(
+        self,
+        value: ConfirmedBlock,
+    ) -> Option<ConfirmedBlockCertificate> {
+        let (quorum, justification) = self.into_quorum_and_chain(value)?;
+        Some(ConfirmedBlockCertificate::from_parts(quorum, justification))
+    }
+
+    /// Consumes this lite certificate into the full [`ValidatedBlockCertificate`] for `value`,
+    /// carrying the justification chain across (never cloning it). Returns `None` if the value
+    /// does not match.
+    pub fn into_validated_certificate(
+        self,
+        value: ValidatedBlock,
+    ) -> Option<ValidatedBlockCertificate> {
+        let (quorum, justification) = self.into_quorum_and_chain(value)?;
+        Some(ValidatedBlockCertificate::from_parts(quorum, justification))
+    }
+
+    /// Splits this lite certificate into the signed quorum for `value` and its justification
+    /// chain, moving both out. Returns `None` if the value does not match.
+    fn into_quorum_and_chain<T: CertificateValue>(
+        self,
+        value: T,
+    ) -> Option<(GenericCertificate<T>, JustificationChain)> {
+        if !self.check_value(&value) {
+            return None;
+        }
+        let quorum = GenericCertificate::new_with_unlocking_round_and_first_round(
+            value,
+            self.round,
+            self.unlocking_round,
+            self.first_round,
+            self.signatures.into_owned(),
+        );
+        Some((quorum, self.justification.into_owned()))
+    }
+
+    /// Returns a [`LiteCertificate`] that owns its signatures and justification chain.
     pub fn cloned(&self) -> LiteCertificate<'static> {
         LiteCertificate {
             value: self.value.clone(),
             round: self.round,
             unlocking_round: self.unlocking_round,
             first_round: self.first_round,
-            justification: self.justification.clone(),
+            justification: Cow::Owned(self.justification.as_ref().clone()),
             signatures: Cow::Owned(self.signatures.clone().into_owned()),
         }
     }

@@ -8,7 +8,6 @@ use allocative::Allocative;
 use linera_base::{
     crypto::{ValidatorPublicKey, ValidatorSignature},
     data_types::Round,
-    ensure,
 };
 use linera_execution::committee::Committee;
 use serde::{
@@ -114,29 +113,19 @@ impl ValidatedBlockCertificate {
             .append(self.quorum.round(), self.quorum.signatures().clone())
     }
 
-    /// Verifies the certificate: the quorum's signatures against its unlocking round, the
-    /// justification chain, that the unlocking round matches the top of the chain, and that the
-    /// chain lies in rounds strictly below this certificate's.
+    /// Verifies the certificate: its signatures, its justification chain, that the unlocking round
+    /// matches the top of the chain, and that the chain lies in rounds strictly below this
+    /// certificate's. Delegates to [`LiteCertificate::check`], the single source of truth for the
+    /// quorum-to-chain binding.
     pub fn check(&self, committee: &Committee) -> Result<(), ChainError> {
-        self.quorum.check(committee)?;
-        self.below.verify(self.hash(), committee)?;
-        ensure!(
-            self.quorum.unlocking_round() == self.below.top_unlocking_round(),
-            ChainError::JustificationUnlockingRoundMismatch
-        );
-        ensure!(
-            self.below
-                .top_unlocking_round()
-                .is_none_or(|top| top < self.quorum.round()),
-            ChainError::JustificationChainNotBelowCertificate
-        );
+        self.lite_certificate().check(committee)?;
         Ok(())
     }
 
-    /// Returns the [`LiteCertificate`] corresponding to this certificate, carrying the chain.
+    /// Returns the [`LiteCertificate`] corresponding to this certificate, borrowing the chain.
     pub fn lite_certificate(&self) -> LiteCertificate<'_> {
-        let mut lite = self.quorum.lite_certificate();
-        lite.justification = self.below.clone();
+        let mut lite = self.quorum.lite_certificate_without_justification();
+        lite.justification = Cow::Borrowed(&self.below);
         lite
     }
 }

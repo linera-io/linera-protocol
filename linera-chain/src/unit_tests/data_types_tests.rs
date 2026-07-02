@@ -192,7 +192,7 @@ fn lite_certificate_check_binds_justification_chain() {
     // lite check must reject it, or a proposer could wedge the height with a chainless certificate
     // that every honest validator then stores and later fails to re-verify.
     let mut stripped = certificate.lite_certificate();
-    stripped.justification = JustificationChain::default();
+    stripped.justification = Default::default();
     assert!(matches!(
         stripped.check(&committee),
         Err(ChainError::JustificationUnlockingRoundMismatch)
