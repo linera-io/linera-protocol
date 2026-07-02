@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AddressKind","Protocol"],"fn":["data","decode_user_event_value","decode_user_message","decode_user_operation","decode_user_response","fetch_user_app_formats_js","route","save_config","short_app_id","short_crypto_hash","start"],"struct":["Config","Data","GQuery"]};

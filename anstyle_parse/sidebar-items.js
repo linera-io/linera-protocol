@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["state"],"struct":["AsciiParser","Params","ParamsIter","Parser","Utf8Parser"],"trait":["CharAccumulator","Perform"],"type":["DefaultCharAccumulator"]};

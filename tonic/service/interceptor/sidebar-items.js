@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["InterceptedService","InterceptorLayer","ResponseBody","ResponseFuture"],"trait":["Interceptor"]};

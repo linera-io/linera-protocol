@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_TX_GAS_LIMIT_OSAKA"]};

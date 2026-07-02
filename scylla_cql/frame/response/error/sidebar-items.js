@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DbError","OperationType","WriteType"],"struct":["Error"]};

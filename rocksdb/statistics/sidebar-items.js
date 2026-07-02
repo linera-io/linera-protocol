@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Histogram","StatsLevel","Ticker"],"struct":["HistogramData","NameParseError"]};

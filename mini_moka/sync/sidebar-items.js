@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Cache","CacheBuilder","EntryRef","Iter"],"trait":["ConcurrentCacheExt"]};

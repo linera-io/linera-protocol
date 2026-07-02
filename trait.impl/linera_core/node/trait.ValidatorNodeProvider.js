@@ -1,0 +1,9 @@
+(function() {
+    const implementors = Object.fromEntries([["linera_core",[]],["linera_rpc",[["impl <a class=\"trait\" href=\"linera_core/node/trait.ValidatorNodeProvider.html\" title=\"trait linera_core::node::ValidatorNodeProvider\">ValidatorNodeProvider</a> for <a class=\"struct\" href=\"linera_rpc/grpc/struct.GrpcNodeProvider.html\" title=\"struct linera_rpc::grpc::GrpcNodeProvider\">GrpcNodeProvider</a>",0],["impl <a class=\"trait\" href=\"linera_core/node/trait.ValidatorNodeProvider.html\" title=\"trait linera_core::node::ValidatorNodeProvider\">ValidatorNodeProvider</a> for <a class=\"struct\" href=\"linera_rpc/node_provider/struct.NodeProvider.html\" title=\"struct linera_rpc::node_provider::NodeProvider\">NodeProvider</a>",0],["impl <a class=\"trait\" href=\"linera_core/node/trait.ValidatorNodeProvider.html\" title=\"trait linera_core::node::ValidatorNodeProvider\">ValidatorNodeProvider</a> for <a class=\"struct\" href=\"linera_rpc/simple/struct.SimpleNodeProvider.html\" title=\"struct linera_rpc::simple::SimpleNodeProvider\">SimpleNodeProvider</a>",0]]],["linera_schema_export",[["impl <a class=\"trait\" href=\"linera_core/node/trait.ValidatorNodeProvider.html\" title=\"trait linera_core::node::ValidatorNodeProvider\">ValidatorNodeProvider</a> for <a class=\"struct\" href=\"linera_schema_export/struct.DummyValidatorNodeProvider.html\" title=\"struct linera_schema_export::DummyValidatorNodeProvider\">DummyValidatorNodeProvider</a>",0]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":59,"fragment_lengths":[18,1002,389]}
