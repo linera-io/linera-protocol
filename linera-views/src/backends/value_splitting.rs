@@ -361,11 +361,11 @@ where
 }
 
 #[cfg(with_testing)]
-impl<D: crate::backends::DatabaseBackup> crate::backends::DatabaseBackup
+impl<D: crate::backends::DatabaseBackup + Sync> crate::backends::DatabaseBackup
     for ValueSplittingDatabase<D>
 {
-    fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()> {
-        self.database.backup_to(dir)
+    async fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()> {
+        self.database.backup_to(dir).await
     }
 }
 

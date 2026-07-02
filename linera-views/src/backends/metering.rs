@@ -585,8 +585,10 @@ where
 }
 
 #[cfg(with_testing)]
-impl<D: crate::backends::DatabaseBackup> crate::backends::DatabaseBackup for MeteredDatabase<D> {
-    fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()> {
-        self.database.backup_to(dir)
+impl<D: crate::backends::DatabaseBackup + Sync> crate::backends::DatabaseBackup
+    for MeteredDatabase<D>
+{
+    async fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()> {
+        self.database.backup_to(dir).await
     }
 }

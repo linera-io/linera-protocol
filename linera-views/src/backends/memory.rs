@@ -356,6 +356,32 @@ impl TestKeyValueDatabase for MemoryDatabase {
     }
 }
 
+#[cfg(with_testing)]
+impl crate::backends::DatabaseBackup for MemoryDatabase {
+    async fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()> {
+        use std::collections::BTreeMap;
+        let databases = MEMORY_DATABASES
+            .lock()
+            .expect("MEMORY_DATABASES lock should not be poisoned");
+        let namespace_map = databases
+            .databases
+            .get(&self.namespace)
+            .ok_or_else(|| anyhow::anyhow!("namespace not found: {}", self.namespace))?;
+        let snapshot: BTreeMap<Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>> = namespace_map
+            .iter()
+            .map(|(root_key, store_map)| {
+                let store_map = store_map
+                    .read()
+                    .expect("MemoryStore lock should not be poisoned");
+                (root_key.clone(), store_map.clone())
+            })
+            .collect();
+        let encoded = bcs::to_bytes(&snapshot)?;
+        std::fs::write(dir.join("memory_backup.bcs"), encoded)?;
+        Ok(())
+    }
+}
+
 /// The error type for [`MemoryStore`].
 #[derive(Error, Debug)]
 pub enum MemoryStoreError {
