@@ -33,8 +33,8 @@ use linera_chain::{
         Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
         ValidatedBlockCertificate,
     },
-    BlockExecutionPhase, ChainError, ChainExecutionContext, ChainIdSet, ChainStateView,
-    ChainTipState, ExecutionResultExt as _, StreamCounts,
+    BlockExecution, ChainError, ChainExecutionContext, ChainIdSet, ChainStateView, ChainTipState,
+    ExecutionResultExt as _, StreamCounts,
 };
 use linera_execution::{
     system::{EpochEventData, EventSubscriptions, EPOCH_STREAM_NAME},
@@ -1306,16 +1306,15 @@ where
             certificate.into_value()
         } else {
             let (proposed_block, outcome) = certificate.into_value().into_block().into_proposal();
-            let oracle_responses = Some(outcome.oracle_responses.clone());
             let (proposed_block, verified, _resource_tracker, _) = chain
                 .execute_block(
                     proposed_block,
                     local_time,
                     None,
                     &published_blobs,
-                    oracle_responses,
-                    BundleExecutionPolicy::committed(),
-                    BlockExecutionPhase::HandleConfirmed,
+                    BlockExecution::HandleConfirmed {
+                        oracle_responses: outcome.oracle_responses.clone(),
+                    },
                 )
                 .await?;
             // We should always agree on the messages and state hash.
@@ -2323,8 +2322,7 @@ where
                 local_time,
                 round,
                 published_blobs,
-                policy,
-                BlockExecutionPhase::StageProposal,
+                BlockExecution::StageProposal { policy },
             ))
             .await?;
 
@@ -2531,8 +2529,7 @@ where
                 local_time,
                 round.multi_leader(),
                 &published_blobs,
-                BundleExecutionPolicy::committed(),
-                BlockExecutionPhase::HandleProposal,
+                BlockExecution::HandleProposal,
             ))
             .await?;
             executed_block
@@ -2696,20 +2693,13 @@ where
         local_time: Timestamp,
         round: Option<u32>,
         published_blobs: &[Blob],
-        policy: BundleExecutionPolicy,
-        phase: BlockExecutionPhase,
+        execution: BlockExecution,
     ) -> Result<(Block, ResourceTracker, HashSet<ChainId>), WorkerError> {
-        let (proposed_block, outcome, resource_tracker, never_reject_origins) =
-            Box::pin(self.chain.execute_block(
-                block,
-                local_time,
-                round,
-                published_blobs,
-                None,
-                policy,
-                phase,
-            ))
-            .await?;
+        let (proposed_block, outcome, resource_tracker, never_reject_origins) = Box::pin(
+            self.chain
+                .execute_block(block, local_time, round, published_blobs, execution),
+        )
+        .await?;
         let executed_block = Block::new(proposed_block, outcome);
         let block_hash = executed_block.hash();
         if let Some(cache) = &self.execution_state_cache {
