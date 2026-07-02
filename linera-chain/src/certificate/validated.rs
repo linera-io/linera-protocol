@@ -2,17 +2,180 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{borrow::Cow, ops::Deref};
+
+use allocative::Allocative;
 use linera_base::{
     crypto::{ValidatorPublicKey, ValidatorSignature},
     data_types::Round,
+    ensure,
 };
+use linera_execution::committee::Committee;
 use serde::{
-    ser::{Serialize, SerializeStruct, Serializer},
+    ser::{Serialize, Serializer},
     Deserialize, Deserializer,
 };
 
-use super::{generic::GenericCertificate, Certificate};
-use crate::block::{Block, ConversionError, ValidatedBlock};
+use super::{generic::GenericCertificate, Certificate, Certified, LiteCertificate};
+use crate::{
+    block::{Block, ConversionError, ValidatedBlock},
+    justification::JustificationChain,
+    ChainError,
+};
+
+/// The serialized representation of a [`ValidatedBlockCertificate`]. Deriving the
+/// (de)serialization on this single type keeps both directions in sync and free of manual field
+/// bookkeeping; the manual impls only add the strictly-ordered-signatures invariant.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename = "ValidatedBlockCertificate")]
+struct Repr<'a> {
+    value: Cow<'a, ValidatedBlock>,
+    round: Round,
+    unlocking_round: Option<Round>,
+    signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
+    below: Cow<'a, JustificationChain>,
+}
+
+/// Certificate for a [`ValidatedBlock`] instance, certified in some round whose `ValidatedBlock`
+/// voters signed an unlocking round.
+///
+/// A validated block certificate means the block is valid (but not necessarily finalized yet).
+/// Since only one block per round is validated, there can be at most one such certificate in
+/// every round. It wraps the signed quorum and carries the justification chain that grounds the
+/// unlocking round the voters signed.
+#[derive(Clone, Debug, Allocative)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+pub struct ValidatedBlockCertificate {
+    /// The signed quorum of `ValidatedBlock` votes. Its unlocking round equals
+    /// `below.top_unlocking_round()`.
+    quorum: GenericCertificate<ValidatedBlock>,
+    /// The chain of validated quorums for the same block in rounds below this certificate's,
+    /// rising from the grounding round to its top link in the unlocking round. Empty iff
+    /// the unlocking round is `None`.
+    below: JustificationChain,
+}
+
+impl ValidatedBlockCertificate {
+    /// Creates a validated block certificate with an empty justification chain (unlocking round `None`).
+    pub fn new(
+        value: ValidatedBlock,
+        round: Round,
+        signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
+    ) -> Self {
+        Self {
+            quorum: GenericCertificate::new(value, round, signatures),
+            below: JustificationChain::default(),
+        }
+    }
+
+    /// Creates a validated block certificate from a signed quorum and its justification chain.
+    pub fn from_parts(
+        quorum: GenericCertificate<ValidatedBlock>,
+        below: JustificationChain,
+    ) -> Self {
+        Self { quorum, below }
+    }
+
+    /// Returns the signed quorum of `ValidatedBlock` votes.
+    pub fn quorum(&self) -> &GenericCertificate<ValidatedBlock> {
+        &self.quorum
+    }
+
+    /// Returns the chain of validated quorums in rounds below this certificate's.
+    pub fn below(&self) -> &JustificationChain {
+        &self.below
+    }
+
+    /// Consumes this certificate, returning the signed quorum and the justification chain.
+    pub fn into_parts(self) -> (GenericCertificate<ValidatedBlock>, JustificationChain) {
+        (self.quorum, self.below)
+    }
+
+    /// Returns the round in which the value was certified.
+    pub fn round(&self) -> Round {
+        self.quorum.round()
+    }
+
+    /// Consumes this certificate, returning the validated block it contains.
+    pub fn into_value(self) -> ValidatedBlock {
+        self.quorum.into_value()
+    }
+
+    /// Consumes this certificate, returning the validated block it contains.
+    pub fn into_inner(self) -> ValidatedBlock {
+        self.quorum.into_inner()
+    }
+
+    /// Returns the full justification chain that a certificate certified in a higher round on
+    /// top of this one would carry: the chain below it, with this certificate's own quorum
+    /// appended as the new top link.
+    pub fn full_justification(&self) -> JustificationChain {
+        self.below
+            .append(self.quorum.round(), self.quorum.signatures().clone())
+    }
+
+    /// Verifies the certificate: the quorum's signatures against its unlocking round, the
+    /// justification chain, that the unlocking round matches the top of the chain, and that the
+    /// chain lies in rounds strictly below this certificate's.
+    pub fn check(&self, committee: &Committee) -> Result<(), ChainError> {
+        self.quorum.check(committee)?;
+        self.below.verify(self.hash(), committee)?;
+        ensure!(
+            self.quorum.unlocking_round() == self.below.top_unlocking_round(),
+            ChainError::JustificationUnlockingRoundMismatch
+        );
+        ensure!(
+            self.below
+                .top_unlocking_round()
+                .is_none_or(|top| top < self.quorum.round()),
+            ChainError::JustificationChainNotBelowCertificate
+        );
+        Ok(())
+    }
+
+    /// Returns the [`LiteCertificate`] corresponding to this certificate, carrying the chain.
+    pub fn lite_certificate(&self) -> LiteCertificate<'_> {
+        let mut lite = self.quorum.lite_certificate();
+        lite.justification = self.below.clone();
+        lite
+    }
+}
+
+impl Deref for ValidatedBlockCertificate {
+    type Target = GenericCertificate<ValidatedBlock>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.quorum
+    }
+}
+
+impl Certified for ValidatedBlockCertificate {
+    type Value = ValidatedBlock;
+
+    fn value(&self) -> &ValidatedBlock {
+        self.quorum.value()
+    }
+
+    fn round(&self) -> Round {
+        ValidatedBlockCertificate::round(self)
+    }
+
+    fn unlocking_round(&self) -> Option<Round> {
+        self.quorum.unlocking_round()
+    }
+
+    fn signatures(&self) -> &Vec<(ValidatorPublicKey, ValidatorSignature)> {
+        self.quorum.signatures()
+    }
+
+    fn lite_certificate(&self) -> LiteCertificate<'_> {
+        ValidatedBlockCertificate::lite_certificate(self)
+    }
+
+    fn check(&self, committee: &Committee) -> Result<(), ChainError> {
+        ValidatedBlockCertificate::check(self, committee)
+    }
+}
 
 impl GenericCertificate<ValidatedBlock> {
     /// Returns the total number of outgoing messages in the certified block.
@@ -27,7 +190,7 @@ impl GenericCertificate<ValidatedBlock> {
     }
 }
 
-impl TryFrom<Certificate> for GenericCertificate<ValidatedBlock> {
+impl TryFrom<Certificate> for ValidatedBlockCertificate {
     type Error = ConversionError;
 
     fn try_from(cert: Certificate) -> Result<Self, Self::Error> {
@@ -38,41 +201,46 @@ impl TryFrom<Certificate> for GenericCertificate<ValidatedBlock> {
     }
 }
 
-impl From<GenericCertificate<ValidatedBlock>> for Certificate {
-    fn from(cert: GenericCertificate<ValidatedBlock>) -> Certificate {
+impl From<ValidatedBlockCertificate> for Certificate {
+    fn from(cert: ValidatedBlockCertificate) -> Certificate {
         Certificate::Validated(cert)
     }
 }
 
-impl Serialize for GenericCertificate<ValidatedBlock> {
+impl Serialize for ValidatedBlockCertificate {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut state = serializer.serialize_struct("ValidatedBlockCertificate", 3)?;
-        state.serialize_field("value", self.inner())?;
-        state.serialize_field("round", &self.round)?;
-        state.serialize_field("signatures", self.signatures())?;
-        state.end()
+        Repr {
+            value: Cow::Borrowed(self.quorum.inner()),
+            round: self.quorum.round(),
+            unlocking_round: self.quorum.unlocking_round(),
+            signatures: Cow::Borrowed(self.quorum.signatures().as_slice()),
+            below: Cow::Borrowed(&self.below),
+        }
+        .serialize(serializer)
     }
 }
 
-impl<'de> Deserialize<'de> for GenericCertificate<ValidatedBlock> {
+impl<'de> Deserialize<'de> for ValidatedBlockCertificate {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        #[derive(Deserialize)]
-        #[serde(rename = "ValidatedBlockCertificate")]
-        struct Inner {
-            value: ValidatedBlock,
-            round: Round,
-            signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
-        }
-        let inner = Inner::deserialize(deserializer)?;
-        if !crate::data_types::is_strictly_ordered(&inner.signatures) {
+        let inner = Repr::deserialize(deserializer)?;
+        let signatures = inner.signatures.into_owned();
+        if !crate::data_types::is_strictly_ordered(&signatures) {
             Err(serde::de::Error::custom(
                 "Signatures are not strictly ordered",
             ))
         } else {
-            Ok(Self::new(inner.value, inner.round, inner.signatures))
+            Ok(Self::from_parts(
+                GenericCertificate::new_with_unlocking_round(
+                    inner.value.into_owned(),
+                    inner.round,
+                    inner.unlocking_round,
+                    signatures,
+                ),
+                inner.below.into_owned(),
+            ))
         }
     }
 }

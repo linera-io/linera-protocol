@@ -27,8 +27,8 @@ use linera_base::{
 use linera_chain::{
     data_types::BlockProposal,
     types::{
-        CertificateKind, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
-        LiteCertificate, Timeout, ValidatedBlock,
+        CertificateKind, Certified, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
+        LiteCertificate, Timeout, ValidatedBlock, ValidatedBlockCertificate,
     },
 };
 use linera_execution::{committee::Committee, ResourceControlPolicy, WasmRuntime};
@@ -142,28 +142,31 @@ where
         certificate: GenericCertificate<Timeout>,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(certificate, sender)
+            validator.do_handle_certificate::<Timeout>(certificate, sender)
         })
         .await
     }
 
     async fn handle_validated_certificate(
         &self,
-        certificate: GenericCertificate<ValidatedBlock>,
+        certificate: ValidatedBlockCertificate,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(certificate, sender)
+            validator.do_handle_certificate::<ValidatedBlock>(certificate, sender)
         })
         .await
     }
 
     async fn handle_confirmed_certificate(
         &self,
-        certificate: CacheArc<GenericCertificate<ConfirmedBlock>>,
+        certificate: CacheArc<ConfirmedBlockCertificate>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(CacheArc::unwrap_or_clone(certificate), sender)
+            validator.do_handle_certificate::<ConfirmedBlock>(
+                CacheArc::unwrap_or_clone(certificate),
+                sender,
+            )
         })
         .await
     }
@@ -430,11 +433,11 @@ where
         let result = async move {
             match validator.state.full_certificate(certificate).await? {
                 Either::Left(confirmed) => {
-                    self.do_handle_certificate_internal(confirmed, &validator)
+                    self.do_handle_certificate_internal::<ConfirmedBlock>(confirmed, &validator)
                         .await
                 }
                 Either::Right(validated) => {
-                    self.do_handle_certificate_internal(validated, &validator)
+                    self.do_handle_certificate_internal::<ValidatedBlock>(validated, &validator)
                         .await
                 }
             }
@@ -445,7 +448,7 @@ where
 
     async fn do_handle_certificate_internal<T: ProcessableCertificate>(
         &self,
-        certificate: GenericCertificate<T>,
+        certificate: T::Certificate,
         validator: &MutexGuard<'_, LocalValidator<S>>,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self.fault_type {
@@ -482,12 +485,12 @@ where
 
     async fn do_handle_certificate<T: ProcessableCertificate>(
         self,
-        certificate: GenericCertificate<T>,
+        certificate: T::Certificate,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let validator = self.client.lock().await;
         let result = self
-            .do_handle_certificate_internal(certificate, &validator)
+            .do_handle_certificate_internal::<T>(certificate, &validator)
             .await;
         sender.send(result)
     }

@@ -567,9 +567,27 @@ impl LiteValue {
 }
 
 //(deuszx): pub is temp.
-/// The value a validator signs when voting: the value hash, round and certificate kind.
+/// The value a validator signs when voting: the value hash, round, certificate kind, the
+/// unlocking round (for `ValidatedBlock` votes), and the first-round attestation (for
+/// `ConfirmedBlock` votes).
+///
+/// The unlocking round is the consensus device behind fault attributability: by signing it, a
+/// validator asserts "I have not voted to confirm a block other than this one in any round at or
+/// above the unlocking round". `None` means an unlocking round of `0`, i.e. the strongest claim
+/// ("...in any round"), and is used for freshly proposed blocks and for `ConfirmedBlock`/`Timeout`
+/// votes, which carry no unlocking round.
+///
+/// The final `bool` is the first-round attestation: it is `true` only when a `ConfirmedBlock`
+/// vote confirms a block in the chain's first round, and is always `false` for `ValidatedBlock`
+/// and `Timeout` votes.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct VoteValue(CryptoHash, Round, CertificateKind);
+pub struct VoteValue(
+    pub(crate) CryptoHash,
+    pub(crate) Round,
+    pub(crate) CertificateKind,
+    pub(crate) Option<Round>,
+    pub(crate) bool,
+);
 
 /// A vote on a statement from a validator.
 #[derive(Allocative, Clone, Debug, Serialize, Deserialize)]
@@ -579,7 +597,15 @@ pub struct Vote<T> {
     pub value: T,
     /// The consensus round in which the vote was cast.
     pub round: Round,
-    /// The validator's signature over the value hash, round and certificate kind.
+    /// The unlocking round this vote signed (see [`VoteValue`]). Only `ValidatedBlock` votes carry
+    /// an unlocking round; it is `None` for fresh proposals and for `ConfirmedBlock`/`Timeout` votes.
+    pub unlocking_round: Option<Round>,
+    /// The first-round attestation this vote signed (see [`VoteValue`]). It is `true` only for a
+    /// `ConfirmedBlock` vote that confirms a block in the chain's first round; it is always
+    /// `false` for `ValidatedBlock` and `Timeout` votes.
+    pub first_round: bool,
+    /// The validator's signature over the value hash, round, certificate kind, unlocking round and
+    /// first-round attestation.
     pub signature: ValidatorSignature,
 }
 
@@ -589,11 +615,48 @@ impl<T> Vote<T> {
     where
         T: CertificateValue,
     {
-        let hash_and_round = VoteValue(value.hash(), round, T::KIND);
+        Self::new_with_unlocking_round(value, round, None, key_pair)
+    }
+
+    /// Use signing key to create a signed object with the given unlocking round (see [`VoteValue`]).
+    pub fn new_with_unlocking_round(
+        value: T,
+        round: Round,
+        unlocking_round: Option<Round>,
+        key_pair: &ValidatorSecretKey,
+    ) -> Self
+    where
+        T: CertificateValue,
+    {
+        let hash_and_round = VoteValue(value.hash(), round, T::KIND, unlocking_round, false);
         let signature = ValidatorSignature::new(&hash_and_round, key_pair);
         Self {
             value,
             round,
+            unlocking_round,
+            first_round: false,
+            signature,
+        }
+    }
+
+    /// Use signing key to create a signed `ConfirmedBlock` object that carries the first-round
+    /// attestation `first_round` (see [`VoteValue`]). The unlocking round is always `None`.
+    pub fn new_with_first_round(
+        value: T,
+        round: Round,
+        first_round: bool,
+        key_pair: &ValidatorSecretKey,
+    ) -> Self
+    where
+        T: CertificateValue,
+    {
+        let hash_and_round = VoteValue(value.hash(), round, T::KIND, None, first_round);
+        let signature = ValidatorSignature::new(&hash_and_round, key_pair);
+        Self {
+            value,
+            round,
+            unlocking_round: None,
+            first_round,
             signature,
         }
     }
@@ -606,6 +669,8 @@ impl<T> Vote<T> {
         LiteVote {
             value: LiteValue::new(&self.value),
             round: self.round,
+            unlocking_round: self.unlocking_round,
+            first_round: self.first_round,
             signature: self.signature,
         }
     }
@@ -624,7 +689,15 @@ pub struct LiteVote {
     pub value: LiteValue,
     /// The consensus round in which the vote was cast.
     pub round: Round,
-    /// The validator's signature over the value hash, round and certificate kind.
+    /// The unlocking round this vote signed (see [`VoteValue`]). Only `ValidatedBlock` votes carry
+    /// an unlocking round; it is `None` for fresh proposals and for `ConfirmedBlock`/`Timeout` votes.
+    pub unlocking_round: Option<Round>,
+    /// The first-round attestation this vote signed (see [`VoteValue`]). It is `true` only for a
+    /// `ConfirmedBlock` vote that confirms a block in the chain's first round; it is always
+    /// `false` for `ValidatedBlock` and `Timeout` votes.
+    pub first_round: bool,
+    /// The validator's signature over the value hash, round, certificate kind, unlocking round and
+    /// first-round attestation.
     pub signature: ValidatorSignature,
 }
 
@@ -638,6 +711,8 @@ impl LiteVote {
         Some(Vote {
             value,
             round: self.round,
+            unlocking_round: self.unlocking_round,
+            first_round: self.first_round,
             signature: self.signature,
         })
     }
@@ -905,18 +980,26 @@ impl BlockProposal {
 impl LiteVote {
     /// Uses the signing key to create a signed object.
     pub fn new(value: LiteValue, round: Round, secret_key: &ValidatorSecretKey) -> Self {
-        let hash_and_round = VoteValue(value.value_hash, round, value.kind);
+        let hash_and_round = VoteValue(value.value_hash, round, value.kind, None, false);
         let signature = ValidatorSignature::new(&hash_and_round, secret_key);
         Self {
             value,
             round,
+            unlocking_round: None,
+            first_round: false,
             signature,
         }
     }
 
     /// Verifies the signature in the vote.
     pub fn check(&self, public_key: ValidatorPublicKey) -> Result<(), ChainError> {
-        let hash_and_round = VoteValue(self.value.value_hash, self.round, self.value.kind);
+        let hash_and_round = VoteValue(
+            self.value.value_hash,
+            self.round,
+            self.value.kind,
+            self.unlocking_round,
+            self.first_round,
+        );
         Ok(self.signature.check(&hash_and_round, public_key)?)
     }
 }
@@ -951,7 +1034,13 @@ impl<'a, T: CertificateValue> SignatureAggregator<'a, T> {
     where
         T: CertificateValue,
     {
-        let hash_and_round = VoteValue(self.partial.hash(), self.partial.round, T::KIND);
+        let hash_and_round = VoteValue(
+            self.partial.hash(),
+            self.partial.round,
+            T::KIND,
+            None,
+            false,
+        );
         signature.check(&hash_and_round, public_key)?;
         // Check that each validator only appears once.
         ensure!(
@@ -982,10 +1071,17 @@ pub(crate) fn is_strictly_ordered(values: &[(ValidatorPublicKey, ValidatorSignat
 }
 
 /// Verifies certificate signatures.
+///
+/// `unlocking_round` is the unlocking round that `ValidatedBlock` voters signed (see [`VoteValue`]);
+/// it is `None` for `ConfirmedBlock`/`Timeout` certificates and for validated blocks with no
+/// justification. `first_round` is the first-round attestation that `ConfirmedBlock` voters
+/// signed; it is always `false` for `ValidatedBlock`/`Timeout` certificates.
 pub(crate) fn check_signatures(
     value_hash: CryptoHash,
     certificate_kind: CertificateKind,
     round: Round,
+    unlocking_round: Option<Round>,
+    first_round: bool,
     signatures: &[(ValidatorPublicKey, ValidatorSignature)],
     committee: &Committee,
 ) -> Result<(), ChainError> {
@@ -1009,7 +1105,13 @@ pub(crate) fn check_signatures(
         ChainError::CertificateRequiresQuorum
     );
     // All that is left is checking signatures!
-    let hash_and_round = VoteValue(value_hash, round, certificate_kind);
+    let hash_and_round = VoteValue(
+        value_hash,
+        round,
+        certificate_kind,
+        unlocking_round,
+        first_round,
+    );
     ValidatorSignature::verify_batch(&hash_and_round, signatures.iter())?;
     Ok(())
 }

@@ -17,7 +17,8 @@ use linera_chain::{
         BlockExecutionOutcome, IncomingBundle, MessageAction, MessageBundle, PostedMessage,
         ProposedBlock, Transaction, Vote,
     },
-    types::ConfirmedBlockCertificate,
+    justification::JustificationChain,
+    types::{ConfirmedBlockCertificate, GenericCertificate},
 };
 use linera_execution::{
     committee::ValidatorState,
@@ -210,6 +211,31 @@ pub fn create_signed_certificate(
 ) -> ConfirmedBlockCertificate {
     let chain_id = CryptoHash::new(&TestString::new("test_chain"));
     create_signed_certificate_for_chain(secret, public, chain_id, BlockHeight(1))
+}
+
+/// Like [`create_signed_certificate`], but the `ConfirmedBlock` votes carry the first-round
+/// attestation (as a real confirmation in the chain's first round does) and the certificate omits
+/// its justification chain. Exercises the light client's first-round verification path.
+pub fn create_signed_certificate_first_round(
+    secret: &ValidatorSecretKey,
+    public: &ValidatorPublicKey,
+) -> ConfirmedBlockCertificate {
+    let chain_id = CryptoHash::new(&TestString::new("test_chain"));
+    let transactions = vec![Transaction::ExecuteOperation(Operation::User {
+        application_id: ApplicationId::new(CryptoHash::new(&TestString::new("test_app"))),
+        bytes: vec![0xDE, 0xAD, 0xBE, 0xEF],
+    })];
+    let block = create_test_block(chain_id, Epoch::ZERO, BlockHeight(1), transactions);
+    let confirmed = ConfirmedBlock::new(block);
+    let vote = Vote::new_with_first_round(confirmed.clone(), Round::Fast, true, secret);
+    let quorum = GenericCertificate::new_with_unlocking_round_and_first_round(
+        confirmed,
+        Round::Fast,
+        None,
+        true,
+        vec![(*public, vote.signature)],
+    );
+    ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default())
 }
 
 /// Deploys the V1 burn-event decoder (no constructor args) and returns its

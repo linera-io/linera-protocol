@@ -1316,7 +1316,9 @@ impl<Env: Environment> ChainClient<Env> {
                 .communicate_chain_action(&committee, action, value)
                 .await?,
         );
-        self.client.handle_certificate(*certificate.clone()).await?;
+        self.client
+            .handle_certificate::<Timeout>(*certificate.clone())
+            .await?;
         // The block height didn't increase, but this will communicate the timeout as well.
         self.client
             .communicate_chain_updates(

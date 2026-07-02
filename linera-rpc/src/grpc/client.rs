@@ -24,7 +24,7 @@ use linera_chain::{
     data_types::{self},
     types::{
         self, Certificate, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
-        LiteCertificate, Timeout, ValidatedBlock,
+        LiteCertificate, Timeout, ValidatedBlockCertificate,
     },
 };
 #[cfg(with_metrics)]
@@ -284,7 +284,7 @@ impl ValidatorNode for GrpcClient {
     #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn handle_confirmed_certificate(
         &self,
-        certificate: CacheArc<GenericCertificate<ConfirmedBlock>>,
+        certificate: CacheArc<ConfirmedBlockCertificate>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages: bool = delivery.wait_for_outgoing_messages();
@@ -302,7 +302,7 @@ impl ValidatorNode for GrpcClient {
     #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn handle_validated_certificate(
         &self,
-        certificate: GenericCertificate<ValidatedBlock>,
+        certificate: ValidatedBlockCertificate,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         let request = HandleValidatedCertificateRequest { certificate };
         GrpcClient::try_into_chain_info(client_delegate!(
@@ -607,15 +607,19 @@ impl ValidatorNode for GrpcClient {
                         |RawCertificate {
                              lite_certificate,
                              confirmed_block,
-                         }| {
+                         }|
+                         -> Result<ConfirmedBlockCertificate, NodeError> {
                             let cert = bcs::from_bytes::<LiteCertificate>(&lite_certificate)
                                 .map_err(|_| NodeError::UnexpectedCertificateValue)?;
 
                             let block = bcs::from_bytes::<ConfirmedBlock>(&confirmed_block)
                                 .map_err(|_| NodeError::UnexpectedCertificateValue)?;
 
-                            cert.with_value(block)
-                                .ok_or(NodeError::UnexpectedCertificateValue)
+                            let validated = cert.justification.clone();
+                            let quorum = cert
+                                .with_value(block)
+                                .ok_or(NodeError::UnexpectedCertificateValue)?;
+                            Ok(ConfirmedBlockCertificate::from_parts(quorum, validated))
                         },
                     )
                     .collect::<Result<_, _>>()?;

@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use super::{CertificateValue, GenericCertificate};
 use crate::{
     data_types::{check_signatures, LiteValue, LiteVote},
+    justification::JustificationChain,
     ChainError,
 };
 
@@ -26,6 +27,22 @@ pub struct LiteCertificate<'a> {
     pub value: LiteValue,
     /// The round in which the value was certified.
     pub round: Round,
+    /// The unlocking round the `ValidatedBlock` voters signed (see [`VoteValue`]). Always `None`
+    /// for `ConfirmedBlock`/`Timeout` certificates and for validated blocks with no justification.
+    ///
+    /// [`VoteValue`]: crate::data_types::VoteValue
+    pub unlocking_round: Option<Round>,
+    /// The first-round attestation the `ConfirmedBlock` voters signed (see [`VoteValue`]). Only
+    /// `true` for a `ConfirmedBlock` certificate confirming a block in the chain's first round;
+    /// always `false` for `ValidatedBlock`/`Timeout` certificates.
+    ///
+    /// [`VoteValue`]: crate::data_types::VoteValue
+    pub first_round: bool,
+    /// The justification chain attached to this certificate: for a `ValidatedBlock` certificate
+    /// it is the chain of validated quorums in rounds below `round`; for a `ConfirmedBlock`
+    /// certificate it is the full chain of validated quorums up to and including the confirm
+    /// round. Empty for `Timeout` certificates and for blocks needing no justification.
+    pub justification: JustificationChain,
     /// Signatures on the value.
     pub signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
 }
@@ -34,6 +51,10 @@ impl Allocative for LiteCertificate<'_> {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
         visitor.visit_field(Key::new("LiteCertificate_value"), &self.value);
         visitor.visit_field(Key::new("LiteCertificate_round"), &self.round);
+        visitor.visit_field(
+            Key::new("LiteCertificate_justification"),
+            &self.justification,
+        );
         if matches!(self.signatures, Cow::Owned(_)) {
             for (public_key, signature) in self.signatures.deref() {
                 visitor.visit_field(Key::new("ValidatorPublicKey"), public_key);
@@ -48,6 +69,40 @@ impl LiteCertificate<'_> {
     pub fn new(
         value: LiteValue,
         round: Round,
+        signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
+    ) -> Self {
+        Self::new_with_unlocking_round(value, round, None, signatures)
+    }
+
+    /// Creates a new lite certificate that also records the unlocking round its `ValidatedBlock`
+    /// voters signed (see [`VoteValue`]).
+    ///
+    /// [`VoteValue`]: crate::data_types::VoteValue
+    pub fn new_with_unlocking_round(
+        value: LiteValue,
+        round: Round,
+        unlocking_round: Option<Round>,
+        signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
+    ) -> Self {
+        Self::new_with_unlocking_round_and_first_round(
+            value,
+            round,
+            unlocking_round,
+            false,
+            signatures,
+        )
+    }
+
+    /// Creates a new lite certificate that also records the unlocking round its `ValidatedBlock`
+    /// voters signed and the first-round attestation its `ConfirmedBlock` voters signed (see
+    /// [`VoteValue`]).
+    ///
+    /// [`VoteValue`]: crate::data_types::VoteValue
+    pub fn new_with_unlocking_round_and_first_round(
+        value: LiteValue,
+        round: Round,
+        unlocking_round: Option<Round>,
+        first_round: bool,
         mut signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
     ) -> Self {
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
@@ -56,6 +111,9 @@ impl LiteCertificate<'_> {
         Self {
             value,
             round,
+            unlocking_round,
+            first_round,
+            justification: JustificationChain::default(),
             signatures,
         }
     }
@@ -71,29 +129,53 @@ impl LiteCertificate<'_> {
             LiteVote {
                 value,
                 round,
+                unlocking_round,
+                first_round,
                 signature,
             },
         ) = votes.next()?;
         let mut signatures = vec![(public_key, signature)];
         for (validator_key, vote) in votes {
-            if vote.value.value_hash != value.value_hash || vote.round != round {
+            if vote.value.value_hash != value.value_hash
+                || vote.round != round
+                || vote.unlocking_round != unlocking_round
+                || vote.first_round != first_round
+            {
                 return None;
             }
             signatures.push((validator_key, vote.signature));
         }
-        Some(LiteCertificate::new(value, round, signatures))
+        Some(LiteCertificate::new_with_unlocking_round_and_first_round(
+            value,
+            round,
+            unlocking_round,
+            first_round,
+            signatures,
+        ))
     }
 
-    /// Verifies the certificate.
+    /// Verifies the certificate, including its justification chain.
     pub fn check(&self, committee: &Committee) -> Result<&LiteValue, ChainError> {
         check_signatures(
             self.value.value_hash,
             self.value.kind,
             self.round,
+            self.unlocking_round,
+            self.first_round,
             &self.signatures,
             committee,
         )?;
+        self.justification
+            .verify(self.value.value_hash, committee)?;
         Ok(&self.value)
+    }
+
+    /// Returns the full justification chain that a certificate validating in a higher round
+    /// would carry below itself: the chain it already carries, with this certificate's own
+    /// quorum appended as the new top link.
+    pub fn full_justification(&self) -> JustificationChain {
+        self.justification
+            .append(self.round, self.signatures.to_vec())
     }
 
     /// Checks whether the value matches this certificate.
@@ -111,11 +193,15 @@ impl LiteCertificate<'_> {
         {
             return None;
         }
-        Some(GenericCertificate::new(
-            value,
-            self.round,
-            self.signatures.into_owned(),
-        ))
+        Some(
+            GenericCertificate::new_with_unlocking_round_and_first_round(
+                value,
+                self.round,
+                self.unlocking_round,
+                self.first_round,
+                self.signatures.into_owned(),
+            ),
+        )
     }
 
     /// Returns a [`LiteCertificate`] that owns the list of signatures.
@@ -123,6 +209,9 @@ impl LiteCertificate<'_> {
         LiteCertificate {
             value: self.value.clone(),
             round: self.round,
+            unlocking_round: self.unlocking_round,
+            first_round: self.first_round,
+            justification: self.justification.clone(),
             signatures: Cow::Owned(self.signatures.clone().into_owned()),
         }
     }

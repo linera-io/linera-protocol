@@ -50,13 +50,14 @@ use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, ChainAndHeight,
         IncomingBundle, LiteValue, LiteVote, MessageAction, MessageBundle, OperationResult,
-        PostedMessage, ProposedBlock, SignatureAggregator, Transaction, Vote,
+        PostedMessage, ProposedBlock, Transaction, Vote,
     },
+    justification::{JustificationChain, JustificationLink},
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
-        CertificateKind, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate,
-        GenericCertificate, Timeout, ValidatedBlock,
+        CertificateKind, CertificateValue, Certified, ConfirmedBlock, ConfirmedBlockCertificate,
+        GenericCertificate, Timeout, ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainExecutionContext, ChainStateView,
 };
@@ -87,7 +88,7 @@ use crate::{
     data_types::*,
     test_utils::{MemoryStorageBuilder, StorageBuilder},
     worker::{
-        Notification,
+        Notification, ProcessableCertificate,
         Reason::{self, NewBlock, NewIncomingBundle},
         WorkerError, WorkerState,
     },
@@ -324,30 +325,54 @@ where
         description
     }
 
-    fn make_certificate<T>(&self, value: T) -> GenericCertificate<T>
+    fn make_certificate<T>(&self, value: T) -> T::Certificate
     where
-        T: CertificateValue,
+        T: ProcessableCertificate,
     {
         self.make_certificate_with_round(value, Round::MultiLeader(0))
     }
 
-    fn make_certificate_with_round<T>(&self, value: T, round: Round) -> GenericCertificate<T>
+    fn make_certificate_with_round<T>(&self, value: T, round: Round) -> T::Certificate
     where
-        T: CertificateValue,
+        T: ProcessableCertificate,
     {
-        let vote = LiteVote::new(
-            LiteValue::new(&value),
+        let key_pair = self
+            .executing_worker
+            .chain_worker_config
+            .key_pair()
+            .unwrap();
+        let public_key = self.executing_worker.public_key();
+        let value_hash = value.hash();
+        let chain_id = value.chain_id();
+        // A confirmation in the fast round is in the chain's first round, so its votes attest it.
+        let first_round = T::KIND == CertificateKind::Confirmed && round.is_fast();
+        let vote = Vote::new_with_first_round(value.clone(), round, first_round, key_pair);
+        let quorum = GenericCertificate::new_with_unlocking_round_and_first_round(
+            value,
             round,
-            self.executing_worker
-                .chain_worker_config
-                .key_pair()
-                .unwrap(),
+            None,
+            first_round,
+            vec![(public_key, vote.signature)],
         );
-        let mut builder = SignatureAggregator::new(value, round, &self.committee);
-        builder
-            .append(self.executing_worker.public_key(), vote.signature)
-            .unwrap()
-            .unwrap()
+        // A block confirmed outside the fast round must be justified by a validated quorum at the
+        // confirm round. Build that single-link chain (the lone test validator signs a
+        // `ValidatedBlock` vote with lock `None`). Validated and timeout certificates, and blocks
+        // confirmed in the fast round, carry no justification.
+        let justification = if T::KIND == CertificateKind::Confirmed && !round.is_fast() {
+            let validated_value = LiteValue {
+                value_hash,
+                chain_id,
+                kind: CertificateKind::Validated,
+            };
+            let validated_vote = LiteVote::new(validated_value, round, key_pair);
+            JustificationChain::new(vec![JustificationLink {
+                round,
+                signatures: vec![(public_key, validated_vote.signature)],
+            }])
+        } else {
+            JustificationChain::default()
+        };
+        T::make_certificate(quorum, justification)
     }
 
     async fn make_simple_transfer_certificate(
@@ -3595,10 +3620,12 @@ where
 
     // If we send the validated block certificate to the worker, it votes to confirm.
     let vote = response.info.manager.pending.clone().unwrap();
-    let certificate1 = vote
+    let quorum1 = vote
         .with_value(value1.clone())
         .unwrap()
         .into_certificate(env.executing_worker().public_key());
+    let certificate1 =
+        ValidatedBlockCertificate::from_parts(quorum1, JustificationChain::default());
     let (response, _) = env
         .executing_worker()
         .handle_validated_certificate(certificate1.clone())
@@ -3689,6 +3716,8 @@ where
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
     assert_eq!(vote.round, Round::SingleLeader(5));
+    // The validation vote's unlocking round is the round of the justifying certificate it relied on.
+    assert_eq!(vote.unlocking_round, Some(Round::SingleLeader(4)));
 
     // Let round 5 time out, too.
     let certificate_timeout =
@@ -5394,5 +5423,57 @@ where
     );
     assert!(!chain.nonempty_outboxes.get().contains(&chain_2));
     assert!(chain.outbox_counters.get().is_empty());
+    Ok(())
+}
+
+/// A confirmation whose first-round attestation is untruthful is rejected when the block is
+/// executed in order, where the chain's ownership — and thus its real first round — is known.
+/// This single-owner chain's first round is `MultiLeader(0)`, but the certificate claims the
+/// fast round, so the attested bit is a lie.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[test_log::test(tokio::test)]
+async fn test_false_first_round_attestation_rejected<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let key_pair = AccountSecretKey::generate();
+    let mut env = TestEnvironment::new(&mut storage_builder, true, false).await?;
+    let chain_1 = env
+        .add_root_chain(1, key_pair.public().into(), Amount::from_tokens(10))
+        .await
+        .id();
+    let chain_2 = env
+        .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ONE)
+        .await
+        .id();
+
+    // An honest first block, re-certified in the fast round with the first-round attestation set.
+    // The fast round passes the committee-only structural check (it is a possible first round),
+    // but it is not *this* chain's first round, so executing it in order must reject the bit.
+    let honest = env
+        .make_simple_transfer_certificate(
+            chain_1,
+            key_pair.public(),
+            chain_2,
+            Amount::ONE,
+            Vec::new(),
+            None,
+        )
+        .await;
+    let lying = env.make_certificate_with_round(honest.value().clone(), Round::Fast);
+
+    let result = env
+        .worker()
+        .process_confirmed_block(lying, ProcessConfirmedBlockMode::Execute, None)
+        .await;
+    match result {
+        Err(WorkerError::ChainError(error)) => {
+            assert_matches!(*error, ChainError::FalseFirstRoundAttestation);
+        }
+        _ => panic!("expected the false first-round attestation to be rejected"),
+    }
     Ok(())
 }

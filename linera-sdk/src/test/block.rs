@@ -7,18 +7,18 @@
 
 use linera_base::{
     abi::ContractAbi,
-    data_types::{Amount, ApplicationPermissions, Blob, Epoch, Round, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Blob, Epoch, Timestamp},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
     ownership::TimeoutConfig,
 };
 use linera_chain::{
     data_types::{
-        BundleExecutionPolicy, IncomingBundle, LiteValue, LiteVote, MessageAction, ProposedBlock,
-        SignatureAggregator, Transaction,
+        BundleExecutionPolicy, IncomingBundle, MessageAction, ProposedBlock, Transaction, Vote,
     },
-    types::{ConfirmedBlock, ConfirmedBlockCertificate},
+    justification::JustificationChain,
+    types::{ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate},
 };
-use linera_core::worker::WorkerError;
+use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{system::SystemOperation, Operation, ResourceTracker};
 
 use super::TestValidator;
@@ -259,18 +259,30 @@ impl BlockBuilder {
             .await?;
 
         let value = ConfirmedBlock::new(block);
-        let vote = LiteVote::new(
-            LiteValue::new(&value),
-            Round::Fast,
-            self.validator.key_pair(),
-        );
-        let committee = self.validator.committee().await;
+        // Confirm in the chain's first round so the votes can carry the first-round attestation
+        // and the certificate needs no justification chain. The chain's current ownership (the
+        // parent's, since this block isn't committed yet) is the one that governs this block's
+        // rounds.
+        let info = self
+            .validator
+            .worker()
+            .handle_chain_info_query(ChainInfoQuery::new(value.chain_id()))
+            .await
+            .expect("Failed to query chain ownership")
+            .info;
+        let round = info.manager.ownership.first_round();
         let public_key = self.validator.key_pair().public();
-        let mut builder = SignatureAggregator::new(value, Round::Fast, &committee);
-        let certificate = builder
-            .append(public_key, vote.signature)
-            .expect("Failed to sign block")
-            .expect("Committee has more than one test validator");
+        let vote =
+            Vote::new_with_first_round(value.clone(), round, true, self.validator.key_pair());
+        let quorum = GenericCertificate::new_with_unlocking_round_and_first_round(
+            value,
+            round,
+            None,
+            true,
+            vec![(public_key, vote.signature)],
+        );
+        let certificate =
+            ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default());
 
         Ok((certificate, resource_tracker))
     }

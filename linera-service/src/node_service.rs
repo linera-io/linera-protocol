@@ -34,10 +34,7 @@ use linera_base::{
     vm::VmRuntime,
     BcsHexParseError,
 };
-use linera_chain::{
-    types::{ConfirmedBlock, GenericCertificate},
-    ChainStateView,
-};
+use linera_chain::{types::ConfirmedBlock, ChainStateView};
 use linera_client::chain_listener::{
     ChainListener, ChainListenerConfig, ClientContext, ClientContextExt as _, ListenerCommand,
 };
@@ -549,7 +546,7 @@ where
                 (result, client)
             })
             .await?;
-        Ok(maybe_cert.as_ref().map(GenericCertificate::hash))
+        Ok(maybe_cert.as_ref().map(|cert| cert.hash()))
     }
 
     /// Changes the chain to a single-owner chain
