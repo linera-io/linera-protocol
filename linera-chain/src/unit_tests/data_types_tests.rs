@@ -94,7 +94,7 @@ fn light_client_verifies_header_and_one_field() {
         Round::Fast,
         &validator_key_pair.secret_key,
     );
-    let mut builder = SignatureAggregator::new(value, Round::Fast, &committee);
+    let mut builder = SignatureAggregator::new(value, Round::Fast, None, false, &committee);
     let certificate = builder
         .append(validator_key_pair.public_key, vote.signature)
         .unwrap()
@@ -304,7 +304,7 @@ fn test_certificates() {
         &validator3_key_pair.secret_key,
     );
 
-    let mut builder = SignatureAggregator::new(value.clone(), Round::Fast, &committee);
+    let mut builder = SignatureAggregator::new(value.clone(), Round::Fast, None, false, &committee);
     assert!(builder
         .append(validator1_key_pair.public_key, v1.signature)
         .unwrap()
@@ -317,7 +317,7 @@ fn test_certificates() {
     c.signatures_mut().pop();
     assert!(c.check(&committee).is_err());
 
-    let mut builder = SignatureAggregator::new(value, Round::Fast, &committee);
+    let mut builder = SignatureAggregator::new(value, Round::Fast, None, false, &committee);
     assert!(builder
         .append(validator1_key_pair.public_key, v1.signature)
         .unwrap()

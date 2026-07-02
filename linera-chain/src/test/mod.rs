@@ -8,21 +8,18 @@ mod http_server;
 use std::collections::BTreeMap;
 
 use linera_base::{
-    crypto::{AccountPublicKey, CryptoHash, Signer, ValidatorPublicKey},
+    crypto::{CryptoHash, Signer, ValidatorPublicKey},
     data_types::{Amount, Blob, BlockHeight, Epoch, Event, OracleResponse, Round, Timestamp},
     identifiers::{Account, AccountOwner, ChainId},
 };
-use linera_execution::{
-    committee::{Committee, ValidatorState},
-    Message, MessageKind, Operation, OutgoingMessage, ResourceControlPolicy, SystemOperation,
-};
+use linera_execution::{Message, MessageKind, Operation, OutgoingMessage, SystemOperation};
 
 pub use self::http_server::HttpServer;
 use crate::{
     block::{Block, ConfirmedBlock},
     data_types::{
         BlockExecutionOutcome, BlockProposal, IncomingBundle, OperationResult, PostedMessage,
-        ProposedBlock, SignatureAggregator, Transaction, Vote,
+        ProposedBlock, Transaction, Vote,
     },
     types::{CertificateValue, GenericCertificate},
 };
@@ -268,20 +265,16 @@ pub trait VoteTestExt<T: CertificateValue>: Sized {
 
 impl<T: CertificateValue> VoteTestExt<T> for Vote<T> {
     fn into_certificate(self, public_key: ValidatorPublicKey) -> GenericCertificate<T> {
-        let state = ValidatorState {
-            network_address: "".to_string(),
-            votes: 100,
-            account_public_key: AccountPublicKey::test_key(1),
-        };
-        let committee = Committee::new(
-            vec![(public_key, state)].into_iter().collect(),
-            ResourceControlPolicy::only_fuel(),
+        // Preserve the vote's own signed unlocking round and first-round attestation, so this
+        // works for any vote — a plain confirmation, a validated vote justified by an unlocking
+        // round, or a first-round-attested confirmation — not just the default payload.
+        GenericCertificate::new_with_unlocking_round_and_first_round(
+            self.value,
+            self.round,
+            self.unlocking_round,
+            self.first_round,
+            vec![(public_key, self.signature)],
         )
-        .expect("test committee votes should not overflow");
-        SignatureAggregator::new(self.value, self.round, &committee)
-            .append(public_key, self.signature)
-            .unwrap()
-            .unwrap()
     }
 }
 

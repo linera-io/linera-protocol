@@ -1013,13 +1013,26 @@ pub struct SignatureAggregator<'a, T: CertificateValue> {
 }
 
 impl<'a, T: CertificateValue> SignatureAggregator<'a, T> {
-    /// Starts aggregating signatures for the given value into a certificate.
-    pub fn new(value: T, round: Round, committee: &'a Committee) -> Self {
+    /// Starts aggregating signatures for the given value into a certificate whose voters signed
+    /// the given unlocking round and first-round attestation (see [`VoteValue`]).
+    pub fn new(
+        value: T,
+        round: Round,
+        unlocking_round: Option<Round>,
+        first_round: bool,
+        committee: &'a Committee,
+    ) -> Self {
         Self {
             committee,
             weight: 0,
             used_validators: HashSet::new(),
-            partial: GenericCertificate::new(value, round, Vec::new()),
+            partial: GenericCertificate::new_with_unlocking_round_and_first_round(
+                value,
+                round,
+                unlocking_round,
+                first_round,
+                Vec::new(),
+            ),
         }
     }
 
@@ -1038,8 +1051,8 @@ impl<'a, T: CertificateValue> SignatureAggregator<'a, T> {
             self.partial.hash(),
             self.partial.round,
             T::KIND,
-            None,
-            false,
+            self.partial.unlocking_round(),
+            self.partial.first_round(),
         );
         signature.check(&hash_and_round, public_key)?;
         // Check that each validator only appears once.
