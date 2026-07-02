@@ -346,6 +346,15 @@ impl From<Amount> for U256 {
     }
 }
 
+impl From<Amount> for f64 {
+    /// Returns the amount as a floating-point number of whole tokens. This is
+    /// lossy for large or high-precision amounts; intended for telemetry, not
+    /// for arithmetic.
+    fn from(amount: Amount) -> f64 {
+        amount.0 as f64 / Amount::ONE.0 as f64
+    }
+}
+
 impl TryFrom<U256> for Amount {
     type Error = ArithmeticError;
 
