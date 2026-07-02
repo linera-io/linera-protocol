@@ -1292,23 +1292,11 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<ConfirmedBlockCertificate, chain_client::Error> {
         debug!(round = %certificate.round(), "Submitting block for confirmation");
         let hashed_value = ConfirmedBlock::new(certificate.block().clone());
-        // The confirmed certificate carries the full chain of validated quorums for the block —
-        // this validated certificate's own quorum as the top link, then the chain below it —
-        // except in the chain's first round: a first-round block is always the lower block in any
-        // fork, so it never needs a chain of its own and we omit it.
-        let chain_id = certificate.block().header.chain_id;
-        let first_round = self
-            .local_node
-            .chain_info(chain_id)
-            .await?
-            .manager
-            .ownership
-            .first_round();
-        let validated = if certificate.round() == first_round {
-            JustificationChain::default()
-        } else {
-            certificate.full_justification()
-        };
+        // The full chain of validated quorums for the block: this validated certificate's own
+        // quorum as the top link, then the chain below it. Whether the confirmed certificate
+        // actually carries it is decided *after* the quorum forms, from the attestation the
+        // confirming votes signed (below).
+        let full_justification = certificate.full_justification();
         let finalize_action = CommunicateAction::FinalizeBlock {
             certificate: Box::new(certificate),
             delivery: self.options.cross_chain_message_delivery,
@@ -1316,7 +1304,17 @@ impl<Env: Environment> Client<Env> {
         let quorum = self
             .communicate_chain_action(committee, finalize_action, hashed_value)
             .await?;
-        let certificate = ConfirmedBlockCertificate::from_parts(quorum, validated);
+        // Omit the chain iff the confirming votes attested that this is the chain's first round:
+        // such a block is always the lower one in any fork, so it never needs a chain of its own.
+        // Deciding from the quorum's signed attestation — rather than our local ownership view,
+        // which a concurrently finalized block could have advanced to a different first round —
+        // guarantees the certificate we assemble matches what the validators actually signed.
+        let justification = if quorum.first_round() {
+            JustificationChain::default()
+        } else {
+            full_justification
+        };
+        let certificate = ConfirmedBlockCertificate::from_parts(quorum, justification);
         self.receive_certificate_with_checked_signatures(
             certificate.clone(),
             ProcessConfirmedBlockMode::Execute,
@@ -1399,6 +1397,19 @@ impl<Env: Environment> Client<Env> {
 
         clock_skew_check_handle.await;
 
+        // The justification chain comes from our own proposal, but the winning quorum may have
+        // been formed from a competing proposal that cited a different certificate: its votes then
+        // sign a different unlocking round, and gluing our chain onto them would build a
+        // certificate that fails verification downstream. Reject that here with a retryable error
+        // rather than assembling a mismatched certificate. (For confirmed and timeout quorums both
+        // sides are `None`, so this only bites the validated-retry case it is meant to guard.)
+        ensure!(
+            quorum.unlocking_round() == justification.top_unlocking_round(),
+            chain_client::Error::ProtocolError(
+                "A quorum voted with an unlocking round that does not match the proposal's \
+                 justification chain",
+            )
+        );
         let certificate = T::make_certificate(quorum, justification);
         self.handle_certificate::<T>(certificate.clone()).await?;
         Ok(certificate)
