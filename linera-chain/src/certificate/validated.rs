@@ -115,13 +115,20 @@ impl ValidatedBlockCertificate {
     }
 
     /// Verifies the certificate: the quorum's signatures against its unlocking round, the
-    /// justification chain, and that the unlocking round matches the top of the chain.
+    /// justification chain, that the unlocking round matches the top of the chain, and that the
+    /// chain lies in rounds strictly below this certificate's.
     pub fn check(&self, committee: &Committee) -> Result<(), ChainError> {
         self.quorum.check(committee)?;
         self.below.verify(self.hash(), committee)?;
         ensure!(
             self.quorum.unlocking_round() == self.below.top_unlocking_round(),
             ChainError::JustificationUnlockingRoundMismatch
+        );
+        ensure!(
+            self.below
+                .top_unlocking_round()
+                .is_none_or(|top| top < self.quorum.round()),
+            ChainError::JustificationChainNotBelowCertificate
         );
         Ok(())
     }

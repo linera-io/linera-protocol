@@ -32,7 +32,7 @@ struct Repr<'a> {
     round: Round,
     first_round: bool,
     signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
-    validated: Cow<'a, JustificationChain>,
+    justification: Cow<'a, JustificationChain>,
 }
 
 /// Certificate for a [`ConfirmedBlock`] instance, certified in some round by a quorum of
@@ -48,12 +48,12 @@ pub struct ConfirmedBlockCertificate {
     quorum: GenericCertificate<ConfirmedBlock>,
     /// The full chain of validated quorums for the block, rising from the grounding round to its
     /// top link in the round the block was confirmed. Empty iff the block was confirmed in the
-    /// fast round.
-    validated: JustificationChain,
+    /// chain's first round.
+    justification: JustificationChain,
 }
 
 impl ConfirmedBlockCertificate {
-    /// Creates a confirmed block certificate with an empty justification chain (fast round).
+    /// Creates a confirmed block certificate with an empty justification chain (first round).
     pub fn new(
         value: ConfirmedBlock,
         round: Round,
@@ -61,16 +61,19 @@ impl ConfirmedBlockCertificate {
     ) -> Self {
         Self {
             quorum: GenericCertificate::new(value, round, signatures),
-            validated: JustificationChain::default(),
+            justification: JustificationChain::default(),
         }
     }
 
     /// Creates a confirmed block certificate from a signed quorum and its justification chain.
     pub fn from_parts(
         quorum: GenericCertificate<ConfirmedBlock>,
-        validated: JustificationChain,
+        justification: JustificationChain,
     ) -> Self {
-        Self { quorum, validated }
+        Self {
+            quorum,
+            justification,
+        }
     }
 
     /// Returns the signed quorum of `ConfirmedBlock` votes.
@@ -79,13 +82,13 @@ impl ConfirmedBlockCertificate {
     }
 
     /// Returns the full chain of validated quorums for the block.
-    pub fn validated(&self) -> &JustificationChain {
-        &self.validated
+    pub fn justification(&self) -> &JustificationChain {
+        &self.justification
     }
 
     /// Consumes this certificate, returning the signed quorum and the justification chain.
     pub fn into_parts(self) -> (GenericCertificate<ConfirmedBlock>, JustificationChain) {
-        (self.quorum, self.validated)
+        (self.quorum, self.justification)
     }
 
     /// Returns the round in which the value was certified.
@@ -104,21 +107,23 @@ impl ConfirmedBlockCertificate {
     }
 
     /// Verifies the certificate's signatures and justification chain: the quorum of
-    /// `ConfirmedBlock` votes, that the validated chain is itself a valid chain of quorums, and
-    /// that — if present — it heads at the confirmation round.
+    /// `ConfirmedBlock` votes, that the justification chain is itself a valid chain of quorums,
+    /// and that — if present — it heads at the confirmation round.
     ///
     /// An *absent* chain is accepted only when the quorum carries the first-round attestation
     /// (a fast-round confirmation always does, since the fast round is a chain's first round):
-    /// such a block is always the lower block in any fork, so its own chain is never needed to
-    /// attribute one. The attestation is also sanity-checked here against the round — it can only
-    /// be set in a round that could be a chain's first one. Whether it is the *actual* first
-    /// round depends on the chain's ownership at that height, which a committee-only check cannot
-    /// know; that, and the obligation of a later-round block to carry its chain, rest on honest
-    /// block construction (see `finalize_block`), full-execution verification, and the
-    /// per-signature justifications retained by the commitment scheme.
+    /// the attestation asserts that no lower round exists, so any conflicting confirmation is
+    /// attributable without this block's chain — via the other block's chain if it is higher, or
+    /// via the attestation itself if it is lower (see `EquivocationProof::FirstRoundViolation`).
+    /// The attestation is also sanity-checked here against the round — it can only be set in a
+    /// round that could be a chain's first one. Whether it is the *actual* first round depends on
+    /// the chain's ownership at that height, which a committee-only check cannot know; that, and
+    /// the obligation of a later-round block to carry its chain, rest on honest block
+    /// construction (see `finalize_block`), full-execution verification, and the per-signature
+    /// justifications retained by the commitment scheme.
     pub fn check(&self, committee: &Committee) -> Result<(), ChainError> {
         self.quorum.check(committee)?;
-        self.validated.verify(self.hash(), committee)?;
+        self.justification.verify(self.hash(), committee)?;
         // The first-round attestation can only be set in a round that could be a chain's first:
         // the fast round, or the index-0 round of whichever round type the chain starts with —
         // a single- or multi-leader chain begins at `SingleLeader(0)`/`MultiLeader(0)`, and a
@@ -132,10 +137,10 @@ impl ConfirmedBlockCertificate {
                         | Round::SingleLeader(0)
                         | Round::Validator(0)
                 ),
-                ChainError::JustificationUnlockingRoundMismatch
+                ChainError::FalseFirstRoundAttestation
             );
         }
-        match self.validated().top_unlocking_round() {
+        match self.justification().top_unlocking_round() {
             // An absent chain is allowed only for a first-round confirmation.
             None => ensure!(
                 self.quorum().first_round(),
@@ -153,7 +158,7 @@ impl ConfirmedBlockCertificate {
     /// Returns the [`LiteCertificate`] corresponding to this certificate, carrying the chain.
     pub fn lite_certificate(&self) -> LiteCertificate<'_> {
         let mut lite = self.quorum.lite_certificate();
-        lite.justification = self.validated.clone();
+        lite.justification = self.justification.clone();
         lite
     }
 }
@@ -252,7 +257,7 @@ impl Serialize for ConfirmedBlockCertificate {
             round: self.quorum.round(),
             first_round: self.quorum.first_round(),
             signatures: Cow::Borrowed(self.quorum.signatures().as_slice()),
-            validated: Cow::Borrowed(&self.validated),
+            justification: Cow::Borrowed(&self.justification),
         }
         .serialize(serializer)
     }
@@ -276,7 +281,7 @@ impl<'de> Deserialize<'de> for ConfirmedBlockCertificate {
                     helper.first_round,
                     signatures,
                 ),
-                helper.validated.into_owned(),
+                helper.justification.into_owned(),
             ))
         }
     }

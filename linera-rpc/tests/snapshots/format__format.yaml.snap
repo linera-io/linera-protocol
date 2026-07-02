@@ -456,7 +456,7 @@ ConfirmedBlockCertificate:
           TUPLE:
             - TYPENAME: Secp256k1PublicKey
             - TYPENAME: Secp256k1Signature
-    - validated:
+    - justification:
         TYPENAME: JustificationChain
 CrateVersion:
   STRUCT:

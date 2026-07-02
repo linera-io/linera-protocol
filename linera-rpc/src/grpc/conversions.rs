@@ -623,7 +623,7 @@ impl TryFrom<ConfirmedBlockCertificate> for api::Certificate {
     fn try_from(certificate: ConfirmedBlockCertificate) -> Result<Self, Self::Error> {
         let round = bincode::serialize(&certificate.round())?;
         let signatures = bincode::serialize(certificate.signatures())?;
-        let justification = bincode::serialize(certificate.validated())?;
+        let justification = bincode::serialize(certificate.justification())?;
         let first_round = certificate.quorum().first_round();
 
         let value = bincode::serialize(certificate.value())?;
@@ -1025,7 +1025,7 @@ impl TryFrom<Certificate> for api::Certificate {
             Certificate::Confirmed(confirmed) => (
                 api::CertificateKind::Confirmed,
                 bincode::serialize(confirmed.value())?,
-                bincode::serialize(confirmed.validated())?,
+                bincode::serialize(confirmed.justification())?,
                 confirmed.quorum().first_round(),
             ),
             Certificate::Validated(validated) => (
