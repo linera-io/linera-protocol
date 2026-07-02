@@ -884,6 +884,8 @@ where
 
         chain.system.progress.get_mut().timestamp = block.timestamp;
 
+        let start_epoch = *chain.system.epoch.get();
+
         let mut resource_controller = ResourceController::new(
             Arc::new(committee_policy),
             ResourceTracker::default(),
@@ -1093,6 +1095,17 @@ where
         // This can only happen if all transactions were incoming bundles that all got discarded
         // due to resource limit errors. This is unlikely in practice but theoretically possible.
         ensure!(!block.transactions.is_empty(), ChainError::EmptyBlock);
+
+        // A block may advance the epoch at most once, so that consecutive blocks never skip
+        // an epoch: the child of a block in epoch `e` is at most in epoch `e + 1`.
+        let end_epoch = *chain.system.epoch.get();
+        ensure!(
+            end_epoch.0 <= start_epoch.0.saturating_add(1),
+            ChainError::MultipleEpochAdvances {
+                start_epoch,
+                end_epoch,
+            }
+        );
 
         let recipients = block_execution_tracker.recipients();
         let non_ack_tx_indices = block_execution_tracker.non_checkpoint_ack_tx_indices();

@@ -30,7 +30,7 @@ use data_types::{MessageBundle, PostedMessage};
 use linera_base::{
     bcs,
     crypto::CryptoError,
-    data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
+    data_types::{ArithmeticError, BlockHeight, Epoch, Round, Timestamp},
     identifiers::{ApplicationId, ChainId},
 };
 use linera_execution::ExecutionError;
@@ -162,6 +162,14 @@ pub enum ChainError {
     BlockProposalTooLarge(usize),
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
+    #[error(
+        "Block advances the chain's epoch from {start_epoch} to {end_epoch}; \
+         a block may advance the epoch at most once"
+    )]
+    MultipleEpochAdvances {
+        start_epoch: Epoch,
+        end_epoch: Epoch,
+    },
     #[error("Closed chains cannot have operations, accepted messages or empty blocks")]
     ClosedChain,
     #[error("Empty blocks are not allowed")]
@@ -208,6 +216,7 @@ impl ChainError {
             | ChainError::CertificateValidatorReuse
             | ChainError::CertificateRequiresQuorum
             | ChainError::BlockProposalTooLarge(_)
+            | ChainError::MultipleEpochAdvances { .. }
             | ChainError::ClosedChain
             | ChainError::EmptyBlock
             | ChainError::AuthorizedApplications(_)

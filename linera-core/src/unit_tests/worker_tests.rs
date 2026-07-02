@@ -3000,6 +3000,28 @@ where
         .fully_handle_certificate_with_notifications(certificate1.clone(), &())
         .await?;
 
+    // A block may advance the epoch at most once: creating two committees in the same
+    // block must fail.
+    let proposal2 = make_child_block(&certificate1.clone().into_value())
+        .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
+            epoch: Epoch::from(2),
+            blob_hash,
+        }))
+        .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
+            epoch: Epoch::from(3),
+            blob_hash,
+        }));
+    let error = env
+        .execute_proposal(proposal2, vec![])
+        .await
+        .expect_err("blocks must not advance the epoch twice")
+        .downcast::<WorkerError>()?;
+    assert_matches!(
+        error,
+        WorkerError::ChainError(chain_error)
+            if matches!(*chain_error, ChainError::MultipleEpochAdvances { .. })
+    );
+
     // Try to execute the transfer.
     env.worker()
         .fully_handle_certificate_with_notifications(certificate0.clone(), &())

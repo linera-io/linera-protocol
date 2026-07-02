@@ -1561,8 +1561,8 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Creates a vector of transactions which, in addition to the provided operations,
-    /// also contains epoch changes, receiving message bundles and event stream updates
-    /// (if there are any to be processed).
+    /// also contains the next pending epoch change, receiving message bundles and event
+    /// stream updates (if there are any to be processed).
     /// This should be called when executing a block, in order to make sure that any pending
     /// messages or events are included in it.
     #[instrument(level = "trace", skip(operations))]
@@ -1573,7 +1573,7 @@ impl<Env: Environment> ChainClient<Env> {
         let incoming_bundles = self.pending_message_bundles().await?;
         let stream_updates = self.collect_stream_updates().await?;
         Ok(self
-            .collect_epoch_changes()
+            .next_epoch_change()
             .await?
             .into_iter()
             .map(Transaction::ExecuteOperation)
@@ -2868,20 +2868,21 @@ impl<Env: Environment> ChainClient<Env> {
         }
     }
 
-    /// Returns operations to process all pending new epochs, in order.
-    async fn collect_epoch_changes(&self) -> Result<Vec<Operation>, Error> {
-        let mut next_epoch = self.chain_info().await?.epoch.try_add_one()?;
-        let mut epoch_change_ops = Vec::new();
-        while self
+    /// Returns an operation to process the next pending new epoch, if there is one.
+    ///
+    /// Later epochs are not included, since a block may advance the epoch at most once;
+    /// they are processed by subsequent blocks.
+    async fn next_epoch_change(&self) -> Result<Option<Operation>, Error> {
+        let next_epoch = self.chain_info().await?.epoch.try_add_one()?;
+        if !self
             .has_admin_event(EPOCH_STREAM_NAME, next_epoch.0)
             .await?
         {
-            epoch_change_ops.push(Operation::system(SystemOperation::ProcessNewEpoch(
-                next_epoch,
-            )));
-            next_epoch.try_add_assign_one()?;
+            return Ok(None);
         }
-        Ok(epoch_change_ops)
+        Ok(Some(Operation::system(SystemOperation::ProcessNewEpoch(
+            next_epoch,
+        ))))
     }
 
     /// Returns whether the system event on the admin chain with the given stream name and key

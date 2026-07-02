@@ -1381,20 +1381,37 @@ where
     // Transfer goes through and the previous one as well thanks to block chaining.
     assert_eq!(admin.local_balance().await.unwrap(), Amount::from_tokens(3));
 
+    // The user chain is now two epochs behind. A block may advance the epoch at most
+    // once, so executing an operation only processes the first pending epoch change;
+    // the chain is not fully caught up yet.
+    let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel())?;
+    admin.stage_new_committee(committee.clone()).await.unwrap();
+    admin.stage_new_committee(committee).await.unwrap();
+    assert_eq!(admin.chain_info().await?.epoch, Epoch::from(4));
+    user.synchronize_from_validators().await?;
+    let info = user.chain_info().await?;
+    assert_eq!(info.epoch, Epoch::from(2));
+    let next_height = info.next_block_height;
     user.change_application_permissions(ApplicationPermissions::new_single(ApplicationId::new(
         CryptoHash::test_hash("foo"),
     )))
     .await?;
+    let info = user.chain_info().await?;
+    assert_eq!(info.epoch, Epoch::from(3));
+    assert_eq!(info.next_block_height, BlockHeight(next_height.0 + 1));
 
     let committee = Committee::new(validators, ResourceControlPolicy::default())?;
+    admin.stage_new_committee(committee.clone()).await.unwrap();
     admin.stage_new_committee(committee).await.unwrap();
-    assert_eq!(admin.chain_info().await?.epoch, Epoch::from(3));
+    assert_eq!(admin.chain_info().await?.epoch, Epoch::from(6));
 
     // Despite the restrictive application permissions, some system operations are still allowed,
-    // and the user chain can migrate to the new epoch.
+    // and the user chain can migrate to the new epochs — processing the inbox produces one
+    // block per epoch.
     user.synchronize_from_validators().await?;
-    user.process_inbox().await?;
-    assert_eq!(user.chain_info().await?.epoch, Epoch::from(3));
+    let (certificates, _) = user.process_inbox().await?;
+    assert_eq!(certificates.len(), 3);
+    assert_eq!(user.chain_info().await?.epoch, Epoch::from(6));
 
     Ok(())
 }
