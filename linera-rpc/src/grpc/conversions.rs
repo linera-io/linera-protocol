@@ -1019,38 +1019,13 @@ impl TryFrom<Certificate> for api::Certificate {
     type Error = GrpcProtoConversionError;
 
     fn try_from(certificate: Certificate) -> Result<Self, Self::Error> {
-        let round = bincode::serialize(&certificate.round())?;
-        let signatures = bincode::serialize(certificate.signatures())?;
-
-        let (kind, value, justification, first_round) = match certificate {
-            Certificate::Confirmed(confirmed) => (
-                api::CertificateKind::Confirmed,
-                bincode::serialize(confirmed.value())?,
-                bincode::serialize(confirmed.justification())?,
-                confirmed.quorum().first_round(),
-            ),
-            Certificate::Validated(validated) => (
-                api::CertificateKind::Validated,
-                bincode::serialize(validated.value())?,
-                bincode::serialize(validated.below())?,
-                false,
-            ),
-            Certificate::Timeout(timeout) => (
-                api::CertificateKind::Timeout,
-                bincode::serialize(timeout.value())?,
-                Vec::new(),
-                false,
-            ),
-        };
-
-        Ok(Self {
-            value,
-            round,
-            signatures,
-            kind: kind as i32,
-            justification,
-            first_round,
-        })
+        // Delegate to the per-type conversions so the justification/first-round wire encoding
+        // lives in exactly one place per certificate kind.
+        match certificate {
+            Certificate::Confirmed(confirmed) => confirmed.try_into(),
+            Certificate::Validated(validated) => validated.try_into(),
+            Certificate::Timeout(timeout) => timeout.try_into(),
+        }
     }
 }
 
@@ -1058,38 +1033,22 @@ impl TryFrom<api::Certificate> for Certificate {
     type Error = GrpcProtoConversionError;
 
     fn try_from(certificate: api::Certificate) -> Result<Self, Self::Error> {
-        let round = bincode::deserialize(&certificate.round)?;
-        let signatures = bincode::deserialize(&certificate.signatures)?;
-
-        let value = if certificate.kind == api::CertificateKind::Confirmed as i32 {
-            let value: ConfirmedBlock = bincode::deserialize(&certificate.value)?;
-            let validated = deserialize_justification(&certificate.justification)?;
-            let quorum = GenericCertificate::new_with_unlocking_round_and_first_round(
-                value,
-                round,
-                None,
-                certificate.first_round,
-                signatures,
-            );
-            Certificate::Confirmed(ConfirmedBlockCertificate::from_parts(quorum, validated))
+        // Delegate to the per-type conversions, which own the justification/first-round decoding.
+        if certificate.kind == api::CertificateKind::Confirmed as i32 {
+            Ok(Certificate::Confirmed(ConfirmedBlockCertificate::try_from(
+                certificate,
+            )?))
         } else if certificate.kind == api::CertificateKind::Validated as i32 {
-            let value: ValidatedBlock = bincode::deserialize(&certificate.value)?;
-            let below = deserialize_justification(&certificate.justification)?;
-            let quorum = GenericCertificate::new_with_unlocking_round(
-                value,
-                round,
-                below.top_unlocking_round(),
-                signatures,
-            );
-            Certificate::Validated(ValidatedBlockCertificate::from_parts(quorum, below))
+            Ok(Certificate::Validated(ValidatedBlockCertificate::try_from(
+                certificate,
+            )?))
         } else if certificate.kind == api::CertificateKind::Timeout as i32 {
-            let value: Timeout = bincode::deserialize(&certificate.value)?;
-            Certificate::Timeout(TimeoutCertificate::new(value, round, signatures))
+            Ok(Certificate::Timeout(TimeoutCertificate::try_from(
+                certificate,
+            )?))
         } else {
-            return Err(GrpcProtoConversionError::InvalidCertificateType);
-        };
-
-        Ok(value)
+            Err(GrpcProtoConversionError::InvalidCertificateType)
+        }
     }
 }
 
