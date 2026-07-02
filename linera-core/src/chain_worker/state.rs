@@ -972,28 +972,14 @@ where
             ));
         }
 
-        // Whether this block extends our tip. When it does, we are about to execute it in order
-        // and hold the chain's ownership at this height; otherwise it is preprocessed or
-        // restored from a checkpoint. The dispatch further down routes on the same condition.
+        // Whether this block extends our tip. When it does, we are about to execute it in order;
+        // otherwise it is preprocessed or restored from a checkpoint. The dispatch further down
+        // routes on the same condition.
         let gap = tip.next_block_height != height;
 
         // We haven't processed the block - verify the certificate first.
         let committee = self.committee_for_epoch(block.header.epoch).await?;
         certificate.check(&committee)?;
-
-        // The first-round attestation is checkable only where we hold the chain's ownership at
-        // this height: when we are about to execute the block in order (no gap) on an already
-        // active chain, the current ownership is the configuration the block was proposed under,
-        // giving the correct first round. A block above our tip, on a sparsely-tracked chain, or
-        // on a chain we have not yet initialized (its genesis, before we have applied its
-        // description) leaves us without that ownership, so we trust the bit and defer the check
-        // to wherever the chain is executed in order.
-        if !gap && certificate.first_round() && self.chain.is_active().await? {
-            ensure!(
-                certificate.round() == self.chain.ownership().await?.first_round(),
-                ChainError::FalseFirstRoundAttestation
-            );
-        }
 
         // Certificate check passed - which means the blobs the block requires are legitimate and
         // we can take note of it, so that if any are missing, we will accept them when the client
@@ -1284,6 +1270,18 @@ where
         self.initialize_and_save_if_needed().await?;
         let (epoch, _) = self.chain.current_committee().await?;
         check_block_epoch(epoch, chain_id, block.header.epoch)?;
+
+        // The chain is initialized and this block has not executed yet, so the current ownership
+        // is the configuration the block was proposed under — even for the chain's first block,
+        // whose ownership comes from the just-applied chain description. This is the point where
+        // the first-round attestation can be checked against the actual first round; blocks that
+        // are only preprocessed skip it and rely on the nodes that execute the chain in order.
+        if certificate.first_round() {
+            ensure!(
+                certificate.round() == self.chain.ownership().await?.first_round(),
+                ChainError::FalseFirstRoundAttestation
+            );
+        }
 
         let published_blobs = block
             .published_blob_ids()
