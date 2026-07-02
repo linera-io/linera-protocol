@@ -457,6 +457,9 @@ where
             MissingBlobIds(blob_ids) => Ok(Some(RpcMessage::MissingBlobIdsResponse(
                 self.storage.missing_blobs(&blob_ids).await?,
             ))),
+            EventBlockHeights(event_ids) => Ok(Some(RpcMessage::EventBlockHeightsResponse(
+                self.storage.read_event_block_heights(&event_ids).await?,
+            ))),
             BlobLastUsedByCertificate(blob_id) => {
                 let blob_state = self.storage.read_blob_state(*blob_id).await?;
                 let blob_state = blob_state.ok_or_else(|| anyhow!("Blob not found {blob_id}"))?;
@@ -493,6 +496,7 @@ where
             | BlobLastUsedByResponse(_)
             | BlobLastUsedByCertificateResponse(_)
             | MissingBlobIdsResponse(_)
+            | EventBlockHeightsResponse(_)
             | DownloadConfirmedBlockResponse(_)
             | DownloadCertificatesResponse(_)
             | UploadBlobResponse(_)
