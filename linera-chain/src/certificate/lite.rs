@@ -8,6 +8,7 @@ use allocative::{Allocative, Key, Visitor};
 use linera_base::{
     crypto::{ValidatorPublicKey, ValidatorSignature},
     data_types::Round,
+    ensure,
 };
 use linera_execution::committee::Committee;
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,7 @@ use super::{CertificateValue, GenericCertificate};
 use crate::{
     data_types::{check_signatures, LiteValue, LiteVote},
     justification::JustificationChain,
+    types::CertificateKind,
     ChainError,
 };
 
@@ -154,7 +156,14 @@ impl LiteCertificate<'_> {
         ))
     }
 
-    /// Verifies the certificate, including its justification chain.
+    /// Verifies the certificate: its signatures, its justification chain, and that the signed
+    /// unlocking round and first-round attestation are bound to that chain exactly as
+    /// [`ValidatedBlockCertificate::check`] and [`ConfirmedBlockCertificate::check`] require. This
+    /// is the single verification the worker applies to the certificate a retry proposal carries,
+    /// so it must reject a stripped or mismatched chain, not just check the pieces in isolation.
+    ///
+    /// [`ValidatedBlockCertificate::check`]: super::ValidatedBlockCertificate::check
+    /// [`ConfirmedBlockCertificate::check`]: super::ConfirmedBlockCertificate::check
     pub fn check(&self, committee: &Committee) -> Result<&LiteValue, ChainError> {
         check_signatures(
             self.value.value_hash,
@@ -167,6 +176,54 @@ impl LiteCertificate<'_> {
         )?;
         self.justification
             .verify(self.value.value_hash, committee)?;
+        let top = self.justification.top_unlocking_round();
+        match self.value.kind {
+            CertificateKind::Validated => {
+                // The signed unlocking round must be the top of the chain, which must lie strictly
+                // below the certified round.
+                ensure!(
+                    self.unlocking_round == top,
+                    ChainError::JustificationUnlockingRoundMismatch
+                );
+                ensure!(
+                    top.is_none_or(|top| top < self.round),
+                    ChainError::JustificationChainNotBelowCertificate
+                );
+            }
+            CertificateKind::Confirmed => {
+                // The first-round attestation can only be set in a round that could be a chain's
+                // first one.
+                if self.first_round {
+                    ensure!(
+                        matches!(
+                            self.round,
+                            Round::Fast
+                                | Round::MultiLeader(0)
+                                | Round::SingleLeader(0)
+                                | Round::Validator(0)
+                        ),
+                        ChainError::FalseFirstRoundAttestation
+                    );
+                }
+                match top {
+                    // An absent chain is allowed only for a first-round confirmation.
+                    None => ensure!(
+                        self.first_round,
+                        ChainError::JustificationUnlockingRoundMismatch
+                    ),
+                    // Otherwise the chain's top link is the validation in the confirmation round.
+                    Some(top) => ensure!(
+                        top == self.round,
+                        ChainError::JustificationUnlockingRoundMismatch
+                    ),
+                }
+            }
+            // Timeout certificates carry no justification.
+            CertificateKind::Timeout => ensure!(
+                top.is_none(),
+                ChainError::JustificationUnlockingRoundMismatch
+            ),
+        }
         Ok(&self.value)
     }
 

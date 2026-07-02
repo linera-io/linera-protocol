@@ -145,6 +145,61 @@ fn confirmed_certificate_check_and_absent_chain() {
 }
 
 #[test]
+fn lite_certificate_check_binds_justification_chain() {
+    use crate::{
+        justification::{JustificationChain, JustificationLink},
+        types::{CertificateKind, GenericCertificate, ValidatedBlockCertificate},
+    };
+
+    let validator = ValidatorKeypair::generate();
+    let account = AccountSecretKey::Ed25519(Ed25519SecretKey::generate());
+    let committee = Committee::make_simple(vec![(validator.public_key, account.public())]);
+
+    let value = ValidatedBlock::new(sample_block());
+    let hash = value.hash();
+    let ground_round = Round::SingleLeader(1);
+    let round = Round::SingleLeader(3);
+
+    // A grounding validated quorum in the lower round (unlocking round `None`) ...
+    let ground_value = VoteValue(hash, ground_round, CertificateKind::Validated, None, false);
+    let ground_signature = ValidatorSignature::new(&ground_value, &validator.secret_key);
+    let below = JustificationChain::new(vec![JustificationLink {
+        round: ground_round,
+        signatures: vec![(validator.public_key, ground_signature)],
+    }]);
+    // ... justifies a validated quorum in `round` that signs the unlocking round `ground_round`.
+    let top_value = VoteValue(
+        hash,
+        round,
+        CertificateKind::Validated,
+        Some(ground_round),
+        false,
+    );
+    let top_signature = ValidatorSignature::new(&top_value, &validator.secret_key);
+    let quorum = GenericCertificate::new_with_unlocking_round(
+        value,
+        round,
+        Some(ground_round),
+        vec![(validator.public_key, top_signature)],
+    );
+    let certificate = ValidatedBlockCertificate::from_parts(quorum, below);
+
+    // The lite certificate carries the chain, so its check — the only gate the worker applies to
+    // the certificate a retry proposal carries — passes.
+    assert!(certificate.lite_certificate().check(&committee).is_ok());
+
+    // Stripping the chain while keeping the signed unlocking round leaves the two unbound. The
+    // lite check must reject it, or a proposer could wedge the height with a chainless certificate
+    // that every honest validator then stores and later fails to re-verify.
+    let mut stripped = certificate.lite_certificate();
+    stripped.justification = JustificationChain::default();
+    assert!(matches!(
+        stripped.check(&committee),
+        Err(ChainError::JustificationUnlockingRoundMismatch)
+    ));
+}
+
+#[test]
 fn test_signed_values() {
     let validator1_key_pair = ValidatorKeypair::generate();
     let validator2_key_pair = ValidatorKeypair::generate();
