@@ -46,9 +46,15 @@ use linera_base::{
     data_types::Round,
     ensure,
 };
+use linera_execution::committee::Committee;
 use serde::{Deserialize, Serialize};
 
-use crate::{block::BlockHeader, data_types::VoteValue, types::CertificateKind, ChainError};
+use crate::{
+    block::BlockHeader,
+    data_types::{check_signatures, VoteValue},
+    types::CertificateKind,
+    ChainError,
+};
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -352,6 +358,31 @@ pub enum EquivocationProof {
         /// Its `ConfirmedBlock` signature.
         earlier_signature: ValidatorSignature,
     },
+    /// The validator signed a justification commitment whose opening is not a quorum it could
+    /// honestly have cited: the opening's signatures are invalid or below the quorum threshold,
+    /// it validates a different block, or its round does not ground the vote that cited it. By
+    /// signing the commitment the validator attested that it had verified the cited quorum —
+    /// certificate verification relies on that attestation instead of re-checking the chain — so
+    /// an invalid opening is individually attributable, with no conflicting certificate needed.
+    InvalidJustification {
+        /// The misbehaving validator.
+        validator: ValidatorPublicKey,
+        /// The header of the block the attesting vote was for.
+        header: BlockHeader,
+        /// The round of the attesting vote.
+        round: Round,
+        /// The kind of the attesting vote.
+        kind: CertificateKind,
+        /// The unlocking round the attesting vote signed.
+        unlocking_round: Option<Round>,
+        /// The first-round attestation the attesting vote signed.
+        first_round: bool,
+        /// The attesting vote's signature. Its payload contains the opening's hash as the
+        /// justification commitment, binding the signature to the opening.
+        signature: ValidatorSignature,
+        /// The opening of the signed commitment: the cited quorum, which is not valid.
+        opening: CommittedQuorum,
+    },
 }
 
 impl EquivocationProof {
@@ -360,13 +391,15 @@ impl EquivocationProof {
         match self {
             EquivocationProof::LockViolation { validator, .. }
             | EquivocationProof::DoubleVote { validator, .. }
-            | EquivocationProof::FirstRoundViolation { validator, .. } => *validator,
+            | EquivocationProof::FirstRoundViolation { validator, .. }
+            | EquivocationProof::InvalidJustification { validator, .. } => *validator,
         }
     }
 
-    /// Verifies that this is a genuine proof of misbehavior: the two votes are for different
-    /// blocks, are actually incompatible, and are both signed by the named validator.
-    pub fn check(&self) -> Result<(), ChainError> {
+    /// Verifies that this is a genuine proof of misbehavior: the referenced votes are actually
+    /// incompatible (or the opened justification actually invalid, judged against `committee`)
+    /// and signed by the named validator.
+    pub fn check(&self, committee: &Committee) -> Result<(), ChainError> {
         match self {
             EquivocationProof::LockViolation {
                 validator,
@@ -522,8 +555,160 @@ impl EquivocationProof {
                 earlier_signature.check(&earlier, *validator)?;
                 Ok(())
             }
+            EquivocationProof::InvalidJustification {
+                validator,
+                header,
+                round,
+                kind,
+                unlocking_round,
+                first_round,
+                signature,
+                opening,
+            } => {
+                // The signed payload contains the opening's hash, so verifying the signature
+                // binds the validator to exactly this opening.
+                let value = VoteValue(
+                    CryptoHash::new(header),
+                    *round,
+                    *kind,
+                    *unlocking_round,
+                    *first_round,
+                    Some(opening.commitment()),
+                );
+                signature.check(&value, *validator)?;
+                // The opening must be one that no honest voter could have cited.
+                ensure!(
+                    check_cited_quorum(header, *round, *kind, *unlocking_round, opening, committee)
+                        .is_err(),
+                    ChainError::EquivocationProofValidJustification
+                );
+                Ok(())
+            }
         }
     }
+}
+
+/// Checks that `opening` is a quorum an honest voter could cite from a vote of the given kind,
+/// round and unlocking round for the block with the given header: it validates the same block, in
+/// the round the vote's payload grounds on, and its signatures form a genuine quorum of
+/// `committee` over the reconstructed `ValidatedBlock` payload. These are exactly the checks a
+/// voter performs before signing the opening's commitment, so their failure on a signed opening
+/// convicts the signer.
+fn check_cited_quorum(
+    header: &BlockHeader,
+    round: Round,
+    kind: CertificateKind,
+    unlocking_round: Option<Round>,
+    opening: &CommittedQuorum,
+    committee: &Committee,
+) -> Result<(), ChainError> {
+    ensure!(
+        opening.value_hash == CryptoHash::new(header),
+        ChainError::JustificationCommitmentMismatch
+    );
+    match kind {
+        // A validated vote cites the quorum grounding its unlocking round, in a lower round.
+        CertificateKind::Validated => ensure!(
+            unlocking_round == Some(opening.round) && opening.round < round,
+            ChainError::JustificationUnlockingRoundMismatch
+        ),
+        // A confirmed vote cites the quorum that validated the block in the same round.
+        CertificateKind::Confirmed => ensure!(
+            opening.round == round,
+            ChainError::JustificationUnlockingRoundMismatch
+        ),
+        // Timeout votes cite nothing; any commitment is dishonest.
+        CertificateKind::Timeout => ensure!(false, ChainError::JustificationCommitmentMismatch),
+    }
+    // A quorum with an unlocking round cites a quorum itself, and vice versa: its own commitment
+    // and unlocking round come from one chain, so they are both present or both absent.
+    ensure!(
+        opening.unlocking_round.is_some() == opening.previous.is_some(),
+        ChainError::JustificationUnlockingRoundMismatch
+    );
+    let value = VoteValue(
+        opening.value_hash,
+        opening.round,
+        CertificateKind::Validated,
+        opening.unlocking_round,
+        false,
+        opening.previous,
+    );
+    check_signatures(&value, &opening.signatures, committee)
+}
+
+/// Audits a justified confirmation by re-checking every link of its carried chain — the work
+/// certificate verification skips, because each link's validity is attested by the signatures
+/// above it. If a link is not a genuine quorum, returns one [`InvalidJustification`] proof per
+/// signer of the level above it (the next link, or the confirmation quorum for the top link):
+/// they all signed the invalid quorum's commitment. Returns an empty list if the chain is sound.
+///
+/// [`InvalidJustification`]: EquivocationProof::InvalidJustification
+pub fn audit_confirmation(
+    confirmation: &JustifiedConfirmation,
+    committee: &Committee,
+) -> Vec<EquivocationProof> {
+    let block_hash = confirmation.block_hash();
+    let mut previous = None;
+    let mut unlocking_round = None;
+    for (index, link) in confirmation.justification.links().iter().enumerate() {
+        let opening = CommittedQuorum {
+            value_hash: block_hash,
+            round: link.round,
+            unlocking_round,
+            previous,
+            signatures: link.signatures.clone(),
+        };
+        let value = VoteValue(
+            block_hash,
+            link.round,
+            CertificateKind::Validated,
+            unlocking_round,
+            false,
+            previous,
+        );
+        if check_signatures(&value, &link.signatures, committee).is_err() {
+            // This link is not a genuine quorum. Its own signatures prove nothing, but every
+            // signer of the level above committed to its hash, attesting they had verified it.
+            return match confirmation.justification.links().get(index + 1) {
+                Some(above) => above
+                    .signatures
+                    .iter()
+                    .map(
+                        |(validator, signature)| EquivocationProof::InvalidJustification {
+                            validator: *validator,
+                            header: confirmation.header.clone(),
+                            round: above.round,
+                            kind: CertificateKind::Validated,
+                            unlocking_round: Some(link.round),
+                            first_round: false,
+                            signature: *signature,
+                            opening: opening.clone(),
+                        },
+                    )
+                    .collect(),
+                None => confirmation
+                    .confirmed_signatures
+                    .iter()
+                    .map(
+                        |(validator, signature)| EquivocationProof::InvalidJustification {
+                            validator: *validator,
+                            header: confirmation.header.clone(),
+                            round: confirmation.round,
+                            kind: CertificateKind::Confirmed,
+                            unlocking_round: None,
+                            first_round: confirmation.first_round,
+                            signature: *signature,
+                            opening: opening.clone(),
+                        },
+                    )
+                    .collect(),
+            };
+        }
+        previous = Some(opening.commitment());
+        unlocking_round = Some(link.round);
+    }
+    Vec::new()
 }
 
 /// Extracts proofs of equivocation from two `ConfirmedBlock` certificates that finalize
