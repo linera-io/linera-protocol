@@ -377,8 +377,6 @@ impl TryFrom<U256> for Amount {
     PartialOrd,
     Hash,
     derive_more::Display,
-    derive_more::From,
-    derive_more::Into,
     derive_more::Deref,
     derive_more::DerefMut,
     derive_more::FromStr,
@@ -843,6 +841,7 @@ impl TryFrom<BlockHeight> for usize {
 }
 
 impl_wrapped_number!(Amount, u128);
+impl_wrapped_number!(U128, u128);
 impl_wrapped_number!(BlockHeight, u64);
 impl_wrapped_number!(TimeDelta, u64);
 
