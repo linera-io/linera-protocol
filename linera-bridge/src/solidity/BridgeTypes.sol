@@ -375,6 +375,7 @@ library BridgeTypes {
         BlockHeader header;
         Round round;
         bool first_round;
+        opt_CryptoHash justification_commitment;
         tuple_Secp256k1PublicKey_Secp256k1Signature[] signatures;
     }
 
@@ -382,6 +383,7 @@ library BridgeTypes {
         bytes memory result = bcs_serialize_BlockHeader(input.header);
         result = abi.encodePacked(result, bcs_serialize_Round(input.round));
         result = abi.encodePacked(result, bcs_serialize_bool(input.first_round));
+        result = abi.encodePacked(result, bcs_serialize_opt_CryptoHash(input.justification_commitment));
         return abi.encodePacked(result, bcs_serialize_seq_tuple_Secp256k1PublicKey_Secp256k1Signature(input.signatures));
     }
 
@@ -397,9 +399,11 @@ library BridgeTypes {
         (new_pos, round) = bcs_deserialize_offset_Round(new_pos, input);
         bool first_round;
         (new_pos, first_round) = bcs_deserialize_offset_bool(new_pos, input);
+        opt_CryptoHash memory justification_commitment;
+        (new_pos, justification_commitment) = bcs_deserialize_offset_opt_CryptoHash(new_pos, input);
         tuple_Secp256k1PublicKey_Secp256k1Signature[] memory signatures;
         (new_pos, signatures) = bcs_deserialize_offset_seq_tuple_Secp256k1PublicKey_Secp256k1Signature(new_pos, input);
-        return (new_pos, BlockProof(header, round, first_round, signatures));
+        return (new_pos, BlockProof(header, round, first_round, justification_commitment, signatures));
     }
 
     function bcs_deserialize_BlockProof(bytes memory input) internal pure returns (BlockProof memory) {
@@ -1345,6 +1349,7 @@ library BridgeTypes {
         CertificateKind entry2;
         opt_Round entry3;
         bool entry4;
+        opt_CryptoHash entry5;
     }
 
     function bcs_serialize_VoteValue(VoteValue memory input) internal pure returns (bytes memory) {
@@ -1352,7 +1357,8 @@ library BridgeTypes {
         result = abi.encodePacked(result, bcs_serialize_Round(input.entry1));
         result = abi.encodePacked(result, bcs_serialize_CertificateKind(input.entry2));
         result = abi.encodePacked(result, bcs_serialize_opt_Round(input.entry3));
-        return abi.encodePacked(result, bcs_serialize_bool(input.entry4));
+        result = abi.encodePacked(result, bcs_serialize_bool(input.entry4));
+        return abi.encodePacked(result, bcs_serialize_opt_CryptoHash(input.entry5));
     }
 
     function bcs_deserialize_offset_VoteValue(uint256 pos, bytes memory input)
@@ -1371,7 +1377,9 @@ library BridgeTypes {
         (new_pos, entry3) = bcs_deserialize_offset_opt_Round(new_pos, input);
         bool entry4;
         (new_pos, entry4) = bcs_deserialize_offset_bool(new_pos, input);
-        return (new_pos, VoteValue(entry0, entry1, entry2, entry3, entry4));
+        opt_CryptoHash memory entry5;
+        (new_pos, entry5) = bcs_deserialize_offset_opt_CryptoHash(new_pos, input);
+        return (new_pos, VoteValue(entry0, entry1, entry2, entry3, entry4, entry5));
     }
 
     function bcs_deserialize_VoteValue(bytes memory input) internal pure returns (VoteValue memory) {

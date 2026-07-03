@@ -31,6 +31,13 @@ pub struct BlockProof {
     /// the `ConfirmedBlock` voters signed. It is part of the signed `VoteValue`, so the light
     /// client must reconstruct that value with this flag for the signatures to verify.
     pub first_round: bool,
+    /// The justification commitment the `ConfirmedBlock` voters signed: the hash of the quorum
+    /// that validated the block in the confirmation round, transitively committing to the whole
+    /// justification chain, or `None` for a first-round confirmation. It is part of the signed
+    /// `VoteValue`, so the light client must reconstruct that value with it — and by verifying
+    /// the confirmation signatures over it, the light client inherits the whole chain's validity
+    /// without ever seeing the chain.
+    pub justification_commitment: Option<CryptoHash>,
     /// The validator signatures over the block hash.
     pub signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
 }
@@ -44,6 +51,7 @@ impl BlockProof {
             header: block.header.clone(),
             round: certificate.round,
             first_round: certificate.first_round(),
+            justification_commitment: certificate.quorum().justification_commitment(),
             signatures: certificate.signatures().clone(),
         }
     }
@@ -250,7 +258,7 @@ mod tests {
         // Confirmed in the fast round, which is the chain's first round, so the votes attest it
         // and the certificate carries no justification chain.
         let quorum =
-            Vote::new_with_first_round(confirmed, Round::Fast, true, &validator.secret_key)
+            Vote::new_with_first_round(confirmed, Round::Fast, true, None, &validator.secret_key)
                 .into_certificate(validator.public_key);
         let certificate =
             ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default());

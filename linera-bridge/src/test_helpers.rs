@@ -228,8 +228,8 @@ pub fn create_signed_certificate_first_round(
     })];
     let block = create_test_block(chain_id, Epoch::ZERO, BlockHeight(1), transactions);
     let confirmed = ConfirmedBlock::new(block);
-    let quorum =
-        Vote::new_with_first_round(confirmed, Round::Fast, true, secret).into_certificate(*public);
+    let quorum = Vote::new_with_first_round(confirmed, Round::Fast, true, None, secret)
+        .into_certificate(*public);
     ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default())
 }
 
