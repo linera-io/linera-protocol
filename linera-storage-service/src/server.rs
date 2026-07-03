@@ -262,9 +262,6 @@ enum StorageServerOptions {
         /// The storage service address.
         #[arg(long)]
         endpoint: String,
-        /// Preferred buffer size for async streams.
-        #[arg(long, default_value = "10")]
-        max_stream_queries: usize,
     },
 
     #[cfg(with_rocksdb)]
@@ -279,9 +276,6 @@ enum StorageServerOptions {
         /// Path to the rocksdb database.
         #[arg(long)]
         path: String,
-        /// Preferred buffer size for async streams.
-        #[arg(long, default_value = "10")]
-        max_stream_queries: usize,
         /// The maximum size of the cache, in bytes (keys size + value sizes)
         #[arg(long, default_value = "10000000")]
         max_cache_size: usize,
@@ -645,10 +639,8 @@ async fn main() {
         StorageServerOptions::Memory {
             namespace,
             endpoint,
-            max_stream_queries,
         } => {
             let config = MemoryStoreConfig {
-                max_stream_queries,
                 kill_on_drop: false,
             };
             let database = MemoryDatabase::maybe_create_and_connect(&config, &namespace)
@@ -664,7 +656,6 @@ async fn main() {
             namespace,
             endpoint,
             path,
-            max_stream_queries,
             max_cache_size,
             max_value_entry_size,
             max_find_keys_entry_size,
@@ -680,7 +671,6 @@ async fn main() {
             let inner_config = RocksDbStoreInternalConfig {
                 spawn_mode,
                 path_with_guard,
-                max_stream_queries,
                 enable_statistics: false,
                 statistics_level: Default::default(),
             };

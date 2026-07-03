@@ -32,10 +32,6 @@ pub struct RocksDbConfig {
     #[arg(long)]
     max_concurrent_queries: Option<usize>,
 
-    /// The maximal number of simultaneous stream queries to the database
-    #[arg(long, default_value = "10")]
-    pub max_stream_queries: usize,
-
     /// The maximal memory used in the storage cache in bytes.
     #[arg(long, default_value = "10000000")]
     pub max_cache_size: usize,
@@ -112,7 +108,6 @@ impl RocksDbRunner {
         let inner_config = RocksDbStoreInternalConfig {
             spawn_mode,
             path_with_guard,
-            max_stream_queries: config.client.max_stream_queries,
             enable_statistics: false,
             statistics_level: Default::default(),
         };

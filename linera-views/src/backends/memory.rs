@@ -25,16 +25,10 @@ use crate::{
 /// The initial configuration of the system
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MemoryStoreConfig {
-    /// Preferred buffer size for async streams.
-    pub max_stream_queries: usize,
     /// Whether a namespace should be immediately cleaned up from memory when the
     /// connection object is dropped.
     pub kill_on_drop: bool,
 }
-
-/// The number of streams for the test
-#[cfg(with_testing)]
-const TEST_MEMORY_MAX_STREAM_QUERIES: usize = 10;
 
 /// The values in a partition.
 type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
@@ -50,8 +44,6 @@ struct MemoryDatabases {
 pub struct MemoryDatabase {
     /// The current namespace.
     namespace: String,
-    /// The maximum number of queries used for a stream.
-    max_stream_queries: usize,
     /// Whether to remove the namespace on drop.
     kill_on_drop: bool,
 }
@@ -60,7 +52,6 @@ impl MemoryDatabases {
     fn sync_open(
         &mut self,
         namespace: &str,
-        max_stream_queries: usize,
         root_key: &[u8],
     ) -> Result<MemoryStore, MemoryStoreError> {
         let Some(stores) = self.databases.get_mut(namespace) else {
@@ -74,7 +65,6 @@ impl MemoryDatabases {
         Ok(MemoryStore {
             map,
             root_key: root_key.to_vec(),
-            max_stream_queries,
         })
     }
 
@@ -114,8 +104,6 @@ pub struct MemoryStore {
     map: Arc<RwLock<MemoryStoreMap>>,
     /// The root key.
     root_key: Vec<u8>,
-    /// The maximum number of queries used for a stream.
-    max_stream_queries: usize,
 }
 
 impl WithError for MemoryDatabase {
@@ -128,10 +116,6 @@ impl WithError for MemoryStore {
 
 impl ReadableKeyValueStore for MemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
-
-    fn max_stream_queries(&self) -> usize {
-        self.max_stream_queries
-    }
 
     fn root_key(&self) -> Result<Vec<u8>, MemoryStoreError> {
         Ok(self.root_key.clone())
@@ -255,7 +239,6 @@ impl MemoryStore {
         Self {
             map: Arc::default(),
             root_key: Vec::new(),
-            max_stream_queries: TEST_MEMORY_MAX_STREAM_QUERIES,
         }
     }
 }
@@ -289,7 +272,6 @@ impl KeyValueDatabase for MemoryDatabase {
         };
         Ok(MemoryDatabase {
             namespace: namespace.to_string(),
-            max_stream_queries: config.max_stream_queries,
             kill_on_drop: config.kill_on_drop,
         })
     }
@@ -298,7 +280,7 @@ impl KeyValueDatabase for MemoryDatabase {
         let mut databases = MEMORY_DATABASES
             .lock()
             .expect("MEMORY_DATABASES lock should not be poisoned");
-        databases.sync_open(&self.namespace, self.max_stream_queries, root_key)
+        databases.sync_open(&self.namespace, root_key)
     }
 
     fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, MemoryStoreError> {
@@ -350,7 +332,6 @@ impl KeyValueDatabase for MemoryDatabase {
 impl TestKeyValueDatabase for MemoryDatabase {
     async fn new_test_config() -> Result<MemoryStoreConfig, MemoryStoreError> {
         Ok(MemoryStoreConfig {
-            max_stream_queries: TEST_MEMORY_MAX_STREAM_QUERIES,
             kill_on_drop: false,
         })
     }

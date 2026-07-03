@@ -106,10 +106,6 @@ impl ReadableKeyValueStore for KeyValueStore {
     // on the size of its values.
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
 
-    fn max_stream_queries(&self) -> usize {
-        1
-    }
-
     fn root_key(&self) -> Result<Vec<u8>, KeyValueStoreError> {
         Ok(Vec::new())
     }
