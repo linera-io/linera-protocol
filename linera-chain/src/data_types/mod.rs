@@ -568,8 +568,8 @@ impl LiteValue {
 
 //(deuszx): pub is temp.
 /// The value a validator signs when voting: the value hash, round, certificate kind, the
-/// unlocking round (for `ValidatedBlock` votes), and the first-round attestation (for
-/// `ConfirmedBlock` votes).
+/// unlocking round (for `ValidatedBlock` votes), the first-round attestation (for
+/// `ConfirmedBlock` votes), and the justification commitment.
 ///
 /// The unlocking round is the consensus device behind fault attributability: by signing it, a
 /// validator asserts "I have not voted to confirm a block other than this one in any round at or
@@ -577,9 +577,19 @@ impl LiteValue {
 /// ("...in any round"), and is used for freshly proposed blocks and for `ConfirmedBlock`/`Timeout`
 /// votes, which carry no unlocking round.
 ///
-/// The final `bool` is the first-round attestation: it is `true` only when a `ConfirmedBlock`
+/// The `bool` is the first-round attestation: it is `true` only when a `ConfirmedBlock`
 /// vote confirms a block in the chain's first round, and is always `false` for `ValidatedBlock`
 /// and `Timeout` votes.
+///
+/// The final hash is the justification commitment: the hash of the quorum this vote cites (see
+/// [`CommittedQuorum`]), which transitively commits to the whole justification chain below it.
+/// By signing it, the voter attests that they verified the cited quorum, so certificates are
+/// verified by checking only their top quorum's signatures. A `ValidatedBlock` vote cites the
+/// quorum that justifies its unlocking round (`None` for a fresh proposal); a `ConfirmedBlock`
+/// vote cites the quorum that validated the block in the same round (`None` when confirming in
+/// the chain's first round); `Timeout` votes cite nothing.
+///
+/// [`CommittedQuorum`]: crate::justification::CommittedQuorum
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct VoteValue(
     pub(crate) CryptoHash,
@@ -587,6 +597,7 @@ pub struct VoteValue(
     pub(crate) CertificateKind,
     pub(crate) Option<Round>,
     pub(crate) bool,
+    pub(crate) Option<CryptoHash>,
 );
 
 /// A vote on a statement from a validator.
@@ -604,8 +615,11 @@ pub struct Vote<T> {
     /// `ConfirmedBlock` vote that confirms a block in the chain's first round; it is always
     /// `false` for `ValidatedBlock` and `Timeout` votes.
     pub first_round: bool,
-    /// The validator's signature over the value hash, round, certificate kind, unlocking round and
-    /// first-round attestation.
+    /// The justification commitment this vote signed (see [`VoteValue`]): the hash of the cited
+    /// quorum, or `None` if the vote cites none.
+    pub justification_commitment: Option<CryptoHash>,
+    /// The validator's signature over the value hash, round, certificate kind, unlocking round,
+    /// first-round attestation and justification commitment.
     pub signature: ValidatorSignature,
 }
 
@@ -615,48 +629,68 @@ impl<T> Vote<T> {
     where
         T: CertificateValue,
     {
-        Self::new_with_unlocking_round(value, round, None, key_pair)
+        Self::new_with_unlocking_round(value, round, None, None, key_pair)
     }
 
-    /// Use signing key to create a signed object with the given unlocking round (see [`VoteValue`]).
+    /// Use signing key to create a signed object with the given unlocking round and the
+    /// justification commitment of the quorum that grounds it (see [`VoteValue`]).
     pub fn new_with_unlocking_round(
         value: T,
         round: Round,
         unlocking_round: Option<Round>,
+        justification_commitment: Option<CryptoHash>,
         key_pair: &ValidatorSecretKey,
     ) -> Self
     where
         T: CertificateValue,
     {
-        let hash_and_round = VoteValue(value.hash(), round, T::KIND, unlocking_round, false);
+        let hash_and_round = VoteValue(
+            value.hash(),
+            round,
+            T::KIND,
+            unlocking_round,
+            false,
+            justification_commitment,
+        );
         let signature = ValidatorSignature::new(&hash_and_round, key_pair);
         Self {
             value,
             round,
             unlocking_round,
             first_round: false,
+            justification_commitment,
             signature,
         }
     }
 
     /// Use signing key to create a signed `ConfirmedBlock` object that carries the first-round
-    /// attestation `first_round` (see [`VoteValue`]). The unlocking round is always `None`.
+    /// attestation `first_round` and the justification commitment of the quorum that validated
+    /// the block (see [`VoteValue`]). The unlocking round is always `None`.
     pub fn new_with_first_round(
         value: T,
         round: Round,
         first_round: bool,
+        justification_commitment: Option<CryptoHash>,
         key_pair: &ValidatorSecretKey,
     ) -> Self
     where
         T: CertificateValue,
     {
-        let hash_and_round = VoteValue(value.hash(), round, T::KIND, None, first_round);
+        let hash_and_round = VoteValue(
+            value.hash(),
+            round,
+            T::KIND,
+            None,
+            first_round,
+            justification_commitment,
+        );
         let signature = ValidatorSignature::new(&hash_and_round, key_pair);
         Self {
             value,
             round,
             unlocking_round: None,
             first_round,
+            justification_commitment,
             signature,
         }
     }
@@ -671,6 +705,7 @@ impl<T> Vote<T> {
             round: self.round,
             unlocking_round: self.unlocking_round,
             first_round: self.first_round,
+            justification_commitment: self.justification_commitment,
             signature: self.signature,
         }
     }
@@ -696,8 +731,11 @@ pub struct LiteVote {
     /// `ConfirmedBlock` vote that confirms a block in the chain's first round; it is always
     /// `false` for `ValidatedBlock` and `Timeout` votes.
     pub first_round: bool,
-    /// The validator's signature over the value hash, round, certificate kind, unlocking round and
-    /// first-round attestation.
+    /// The justification commitment this vote signed (see [`VoteValue`]): the hash of the cited
+    /// quorum, or `None` if the vote cites none.
+    pub justification_commitment: Option<CryptoHash>,
+    /// The validator's signature over the value hash, round, certificate kind, unlocking round,
+    /// first-round attestation and justification commitment.
     pub signature: ValidatorSignature,
 }
 
@@ -713,6 +751,7 @@ impl LiteVote {
             round: self.round,
             unlocking_round: self.unlocking_round,
             first_round: self.first_round,
+            justification_commitment: self.justification_commitment,
             signature: self.signature,
         })
     }
@@ -980,13 +1019,14 @@ impl BlockProposal {
 impl LiteVote {
     /// Uses the signing key to create a signed object.
     pub fn new(value: LiteValue, round: Round, secret_key: &ValidatorSecretKey) -> Self {
-        let hash_and_round = VoteValue(value.value_hash, round, value.kind, None, false);
+        let hash_and_round = VoteValue(value.value_hash, round, value.kind, None, false, None);
         let signature = ValidatorSignature::new(&hash_and_round, secret_key);
         Self {
             value,
             round,
             unlocking_round: None,
             first_round: false,
+            justification_commitment: None,
             signature,
         }
     }
@@ -999,6 +1039,7 @@ impl LiteVote {
             self.value.kind,
             self.unlocking_round,
             self.first_round,
+            self.justification_commitment,
         );
         Ok(self.signature.check(&hash_and_round, public_key)?)
     }
@@ -1014,23 +1055,26 @@ pub struct SignatureAggregator<'a, T: CertificateValue> {
 
 impl<'a, T: CertificateValue> SignatureAggregator<'a, T> {
     /// Starts aggregating signatures for the given value into a certificate whose voters signed
-    /// the given unlocking round and first-round attestation (see [`VoteValue`]).
+    /// the given unlocking round, first-round attestation and justification commitment (see
+    /// [`VoteValue`]).
     pub fn new(
         value: T,
         round: Round,
         unlocking_round: Option<Round>,
         first_round: bool,
+        justification_commitment: Option<CryptoHash>,
         committee: &'a Committee,
     ) -> Self {
         Self {
             committee,
             weight: 0,
             used_validators: HashSet::new(),
-            partial: GenericCertificate::new_with_unlocking_round_and_first_round(
+            partial: GenericCertificate::new_with_payload(
                 value,
                 round,
                 unlocking_round,
                 first_round,
+                justification_commitment,
                 Vec::new(),
             ),
         }
@@ -1053,6 +1097,7 @@ impl<'a, T: CertificateValue> SignatureAggregator<'a, T> {
             T::KIND,
             self.partial.unlocking_round(),
             self.partial.first_round(),
+            self.partial.justification_commitment(),
         );
         signature.check(&hash_and_round, public_key)?;
         // Check that each validator only appears once.
@@ -1083,18 +1128,10 @@ pub(crate) fn is_strictly_ordered(values: &[(ValidatorPublicKey, ValidatorSignat
     values.windows(2).all(|pair| pair[0].0 < pair[1].0)
 }
 
-/// Verifies certificate signatures.
-///
-/// `unlocking_round` is the unlocking round that `ValidatedBlock` voters signed (see [`VoteValue`]);
-/// it is `None` for `ConfirmedBlock`/`Timeout` certificates and for validated blocks with no
-/// justification. `first_round` is the first-round attestation that `ConfirmedBlock` voters
-/// signed; it is always `false` for `ValidatedBlock`/`Timeout` certificates.
+/// Verifies certificate signatures: that the signers form a quorum of the committee without
+/// duplicates, and that every signature verifies over the given signed payload.
 pub(crate) fn check_signatures(
-    value_hash: CryptoHash,
-    certificate_kind: CertificateKind,
-    round: Round,
-    unlocking_round: Option<Round>,
-    first_round: bool,
+    value: &VoteValue,
     signatures: &[(ValidatorPublicKey, ValidatorSignature)],
     committee: &Committee,
 ) -> Result<(), ChainError> {
@@ -1118,14 +1155,7 @@ pub(crate) fn check_signatures(
         ChainError::CertificateRequiresQuorum
     );
     // All that is left is checking signatures!
-    let hash_and_round = VoteValue(
-        value_hash,
-        round,
-        certificate_kind,
-        unlocking_round,
-        first_round,
-    );
-    ValidatorSignature::verify_batch(&hash_and_round, signatures.iter())?;
+    ValidatorSignature::verify_batch(value, signatures.iter())?;
     Ok(())
 }
 

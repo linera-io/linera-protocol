@@ -6,7 +6,7 @@ use std::{borrow::Cow, ops::Deref};
 
 use allocative::{Allocative, Key, Visitor};
 use linera_base::{
-    crypto::{ValidatorPublicKey, ValidatorSignature},
+    crypto::{CryptoHash, ValidatorPublicKey, ValidatorSignature},
     data_types::Round,
     ensure,
 };
@@ -18,8 +18,8 @@ use super::{
 };
 use crate::{
     block::{ConfirmedBlock, ValidatedBlock},
-    data_types::{check_signatures, LiteValue, LiteVote},
-    justification::JustificationChain,
+    data_types::{check_signatures, LiteValue, LiteVote, VoteValue},
+    justification::{CommittedQuorum, JustificationChain},
     types::CertificateKind,
     ChainError,
 };
@@ -43,6 +43,11 @@ pub struct LiteCertificate<'a> {
     ///
     /// [`VoteValue`]: crate::data_types::VoteValue
     pub first_round: bool,
+    /// The justification commitment the voters signed (see [`VoteValue`]): the hash of the
+    /// carried chain's top link, or `None` if the chain is empty.
+    ///
+    /// [`VoteValue`]: crate::data_types::VoteValue
+    pub justification_commitment: Option<CryptoHash>,
     /// The justification chain attached to this certificate: for a `ValidatedBlock` certificate
     /// it is the chain of validated quorums in rounds below `round`; for a `ConfirmedBlock`
     /// certificate it is the full chain of validated quorums up to and including the confirm
@@ -71,16 +76,18 @@ impl Allocative for LiteCertificate<'_> {
 }
 
 impl LiteCertificate<'_> {
-    /// Creates a new lite certificate that records the unlocking round its `ValidatedBlock`
-    /// voters signed and the first-round attestation its `ConfirmedBlock` voters signed (see
-    /// [`VoteValue`]), with an empty justification chain.
+    /// Creates a new lite certificate that records the signed payload fields beyond the value
+    /// and round: the unlocking round its `ValidatedBlock` voters signed, the first-round
+    /// attestation its `ConfirmedBlock` voters signed, and the justification commitment (see
+    /// [`VoteValue`]) — with an empty justification chain.
     ///
     /// [`VoteValue`]: crate::data_types::VoteValue
-    pub fn new_with_unlocking_round_and_first_round(
+    pub fn new_with_payload(
         value: LiteValue,
         round: Round,
         unlocking_round: Option<Round>,
         first_round: bool,
+        justification_commitment: Option<CryptoHash>,
         mut signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
     ) -> Self {
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
@@ -90,6 +97,7 @@ impl LiteCertificate<'_> {
             round,
             unlocking_round,
             first_round,
+            justification_commitment,
             justification: Cow::Owned(JustificationChain::default()),
             signatures: Cow::Owned(signatures),
         }
@@ -108,6 +116,7 @@ impl LiteCertificate<'_> {
                 round,
                 unlocking_round,
                 first_round,
+                justification_commitment,
                 signature,
             },
         ) = votes.next()?;
@@ -117,16 +126,18 @@ impl LiteCertificate<'_> {
                 || vote.round != round
                 || vote.unlocking_round != unlocking_round
                 || vote.first_round != first_round
+                || vote.justification_commitment != justification_commitment
             {
                 return None;
             }
             signatures.push((validator_key, vote.signature));
         }
-        Some(LiteCertificate::new_with_unlocking_round_and_first_round(
+        Some(LiteCertificate::new_with_payload(
             value,
             round,
             unlocking_round,
             first_round,
+            justification_commitment,
             signatures,
         ))
     }
@@ -140,17 +151,24 @@ impl LiteCertificate<'_> {
     /// [`ValidatedBlockCertificate::check`]: super::ValidatedBlockCertificate::check
     /// [`ConfirmedBlockCertificate::check`]: super::ConfirmedBlockCertificate::check
     pub fn check(&self, committee: &Committee) -> Result<&LiteValue, ChainError> {
-        check_signatures(
+        // The carried chain's links are not signature-checked: the signed justification
+        // commitment is the hash-linked head of the chain, so the single signature check over
+        // this certificate's own quorum (below) attests every link — each link's voters verified
+        // the quorum beneath them before signing over its hash.
+        let derived_commitment = self.justification.verify(self.value.value_hash)?;
+        ensure!(
+            self.justification_commitment == derived_commitment,
+            ChainError::JustificationCommitmentMismatch
+        );
+        let value = VoteValue(
             self.value.value_hash,
-            self.value.kind,
             self.round,
+            self.value.kind,
             self.unlocking_round,
             self.first_round,
-            &self.signatures,
-            committee,
-        )?;
-        self.justification
-            .verify(self.value.value_hash, committee)?;
+            self.justification_commitment,
+        );
+        check_signatures(&value, &self.signatures, committee)?;
         let top = self.justification.top_unlocking_round();
         match self.value.kind {
             CertificateKind::Validated => {
@@ -210,6 +228,20 @@ impl LiteCertificate<'_> {
             .append(self.round, self.signatures.to_vec())
     }
 
+    /// Returns the justification commitment that a vote citing this certificate signs: the hash
+    /// of this certificate's own quorum as a [`CommittedQuorum`], which transitively commits to
+    /// the chain below it. Equals [`full_justification`](Self::full_justification)'s commitment.
+    pub fn full_justification_commitment(&self) -> CryptoHash {
+        CommittedQuorum {
+            value_hash: self.value.value_hash,
+            round: self.round,
+            unlocking_round: self.unlocking_round,
+            previous: self.justification_commitment,
+            signatures: self.signatures.to_vec(),
+        }
+        .commitment()
+    }
+
     /// Checks whether the value matches this certificate.
     pub fn check_value<T: CertificateValue>(&self, value: &T) -> bool {
         self.value.chain_id == value.chain_id()
@@ -255,11 +287,12 @@ impl LiteCertificate<'_> {
         if !self.check_value(&value) {
             return None;
         }
-        let quorum = GenericCertificate::new_with_unlocking_round_and_first_round(
+        let quorum = GenericCertificate::new_with_payload(
             value,
             self.round,
             self.unlocking_round,
             self.first_round,
+            self.justification_commitment,
             self.signatures.into_owned(),
         );
         Some((quorum, self.justification.into_owned()))
@@ -272,6 +305,7 @@ impl LiteCertificate<'_> {
             round: self.round,
             unlocking_round: self.unlocking_round,
             first_round: self.first_round,
+            justification_commitment: self.justification_commitment,
             justification: Cow::Owned(self.justification.as_ref().clone()),
             signatures: Cow::Owned(self.signatures.clone().into_owned()),
         }

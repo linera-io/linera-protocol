@@ -6,7 +6,7 @@ use std::{borrow::Cow, ops::Deref};
 
 use allocative::Allocative;
 use linera_base::{
-    crypto::{ValidatorPublicKey, ValidatorSignature},
+    crypto::{CryptoHash, ValidatorPublicKey, ValidatorSignature},
     data_types::{Epoch, Round},
     identifiers::ChainId,
 };
@@ -30,6 +30,7 @@ struct Repr<'a> {
     value: Cow<'a, ConfirmedBlock>,
     round: Round,
     first_round: bool,
+    justification_commitment: Option<CryptoHash>,
     signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
     justification: Cow<'a, JustificationChain>,
 }
@@ -227,6 +228,7 @@ impl Serialize for ConfirmedBlockCertificate {
             value: Cow::Borrowed(self.quorum.inner()),
             round: self.quorum.round(),
             first_round: self.quorum.first_round(),
+            justification_commitment: self.quorum.justification_commitment(),
             signatures: Cow::Borrowed(self.quorum.signatures().as_slice()),
             justification: Cow::Borrowed(&self.justification),
         }
@@ -245,11 +247,12 @@ impl<'de> Deserialize<'de> for ConfirmedBlockCertificate {
             Err(serde::de::Error::custom("Vector is not strictly sorted"))
         } else {
             Ok(Self::from_parts(
-                GenericCertificate::new_with_unlocking_round_and_first_round(
+                GenericCertificate::new_with_payload(
                     helper.value.into_owned(),
                     helper.round,
                     None,
                     helper.first_round,
+                    helper.justification_commitment,
                     signatures,
                 ),
                 helper.justification.into_owned(),

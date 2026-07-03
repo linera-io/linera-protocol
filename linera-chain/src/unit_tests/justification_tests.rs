@@ -75,48 +75,60 @@ fn sign(
     kind: CertificateKind,
     unlocking_round: Option<Round>,
     first_round: bool,
+    justification_commitment: Option<CryptoHash>,
     key: &ValidatorKeypair,
 ) -> (ValidatorPublicKey, ValidatorSignature) {
-    let value = VoteValue(block, round, kind, unlocking_round, first_round);
+    let value = VoteValue(
+        block,
+        round,
+        kind,
+        unlocking_round,
+        first_round,
+        justification_commitment,
+    );
     (
         key.public_key,
         ValidatorSignature::new(&value, &key.secret_key),
     )
 }
 
-/// A `ValidatedBlock` quorum for `block` in `round`, cast with the given `unlocking_round`.
-fn validated_link(
-    block: CryptoHash,
-    round: Round,
-    unlocking_round: Option<Round>,
-    signers: &[&ValidatorKeypair],
-) -> JustificationLink {
-    JustificationLink {
-        round,
-        signatures: signers
+/// Builds a justification chain for `block` with one link per `(round, signers)` entry, ordered
+/// by increasing round. Each link's voters sign the unlocking round and justification commitment
+/// derived from the chain below them, exactly as real voters do.
+fn chain(block: CryptoHash, links: &[(Round, &[&ValidatorKeypair])]) -> JustificationChain {
+    let mut result = JustificationChain::default();
+    for (round, signers) in links {
+        let unlocking_round = result.top_unlocking_round();
+        let justification_commitment = result.commitment(block);
+        let signatures = signers
             .iter()
             .map(|kp| {
                 sign(
                     block,
-                    round,
+                    *round,
                     CertificateKind::Validated,
                     unlocking_round,
                     false,
+                    justification_commitment,
                     kp,
                 )
             })
-            .collect(),
+            .collect();
+        result = result.append(*round, signatures);
     }
+    result
 }
 
 /// A quorum of `ConfirmedBlock` signatures for `block` in `round`, carrying the first-round
-/// attestation iff `first_round` is set.
+/// attestation iff `first_round` is set and committing to the given justification chain.
 fn confirmed_signatures(
     block: CryptoHash,
     round: Round,
     first_round: bool,
+    justification: &JustificationChain,
     signers: &[&ValidatorKeypair],
 ) -> Vec<(ValidatorPublicKey, ValidatorSignature)> {
+    let justification_commitment = justification.commitment(block);
     signers
         .iter()
         .map(|kp| {
@@ -126,6 +138,7 @@ fn confirmed_signatures(
                 CertificateKind::Confirmed,
                 None,
                 first_round,
+                justification_commitment,
                 kp,
             )
         })
@@ -163,7 +176,13 @@ fn confirmation(
         header: header(name),
         round,
         first_round,
-        confirmed_signatures: confirmed_signatures(block(name), round, first_round, signers),
+        confirmed_signatures: confirmed_signatures(
+            block(name),
+            round,
+            first_round,
+            &justification,
+            signers,
+        ),
         justification,
     }
 }
@@ -171,74 +190,70 @@ fn confirmation(
 // --- Chain verification -----------------------------------------------------------------
 
 #[test]
-fn verify_accepts_valid_chain() {
-    let (committee, k) = setup(4);
+fn verify_accepts_valid_chain_and_returns_commitment() {
+    let (_committee, k) = setup(4);
     let b = block("B");
     // Link 0 at round 1 is the grounding link; link 1 at round 3 is justified by it.
-    let chain = JustificationChain::new(vec![
-        validated_link(b, Round::SingleLeader(1), None, &[&k[0], &k[1], &k[2]]),
-        validated_link(
-            b,
-            Round::SingleLeader(3),
-            Some(Round::SingleLeader(1)),
-            &[&k[0], &k[1], &k[2]],
-        ),
-    ]);
-    assert!(chain.verify(b, &committee).is_ok());
+    let chain = chain(
+        b,
+        &[
+            (Round::SingleLeader(1), &[&k[0], &k[1], &k[2]]),
+            (Round::SingleLeader(3), &[&k[0], &k[1], &k[2]]),
+        ],
+    );
+    let commitment = chain.verify(b).expect("chain must verify");
+    assert_eq!(commitment, chain.commitment(b));
+    assert!(commitment.is_some());
     assert_eq!(chain.top_unlocking_round(), Some(Round::SingleLeader(3)));
+    // The empty chain has no commitment.
+    assert_eq!(JustificationChain::default().commitment(b), None);
 }
 
 #[test]
 fn verify_rejects_non_increasing_rounds() {
-    let (committee, k) = setup(4);
     let b = block("B");
+    // Round monotonicity is the one structural property checked locally; everything else about
+    // the links is attested by the quorum that signed the chain's commitment.
     let chain = JustificationChain::new(vec![
-        validated_link(b, Round::SingleLeader(1), None, &[&k[0], &k[1], &k[2]]),
-        validated_link(
-            b,
-            Round::SingleLeader(1),
-            Some(Round::SingleLeader(1)),
-            &[&k[0], &k[1], &k[2]],
-        ),
+        JustificationLink {
+            round: Round::SingleLeader(1),
+            signatures: Vec::new(),
+        },
+        JustificationLink {
+            round: Round::SingleLeader(1),
+            signatures: Vec::new(),
+        },
     ]);
     assert!(matches!(
-        chain.verify(b, &committee),
+        chain.verify(b),
         Err(ChainError::JustificationRoundsNotIncreasing)
     ));
 }
 
 #[test]
-fn verify_rejects_broken_linkage() {
-    let (committee, k) = setup(4);
+fn commitment_binds_every_link() {
+    let (_committee, k) = setup(4);
     let b = block("B");
-    // Link 1's votes signed unlocking round `SingleLeader(2)`, but the previous link is at
-    // `SingleLeader(1)`, so the unlocking round the verifier derives doesn't match what was signed.
-    let chain = JustificationChain::new(vec![
-        validated_link(b, Round::SingleLeader(1), None, &[&k[0], &k[1], &k[2]]),
-        validated_link(
-            b,
-            Round::SingleLeader(3),
-            Some(Round::SingleLeader(2)),
-            &[&k[0], &k[1], &k[2]],
-        ),
-    ]);
-    assert!(chain.verify(b, &committee).is_err());
-}
-
-#[test]
-fn verify_rejects_sub_quorum() {
-    let (committee, k) = setup(4);
-    let b = block("B");
-    let chain = JustificationChain::new(vec![validated_link(
+    let original = chain(
         b,
-        Round::SingleLeader(0),
-        None,
-        &[&k[0]],
-    )]);
-    assert!(matches!(
-        chain.verify(b, &committee),
-        Err(ChainError::CertificateRequiresQuorum)
-    ));
+        &[
+            (Round::SingleLeader(1), &[&k[0], &k[1], &k[2]]),
+            (Round::SingleLeader(3), &[&k[0], &k[1], &k[2]]),
+        ],
+    );
+    let commitment = original.commitment(b);
+    // Tampering with the *grounding* link changes the head commitment, even though only the top
+    // link's hash directly includes it: the chain is hash-linked.
+    let tampered = chain(
+        b,
+        &[
+            (Round::SingleLeader(1), &[&k[1], &k[2], &k[3]]),
+            (Round::SingleLeader(3), &[&k[0], &k[1], &k[2]]),
+        ],
+    );
+    assert_ne!(commitment, tampered.commitment(b));
+    // And the commitment depends on the block being justified.
+    assert_ne!(commitment, original.commitment(block("A")));
 }
 
 // --- Equivocation extraction ------------------------------------------------------------
@@ -257,11 +272,12 @@ fn extract_returns_none_for_non_conflicts() {
     let b = a.clone();
     assert!(extract_equivocations(&a, &b).is_empty());
 
-    // Same shape as `extract_finds_lock_violation`, but the two blocks are at *different heights*.
-    // The locking rule is per height, so a validator confirming A at height 0 and validating B at
-    // height 1 is not equivocating — no proof must be produced, in either argument order.
+    // Two conflicting blocks at *different heights* are not a conflict either: the locking rule
+    // is per height, so a validator confirming A at height 0 and validating B at height 1 is not
+    // equivocating — no proof must be produced, in either argument order.
     let a_hash = block_at(1, 0, "A");
     let b_hash = block_at(1, 1, "B");
+    let a_justification = chain(a_hash, &[(Round::SingleLeader(0), &[&k[0], &k[1], &k[2]])]);
     let a = JustifiedConfirmation {
         header: header_at(1, 0, "A"),
         round: Round::SingleLeader(0),
@@ -270,15 +286,12 @@ fn extract_returns_none_for_non_conflicts() {
             a_hash,
             Round::SingleLeader(0),
             false,
+            &a_justification,
             &[&k[0], &k[1], &k[2]],
         ),
-        justification: JustificationChain::new(vec![validated_link(
-            a_hash,
-            Round::SingleLeader(0),
-            None,
-            &[&k[0], &k[1], &k[2]],
-        )]),
+        justification: a_justification,
     };
+    let b_justification = chain(b_hash, &[(Round::SingleLeader(1), &[&k[0], &k[2], &k[3]])]);
     let b = JustifiedConfirmation {
         header: header_at(1, 1, "B"),
         round: Round::SingleLeader(1),
@@ -287,14 +300,10 @@ fn extract_returns_none_for_non_conflicts() {
             b_hash,
             Round::SingleLeader(1),
             false,
+            &b_justification,
             &[&k[0], &k[2], &k[3]],
         ),
-        justification: JustificationChain::new(vec![validated_link(
-            b_hash,
-            Round::SingleLeader(1),
-            None,
-            &[&k[0], &k[2], &k[3]],
-        )]),
+        justification: b_justification,
     };
     assert!(extract_equivocations(&a, &b).is_empty());
     assert!(extract_equivocations(&b, &a).is_empty());
@@ -307,35 +316,27 @@ fn extract_is_independent_of_argument_order() {
     // A is freshly validated and confirmed in round 2. B is grounded in round 1 and
     // re-validated in round 5 (unlocking round 1), then confirmed there. `k[1]`/`k[2]` confirmed A
     // in round 2 and validated B in round 5 under unlocking round 1, whose window [1, 5) contains 2
-    // — a genuine lock
-    // violation. Extraction must find that real fault for either argument order, never a
-    // spurious one read off A's own chain at a round below the B-confirmation.
+    // — a genuine lock violation. Extraction must find that real fault for either argument order,
+    // never a spurious one read off A's own chain at a round below the B-confirmation.
     let a = confirmation(
         "A",
         Round::SingleLeader(2),
         false,
         &[&k[0], &k[1], &k[2]],
-        JustificationChain::new(vec![validated_link(
-            a_hash,
-            Round::SingleLeader(2),
-            None,
-            &[&k[0], &k[1], &k[2]],
-        )]),
+        chain(a_hash, &[(Round::SingleLeader(2), &[&k[0], &k[1], &k[2]])]),
     );
     let b = confirmation(
         "B",
         Round::SingleLeader(5),
         false,
         &[&k[1], &k[2], &k[3]],
-        JustificationChain::new(vec![
-            validated_link(b_hash, Round::SingleLeader(1), None, &[&k[1], &k[2], &k[3]]),
-            validated_link(
-                b_hash,
-                Round::SingleLeader(5),
-                Some(Round::SingleLeader(1)),
-                &[&k[1], &k[2], &k[3]],
-            ),
-        ]),
+        chain(
+            b_hash,
+            &[
+                (Round::SingleLeader(1), &[&k[1], &k[2], &k[3]]),
+                (Round::SingleLeader(5), &[&k[1], &k[2], &k[3]]),
+            ],
+        ),
     );
     for (x, y) in [(&a, &b), (&b, &a)] {
         let proofs = extract_equivocations(x, y);
@@ -376,15 +377,13 @@ fn extract_descends_to_grounding_link() {
         Round::SingleLeader(3),
         false,
         &[&k[1], &k[2], &k[3]],
-        JustificationChain::new(vec![
-            validated_link(b_hash, Round::SingleLeader(1), None, &[&k[0], &k[2], &k[3]]),
-            validated_link(
-                b_hash,
-                Round::SingleLeader(3),
-                Some(Round::SingleLeader(1)),
-                &[&k[1], &k[2], &k[3]],
-            ),
-        ]),
+        chain(
+            b_hash,
+            &[
+                (Round::SingleLeader(1), &[&k[0], &k[2], &k[3]]),
+                (Round::SingleLeader(3), &[&k[1], &k[2], &k[3]]),
+            ],
+        ),
     );
     let proofs = extract_equivocations(&a, &b);
     for proof in &proofs {
@@ -392,10 +391,12 @@ fn extract_descends_to_grounding_link() {
             EquivocationProof::LockViolation {
                 validated_round,
                 validated_unlocking_round,
+                validated_commitment,
                 ..
             } => {
                 assert_eq!(*validated_round, Round::SingleLeader(1));
                 assert_eq!(*validated_unlocking_round, None);
+                assert_eq!(*validated_commitment, None);
             }
             other => panic!("expected a lock violation, got {other:?}"),
         }
@@ -436,30 +437,51 @@ fn extract_finds_double_validation() {
     let (a_hash, b_hash) = (block("A"), block("B"));
     let r = Round::SingleLeader(3);
     // `k[0]` and `k[2]` validated two different blocks in the same round, each under its own
-    // (different) unlocking round. That overlap is the double-validation fault.
+    // (different) justification. That overlap is the double-validation fault. The commitments
+    // the voters signed must travel into the proof for their signatures to verify.
+    let a_below = chain(a_hash, &[(Round::SingleLeader(1), &[&k[0], &k[1], &k[2]])]);
+    let a_commitment = a_below.commitment(a_hash);
     let a = ValidatedQuorum {
         header: header("A"),
         round: r,
-        unlocking_round: Some(Round::SingleLeader(1)),
-        signatures: validated_link(
-            a_hash,
-            r,
-            Some(Round::SingleLeader(1)),
-            &[&k[0], &k[1], &k[2]],
-        )
-        .signatures,
+        unlocking_round: a_below.top_unlocking_round(),
+        justification_commitment: a_commitment,
+        signatures: [&k[0], &k[1], &k[2]]
+            .iter()
+            .map(|kp| {
+                sign(
+                    a_hash,
+                    r,
+                    CertificateKind::Validated,
+                    a_below.top_unlocking_round(),
+                    false,
+                    a_commitment,
+                    kp,
+                )
+            })
+            .collect(),
     };
+    let b_below = chain(b_hash, &[(Round::SingleLeader(2), &[&k[0], &k[2], &k[3]])]);
+    let b_commitment = b_below.commitment(b_hash);
     let b = ValidatedQuorum {
         header: header("B"),
         round: r,
-        unlocking_round: Some(Round::SingleLeader(2)),
-        signatures: validated_link(
-            b_hash,
-            r,
-            Some(Round::SingleLeader(2)),
-            &[&k[0], &k[2], &k[3]],
-        )
-        .signatures,
+        unlocking_round: b_below.top_unlocking_round(),
+        justification_commitment: b_commitment,
+        signatures: [&k[0], &k[2], &k[3]]
+            .iter()
+            .map(|kp| {
+                sign(
+                    b_hash,
+                    r,
+                    CertificateKind::Validated,
+                    b_below.top_unlocking_round(),
+                    false,
+                    b_commitment,
+                    kp,
+                )
+            })
+            .collect(),
     };
     let proofs = extract_double_validations(&a, &b);
     for proof in &proofs {
@@ -477,20 +499,19 @@ fn extract_finds_double_validation() {
         header: header("A"),
         round: Round::SingleLeader(1),
         unlocking_round: None,
-        signatures: validated_link(a_hash, Round::SingleLeader(1), None, &[&k[0], &k[1], &k[2]])
-            .signatures,
+        justification_commitment: None,
+        signatures: chain(a_hash, &[(Round::SingleLeader(1), &[&k[0], &k[1], &k[2]])]).links()[0]
+            .signatures
+            .clone(),
     };
     let b2 = ValidatedQuorum {
         header: header("B"),
         round: Round::SingleLeader(3),
-        unlocking_round: Some(Round::SingleLeader(1)),
-        signatures: validated_link(
-            b_hash,
-            Round::SingleLeader(3),
-            Some(Round::SingleLeader(1)),
-            &[&k[0], &k[2], &k[3]],
-        )
-        .signatures,
+        unlocking_round: None,
+        justification_commitment: None,
+        signatures: chain(b_hash, &[(Round::SingleLeader(3), &[&k[0], &k[2], &k[3]])]).links()[0]
+            .signatures
+            .clone(),
     };
     assert!(extract_double_validations(&a2, &b2).is_empty());
 }
@@ -502,17 +523,19 @@ fn proof_check_rejects_same_block() {
     let (_committee, k) = setup(4);
     let a = block("A");
     let r = Round::SingleLeader(0);
-    let (_, confirmed_signature) = sign(a, r, CertificateKind::Confirmed, None, false, &k[0]);
-    let (_, validated_signature) = sign(a, r, CertificateKind::Validated, None, false, &k[0]);
+    let (_, confirmed_signature) = sign(a, r, CertificateKind::Confirmed, None, false, None, &k[0]);
+    let (_, validated_signature) = sign(a, r, CertificateKind::Validated, None, false, None, &k[0]);
     let proof = EquivocationProof::LockViolation {
         validator: k[0].public_key,
         confirmed_header: header("A"),
         confirmed_round: r,
         confirmed_attested: false,
+        confirmed_commitment: None,
         confirmed_signature,
         validated_header: header("A"),
         validated_round: r,
         validated_unlocking_round: None,
+        validated_commitment: None,
         validated_signature,
     };
     assert!(matches!(
@@ -535,6 +558,7 @@ fn proof_check_rejects_non_violating_lock() {
         CertificateKind::Validated,
         None,
         false,
+        None,
         &k[0],
     );
     let (_, confirmed_signature) = sign(
@@ -543,6 +567,7 @@ fn proof_check_rejects_non_violating_lock() {
         CertificateKind::Confirmed,
         None,
         false,
+        None,
         &k[0],
     );
     let proof = EquivocationProof::LockViolation {
@@ -550,10 +575,12 @@ fn proof_check_rejects_non_violating_lock() {
         confirmed_header: header("A"),
         confirmed_round: Round::SingleLeader(5),
         confirmed_attested: false,
+        confirmed_commitment: None,
         confirmed_signature,
         validated_header: header("B"),
         validated_round: Round::SingleLeader(2),
         validated_unlocking_round: None,
+        validated_commitment: None,
         validated_signature,
     };
     assert!(matches!(
@@ -569,14 +596,17 @@ fn proof_check_rejects_non_violating_lock() {
         CertificateKind::Confirmed,
         None,
         false,
+        None,
         &k[0],
     );
+    let commitment = Some(CryptoHash::test_hash("cited quorum"));
     let (_, validated_signature) = sign(
         b,
         Round::SingleLeader(3),
         CertificateKind::Validated,
         Some(Round::SingleLeader(2)),
         false,
+        commitment,
         &k[0],
     );
     let proof = EquivocationProof::LockViolation {
@@ -584,10 +614,12 @@ fn proof_check_rejects_non_violating_lock() {
         confirmed_header: header("A"),
         confirmed_round: Round::SingleLeader(0),
         confirmed_attested: false,
+        confirmed_commitment: None,
         confirmed_signature,
         validated_header: header("B"),
         validated_round: Round::SingleLeader(3),
         validated_unlocking_round: Some(Round::SingleLeader(2)),
+        validated_commitment: commitment,
         validated_signature,
     };
     assert!(matches!(
@@ -601,18 +633,20 @@ fn proof_check_rejects_forged_signature() {
     let (_committee, k) = setup(4);
     let (a, b) = (block("A"), block("B"));
     let r = Round::SingleLeader(0);
-    let (_, confirmed_signature) = sign(a, r, CertificateKind::Confirmed, None, false, &k[0]);
+    let (_, confirmed_signature) = sign(a, r, CertificateKind::Confirmed, None, false, None, &k[0]);
     // Signed by k[1], but the proof names k[0].
-    let (_, validated_signature) = sign(b, r, CertificateKind::Validated, None, false, &k[1]);
+    let (_, validated_signature) = sign(b, r, CertificateKind::Validated, None, false, None, &k[1]);
     let proof = EquivocationProof::LockViolation {
         validator: k[0].public_key,
         confirmed_header: header("A"),
         confirmed_round: r,
         confirmed_attested: false,
+        confirmed_commitment: None,
         confirmed_signature,
         validated_header: header("B"),
         validated_round: r,
         validated_unlocking_round: None,
+        validated_commitment: None,
         validated_signature,
     };
     assert!(proof.check().is_err());
@@ -638,12 +672,7 @@ fn extract_finds_lock_violation_against_attested_confirmation() {
         Round::SingleLeader(1),
         false,
         &[&k[0], &k[2], &k[3]],
-        JustificationChain::new(vec![validated_link(
-            b_hash,
-            Round::SingleLeader(1),
-            None,
-            &[&k[0], &k[2], &k[3]],
-        )]),
+        chain(b_hash, &[(Round::SingleLeader(1), &[&k[0], &k[2], &k[3]])]),
     );
     for (x, y) in [(&a, &b), (&b, &a)] {
         let proofs = extract_equivocations(x, y);
@@ -706,6 +735,7 @@ fn proof_check_rejects_non_violating_first_round() {
         CertificateKind::Confirmed,
         None,
         true,
+        None,
         &k[0],
     );
     let (_, earlier_signature) = sign(
@@ -714,16 +744,19 @@ fn proof_check_rejects_non_violating_first_round() {
         CertificateKind::Confirmed,
         None,
         false,
+        None,
         &k[0],
     );
     let proof = EquivocationProof::FirstRoundViolation {
         validator: k[0].public_key,
         attested_header: header("A"),
         attested_round: Round::Fast,
+        attested_commitment: None,
         attested_signature,
         earlier_header: header("B"),
         earlier_round: Round::MultiLeader(0),
         earlier_attested: false,
+        earlier_commitment: None,
         earlier_signature,
     };
     assert!(matches!(
@@ -746,6 +779,7 @@ fn proof_check_rejects_different_chain() {
         CertificateKind::Confirmed,
         None,
         false,
+        None,
         &k[0],
     );
     let (_, validated_signature) = sign(
@@ -754,6 +788,7 @@ fn proof_check_rejects_different_chain() {
         CertificateKind::Validated,
         None,
         false,
+        None,
         &k[0],
     );
     let proof = EquivocationProof::LockViolation {
@@ -761,10 +796,12 @@ fn proof_check_rejects_different_chain() {
         confirmed_header,
         confirmed_round: Round::SingleLeader(0),
         confirmed_attested: false,
+        confirmed_commitment: None,
         confirmed_signature,
         validated_header,
         validated_round: Round::SingleLeader(1),
         validated_unlocking_round: None,
+        validated_commitment: None,
         validated_signature,
     };
     assert!(matches!(

@@ -346,8 +346,6 @@ where
         let chain_id = value.chain_id();
         // A confirmation in the fast round is in the chain's first round, so its votes attest it.
         let first_round = T::KIND == CertificateKind::Confirmed && round.is_fast();
-        let quorum = Vote::new_with_first_round(value, round, first_round, key_pair)
-            .into_certificate(public_key);
         // A block confirmed outside the fast round must be justified by a validated quorum at the
         // confirm round. Build that single-link chain (the lone test validator signs a
         // `ValidatedBlock` vote with lock `None`). Validated and timeout certificates, and blocks
@@ -366,6 +364,17 @@ where
         } else {
             JustificationChain::default()
         };
+        // The confirmation vote commits to the chain it sits on, so a single signature check
+        // attests the whole chain.
+        let justification_commitment = justification.commitment(value_hash);
+        let quorum = Vote::new_with_first_round(
+            value,
+            round,
+            first_round,
+            justification_commitment,
+            key_pair,
+        )
+        .into_certificate(public_key);
         T::make_certificate(quorum, justification)
     }
 

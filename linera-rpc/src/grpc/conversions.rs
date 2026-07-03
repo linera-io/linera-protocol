@@ -14,7 +14,7 @@ use linera_chain::{
     data_types::{BlockProposal, LiteValue, ProposalContent},
     justification::JustificationChain,
     types::{
-        Certificate, CertificateKind, ConfirmedBlock, ConfirmedBlockCertificate,
+        Certificate, CertificateKind, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate,
         GenericCertificate, LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock,
         ValidatedBlockCertificate,
     },
@@ -392,18 +392,23 @@ impl TryFrom<api::LiteCertificate> for HandleLiteCertRequest<'_> {
             chain_id: try_proto_convert(certificate.chain_id)?,
             kind,
         };
-        let signatures = bincode::deserialize(&certificate.signatures)?;
+        let signatures: Vec<_> = bincode::deserialize(&certificate.signatures)?;
         let round = bincode::deserialize(&certificate.round)?;
         let unlocking_round = bincode::deserialize(&certificate.unlocking_round)?;
-        let mut lite = LiteCertificate::new_with_unlocking_round_and_first_round(
+        let justification = deserialize_justification(&certificate.justification)?;
+        // The signed justification commitment is not on the wire: it is derived from the carried
+        // chain, which `LiteCertificate::check` binds it to anyway. A certificate whose voters
+        // signed a different commitment simply fails its signature check.
+        let justification_commitment = justification.commitment(value.value_hash);
+        let mut lite = LiteCertificate::new_with_payload(
             value,
             round,
             unlocking_round,
             certificate.first_round,
+            justification_commitment,
             signatures,
         );
-        lite.justification =
-            std::borrow::Cow::Owned(deserialize_justification(&certificate.justification)?);
+        lite.justification = std::borrow::Cow::Owned(justification);
         Ok(Self {
             certificate: lite,
             wait_for_outgoing_messages: certificate.wait_for_outgoing_messages,
@@ -560,10 +565,15 @@ impl TryFrom<api::Certificate> for ValidatedBlockCertificate {
         if cert_type == api::CertificateKind::Validated as i32 {
             let value: ValidatedBlock = bincode::deserialize(&certificate.value)?;
             let below = deserialize_justification(&certificate.justification)?;
-            let quorum = GenericCertificate::new_with_unlocking_round(
+            // The signed unlocking round and justification commitment are derived from the
+            // carried chain, which the certificate check binds them to anyway.
+            let justification_commitment = below.commitment(value.hash());
+            let quorum = GenericCertificate::new_with_payload(
                 value,
                 round,
                 below.top_unlocking_round(),
+                false,
+                justification_commitment,
                 signatures,
             );
             Ok(ValidatedBlockCertificate::from_parts(quorum, below))
@@ -584,11 +594,15 @@ impl TryFrom<api::Certificate> for ConfirmedBlockCertificate {
         if cert_type == api::CertificateKind::Confirmed as i32 {
             let value: ConfirmedBlock = bincode::deserialize(&certificate.value)?;
             let validated = deserialize_justification(&certificate.justification)?;
-            let quorum = GenericCertificate::new_with_unlocking_round_and_first_round(
+            // The signed justification commitment is derived from the carried chain, which the
+            // certificate check binds it to anyway.
+            let justification_commitment = validated.commitment(value.hash());
+            let quorum = GenericCertificate::new_with_payload(
                 value,
                 round,
                 None,
                 certificate.first_round,
+                justification_commitment,
                 signatures,
             );
             Ok(ConfirmedBlockCertificate::from_parts(quorum, validated))
@@ -1313,6 +1327,7 @@ pub mod tests {
             round: Round::MultiLeader(2),
             unlocking_round: None,
             first_round: false,
+            justification_commitment: None,
             justification: Default::default(),
             signatures: Cow::Owned(vec![(
                 key_pair.public_key,

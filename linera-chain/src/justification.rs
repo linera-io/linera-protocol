@@ -16,6 +16,15 @@
 //! strictly increasing rounds, rising from the round where the block was first validated (where
 //! the unlocking round is `0`, represented as `None`) up to the certifying round.
 //!
+//! Votes also sign a *justification commitment*: the hash of the quorum they cite, as a
+//! [`CommittedQuorum`] — which itself contains the hash of the quorum below it, and so on down to
+//! the fresh proposal. The chain is thus hash-linked, and by signing its head a voter attests
+//! that they verified the cited quorum, whose voters in turn attested the quorum below. A
+//! certificate is therefore verified with a *single* signature check over its top quorum plus a
+//! hash walk down the carried chain: any quorum contains honest voters, so an invalid link can
+//! only sit beneath a quorum whose signers all lied — and signing over an invalid quorum is
+//! itself an attributable fault.
+//!
 //! A confirmation in a chain's *first* round needs no chain: its `ConfirmedBlock` votes instead
 //! carry a first-round attestation (see [`VoteValue`]), asserting that no lower round exists at
 //! this height. A vote in a lower round together with an attestation in a higher one is therefore
@@ -33,19 +42,13 @@ use std::collections::BTreeMap;
 
 use allocative::Allocative;
 use linera_base::{
-    crypto::{CryptoHash, ValidatorPublicKey, ValidatorSignature},
+    crypto::{BcsHashable, CryptoHash, ValidatorPublicKey, ValidatorSignature},
     data_types::Round,
     ensure,
 };
-use linera_execution::committee::Committee;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    block::BlockHeader,
-    data_types::{check_signatures, VoteValue},
-    types::CertificateKind,
-    ChainError,
-};
+use crate::{block::BlockHeader, data_types::VoteValue, types::CertificateKind, ChainError};
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -76,6 +79,41 @@ pub struct JustificationLink {
     pub round: Round,
     /// The validators' signatures over the corresponding [`VoteValue`].
     pub signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
+}
+
+/// A quorum of `ValidatedBlock` votes as the votes built on top of it commit to it: the block
+/// and round it validated, the payload fields its own voters signed — their unlocking round and
+/// their commitment to the quorum below — and its signatures.
+///
+/// Hashing this struct yields the *justification commitment* (see [`VoteValue`]) that votes
+/// citing this quorum sign. Because the struct contains the previous quorum's commitment, the
+/// hash transitively commits to the entire chain below: verifying one quorum's signatures over
+/// it attests, link by link, that every quorum underneath was checked by the honest voters who
+/// signed above it.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+pub struct CommittedQuorum {
+    /// The hash of the block this quorum validated.
+    pub value_hash: CryptoHash,
+    /// The round in which the quorum's votes were cast.
+    pub round: Round,
+    /// The unlocking round the quorum's voters signed: the round of the quorum below, or `None`
+    /// for a fresh proposal.
+    pub unlocking_round: Option<Round>,
+    /// The justification commitment the quorum's voters signed: the hash of the quorum below as
+    /// a [`CommittedQuorum`], or `None` for a fresh proposal.
+    pub previous: Option<CryptoHash>,
+    /// The `ValidatedBlock` signatures forming the quorum.
+    pub signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
+}
+
+impl BcsHashable<'_> for CommittedQuorum {}
+
+impl CommittedQuorum {
+    /// Returns the justification commitment for this quorum: the value a vote citing it signs.
+    pub fn commitment(&self) -> CryptoHash {
+        CryptoHash::new(self)
+    }
 }
 
 /// The chain of `ValidatedBlock` quorums that justifies a validated or confirmed block, from
@@ -115,48 +153,60 @@ impl JustificationChain {
         Self { links }
     }
 
-    /// Returns the unlocking round that the quorum in link `index` signed: the round of the
-    /// previous, lower link, or `None` if `index` is the first (grounding) link.
-    fn unlocking_round_at(&self, index: usize) -> Option<Round> {
-        index.checked_sub(1).map(|prev| self.links[prev].round)
-    }
-
     /// Returns the unlocking round that a certificate sitting on top of this chain signed: the
     /// round of the highest link, or `None` if the chain is empty.
     pub fn top_unlocking_round(&self) -> Option<Round> {
         self.links.last().map(|link| link.round)
     }
 
-    /// Verifies that every link is a quorum of `ValidatedBlock` votes for `value_hash` and
-    /// that the rounds strictly increase, so each link is properly justified by the previous one.
+    /// Returns the justification commitment that a vote sitting on top of this chain signs (see
+    /// [`VoteValue`]): the hash of the top link as a [`CommittedQuorum`], which transitively
+    /// commits to every link below. `None` iff the chain is empty.
+    pub fn commitment(&self, value_hash: CryptoHash) -> Option<CryptoHash> {
+        let mut previous = None;
+        let mut unlocking_round = None;
+        for link in &self.links {
+            previous = Some(
+                CommittedQuorum {
+                    value_hash,
+                    round: link.round,
+                    unlocking_round,
+                    previous,
+                    signatures: link.signatures.clone(),
+                }
+                .commitment(),
+            );
+            unlocking_round = Some(link.round);
+        }
+        previous
+    }
+
+    /// Verifies the chain structurally — rounds strictly increase, so each link sits in a higher
+    /// round than the one justifying it — and returns its justification commitment.
+    ///
+    /// Link signatures are deliberately *not* verified here. The quorum built on top of this
+    /// chain signs the chain's commitment, so a single signature check over that quorum attests
+    /// every link below it: each link's voters verified the quorum beneath them before signing
+    /// over its hash. Signing over an invalid quorum is itself an attributable fault, so link
+    /// signatures are only re-checked when auditing a chain to blame the validators that attested
+    /// an invalid link.
     ///
     /// The chain length needs no explicit cap: strictly increasing rounds mean a chain of `n`
     /// links spans `n` distinct rounds, and each link must carry a genuine quorum, so a longer
     /// chain necessarily reaches a higher round and cannot be inflated cheaply. The observed
     /// length is recorded as a metric so real contention shows up in monitoring.
-    pub fn verify(&self, value_hash: CryptoHash, committee: &Committee) -> Result<(), ChainError> {
+    pub fn verify(&self, value_hash: CryptoHash) -> Result<Option<CryptoHash>, ChainError> {
         #[cfg(with_metrics)]
         metrics::JUSTIFICATION_CHAIN_LENGTH
             .with_label_values(&[])
             .observe(self.links.len() as f64);
-        for (index, link) in self.links.iter().enumerate() {
-            if let Some(next) = self.links.get(index + 1) {
-                ensure!(
-                    link.round < next.round,
-                    ChainError::JustificationRoundsNotIncreasing
-                );
-            }
-            check_signatures(
-                value_hash,
-                CertificateKind::Validated,
-                link.round,
-                self.unlocking_round_at(index),
-                false,
-                &link.signatures,
-                committee,
-            )?;
+        for window in self.links.windows(2) {
+            ensure!(
+                window[0].round < window[1].round,
+                ChainError::JustificationRoundsNotIncreasing
+            );
         }
-        Ok(())
+        Ok(self.commitment(value_hash))
     }
 }
 
@@ -186,6 +236,12 @@ impl JustifiedConfirmation {
     pub fn block_hash(&self) -> CryptoHash {
         CryptoHash::new(&self.header)
     }
+
+    /// The justification commitment the confirmed votes signed: the hash of the justification
+    /// chain's top link, or `None` for a first-round confirmation (empty chain).
+    pub fn confirmed_commitment(&self) -> Option<CryptoHash> {
+        self.justification.commitment(self.block_hash())
+    }
 }
 
 /// A quorum of `ValidatedBlock` votes for one block, cast in one round under one unlocking round.
@@ -200,6 +256,8 @@ pub struct ValidatedQuorum {
     pub round: Round,
     /// The unlocking round these `ValidatedBlock` votes signed.
     pub unlocking_round: Option<Round>,
+    /// The justification commitment these `ValidatedBlock` votes signed.
+    pub justification_commitment: Option<CryptoHash>,
     /// The quorum of `ValidatedBlock` votes.
     pub signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
 }
@@ -222,6 +280,8 @@ pub enum EquivocationProof {
         ///
         /// [`VoteValue`]: crate::data_types::VoteValue
         confirmed_attested: bool,
+        /// The justification commitment the confirmation vote signed.
+        confirmed_commitment: Option<CryptoHash>,
         /// Its `ConfirmedBlock` signature.
         confirmed_signature: ValidatorSignature,
         /// The header of the different block the validator voted to validate.
@@ -230,6 +290,8 @@ pub enum EquivocationProof {
         validated_round: Round,
         /// The unlocking round the validation vote signed, contradicted by the confirmation.
         validated_unlocking_round: Option<Round>,
+        /// The justification commitment the validation vote signed.
+        validated_commitment: Option<CryptoHash>,
         /// Its `ValidatedBlock` signature.
         validated_signature: ValidatorSignature,
     },
@@ -249,6 +311,8 @@ pub enum EquivocationProof {
         first_unlocking_round: Option<Round>,
         /// The first-round attestation the first vote signed (`false` for `ValidatedBlock` votes).
         first_attested: bool,
+        /// The justification commitment the first vote signed.
+        first_commitment: Option<CryptoHash>,
         /// The signature on the first vote.
         first_signature: ValidatorSignature,
         /// The header of the second, different block voted for.
@@ -257,6 +321,8 @@ pub enum EquivocationProof {
         second_unlocking_round: Option<Round>,
         /// The first-round attestation the second vote signed (`false` for `ValidatedBlock` votes).
         second_attested: bool,
+        /// The justification commitment the second vote signed.
+        second_commitment: Option<CryptoHash>,
         /// The signature on the second vote.
         second_signature: ValidatorSignature,
     },
@@ -271,6 +337,8 @@ pub enum EquivocationProof {
         attested_header: BlockHeader,
         /// The round the attestation asserts to be the chain's first.
         attested_round: Round,
+        /// The justification commitment the attested vote signed.
+        attested_commitment: Option<CryptoHash>,
         /// The `ConfirmedBlock` signature carrying the attestation.
         attested_signature: ValidatorSignature,
         /// The header of the block the earlier vote confirmed.
@@ -279,6 +347,8 @@ pub enum EquivocationProof {
         earlier_round: Round,
         /// The first-round attestation the earlier vote signed.
         earlier_attested: bool,
+        /// The justification commitment the earlier vote signed.
+        earlier_commitment: Option<CryptoHash>,
         /// Its `ConfirmedBlock` signature.
         earlier_signature: ValidatorSignature,
     },
@@ -303,10 +373,12 @@ impl EquivocationProof {
                 confirmed_header,
                 confirmed_round,
                 confirmed_attested,
+                confirmed_commitment,
                 confirmed_signature,
                 validated_header,
                 validated_round,
                 validated_unlocking_round,
+                validated_commitment,
                 validated_signature,
             } => {
                 let confirmed_block_hash = CryptoHash::new(confirmed_header);
@@ -342,6 +414,7 @@ impl EquivocationProof {
                     CertificateKind::Confirmed,
                     None,
                     *confirmed_attested,
+                    *confirmed_commitment,
                 );
                 confirmed_signature.check(&confirmed, *validator)?;
                 let validated = VoteValue(
@@ -350,6 +423,7 @@ impl EquivocationProof {
                     CertificateKind::Validated,
                     *validated_unlocking_round,
                     false,
+                    *validated_commitment,
                 );
                 validated_signature.check(&validated, *validator)?;
                 Ok(())
@@ -361,10 +435,12 @@ impl EquivocationProof {
                 first_header,
                 first_unlocking_round,
                 first_attested,
+                first_commitment,
                 first_signature,
                 second_header,
                 second_unlocking_round,
                 second_attested,
+                second_commitment,
                 second_signature,
             } => {
                 let first_block_hash = CryptoHash::new(first_header);
@@ -387,6 +463,7 @@ impl EquivocationProof {
                     *kind,
                     *first_unlocking_round,
                     *first_attested,
+                    *first_commitment,
                 );
                 first_signature.check(&first, *validator)?;
                 let second = VoteValue(
@@ -395,6 +472,7 @@ impl EquivocationProof {
                     *kind,
                     *second_unlocking_round,
                     *second_attested,
+                    *second_commitment,
                 );
                 second_signature.check(&second, *validator)?;
                 Ok(())
@@ -403,10 +481,12 @@ impl EquivocationProof {
                 validator,
                 attested_header,
                 attested_round,
+                attested_commitment,
                 attested_signature,
                 earlier_header,
                 earlier_round,
                 earlier_attested,
+                earlier_commitment,
                 earlier_signature,
             } => {
                 // Both votes must concern the same height on the same chain: the attestation only
@@ -428,6 +508,7 @@ impl EquivocationProof {
                     CertificateKind::Confirmed,
                     None,
                     true,
+                    *attested_commitment,
                 );
                 attested_signature.check(&attested, *validator)?;
                 let earlier = VoteValue(
@@ -436,6 +517,7 @@ impl EquivocationProof {
                     CertificateKind::Confirmed,
                     None,
                     *earlier_attested,
+                    *earlier_commitment,
                 );
                 earlier_signature.check(&earlier, *validator)?;
                 Ok(())
@@ -495,9 +577,13 @@ fn walk_chain(
     chained: &JustifiedConfirmation,
     proofs: &mut BTreeMap<ValidatorPublicKey, EquivocationProof>,
 ) {
+    let chained_block_hash = chained.block_hash();
     let chain = &chained.justification;
-    for (index, link) in chain.links().iter().enumerate() {
-        let unlocking_round = chain.unlocking_round_at(index);
+    // The commitment each link's voters signed is the hash of the link below, folded up as we
+    // walk. It is needed to reconstruct the exact payload of the extracted signatures.
+    let mut commitment = None;
+    let mut unlocking_round = None;
+    for link in chain.links() {
         // This link's votes (cast in `link.round`) claim no conflicting confirmation in any
         // round at or above the unlocking round, covering the window `[unlocking_round,
         // link.round)`. A confirmation in `confirmer.round` contradicts it only if it falls in
@@ -505,30 +591,42 @@ fn walk_chain(
         // (`link.round > confirmer.round`) with an unlocking round reaching back over it
         // (`unlocking_round ≤ confirmer.round`). Otherwise it's a legitimate later switch; another
         // link may still straddle the confirmation, so keep scanning.
-        if link.round <= confirmer.round
-            || unlocking_round.is_some_and(|unlocking_round| confirmer.round < unlocking_round)
+        if link.round > confirmer.round
+            && unlocking_round.is_none_or(|unlocking_round| unlocking_round <= confirmer.round)
         {
-            continue;
-        }
-        for (validator, validated_signature) in &link.signatures {
-            if let Some(confirmed_signature) =
-                signature_of(&confirmer.confirmed_signatures, validator)
-            {
-                proofs
-                    .entry(*validator)
-                    .or_insert_with(|| EquivocationProof::LockViolation {
-                        validator: *validator,
-                        confirmed_header: confirmer.header.clone(),
-                        confirmed_round: confirmer.round,
-                        confirmed_attested: confirmer.first_round,
-                        confirmed_signature,
-                        validated_header: chained.header.clone(),
-                        validated_round: link.round,
-                        validated_unlocking_round: unlocking_round,
-                        validated_signature: *validated_signature,
-                    });
+            for (validator, validated_signature) in &link.signatures {
+                if let Some(confirmed_signature) =
+                    signature_of(&confirmer.confirmed_signatures, validator)
+                {
+                    proofs
+                        .entry(*validator)
+                        .or_insert_with(|| EquivocationProof::LockViolation {
+                            validator: *validator,
+                            confirmed_header: confirmer.header.clone(),
+                            confirmed_round: confirmer.round,
+                            confirmed_attested: confirmer.first_round,
+                            confirmed_commitment: confirmer.confirmed_commitment(),
+                            confirmed_signature,
+                            validated_header: chained.header.clone(),
+                            validated_round: link.round,
+                            validated_unlocking_round: unlocking_round,
+                            validated_commitment: commitment,
+                            validated_signature: *validated_signature,
+                        });
+                }
             }
         }
+        commitment = Some(
+            CommittedQuorum {
+                value_hash: chained_block_hash,
+                round: link.round,
+                unlocking_round,
+                previous: commitment,
+                signatures: link.signatures.clone(),
+            }
+            .commitment(),
+        );
+        unlocking_round = Some(link.round);
     }
 }
 
@@ -549,10 +647,12 @@ pub fn extract_double_validations(
             &a.header,
             a.unlocking_round,
             false,
+            a.justification_commitment,
             &a.signatures,
             &b.header,
             b.unlocking_round,
             false,
+            b.justification_commitment,
             &b.signatures,
             &mut proofs,
         );
@@ -575,10 +675,12 @@ fn double_confirm(
         &a.header,
         None,
         a.first_round,
+        a.confirmed_commitment(),
         &a.confirmed_signatures,
         &b.header,
         None,
         b.first_round,
+        b.confirmed_commitment(),
         &b.confirmed_signatures,
         proofs,
     );
@@ -603,10 +705,12 @@ fn first_round_violation(
                     validator: *validator,
                     attested_header: attested.header.clone(),
                     attested_round: attested.round,
+                    attested_commitment: attested.confirmed_commitment(),
                     attested_signature: *attested_signature,
                     earlier_header: earlier.header.clone(),
                     earlier_round: earlier.round,
                     earlier_attested: earlier.first_round,
+                    earlier_commitment: earlier.confirmed_commitment(),
                     earlier_signature,
                 });
         }
@@ -621,10 +725,12 @@ fn double_vote(
     first_header: &BlockHeader,
     first_unlocking_round: Option<Round>,
     first_attested: bool,
+    first_commitment: Option<CryptoHash>,
     first_signatures: &[(ValidatorPublicKey, ValidatorSignature)],
     second_header: &BlockHeader,
     second_unlocking_round: Option<Round>,
     second_attested: bool,
+    second_commitment: Option<CryptoHash>,
     second_signatures: &[(ValidatorPublicKey, ValidatorSignature)],
     proofs: &mut BTreeMap<ValidatorPublicKey, EquivocationProof>,
 ) {
@@ -647,10 +753,12 @@ fn double_vote(
                     first_header: first_header.clone(),
                     first_unlocking_round,
                     first_attested,
+                    first_commitment,
                     first_signature: *first_signature,
                     second_header: second_header.clone(),
                     second_unlocking_round,
                     second_attested,
+                    second_commitment,
                     second_signature,
                 });
         }

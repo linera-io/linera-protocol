@@ -265,14 +265,14 @@ pub trait VoteTestExt<T: CertificateValue>: Sized {
 
 impl<T: CertificateValue> VoteTestExt<T> for Vote<T> {
     fn into_certificate(self, public_key: ValidatorPublicKey) -> GenericCertificate<T> {
-        // Preserve the vote's own signed unlocking round and first-round attestation, so this
-        // works for any vote — a plain confirmation, a validated vote justified by an unlocking
-        // round, or a first-round-attested confirmation — not just the default payload.
-        GenericCertificate::new_with_unlocking_round_and_first_round(
+        // Preserve the vote's own signed payload — unlocking round, first-round attestation and
+        // justification commitment — so this works for any vote, not just the default payload.
+        GenericCertificate::new_with_payload(
             self.value,
             self.round,
             self.unlocking_round,
             self.first_round,
+            self.justification_commitment,
             vec![(public_key, self.signature)],
         )
     }

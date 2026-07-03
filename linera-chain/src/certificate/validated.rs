@@ -6,7 +6,7 @@ use std::{borrow::Cow, ops::Deref};
 
 use allocative::Allocative;
 use linera_base::{
-    crypto::{ValidatorPublicKey, ValidatorSignature},
+    crypto::{CryptoHash, ValidatorPublicKey, ValidatorSignature},
     data_types::Round,
 };
 use linera_execution::committee::Committee;
@@ -31,6 +31,7 @@ struct Repr<'a> {
     value: Cow<'a, ValidatedBlock>,
     round: Round,
     unlocking_round: Option<Round>,
+    justification_commitment: Option<CryptoHash>,
     signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
     justification: Cow<'a, JustificationChain>,
 }
@@ -114,6 +115,22 @@ impl ValidatedBlockCertificate {
     pub fn full_justification(&self) -> JustificationChain {
         self.justification
             .append(self.quorum.round(), self.quorum.signatures().clone())
+    }
+
+    /// Returns the justification commitment that a vote citing this certificate signs: the hash
+    /// of this certificate's own quorum as a [`CommittedQuorum`], which transitively commits to
+    /// the chain below it. Equals [`full_justification`](Self::full_justification)'s commitment.
+    ///
+    /// [`CommittedQuorum`]: crate::justification::CommittedQuorum
+    pub fn full_justification_commitment(&self) -> CryptoHash {
+        crate::justification::CommittedQuorum {
+            value_hash: self.hash(),
+            round: self.quorum.round(),
+            unlocking_round: self.quorum.unlocking_round(),
+            previous: self.quorum.justification_commitment(),
+            signatures: self.quorum.signatures().clone(),
+        }
+        .commitment()
     }
 
     /// Verifies the certificate: its signatures, its justification chain, that the unlocking round
@@ -205,6 +222,7 @@ impl Serialize for ValidatedBlockCertificate {
             value: Cow::Borrowed(self.quorum.inner()),
             round: self.quorum.round(),
             unlocking_round: self.quorum.unlocking_round(),
+            justification_commitment: self.quorum.justification_commitment(),
             signatures: Cow::Borrowed(self.quorum.signatures().as_slice()),
             justification: Cow::Borrowed(&self.justification),
         }
@@ -225,10 +243,12 @@ impl<'de> Deserialize<'de> for ValidatedBlockCertificate {
             ))
         } else {
             Ok(Self::from_parts(
-                GenericCertificate::new_with_unlocking_round(
+                GenericCertificate::new_with_payload(
                     inner.value.into_owned(),
                     inner.round,
                     inner.unlocking_round,
+                    false,
+                    inner.justification_commitment,
                     signatures,
                 ),
                 inner.justification.into_owned(),

@@ -451,6 +451,9 @@ ConfirmedBlockCertificate:
     - round:
         TYPENAME: Round
     - first_round: BOOL
+    - justification_commitment:
+        OPTION:
+          TYPENAME: CryptoHash
     - signatures:
         SEQ:
           TUPLE:
@@ -615,6 +618,9 @@ LiteCertificate:
         OPTION:
           TYPENAME: Round
     - first_round: BOOL
+    - justification_commitment:
+        OPTION:
+          TYPENAME: CryptoHash
     - justification:
         TYPENAME: JustificationChain
     - signatures:
@@ -640,6 +646,9 @@ LiteVote:
         OPTION:
           TYPENAME: Round
     - first_round: BOOL
+    - justification_commitment:
+        OPTION:
+          TYPENAME: CryptoHash
     - signature:
         TYPENAME: Secp256k1Signature
 LockingBlock:
@@ -1433,6 +1442,9 @@ ValidatedBlockCertificate:
     - unlocking_round:
         OPTION:
           TYPENAME: Round
+    - justification_commitment:
+        OPTION:
+          TYPENAME: CryptoHash
     - signatures:
         SEQ:
           TUPLE:

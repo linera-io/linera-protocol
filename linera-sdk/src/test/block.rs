@@ -273,8 +273,11 @@ impl BlockBuilder {
             .info;
         let round = info.manager.ownership.first_round();
         let public_key = self.validator.key_pair().public();
-        let quorum = Vote::new_with_first_round(value, round, true, self.validator.key_pair())
-            .into_certificate(public_key);
+        // A first-round confirmation attests that no lower round exists, so it commits to no
+        // justifying quorum.
+        let quorum =
+            Vote::new_with_first_round(value, round, true, None, self.validator.key_pair())
+                .into_certificate(public_key);
         let certificate =
             ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default());
 

@@ -149,6 +149,8 @@ pub enum ChainError {
     JustificationRoundsNotIncreasing,
     #[error("Certificate unlocking round does not match the top of its justification chain")]
     JustificationUnlockingRoundMismatch,
+    #[error("Certificate justification commitment does not match its justification chain")]
+    JustificationCommitmentMismatch,
     #[error("Justification chain must lie in rounds strictly below the certificate's round")]
     JustificationChainNotBelowCertificate,
     #[error("Certificate carries the first-round attestation but was not confirmed in the chain's first round")]
@@ -226,6 +228,7 @@ impl ChainError {
             | ChainError::CertificateRequiresQuorum
             | ChainError::JustificationRoundsNotIncreasing
             | ChainError::JustificationUnlockingRoundMismatch
+            | ChainError::JustificationCommitmentMismatch
             | ChainError::JustificationChainNotBelowCertificate
             | ChainError::FalseFirstRoundAttestation
             | ChainError::EquivocationProofSameBlock

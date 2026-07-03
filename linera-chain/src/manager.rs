@@ -517,23 +517,35 @@ where
             self.validated_vote.set(None);
             let value = ConfirmedBlock::new(block);
             // Attest that this confirmation is in the chain's first round, so the justification
-            // chain may be omitted: such a block is always the lower one in any fork.
+            // chain may be omitted: such a block is always the lower one in any fork. A fast
+            // block needs no validation, so there is no quorum to commit to.
             let first_round = round == self.ownership.get().first_round();
-            let vote = Vote::new_with_first_round(value, round, first_round, key_pair);
+            let vote = Vote::new_with_first_round(value, round, first_round, None, key_pair);
             Ok(Some(Either::Right(
                 self.confirmed_vote.get_mut().insert(vote),
             )))
         } else {
             // The unlocking round we sign is the round of the justification this proposal relies
-            // on: a fresh proposal or one retrying a fast block has no justifying validated
-            // certificate, so the unlocking round is `0` (`None`); a regular retry is justified by
-            // its certificate.
-            let unlocking_round = match &proposal.original_proposal {
-                Some(OriginalProposal::Regular { certificate }) => Some(certificate.round),
-                Some(OriginalProposal::Fast(_)) | None => None,
+            // on, and the justification commitment is the hash of that justifying quorum — by
+            // signing it we attest that we verified the quorum, so later receivers only need to
+            // check the signatures built on top of it. A fresh proposal or one retrying a fast
+            // block has no justifying validated certificate, so both are `None`; a regular retry
+            // is justified by its certificate.
+            let (unlocking_round, justification_commitment) = match &proposal.original_proposal {
+                Some(OriginalProposal::Regular { certificate }) => (
+                    Some(certificate.round),
+                    Some(certificate.full_justification_commitment()),
+                ),
+                Some(OriginalProposal::Fast(_)) | None => (None, None),
             };
             let value = ValidatedBlock::new(block);
-            let vote = Vote::new_with_unlocking_round(value, round, unlocking_round, key_pair);
+            let vote = Vote::new_with_unlocking_round(
+                value,
+                round,
+                unlocking_round,
+                justification_commitment,
+                key_pair,
+            );
             Ok(Some(Either::Left(
                 self.validated_vote.get_mut().insert(vote),
             )))
@@ -550,17 +562,29 @@ where
     ) -> Result<(), ViewError> {
         let round = validated.round;
         let confirmed_block = ConfirmedBlock::new(validated.inner().block().clone());
+        // Vote to confirm. Attest whether this confirmation is in the chain's first round, so the
+        // justification chain may be omitted: such a block is always the lower one in any fork.
+        // Otherwise commit to the quorum that validated the block, attesting that we verified it
+        // so later receivers only need to check the confirmation signatures built on top.
+        let first_round = round == self.ownership.get().first_round();
+        let justification_commitment = if first_round {
+            None
+        } else {
+            Some(validated.full_justification_commitment())
+        };
         self.update_locking(LockingBlock::Regular(validated), blobs)?;
         self.update_current_round(local_time);
         if let Some(key_pair) = key_pair {
             if self.current_round() != round {
                 return Ok(()); // We never vote in a past round.
             }
-            // Vote to confirm. Attest whether this confirmation is in the chain's first round, so
-            // the justification chain may be omitted: such a block is always the lower one in any
-            // fork.
-            let first_round = round == self.ownership.get().first_round();
-            let vote = Vote::new_with_first_round(confirmed_block, round, first_round, key_pair);
+            let vote = Vote::new_with_first_round(
+                confirmed_block,
+                round,
+                first_round,
+                justification_commitment,
+                key_pair,
+            );
             // Ok to overwrite validation votes with confirmation votes at equal or higher round.
             self.confirmed_vote.set(Some(vote));
             self.validated_vote.set(None);

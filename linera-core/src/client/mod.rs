@@ -1314,6 +1314,15 @@ impl<Env: Environment> Client<Env> {
         } else {
             full_justification
         };
+        // The confirming votes committed to the chain they were shown; the chain we attach must
+        // be that one, or the assembled certificate would fail verification everywhere.
+        ensure!(
+            quorum.justification_commitment() == justification.commitment(quorum.hash()),
+            chain_client::Error::ProtocolError(
+                "A quorum confirmed with a justification commitment that does not match the \
+                 validated certificate's justification chain",
+            )
+        );
         let certificate = ConfirmedBlockCertificate::from_parts(quorum, justification);
         self.receive_certificate_with_checked_signatures(
             certificate.clone(),
@@ -1399,15 +1408,23 @@ impl<Env: Environment> Client<Env> {
 
         // The justification chain comes from our own proposal, but the winning quorum may have
         // been formed from a competing proposal that cited a different certificate: its votes then
-        // sign a different unlocking round, and gluing our chain onto them would build a
-        // certificate that fails verification downstream. Reject that here with a retryable error
-        // rather than assembling a mismatched certificate. (For confirmed and timeout quorums both
-        // sides are `None`, so this only bites the validated-retry case it is meant to guard.)
+        // sign a different unlocking round and justification commitment, and gluing our chain onto
+        // them would build a certificate that fails verification downstream. Reject that here with
+        // a retryable error rather than assembling a mismatched certificate. (For confirmed and
+        // timeout quorums both sides are `None`, so this only bites the validated-retry case it is
+        // meant to guard.)
         ensure!(
             quorum.unlocking_round() == justification.top_unlocking_round(),
             chain_client::Error::ProtocolError(
                 "A quorum voted with an unlocking round that does not match the proposal's \
                  justification chain",
+            )
+        );
+        ensure!(
+            quorum.justification_commitment() == justification.commitment(quorum.hash()),
+            chain_client::Error::ProtocolError(
+                "A quorum voted with a justification commitment that does not match the \
+                 proposal's justification chain",
             )
         );
         let certificate = T::make_certificate(quorum, justification);
@@ -1464,9 +1481,9 @@ impl<Env: Environment> Client<Env> {
         let nodes = self.make_nodes(committee)?;
         // Group votes by their full signed payload: signatures only aggregate into a
         // certificate if they are unanimous on all signed fields, so a vote that diverges in
-        // the unlocking round or first-round attestation belongs to a separate candidate
-        // quorum.
-        let ((votes_hash, votes_round, _, _), votes) = communicate_with_quorum(
+        // the unlocking round, first-round attestation or justification commitment belongs to
+        // a separate candidate quorum.
+        let ((votes_hash, votes_round, _, _, _), votes) = communicate_with_quorum(
             &nodes,
             committee,
             |vote: &LiteVote| {
@@ -1475,6 +1492,7 @@ impl<Env: Environment> Client<Env> {
                     vote.round,
                     vote.unlocking_round,
                     vote.first_round,
+                    vote.justification_commitment,
                 )
             },
             |remote_node| {
