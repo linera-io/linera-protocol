@@ -440,9 +440,9 @@ pub enum OriginalProposal {
 /// Evidence that a chain owner authorized a block: the owner's signature over the
 /// initial, outcome-less [`ProposalContent`] that introduced the block.
 ///
-/// Every block starts its life as a proposal without an execution outcome — either a
-/// fresh proposal or a fast-round proposal being retried — so such a signature always
-/// exists, and it is the one validators checked against the block's
+/// Every block is first proposed without an execution outcome — an outcome appears in
+/// a proposal only when re-proposing an already validated block — so such a signature
+/// always exists, and it is the one validators checked against the block's
 /// `authenticated_owner`. Retaining it alongside the certificate lets anyone verify
 /// that a chain owner really authorized the block without trusting the validator
 /// quorum. A certified block with an `authenticated_owner` is *not valid* without
