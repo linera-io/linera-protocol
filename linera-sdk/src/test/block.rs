@@ -7,14 +7,15 @@
 
 use linera_base::{
     abi::ContractAbi,
+    crypto::AccountSecretKey,
     data_types::{Amount, ApplicationPermissions, Blob, Epoch, Round, Timestamp},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
     ownership::TimeoutConfig,
 };
 use linera_chain::{
     data_types::{
-        BundleExecutionPolicy, IncomingBundle, LiteValue, LiteVote, MessageAction, ProposedBlock,
-        SignatureAggregator, Transaction,
+        BundleExecutionPolicy, IncomingBundle, LiteValue, LiteVote, MessageAction,
+        OwnerAuthorization, ProposalContent, ProposedBlock, SignatureAggregator, Transaction,
     },
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
@@ -234,6 +235,7 @@ impl BlockBuilder {
     pub(crate) async fn try_sign(
         self,
         blobs: &[Blob],
+        owner_key_pair: &AccountSecretKey,
     ) -> Result<(ConfirmedBlockCertificate, ResourceTracker), WorkerError> {
         let published_blobs = self
             .block
@@ -259,6 +261,17 @@ impl BlockBuilder {
             .await?;
 
         let value = ConfirmedBlock::new(block);
+        let owner_authorization = value.block().header.authenticated_owner.map(|_| {
+            let content = ProposalContent {
+                block: value.block().to_proposed(),
+                round: Round::Fast,
+                outcome: None,
+            };
+            OwnerAuthorization {
+                round: Round::Fast,
+                signature: owner_key_pair.sign(&content),
+            }
+        });
         let vote = LiteVote::new(
             LiteValue::new(&value),
             Round::Fast,
@@ -270,7 +283,8 @@ impl BlockBuilder {
         let certificate = builder
             .append(public_key, vote.signature)
             .expect("Failed to sign block")
-            .expect("Committee has more than one test validator");
+            .expect("Committee has more than one test validator")
+            .with_owner_authorization(owner_authorization);
 
         Ok((certificate, resource_tracker))
     }

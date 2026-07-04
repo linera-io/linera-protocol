@@ -130,7 +130,7 @@ impl ValidatorNode for Client {
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {
             Client::Grpc(grpc_client) => {
-                grpc_client.handle_validated_certificate(certificate).await
+                Box::pin(grpc_client.handle_validated_certificate(certificate)).await
             }
 
             #[cfg(with_simple_network)]
