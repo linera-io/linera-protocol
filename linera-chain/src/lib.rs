@@ -186,6 +186,13 @@ pub enum ChainError {
     NotTimedOutYet(Timestamp),
     #[error("Checkpoint precondition failed: {0}")]
     CheckpointPreconditionFailed(&'static str),
+    #[error("Invalid owner authorization on certificate: {0}")]
+    InvalidOwnerAuthorization(&'static str),
+    #[error(
+        "The block declares an authenticated owner, so the certificate must retain \
+        that owner's signature over the original proposal"
+    )]
+    MissingOwnerAuthorization,
 }
 
 impl ChainError {
@@ -225,6 +232,8 @@ impl ChainError {
             | ChainError::RoundDoesNotTimeOut
             | ChainError::NotTimedOutYet(_)
             | ChainError::CheckpointPreconditionFailed(_)
+            | ChainError::InvalidOwnerAuthorization(_)
+            | ChainError::MissingOwnerAuthorization
             | ChainError::MissingCrossChainUpdate { .. } => false,
             ChainError::ViewError(_)
             | ChainError::UnexpectedMessage { .. }

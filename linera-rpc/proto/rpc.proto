@@ -305,6 +305,10 @@ message LiteCertificate {
   bool wait_for_outgoing_messages = 5;
 
   CertificateKind kind = 6;
+
+  // The chain owner's signature over the proposal that introduced the certified
+  // block, retained for auditing (#456), if available.
+  optional bytes owner_authorization = 7;
 }
 
 // A certified statement from the committee, together with other certificates
@@ -375,6 +379,11 @@ message Certificate {
 
   // The kind of certificate serialized in `value` field.
   CertificateKind kind = 4;
+
+  // The chain owner's signature over the proposal that introduced the certified
+  // block, retained for auditing (#456). Absent for timeout certificates and for
+  // certificates whose assembler did not have the original proposal.
+  optional bytes owner_authorization = 5;
 }
 
 enum CertificateKind {

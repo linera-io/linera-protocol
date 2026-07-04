@@ -493,6 +493,17 @@ impl From<AccountPublicKey> for AccountOwner {
     }
 }
 
+impl From<&crate::crypto::AccountSignature> for AccountOwner {
+    fn from(signature: &crate::crypto::AccountSignature) -> Self {
+        use crate::crypto::AccountSignature;
+        match signature {
+            AccountSignature::Ed25519 { public_key, .. } => (*public_key).into(),
+            AccountSignature::Secp256k1 { public_key, .. } => (*public_key).into(),
+            AccountSignature::EvmSecp256k1 { address, .. } => AccountOwner::Address20(*address),
+        }
+    }
+}
+
 impl From<ApplicationId> for GenericApplicationId {
     fn from(application_id: ApplicationId) -> Self {
         GenericApplicationId::User(application_id)

@@ -26,7 +26,7 @@ use linera_cache::{Arc as CacheArc, UniqueValueCache, ValueCache};
 use linera_chain::{
     data_types::{
         BlockProposal, BundleExecutionPolicy, IncomingBundle, MessageAction, MessageBundle,
-        OriginalProposal, ProposalContent, ProposedBlock,
+        OriginalProposal, OwnerAuthorization, ProposalContent, ProposedBlock,
     },
     manager::{self, ManagerSafetySnapshot},
     types::{
@@ -876,6 +876,7 @@ where
         let (epoch, committee) = self.chain.current_committee().await?;
         check_block_epoch(epoch, header.chain_id, header.epoch)?;
         certificate.check(&committee)?;
+        OwnerAuthorization::check_block_authorization(certificate.owner_authorization(), block)?;
         let already_committed_block = self.chain.tip_state.get().already_validated_block(height)?;
         let should_skip_validated_block = || {
             self.chain
@@ -975,6 +976,7 @@ where
         // We haven't processed the block - verify the certificate first.
         let committee = self.committee_for_epoch(block.header.epoch).await?;
         certificate.check(&committee)?;
+        OwnerAuthorization::check_block_authorization(certificate.owner_authorization(), block)?;
 
         // Certificate check passed - which means the blobs the block requires are legitimate and
         // we can take note of it, so that if any are missing, we will accept them when the client
@@ -2435,6 +2437,18 @@ where
             Some(OriginalProposal::Regular { certificate }) => {
                 // Verify that this block has been validated by a quorum before.
                 certificate.check(&committee)?;
+                // A block with an authenticated owner is only valid together with that
+                // owner's retained proposal signature, so require it here before it
+                // can end up in our locking block (#456).
+                match &certificate.owner_authorization {
+                    Some(authorization) => {
+                        authorization.verify_proposed_block(content.block.clone())?;
+                    }
+                    None => ensure!(
+                        content.block.authenticated_owner.is_none(),
+                        ChainError::MissingOwnerAuthorization
+                    ),
+                }
             }
             Some(OriginalProposal::Fast(signature)) => {
                 let original_proposal = BlockProposal {

@@ -12,7 +12,7 @@ use serde::{ser::SerializeStruct, Deserialize, Deserializer, Serialize};
 use super::{generic::GenericCertificate, Certificate};
 use crate::{
     block::{Block, ConfirmedBlock, ConversionError},
-    data_types::MessageBundle,
+    data_types::{MessageBundle, OwnerAuthorization},
 };
 
 impl GenericCertificate<ConfirmedBlock> {
@@ -68,10 +68,11 @@ impl Serialize for GenericCertificate<ConfirmedBlock> {
     where
         S: serde::Serializer,
     {
-        let mut state = serializer.serialize_struct("ConfirmedBlockCertificate", 3)?;
+        let mut state = serializer.serialize_struct("ConfirmedBlockCertificate", 4)?;
         state.serialize_field("value", self.inner())?;
         state.serialize_field("round", &self.round)?;
         state.serialize_field("signatures", self.signatures())?;
+        state.serialize_field("owner_authorization", &self.owner_authorization())?;
         state.end()
     }
 }
@@ -87,13 +88,15 @@ impl<'de> Deserialize<'de> for GenericCertificate<ConfirmedBlock> {
             value: ConfirmedBlock,
             round: Round,
             signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
+            owner_authorization: Option<OwnerAuthorization>,
         }
 
         let helper = Helper::deserialize(deserializer)?;
         if !crate::data_types::is_strictly_ordered(&helper.signatures) {
             Err(serde::de::Error::custom("Vector is not strictly sorted"))
         } else {
-            Ok(Self::new(helper.value, helper.round, helper.signatures))
+            Ok(Self::new(helper.value, helper.round, helper.signatures)
+                .with_owner_authorization(helper.owner_authorization))
         }
     }
 }

@@ -11,7 +11,7 @@ use linera_base::{
     identifiers::{AccountOwner, BlobId, ChainId, EventId},
 };
 use linera_chain::{
-    data_types::{BlockProposal, LiteValue, ProposalContent},
+    data_types::{BlockProposal, LiteValue, OwnerAuthorization, ProposalContent},
     types::{
         Certificate, CertificateKind, ConfirmedBlock, ConfirmedBlockCertificate, LiteCertificate,
         Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
@@ -382,8 +382,15 @@ impl TryFrom<api::LiteCertificate> for HandleLiteCertRequest<'_> {
         };
         let signatures = bincode::deserialize(&certificate.signatures)?;
         let round = bincode::deserialize(&certificate.round)?;
+        let owner_authorization = certificate
+            .owner_authorization
+            .as_deref()
+            .map(bincode::deserialize)
+            .transpose()?;
+        let mut certificate_inner = LiteCertificate::new(value, round, signatures);
+        certificate_inner.owner_authorization = owner_authorization;
         Ok(Self {
-            certificate: LiteCertificate::new(value, round, signatures),
+            certificate: certificate_inner,
             wait_for_outgoing_messages: certificate.wait_for_outgoing_messages,
         })
     }
@@ -400,6 +407,9 @@ impl TryFrom<HandleLiteCertRequest<'_>> for api::LiteCertificate {
             signatures: bincode::serialize(&request.certificate.signatures)?,
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
             kind: request.certificate.value.kind as i32,
+            owner_authorization: owner_authorization_to_proto(
+                request.certificate.owner_authorization.as_ref(),
+            )?,
         })
     }
 }
@@ -524,6 +534,28 @@ impl TryFrom<api::Certificate> for TimeoutCertificate {
     }
 }
 
+/// Deserializes the retained owner authorization from an `api::Certificate`, if any.
+fn owner_authorization_from_proto(
+    certificate: &api::Certificate,
+) -> Result<Option<OwnerAuthorization>, GrpcProtoConversionError> {
+    certificate
+        .owner_authorization
+        .as_deref()
+        .map(bincode::deserialize)
+        .transpose()
+        .map_err(GrpcProtoConversionError::from)
+}
+
+/// Serializes the retained owner authorization for an `api::Certificate`, if any.
+fn owner_authorization_to_proto(
+    authorization: Option<&OwnerAuthorization>,
+) -> Result<Option<Vec<u8>>, GrpcProtoConversionError> {
+    authorization
+        .map(bincode::serialize)
+        .transpose()
+        .map_err(GrpcProtoConversionError::from)
+}
+
 impl TryFrom<api::Certificate> for ValidatedBlockCertificate {
     type Error = GrpcProtoConversionError;
 
@@ -533,8 +565,10 @@ impl TryFrom<api::Certificate> for ValidatedBlockCertificate {
         let cert_type = certificate.kind;
 
         if cert_type == api::CertificateKind::Validated as i32 {
+            let owner_authorization = owner_authorization_from_proto(&certificate)?;
             let value: ValidatedBlock = bincode::deserialize(&certificate.value)?;
-            Ok(ValidatedBlockCertificate::new(value, round, signatures))
+            Ok(ValidatedBlockCertificate::new(value, round, signatures)
+                .with_owner_authorization(owner_authorization))
         } else {
             Err(GrpcProtoConversionError::InvalidCertificateType)
         }
@@ -550,8 +584,10 @@ impl TryFrom<api::Certificate> for ConfirmedBlockCertificate {
         let cert_type = certificate.kind;
 
         if cert_type == api::CertificateKind::Confirmed as i32 {
+            let owner_authorization = owner_authorization_from_proto(&certificate)?;
             let value: ConfirmedBlock = bincode::deserialize(&certificate.value)?;
-            Ok(ConfirmedBlockCertificate::new(value, round, signatures))
+            Ok(ConfirmedBlockCertificate::new(value, round, signatures)
+                .with_owner_authorization(owner_authorization))
         } else {
             Err(GrpcProtoConversionError::InvalidCertificateType)
         }
@@ -572,6 +608,7 @@ impl TryFrom<TimeoutCertificate> for api::Certificate {
             round,
             signatures,
             kind: api::CertificateKind::Timeout as i32,
+            owner_authorization: None,
         })
     }
 }
@@ -582,6 +619,7 @@ impl TryFrom<ConfirmedBlockCertificate> for api::Certificate {
     fn try_from(certificate: ConfirmedBlockCertificate) -> Result<Self, Self::Error> {
         let round = bincode::serialize(&certificate.round)?;
         let signatures = bincode::serialize(certificate.signatures())?;
+        let owner_authorization = owner_authorization_to_proto(certificate.owner_authorization())?;
 
         let value = bincode::serialize(certificate.value())?;
 
@@ -590,6 +628,7 @@ impl TryFrom<ConfirmedBlockCertificate> for api::Certificate {
             round,
             signatures,
             kind: api::CertificateKind::Confirmed as i32,
+            owner_authorization,
         })
     }
 }
@@ -600,6 +639,7 @@ impl TryFrom<ValidatedBlockCertificate> for api::Certificate {
     fn try_from(certificate: ValidatedBlockCertificate) -> Result<Self, Self::Error> {
         let round = bincode::serialize(&certificate.round)?;
         let signatures = bincode::serialize(certificate.signatures())?;
+        let owner_authorization = owner_authorization_to_proto(certificate.owner_authorization())?;
 
         let value = bincode::serialize(certificate.value())?;
 
@@ -608,6 +648,7 @@ impl TryFrom<ValidatedBlockCertificate> for api::Certificate {
             round,
             signatures,
             kind: api::CertificateKind::Validated as i32,
+            owner_authorization,
         })
     }
 }
@@ -972,6 +1013,7 @@ impl TryFrom<Certificate> for api::Certificate {
     fn try_from(certificate: Certificate) -> Result<Self, Self::Error> {
         let round = bincode::serialize(&certificate.round())?;
         let signatures = bincode::serialize(certificate.signatures())?;
+        let owner_authorization = owner_authorization_to_proto(certificate.owner_authorization())?;
 
         let (kind, value) = match certificate {
             Certificate::Confirmed(confirmed) => (
@@ -993,6 +1035,7 @@ impl TryFrom<Certificate> for api::Certificate {
             round,
             signatures,
             kind: kind as i32,
+            owner_authorization,
         })
     }
 }
@@ -1003,13 +1046,20 @@ impl TryFrom<api::Certificate> for Certificate {
     fn try_from(certificate: api::Certificate) -> Result<Self, Self::Error> {
         let round = bincode::deserialize(&certificate.round)?;
         let signatures = bincode::deserialize(&certificate.signatures)?;
+        let owner_authorization = owner_authorization_from_proto(&certificate)?;
 
         let value = if certificate.kind == api::CertificateKind::Confirmed as i32 {
             let value: ConfirmedBlock = bincode::deserialize(&certificate.value)?;
-            Certificate::Confirmed(ConfirmedBlockCertificate::new(value, round, signatures))
+            Certificate::Confirmed(
+                ConfirmedBlockCertificate::new(value, round, signatures)
+                    .with_owner_authorization(owner_authorization),
+            )
         } else if certificate.kind == api::CertificateKind::Validated as i32 {
             let value: ValidatedBlock = bincode::deserialize(&certificate.value)?;
-            Certificate::Validated(ValidatedBlockCertificate::new(value, round, signatures))
+            Certificate::Validated(
+                ValidatedBlockCertificate::new(value, round, signatures)
+                    .with_owner_authorization(owner_authorization),
+            )
         } else if certificate.kind == api::CertificateKind::Timeout as i32 {
             let value: Timeout = bincode::deserialize(&certificate.value)?;
             Certificate::Timeout(TimeoutCertificate::new(value, round, signatures))
@@ -1284,6 +1334,7 @@ pub mod tests {
                 key_pair.public_key,
                 ValidatorSignature::new(&Foo("test".into()), &key_pair.secret_key),
             )]),
+            owner_authorization: None,
         };
         let request = HandleLiteCertRequest {
             certificate,

@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{CertificateValue, GenericCertificate};
 use crate::{
-    data_types::{check_signatures, LiteValue, LiteVote},
+    data_types::{check_signatures, LiteValue, LiteVote, OwnerAuthorization},
     ChainError,
 };
 
@@ -28,6 +28,10 @@ pub struct LiteCertificate<'a> {
     pub round: Round,
     /// Signatures on the value.
     pub signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
+    /// The retained chain owner's signature over the proposal that introduced the
+    /// certified block, if available (#456). Carried here so that reconstructing a
+    /// full certificate from a cached value does not lose it.
+    pub owner_authorization: Option<OwnerAuthorization>,
 }
 
 impl Allocative for LiteCertificate<'_> {
@@ -57,6 +61,7 @@ impl LiteCertificate<'_> {
             value,
             round,
             signatures,
+            owner_authorization: None,
         }
     }
 
@@ -111,11 +116,10 @@ impl LiteCertificate<'_> {
         {
             return None;
         }
-        Some(GenericCertificate::new(
-            value,
-            self.round,
-            self.signatures.into_owned(),
-        ))
+        Some(
+            GenericCertificate::new(value, self.round, self.signatures.into_owned())
+                .with_owner_authorization(self.owner_authorization),
+        )
     }
 
     /// Returns a [`LiteCertificate`] that owns the list of signatures.
@@ -124,6 +128,7 @@ impl LiteCertificate<'_> {
             value: self.value.clone(),
             round: self.round,
             signatures: Cow::Owned(self.signatures.clone().into_owned()),
+            owner_authorization: self.owner_authorization,
         }
     }
 }

@@ -11,7 +11,10 @@ use linera_base::{
 use linera_execution::committee::Committee;
 
 use super::CertificateValue;
-use crate::{data_types::LiteValue, ChainError};
+use crate::{
+    data_types::{LiteValue, OwnerAuthorization},
+    ChainError,
+};
 
 /// Generic type representing a certificate for `value` of type `T`.
 #[derive(Debug)]
@@ -20,6 +23,12 @@ pub struct GenericCertificate<T: CertificateValue> {
     /// The round in which the value was certified.
     pub round: Round,
     signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
+    /// The chain owner's signature over the proposal that introduced the certified
+    /// block, retained for auditing (#456). Not covered by the certified value's hash
+    /// or the validator signatures; it is self-authenticating given the block. Only
+    /// meaningful for block certificates, and best-effort: `None` if whoever assembled
+    /// the certificate did not have the original proposal.
+    owner_authorization: Option<OwnerAuthorization>,
 }
 
 impl<T: Allocative + CertificateValue> Allocative for GenericCertificate<T> {
@@ -29,6 +38,9 @@ impl<T: Allocative + CertificateValue> Allocative for GenericCertificate<T> {
         for (public_key, signature) in &self.signatures {
             visitor.visit_field(Key::new("ValidatorPublicKey"), public_key);
             visitor.visit_field(Key::new("ValidatorSignature"), signature);
+        }
+        if let Some(authorization) = &self.owner_authorization {
+            visitor.visit_field(Key::new("OwnerAuthorization"), authorization);
         }
     }
 }
@@ -46,7 +58,20 @@ impl<T: CertificateValue> GenericCertificate<T> {
             value,
             round,
             signatures,
+            owner_authorization: None,
         }
+    }
+
+    /// Returns the retained chain owner's signature over the proposal that introduced
+    /// the certified block, if available.
+    pub fn owner_authorization(&self) -> Option<&OwnerAuthorization> {
+        self.owner_authorization.as_ref()
+    }
+
+    /// Sets the retained owner authorization (#456).
+    pub fn with_owner_authorization(mut self, authorization: Option<OwnerAuthorization>) -> Self {
+        self.owner_authorization = authorization;
+        self
     }
 
     /// Returns a reference to the `Hashed` value contained in this certificate.
@@ -130,6 +155,7 @@ impl<T: CertificateValue> GenericCertificate<T> {
             value: LiteValue::new(&self.value),
             round: self.round,
             signatures: std::borrow::Cow::Borrowed(&self.signatures),
+            owner_authorization: self.owner_authorization,
         }
     }
 }
@@ -140,6 +166,7 @@ impl<T: CertificateValue> Clone for GenericCertificate<T> {
             value: self.value.clone(),
             round: self.round,
             signatures: self.signatures.clone(),
+            owner_authorization: self.owner_authorization,
         }
     }
 }
@@ -152,5 +179,6 @@ impl<T: CertificateValue + Eq + PartialEq> PartialEq for GenericCertificate<T> {
         self.hash() == other.hash()
             && self.round == other.round
             && self.signatures == other.signatures
+            && self.owner_authorization == other.owner_authorization
     }
 }

@@ -32,7 +32,7 @@ use linera_base::{data_types::Bytecode, identifiers::ModuleId, vm::VmRuntime};
 use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, ChainAndHeight, LiteVote,
-        ProposedBlock,
+        OwnerAuthorization, ProposedBlock,
     },
     manager::LockingBlock,
     types::{
@@ -1288,13 +1288,16 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<ConfirmedBlockCertificate, chain_client::Error> {
         debug!(round = %certificate.round, "Submitting block for confirmation");
         let hashed_value = ConfirmedBlock::new(certificate.inner().block().clone());
+        // Carry the retained owner authorization over from the validated certificate.
+        let owner_authorization = certificate.owner_authorization().copied();
         let finalize_action = CommunicateAction::FinalizeBlock {
             certificate: Box::new(certificate),
             delivery: self.options.cross_chain_message_delivery,
         };
         let certificate = self
             .communicate_chain_action(committee, finalize_action, hashed_value)
-            .await?;
+            .await?
+            .with_owner_authorization(owner_authorization);
         self.receive_certificate_with_checked_signatures(
             certificate.clone(),
             ProcessConfirmedBlockMode::Execute,
@@ -1310,6 +1313,7 @@ impl<Env: Environment> Client<Env> {
         committee: Arc<Committee>,
         proposal: Box<BlockProposal>,
         value: T,
+        owner_authorization: Option<OwnerAuthorization>,
     ) -> Result<GenericCertificate<T>, chain_client::Error> {
         debug!(
             round = %proposal.content.round,
@@ -1365,7 +1369,8 @@ impl<Env: Environment> Client<Env> {
 
         let certificate = self
             .communicate_chain_action(&committee, submit_action, value)
-            .await?;
+            .await?
+            .with_owner_authorization(owner_authorization);
 
         clock_skew_check_handle.await;
 

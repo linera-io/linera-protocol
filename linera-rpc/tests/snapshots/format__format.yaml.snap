@@ -455,6 +455,9 @@ ConfirmedBlockCertificate:
           TUPLE:
             - TYPENAME: Secp256k1PublicKey
             - TYPENAME: Secp256k1Signature
+    - owner_authorization:
+        OPTION:
+          TYPENAME: OwnerAuthorization
 CrateVersion:
   STRUCT:
     - major: U32
@@ -599,6 +602,9 @@ LiteCertificate:
           TUPLE:
             - TYPENAME: Secp256k1PublicKey
             - TYPENAME: Secp256k1Signature
+    - owner_authorization:
+        OPTION:
+          TYPENAME: OwnerAuthorization
 LiteValue:
   STRUCT:
     - value_hash:
@@ -934,6 +940,12 @@ OutgoingMessage:
         TYPENAME: MessageKind
     - message:
         TYPENAME: Message
+OwnerAuthorization:
+  STRUCT:
+    - round:
+        TYPENAME: Round
+    - signature:
+        TYPENAME: AccountSignature
 PostedMessage:
   STRUCT:
     - authenticated_owner:
@@ -1408,6 +1420,9 @@ ValidatedBlockCertificate:
           TUPLE:
             - TYPENAME: Secp256k1PublicKey
             - TYPENAME: Secp256k1Signature
+    - owner_authorization:
+        OPTION:
+          TYPENAME: OwnerAuthorization
 VersionInfo:
   STRUCT:
     - crate_version:

@@ -12,7 +12,10 @@ use serde::{
 };
 
 use super::{generic::GenericCertificate, Certificate};
-use crate::block::{Block, ConversionError, ValidatedBlock};
+use crate::{
+    block::{Block, ConversionError, ValidatedBlock},
+    data_types::OwnerAuthorization,
+};
 
 impl GenericCertificate<ValidatedBlock> {
     /// Returns the total number of outgoing messages in the certified block.
@@ -46,10 +49,11 @@ impl From<GenericCertificate<ValidatedBlock>> for Certificate {
 
 impl Serialize for GenericCertificate<ValidatedBlock> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut state = serializer.serialize_struct("ValidatedBlockCertificate", 3)?;
+        let mut state = serializer.serialize_struct("ValidatedBlockCertificate", 4)?;
         state.serialize_field("value", self.inner())?;
         state.serialize_field("round", &self.round)?;
         state.serialize_field("signatures", self.signatures())?;
+        state.serialize_field("owner_authorization", &self.owner_authorization())?;
         state.end()
     }
 }
@@ -65,6 +69,7 @@ impl<'de> Deserialize<'de> for GenericCertificate<ValidatedBlock> {
             value: ValidatedBlock,
             round: Round,
             signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
+            owner_authorization: Option<OwnerAuthorization>,
         }
         let inner = Inner::deserialize(deserializer)?;
         if !crate::data_types::is_strictly_ordered(&inner.signatures) {
@@ -72,7 +77,8 @@ impl<'de> Deserialize<'de> for GenericCertificate<ValidatedBlock> {
                 "Signatures are not strictly ordered",
             ))
         } else {
-            Ok(Self::new(inner.value, inner.round, inner.signatures))
+            Ok(Self::new(inner.value, inner.round, inner.signatures)
+                .with_owner_authorization(inner.owner_authorization))
         }
     }
 }
