@@ -306,8 +306,9 @@ message LiteCertificate {
 
   CertificateKind kind = 6;
 
-  // The chain owner's signature over the proposal that introduced the certified
-  // block, retained for auditing, if available.
+  // The chain owner's signature over the certified block's proposal content.
+  // Required for blocks that declare an authenticated owner; otherwise optional.
+  // Always absent for timeout certificates.
   optional bytes owner_authorization = 7;
 }
 
@@ -380,9 +381,9 @@ message Certificate {
   // The kind of certificate serialized in `value` field.
   CertificateKind kind = 4;
 
-  // The chain owner's signature over the proposal that introduced the certified
-  // block, retained for auditing. Absent for timeout certificates and for
-  // certificates whose assembler did not have the original proposal.
+  // The chain owner's signature over the certified block's proposal content.
+  // Required for blocks that declare an authenticated owner; otherwise optional.
+  // Always absent for timeout certificates.
   optional bytes owner_authorization = 5;
 }
 

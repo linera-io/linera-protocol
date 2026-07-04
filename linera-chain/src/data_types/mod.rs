@@ -438,7 +438,7 @@ pub enum OriginalProposal {
 }
 
 /// Evidence that a chain owner authorized a block: the owner's signature over the
-/// initial, outcome-less [`ProposalContent`] that introduced the block.
+/// block's [`ProposalContent`], without execution outcome.
 ///
 /// Every block is first proposed without an execution outcome — an outcome appears in
 /// a proposal only when re-proposing an already validated block — so such a signature
@@ -449,10 +449,11 @@ pub enum OriginalProposal {
 /// this signature (see [`OwnerAuthorization::check_block_authorization`]); for other
 /// blocks it is optional provenance.
 ///
-/// This value is deliberately *not* covered by the certified block's hash: the same
-/// block may be authorized by proposals in different rounds, so hashing the signature
-/// would make block hashes ambiguous. It is self-authenticating instead: given the
-/// block, anyone can reconstruct the signed proposal content and check the signature.
+/// This value is not covered by the certified block's hash or by the validator
+/// signatures. Given the block, anyone can reconstruct the signed proposal content
+/// and check the signature, so it cannot be forged — only withheld, which
+/// [`OwnerAuthorization::check_block_authorization`] rejects for blocks with an
+/// authenticated owner.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Allocative)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct OwnerAuthorization {
@@ -470,8 +471,9 @@ impl OwnerAuthorization {
     }
 
     /// Verifies that this authorization is valid for the given block: the signature
-    /// must be valid over the proposal content that introduced the block, and the
-    /// signer must match the block's `authenticated_owner`, if one is set.
+    /// must be valid over the block's proposal content, without execution outcome, in
+    /// `round`, and the signer must match the block's `authenticated_owner`, if one
+    /// is set.
     ///
     /// Returns the authorizing owner. Note that whether that owner was entitled to
     /// propose in `round` under the chain's ownership at that height can only be
@@ -482,7 +484,7 @@ impl OwnerAuthorization {
 
     /// Checks the authorization rule for a certified block: a block with an
     /// `authenticated_owner` is only valid together with that owner's signature over
-    /// the proposal that introduced it. For blocks without an authenticated owner the
+    /// the block's proposal content. For blocks without an authenticated owner the
     /// signature is optional, but must be valid if present.
     pub fn check_block_authorization(
         authorization: Option<&OwnerAuthorization>,

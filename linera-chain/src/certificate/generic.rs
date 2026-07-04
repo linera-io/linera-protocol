@@ -23,10 +23,10 @@ pub struct GenericCertificate<T: CertificateValue> {
     /// The round in which the value was certified.
     pub round: Round,
     signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
-    /// The chain owner's signature over the proposal that introduced the certified
-    /// block. Not covered by the certified value's hash or the validator signatures;
-    /// it is self-authenticating given the block. Required for blocks with an
-    /// `authenticated_owner`; optional otherwise. Always `None` for timeouts.
+    /// The chain owner's signature over the certified block's proposal content.
+    /// Not covered by the certified value's hash or the validator signatures.
+    /// Required for blocks with an `authenticated_owner`; optional otherwise.
+    /// Always `None` for timeouts.
     owner_authorization: Option<OwnerAuthorization>,
 }
 
@@ -61,8 +61,8 @@ impl<T: CertificateValue> GenericCertificate<T> {
         }
     }
 
-    /// Returns the retained chain owner's signature over the proposal that introduced
-    /// the certified block, if available.
+    /// Returns the retained chain owner's signature over the certified block's
+    /// proposal content, if available.
     pub fn owner_authorization(&self) -> Option<&OwnerAuthorization> {
         self.owner_authorization.as_ref()
     }
