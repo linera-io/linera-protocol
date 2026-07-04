@@ -307,7 +307,7 @@ message LiteCertificate {
   CertificateKind kind = 6;
 
   // The chain owner's signature over the proposal that introduced the certified
-  // block, retained for auditing (#456), if available.
+  // block, retained for auditing, if available.
   optional bytes owner_authorization = 7;
 }
 
@@ -381,7 +381,7 @@ message Certificate {
   CertificateKind kind = 4;
 
   // The chain owner's signature over the proposal that introduced the certified
-  // block, retained for auditing (#456). Absent for timeout certificates and for
+  // block, retained for auditing. Absent for timeout certificates and for
   // certificates whose assembler did not have the original proposal.
   optional bytes owner_authorization = 5;
 }

@@ -438,7 +438,7 @@ pub enum OriginalProposal {
 }
 
 /// Evidence that a chain owner authorized a block: the owner's signature over the
-/// initial, outcome-less [`ProposalContent`] that introduced the block (#456).
+/// initial, outcome-less [`ProposalContent`] that introduced the block.
 ///
 /// Every block starts its life as a proposal without an execution outcome — either a
 /// fresh proposal or a fast-round proposal being retried — so such a signature always
@@ -926,7 +926,7 @@ impl BlockProposal {
     }
 
     /// Returns the owner authorization to retain with certificates for this proposal,
-    /// if this proposal itself contains the authorizing signature (#456).
+    /// if this proposal itself contains the authorizing signature.
     ///
     /// For a retry of a validated block, the authorizing signature is not part of this
     /// proposal; it should be carried over from the validated block certificate.

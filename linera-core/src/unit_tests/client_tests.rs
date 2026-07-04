@@ -121,7 +121,7 @@ where
             Amount::from_millis(1000)
         );
         // The chain owner's proposal signature is retained with the certificate and
-        // verifies against the block (#456).
+        // verifies against the block.
         let authorization = certificate
             .owner_authorization()
             .expect("owner authorization should be retained");
@@ -1841,7 +1841,7 @@ where
     );
 
     // Although client 2B finalized the block, the certificate retains owner 2A's
-    // original proposal signature, carried over from the validated certificate (#456).
+    // original proposal signature, carried over from the validated certificate.
     let authorization = certificate
         .owner_authorization()
         .expect("owner authorization should be retained across the retry");

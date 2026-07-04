@@ -89,7 +89,7 @@ impl Certificate {
     }
 
     /// Returns the retained chain owner's signature over the proposal that introduced
-    /// the certified block, if available (#456). Always `None` for timeouts.
+    /// the certified block, if available. Always `None` for timeouts.
     pub fn owner_authorization(&self) -> Option<&crate::data_types::OwnerAuthorization> {
         match self {
             Certificate::Validated(cert) => cert.owner_authorization(),

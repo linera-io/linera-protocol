@@ -29,7 +29,7 @@ pub struct LiteCertificate<'a> {
     /// Signatures on the value.
     pub signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
     /// The retained chain owner's signature over the proposal that introduced the
-    /// certified block, if available (#456). Carried here so that reconstructing a
+    /// certified block, if available. Carried here so that reconstructing a
     /// full certificate from a cached value does not lose it.
     pub owner_authorization: Option<OwnerAuthorization>,
 }

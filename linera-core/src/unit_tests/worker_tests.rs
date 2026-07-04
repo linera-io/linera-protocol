@@ -111,7 +111,7 @@ struct TestEnvironment<S: Storage> {
     admin_description: ChainDescription,
     other_chains: BTreeMap<ChainId, ChainDescription>,
     // Secret keys of chain owners, used to produce the `OwnerAuthorization` that
-    // certificates of blocks with an `authenticated_owner` must retain (#456).
+    // certificates of blocks with an `authenticated_owner` must retain.
     owner_keys: HashMap<AccountOwner, AccountSecretKey>,
 }
 
@@ -210,7 +210,7 @@ where
 
     /// Registers a chain owner's secret key, so that the environment can produce the
     /// [`OwnerAuthorization`] required by certificates of blocks with an
-    /// `authenticated_owner` (#456).
+    /// `authenticated_owner`.
     fn register_owner(&mut self, key_pair: &AccountSecretKey) -> AccountOwner {
         let owner = key_pair.public().into();
         self.owner_keys.insert(owner, key_pair.copy());
@@ -377,7 +377,7 @@ where
     }
 
     /// Like [`Self::make_certificate`], but also attaches the owner authorization
-    /// required for blocks with an `authenticated_owner` (#456).
+    /// required for blocks with an `authenticated_owner`.
     fn make_confirmed_certificate(&self, value: ConfirmedBlock) -> ConfirmedBlockCertificate {
         let authorization = self.owner_authorization_for(value.block());
         self.make_certificate(value)
@@ -385,7 +385,7 @@ where
     }
 
     /// Like [`Self::make_certificate`], but also attaches the owner authorization
-    /// required for blocks with an `authenticated_owner` (#456).
+    /// required for blocks with an `authenticated_owner`.
     fn make_validated_certificate_with_round(
         &self,
         value: ValidatedBlock,

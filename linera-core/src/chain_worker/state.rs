@@ -2439,7 +2439,7 @@ where
                 certificate.check(&committee)?;
                 // A block with an authenticated owner is only valid together with that
                 // owner's retained proposal signature, so require it here before it
-                // can end up in our locking block (#456).
+                // can end up in our locking block.
                 match &certificate.owner_authorization {
                     Some(authorization) => {
                         authorization.verify_proposed_block(content.block.clone())?;
