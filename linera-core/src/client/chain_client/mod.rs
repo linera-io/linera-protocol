@@ -36,7 +36,7 @@ use linera_base::{data_types::Bytecode, vm::VmRuntime};
 use linera_chain::{
     data_types::{
         BlockProposal, BundleExecutionPolicy, BundleFailurePolicy, ChainAndHeight, IncomingBundle,
-        ProposedBlock, Transaction,
+        OwnerAuthorization, ProposalContent, ProposedBlock, Transaction,
     },
     manager::LockingBlock,
     types::{
@@ -1644,11 +1644,17 @@ impl<Env: Environment> ChainClient<Env> {
             }
         }
         let (proposed_block, auto_retry_outcome) = block.clone().into_proposal();
+        // Sign the owner authorization now, while the staging owner's key is certainly
+        // available; the pending block can later be proposed by any owner.
+        let owner_authorization = self
+            .sign_owner_authorization(&identity, &proposed_block)
+            .await?;
         *proposal_guard = Some(PendingProposal {
             block: proposed_block,
             blobs,
             auto_retry_outcome: Some(auto_retry_outcome),
             round: None,
+            owner_authorization: Some(owner_authorization),
         });
         Ok(block)
     }
@@ -2131,8 +2137,13 @@ impl<Env: Environment> ChainClient<Env> {
 
         let local_node = &self.client.local_node;
         // Otherwise we have to re-propose the highest validated block, if there is one.
-        let (block, blobs, owner) = if let Some(locking) = &info.manager.requested_locking {
-            let (block, blobs) = match &**locking {
+        // The proposal is always signed as the current identity; the block's operations
+        // are authenticated by its `authenticated_owner`'s separate signature over the
+        // whole block, which travels with the proposal.
+        let (block, blobs, explicit_authorization) = if let Some(locking) =
+            &info.manager.requested_locking
+        {
+            match &**locking {
                 LockingBlock::Regular(certificate) => {
                     let blob_ids = certificate.block().required_blob_ids();
                     let blobs = local_node
@@ -2140,7 +2151,8 @@ impl<Env: Environment> ChainClient<Env> {
                         .await?
                         .ok_or_else(|| Error::InternalError("Missing local locking blobs"))?;
                     debug!("Retrying locking block from round {}", certificate.round);
-                    (certificate.block().clone(), blobs)
+                    // The owner authorization is carried by the validated certificate.
+                    (certificate.block().clone(), blobs, None)
                 }
                 LockingBlock::Fast(proposal) => {
                     let proposed_block = proposal.content.block.clone();
@@ -2159,19 +2171,26 @@ impl<Env: Environment> ChainClient<Env> {
                         )
                         .await?;
                     debug!("Retrying locking block from fast round.");
-                    (block, blobs)
+                    // The fast proposal's signature authorizes the block.
+                    let authorization = OwnerAuthorization {
+                        round: proposal.content.round,
+                        signature: proposal.signature,
+                    };
+                    (block, blobs, Some(authorization))
                 }
-            };
-            (block, blobs, identity)
+            }
         } else if let Some(pending) = proposal_guard.as_ref() {
-            // Otherwise we are free to propose our own pending block. Sign it as the owner
-            // that staged it: the block's operations are authenticated by that owner, and
-            // validators reject the proposal with `WorkerError::InvalidSigner` if we re-sign
-            // it as someone else (which would happen if `preferred_owner` changed since the
-            // block was staged). The signer is global to the client, so we can sign as the
-            // original author as long as we still hold their key.
-            let owner = match pending.block.authenticated_owner {
-                Some(staged_owner) if staged_owner != identity => {
+            // Otherwise we are free to propose our own pending block, using the owner
+            // authorization created when the block was staged.
+            let explicit_authorization = match (
+                pending.owner_authorization,
+                pending.block.authenticated_owner,
+            ) {
+                (Some(authorization), _) => Some(authorization),
+                (None, Some(staged_owner)) if staged_owner != identity => {
+                    // A pending proposal from an older wallet, staged by a different
+                    // owner: create the missing authorization now, if we still hold
+                    // that owner's key.
                     if !self.has_key_for(&staged_owner).await? {
                         // If a fast-round proposal was already submitted, we can't safely
                         // drop it and propose a conflicting fast block: fast rounds skip
@@ -2181,9 +2200,9 @@ impl<Env: Environment> ChainClient<Env> {
                         // the caller can recover the key or wait for the timeout.
                         if pending.round.is_some_and(|round| round.is_fast()) {
                             return Err(Error::BlockProposalError(
-                                "pending fast block was signed by an owner whose key is no \
-                                 longer available; recover the key or wait for the round to \
-                                 time out before retrying",
+                                "pending fast block was authorized by an owner whose key is \
+                                 no longer available; recover the key or wait for the round \
+                                 to time out before retrying",
                             ));
                         }
                         warn!(
@@ -2193,14 +2212,18 @@ impl<Env: Environment> ChainClient<Env> {
                         *proposal_guard = None;
                         return Ok(ClientOutcome::Committed(None));
                     }
-                    staged_owner
+                    Some(
+                        self.sign_owner_authorization(&staged_owner, &pending.block)
+                            .await?,
+                    )
                 }
-                _ => identity,
+                // The proposal's own signature will double as the authorization.
+                (None, _) => None,
             };
             let proposed_block = pending.block.clone();
             let blobs = pending.blobs.clone();
             let staging_outcome = pending.auto_retry_outcome.as_ref();
-            let round = self.round_for_oracle(&info, &owner).await?;
+            let round = self.round_for_oracle(&info, &identity).await?;
             let (block, _, _) = self
                 .client
                 .stage_block_execution(
@@ -2220,7 +2243,7 @@ impl<Env: Environment> ChainClient<Env> {
                 );
             }
             debug!("Proposing the local pending block.");
-            (block, blobs, owner)
+            (block, blobs, explicit_authorization)
         } else {
             return Ok(ClientOutcome::Committed(None)); // Nothing to do.
         };
@@ -2228,7 +2251,7 @@ impl<Env: Environment> ChainClient<Env> {
         let has_oracle_responses = block.has_oracle_responses();
         let (proposed_block, outcome) = block.into_proposal();
         let round = match self
-            .round_for_new_proposal(&info, &owner, has_oracle_responses)
+            .round_for_new_proposal(&info, &identity, has_oracle_responses)
             .await?
         {
             Either::Left(round) => round,
@@ -2243,31 +2266,32 @@ impl<Env: Environment> ChainClient<Env> {
             .manager
             .already_handled_proposal(round, &proposed_block);
         // Create the final block proposal.
-        let mut carried_authorization = None;
         let proposal = if let Some(locking) = info.manager.requested_locking {
             Box::new(match *locking {
                 LockingBlock::Regular(cert) => {
-                    // The retry proposal doesn't contain the authorizing signature;
-                    // carry it over from the validated certificate, if retained.
-                    carried_authorization = cert.owner_authorization().copied();
-                    BlockProposal::new_retry_regular(owner, round, cert, self.signer())
+                    // The owner authorization is carried by the validated certificate.
+                    BlockProposal::new_retry_regular(identity, round, cert, self.signer())
                         .await
                         .map_err(Error::signer_failure)?
                 }
-                LockingBlock::Fast(proposal) => {
-                    BlockProposal::new_retry_fast(owner, round, proposal, self.signer())
-                        .await
-                        .map_err(Error::signer_failure)?
-                }
+                LockingBlock::Fast(_) => BlockProposal::new_initial(
+                    identity,
+                    round,
+                    proposed_block.clone(),
+                    self.signer(),
+                )
+                .await
+                .map_err(Error::signer_failure)?
+                .with_owner_authorization(explicit_authorization),
             })
         } else {
             Box::new(
-                BlockProposal::new_initial(owner, round, proposed_block.clone(), self.signer())
+                BlockProposal::new_initial(identity, round, proposed_block.clone(), self.signer())
                     .await
-                    .map_err(Error::signer_failure)?,
+                    .map_err(Error::signer_failure)?
+                    .with_owner_authorization(explicit_authorization),
             )
         };
-        let owner_authorization = proposal.owner_authorization().or(carried_authorization);
         if !already_handled_locally {
             // Check the final block proposal. This will be cheaper after #1401.
             if let Err(err) = local_node.handle_block_proposal(*proposal.clone()).await {
@@ -2294,23 +2318,13 @@ impl<Env: Environment> ChainClient<Env> {
         let certificate = if round.is_fast() {
             let hashed_value = ConfirmedBlock::new(block);
             self.client
-                .submit_block_proposal(
-                    committee.clone(),
-                    proposal,
-                    hashed_value,
-                    owner_authorization,
-                )
+                .submit_block_proposal(committee.clone(), proposal, hashed_value)
                 .await?
         } else {
             let hashed_value = ValidatedBlock::new(block);
             let certificate = self
                 .client
-                .submit_block_proposal(
-                    committee.clone(),
-                    proposal,
-                    hashed_value.clone(),
-                    owner_authorization,
-                )
+                .submit_block_proposal(committee.clone(), proposal, hashed_value.clone())
                 .await?;
             self.client.finalize_block(&committee, certificate).await?
         };
@@ -2393,6 +2407,26 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Returns the number for the round number oracle to use when staging a block proposal.
+    /// Signs an [`OwnerAuthorization`] for the given block with the given owner's key.
+    async fn sign_owner_authorization(
+        &self,
+        owner: &AccountOwner,
+        block: &ProposedBlock,
+    ) -> Result<OwnerAuthorization, Error> {
+        let round = Round::MultiLeader(0);
+        let content = ProposalContent {
+            block: block.clone(),
+            round,
+            outcome: None,
+        };
+        let signature = self
+            .signer()
+            .sign(owner, &CryptoHash::new(&content))
+            .await
+            .map_err(Error::signer_failure)?;
+        Ok(OwnerAuthorization { round, signature })
+    }
+
     async fn round_for_oracle(
         &self,
         info: &ChainInfo,

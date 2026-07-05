@@ -4720,7 +4720,7 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[test_log::test(tokio::test)]
-async fn test_pending_block_discarded_when_signer_key_missing<B>(
+async fn test_pending_block_proposed_by_other_owner_after_key_loss<B>(
     storage_builder: B,
 ) -> anyhow::Result<()>
 where
@@ -4765,12 +4765,15 @@ where
     );
     client.set_preferred_owner(owner_b);
 
-    // Processing the pending block must discard the stale proposal (we can no longer sign as `a`)
-    // and report `Committed(None)`, rather than raising an error or looping.
-    assert_matches!(
-        client.process_pending_block().await?,
-        ClientOutcome::Committed(None)
-    );
+    // Processing the pending block succeeds even though `a`'s key is gone: the block
+    // was authorized by `a` when it was staged, and `b` signs the proposal.
+    let ClientOutcome::Committed(Some(certificate)) = client.process_pending_block().await? else {
+        panic!("the pending block authorized by `a` should commit, proposed by `b`");
+    };
+    let authorization = certificate
+        .owner_authorization()
+        .expect("owner authorization should be retained");
+    assert_eq!(authorization.verify(certificate.block())?, owner_a);
     assert!(client.pending_proposal().await.is_none());
 
     Ok(())

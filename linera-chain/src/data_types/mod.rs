@@ -424,19 +424,6 @@ pub struct MessageBundle {
     pub messages: Vec<PostedMessage>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Allocative)]
-#[cfg_attr(with_testing, derive(Eq, PartialEq))]
-/// An earlier proposal that is being retried.
-pub enum OriginalProposal {
-    /// A proposal in the fast round.
-    Fast(AccountSignature),
-    /// A validated block certificate from an earlier round.
-    Regular {
-        /// The validated block certificate.
-        certificate: LiteCertificate<'static>,
-    },
-}
-
 /// Evidence that a chain owner authorized a block: the owner's signature over the
 /// block's [`ProposalContent`], without execution outcome.
 ///
@@ -533,11 +520,19 @@ pub struct BlockProposal {
     /// The signed content of the proposal: the proposed block, the round, and any
     /// execution outcome from a previous round.
     pub content: ProposalContent,
-    /// The proposer's signature over `content`.
+    /// The proposer's signature over `content`, authenticating their participation in
+    /// the round. The proposer need not be the block's `authenticated_owner`.
     pub signature: AccountSignature,
-    /// The earlier proposal being retried, if this proposal is a retry in a later round.
+    /// The authenticated owner's signature over the block, if the proposer is not the
+    /// authenticated owner or the signed content contains an execution outcome. When
+    /// the proposer is the authenticated owner and `content.outcome` is `None`,
+    /// `signature` doubles as the authorization and this may be omitted.
     #[debug(skip_if = Option::is_none)]
-    pub original_proposal: Option<OriginalProposal>,
+    pub owner_authorization: Option<OwnerAuthorization>,
+    /// A certificate showing that the block was validated in an earlier round, if
+    /// this proposal retries it.
+    #[debug(skip_if = Option::is_none)]
+    pub validated_certificate: Option<LiteCertificate<'static>>,
 }
 
 /// A message together with kind, authentication and grant information.
@@ -873,28 +868,8 @@ impl BlockProposal {
         Ok(Self {
             content,
             signature,
-            original_proposal: None,
-        })
-    }
-
-    /// Creates a proposal that retries a fast-round proposal in a later round.
-    pub async fn new_retry_fast<S: Signer + ?Sized>(
-        owner: AccountOwner,
-        round: Round,
-        old_proposal: BlockProposal,
-        signer: &S,
-    ) -> Result<Self, S::Error> {
-        let content = ProposalContent {
-            round,
-            block: old_proposal.content.block,
-            outcome: None,
-        };
-        let signature = signer.sign(&owner, &CryptoHash::new(&content)).await?;
-
-        Ok(Self {
-            content,
-            signature,
-            original_proposal: Some(OriginalProposal::Fast(old_proposal.signature)),
+            owner_authorization: None,
+            validated_certificate: None,
         })
     }
 
@@ -918,8 +893,15 @@ impl BlockProposal {
         Ok(Self {
             content,
             signature,
-            original_proposal: Some(OriginalProposal::Regular { certificate }),
+            owner_authorization: None,
+            validated_certificate: Some(certificate),
         })
+    }
+
+    /// Sets the explicit owner authorization for the block.
+    pub fn with_owner_authorization(mut self, authorization: Option<OwnerAuthorization>) -> Self {
+        self.owner_authorization = authorization;
+        self
     }
 
     /// Returns the `AccountOwner` that proposed the block.
@@ -927,23 +909,28 @@ impl BlockProposal {
         (&self.signature).into()
     }
 
-    /// Returns the owner authorization to retain with certificates for this proposal,
-    /// if this proposal itself contains the authorizing signature.
+    /// Returns the authorization backing the block's `authenticated_owner`, if any:
+    /// the explicit one, the one retained by the validated certificate, or the
+    /// proposer's own signature when the signed content has no execution outcome.
     ///
-    /// For a retry of a validated block, the authorizing signature is not part of this
-    /// proposal; it should be carried over from the validated block certificate.
+    /// Whether the returned candidate is actually valid for the block is checked by
+    /// [`OwnerAuthorization::verify_proposed_block`].
     pub fn owner_authorization(&self) -> Option<OwnerAuthorization> {
-        match &self.original_proposal {
-            None => Some(OwnerAuthorization {
+        if let Some(authorization) = self.owner_authorization {
+            return Some(authorization);
+        }
+        if let Some(certificate) = &self.validated_certificate {
+            if let Some(authorization) = certificate.owner_authorization {
+                return Some(authorization);
+            }
+        }
+        self.content
+            .outcome
+            .is_none()
+            .then_some(OwnerAuthorization {
                 round: self.content.round,
                 signature: self.signature,
-            }),
-            Some(OriginalProposal::Fast(signature)) => Some(OwnerAuthorization {
-                round: Round::Fast,
-                signature: *signature,
-            }),
-            Some(OriginalProposal::Regular { .. }) => None,
-        }
+            })
     }
 
     /// Verifies the signature on this proposal.
@@ -973,24 +960,19 @@ impl BlockProposal {
         )
     }
 
-    /// Checks that the original proposal, if present, matches the new one and has a higher round.
+    /// Checks that the validated certificate, if present, matches the proposal and
+    /// comes from an earlier round.
     pub fn check_invariants(&self) -> Result<(), &'static str> {
-        match (&self.original_proposal, &self.content.outcome) {
+        match (&self.validated_certificate, &self.content.outcome) {
             (None, None) => {}
-            (Some(OriginalProposal::Fast(_)), None) => ensure!(
-                self.content.round > Round::Fast,
-                "The new proposal's round must be greater than the original's"
-            ),
-            (None, Some(_))
-            | (Some(OriginalProposal::Fast(_)), Some(_))
-            | (Some(OriginalProposal::Regular { .. }), None) => {
+            (None, Some(_)) | (Some(_), None) => {
                 return Err("Must contain a validation certificate if and only if \
                      it contains the execution outcome from a previous round");
             }
-            (Some(OriginalProposal::Regular { certificate }), Some(outcome)) => {
+            (Some(certificate), Some(outcome)) => {
                 ensure!(
                     self.content.round > certificate.round,
-                    "The new proposal's round must be greater than the original's"
+                    "The new proposal's round must be greater than the certificate's"
                 );
                 let block = outcome.clone().with(self.content.block.clone());
                 let value = ValidatedBlock::new(block);
@@ -1185,7 +1167,8 @@ mod signing {
         let block_proposal = BlockProposal {
             content: proposal,
             signature,
-            original_proposal: None,
+            owner_authorization: None,
+            validated_certificate: None,
         };
         assert_eq!(block_proposal.owner(), public_key.into(),);
     }

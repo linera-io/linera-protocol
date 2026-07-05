@@ -1313,12 +1313,12 @@ impl<Env: Environment> Client<Env> {
         committee: Arc<Committee>,
         proposal: Box<BlockProposal>,
         value: T,
-        owner_authorization: Option<OwnerAuthorization>,
     ) -> Result<GenericCertificate<T>, chain_client::Error> {
         debug!(
             round = %proposal.content.round,
             "Submitting block proposal to validators"
         );
+        let owner_authorization = proposal.owner_authorization();
 
         // Check if the block timestamp is in the future and log INFO.
         let block_timestamp = proposal.content.block.timestamp;
@@ -2637,6 +2637,10 @@ pub struct PendingProposal {
     /// The round in which this proposal was first submitted, if any.
     #[serde(default)]
     pub round: Option<Round>,
+    /// The staging owner's signature over the block, created when the block was
+    /// staged so that the block can later be proposed by any owner.
+    #[serde(default)]
+    pub owner_authorization: Option<OwnerAuthorization>,
 }
 
 enum ReceiveCertificateMode {

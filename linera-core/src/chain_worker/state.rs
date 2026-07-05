@@ -26,7 +26,7 @@ use linera_cache::{Arc as CacheArc, UniqueValueCache, ValueCache};
 use linera_chain::{
     data_types::{
         BlockProposal, BundleExecutionPolicy, IncomingBundle, MessageAction, MessageBundle,
-        OriginalProposal, OwnerAuthorization, ProposalContent, ProposedBlock,
+        OwnerAuthorization, ProposalContent, ProposedBlock,
     },
     manager::{self, ManagerSafetySnapshot},
     types::{
@@ -818,8 +818,9 @@ where
                     round,
                     outcome: _,
                 },
-            original_proposal,
+            validated_certificate,
             signature: _,
+            owner_authorization: _,
         } = proposal;
 
         let mut maybe_blobs = self
@@ -832,7 +833,7 @@ where
                 // TODO(#3203): Allow multiple pending proposals on permissionless chains.
                 chain.pending_proposed_blobs.clear();
             }
-            let validated = matches!(original_proposal, Some(OriginalProposal::Regular { .. }));
+            let validated = validated_certificate.is_some();
             chain
                 .pending_proposed_blobs
                 .try_load_entry_mut(&owner)
@@ -2409,8 +2410,9 @@ where
         let owner = proposal.owner();
         let BlockProposal {
             content,
-            original_proposal,
+            validated_certificate,
             signature: _,
+            owner_authorization: _,
         } = &proposal;
         let block = &content.block;
         let chain = &self.chain;
@@ -2421,61 +2423,36 @@ where
         check_block_epoch(epoch, block.chain_id, block.epoch)?;
         let policy = committee.policy().clone();
         block.check_proposal_size(policy.maximum_block_proposal_size)?;
-        // Check the authentication of the block.
+        // Check that the proposer is allowed to propose in this round.
         ensure!(
             chain.manager.can_propose(&owner, proposal.content.round),
             WorkerError::InvalidOwner
         );
         let old_round = self.chain.manager.current_round();
-        match original_proposal {
-            None => {
-                if let Some(signer) = block.authenticated_owner {
-                    // Check the authentication of the operations in the new block.
-                    ensure!(signer == owner, WorkerError::InvalidSigner(owner));
+        // Check the authentication of the block: a block with an authenticated owner
+        // is only valid together with that owner's signature over the whole block. The
+        // proposer may differ from the authenticated owner.
+        match proposal.owner_authorization() {
+            Some(authorization) => {
+                let signer = authorization.verify_proposed_block(block.clone())?;
+                // An authorization claiming the fast round asserts that the block was
+                // proposed in the fast round, which only super owners may do. This also
+                // gates the reconstruction of the fast locking block in the manager.
+                if authorization.round.is_fast() {
+                    ensure!(
+                        chain.manager.ownership.get().super_owners.contains(&signer),
+                        WorkerError::InvalidOwner
+                    );
                 }
             }
-            Some(OriginalProposal::Regular { certificate }) => {
-                // Verify that this block has been validated by a quorum before.
-                certificate.check(&committee)?;
-                // A block with an authenticated owner is only valid together with that
-                // owner's retained proposal signature, so require it here before it
-                // can end up in our locking block.
-                match &certificate.owner_authorization {
-                    Some(authorization) => {
-                        authorization.verify_proposed_block(content.block.clone())?;
-                    }
-                    None => ensure!(
-                        content.block.authenticated_owner.is_none(),
-                        ChainError::MissingOwnerAuthorization
-                    ),
-                }
-            }
-            Some(OriginalProposal::Fast(signature)) => {
-                let original_proposal = BlockProposal {
-                    content: ProposalContent {
-                        block: content.block.clone(),
-                        round: Round::Fast,
-                        outcome: None,
-                    },
-                    signature: *signature,
-                    original_proposal: None,
-                };
-                let super_owner = original_proposal.owner();
-                ensure!(
-                    chain
-                        .manager
-                        .ownership
-                        .get()
-                        .super_owners
-                        .contains(&super_owner),
-                    WorkerError::InvalidOwner
-                );
-                if let Some(signer) = block.authenticated_owner {
-                    // Check the authentication of the operations in the new block.
-                    ensure!(signer == super_owner, WorkerError::InvalidSigner(signer));
-                }
-                original_proposal.check_signature()?;
-            }
+            None => ensure!(
+                block.authenticated_owner.is_none(),
+                ChainError::MissingOwnerAuthorization
+            ),
+        }
+        if let Some(certificate) = validated_certificate {
+            // Verify that this block has been validated by a quorum before.
+            certificate.check(&committee)?;
         }
         let local_time = self.storage.clock().current_time();
         match chain.manager.check_proposed_block(&proposal) {

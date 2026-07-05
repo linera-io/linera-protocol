@@ -281,9 +281,12 @@ message BlockProposal {
   // Signature by chain owner
   AccountSignature signature = 5;
 
-  // A lite certificate for a validated block, or a fast block proposal, that
-  // justifies the proposal in this round.
-  optional bytes original_proposal = 6;
+  // A lite certificate for a validated block that this proposal retries.
+  optional bytes validated_certificate = 6;
+
+  // The authenticated owner's signature over the block, if not implied by
+  // `signature` or by the validated certificate.
+  optional bytes owner_authorization = 7;
 }
 
 // A certified statement from the committee, without the value.

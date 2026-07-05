@@ -249,9 +249,12 @@ BlockProposal:
         TYPENAME: ProposalContent
     - signature:
         TYPENAME: AccountSignature
-    - original_proposal:
+    - owner_authorization:
         OPTION:
-          TYPENAME: OriginalProposal
+          TYPENAME: OwnerAuthorization
+    - validated_certificate:
+        OPTION:
+          TYPENAME: LiteCertificate
 Certificate:
   ENUM:
     0:
@@ -913,17 +916,6 @@ OracleResponse:
                 TUPLE:
                   - TYPENAME: ChainId
                   - TYPENAME: Cursor
-OriginalProposal:
-  ENUM:
-    0:
-      Fast:
-        NEWTYPE:
-          TYPENAME: AccountSignature
-    1:
-      Regular:
-        STRUCT:
-          - certificate:
-              TYPENAME: LiteCertificate
 OutgoingMessage:
   STRUCT:
     - destination:
