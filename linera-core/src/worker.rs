@@ -29,8 +29,9 @@ use linera_chain::ChainExecutionContext;
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, MessageBundle, ProposedBlock},
     types::{
-        Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
-        LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
+        Block, CertificateValue, Certified, ConfirmedBlock, ConfirmedBlockCertificate,
+        GenericCertificate, LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock,
+        ValidatedBlockCertificate,
     },
     ChainError, ChainStateView, StreamCounts,
 };
@@ -814,14 +815,14 @@ where
         match certificate.value.kind {
             linera_chain::types::CertificateKind::Confirmed => Ok(Either::Left(
                 certificate
-                    .with_value(block)
+                    .into_confirmed_certificate(block)
                     .ok_or(WorkerError::InvalidLiteCertificate)?,
             )),
             linera_chain::types::CertificateKind::Validated => {
                 let value = ValidatedBlock::from_hashed(block.into_inner());
                 Ok(Either::Right(
                     certificate
-                        .with_value(value)
+                        .into_validated_certificate(value)
                         .ok_or(WorkerError::InvalidLiteCertificate)?,
                 ))
             }
@@ -834,14 +835,34 @@ where
 #[cfg_attr(not(web), trait_variant::make(Send))]
 /// A certificate value that the worker knows how to process.
 pub trait ProcessableCertificate: CertificateValue + Sized + 'static {
+    /// The concrete certificate type carrying this value (and, for block values, its
+    /// justification chain).
+    type Certificate: Certified<Value = Self> + Clone + Send + Sync + 'static;
+
+    /// Builds the concrete certificate from a signed quorum and a justification chain. The chain
+    /// is ignored for values (such as `Timeout`) that carry no justification.
+    fn make_certificate(
+        quorum: GenericCertificate<Self>,
+        justification: linera_chain::justification::JustificationChain,
+    ) -> Self::Certificate;
+
     /// Processes a certificate carrying this value on the given worker.
     async fn process_certificate<S: Storage + Clone + 'static>(
         worker: &WorkerState<S>,
-        certificate: GenericCertificate<Self>,
+        certificate: Self::Certificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError>;
 }
 
 impl ProcessableCertificate for ConfirmedBlock {
+    type Certificate = ConfirmedBlockCertificate;
+
+    fn make_certificate(
+        quorum: GenericCertificate<Self>,
+        justification: linera_chain::justification::JustificationChain,
+    ) -> Self::Certificate {
+        ConfirmedBlockCertificate::from_parts(quorum, justification)
+    }
+
     async fn process_certificate<S: Storage + Clone + 'static>(
         worker: &WorkerState<S>,
         certificate: ConfirmedBlockCertificate,
@@ -856,6 +877,15 @@ impl ProcessableCertificate for ConfirmedBlock {
 }
 
 impl ProcessableCertificate for ValidatedBlock {
+    type Certificate = ValidatedBlockCertificate;
+
+    fn make_certificate(
+        quorum: GenericCertificate<Self>,
+        justification: linera_chain::justification::JustificationChain,
+    ) -> Self::Certificate {
+        ValidatedBlockCertificate::from_parts(quorum, justification)
+    }
+
     async fn process_certificate<S: Storage + Clone + 'static>(
         worker: &WorkerState<S>,
         certificate: ValidatedBlockCertificate,
@@ -865,6 +895,15 @@ impl ProcessableCertificate for ValidatedBlock {
 }
 
 impl ProcessableCertificate for Timeout {
+    type Certificate = TimeoutCertificate;
+
+    fn make_certificate(
+        quorum: GenericCertificate<Self>,
+        _justification: linera_chain::justification::JustificationChain,
+    ) -> Self::Certificate {
+        quorum
+    }
+
     async fn process_certificate<S: Storage + Clone + 'static>(
         worker: &WorkerState<S>,
         certificate: TimeoutCertificate,
@@ -926,19 +965,21 @@ where
     #[inline]
     /// Processes a certificate fully, dispatching any resulting cross-chain requests
     /// and emitting notifications through the given notifier.
-    pub async fn fully_handle_certificate_with_notifications<T>(
+    pub async fn fully_handle_certificate_with_notifications<C>(
         &self,
-        certificate: GenericCertificate<T>,
+        certificate: C,
         notifier: &impl Notifier,
     ) -> Result<ChainInfoResponse, WorkerError>
     where
-        T: ProcessableCertificate,
+        C: Certified + Clone + Send + 'static,
+        C::Value: ProcessableCertificate<Certificate = C>,
     {
         let notifications = (*notifier).clone();
         let this = self.clone();
         linera_base::Task::spawn(async move {
             let (response, actions) =
-                ProcessableCertificate::process_certificate(&this, certificate).await?;
+                <C::Value as ProcessableCertificate>::process_certificate(&this, certificate)
+                    .await?;
             notifications.notify(&actions.notifications);
             let mut requests = VecDeque::from(actions.cross_chain_requests);
             while let Some(request) = requests.pop_front() {
