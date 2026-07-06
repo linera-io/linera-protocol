@@ -32,12 +32,13 @@ use linera_base::{data_types::Bytecode, identifiers::ModuleId, vm::VmRuntime};
 use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, ChainAndHeight, LiteVote,
-        OwnerAuthorization, ProposedBlock,
+        OriginalProposal, ProposedBlock,
     },
+    justification::JustificationChain,
     manager::LockingBlock,
     types::{
-        Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
-        LiteCertificate, ValidatedBlock, ValidatedBlockCertificate,
+        Block, CertificateValue, Certified, ConfirmedBlock, ConfirmedBlockCertificate,
+        GenericCertificate, LiteCertificate, Timeout, ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainIdSet,
 };
@@ -709,7 +710,10 @@ impl<Env: Environment> Client<Env> {
                     break;
                 }
             }
-            last_info = self.handle_certificate(certificate).await?.info;
+            last_info = self
+                .handle_certificate::<ConfirmedBlock>(certificate)
+                .await?
+                .info;
         }
         Ok(last_info)
     }
@@ -1155,10 +1159,10 @@ impl<Env: Environment> Client<Env> {
 
     async fn handle_certificate<T: ProcessableCertificate>(
         &self,
-        certificate: GenericCertificate<T>,
+        certificate: T::Certificate,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         self.local_node
-            .handle_certificate(certificate, &self.notifier)
+            .handle_certificate::<T>(certificate, &self.notifier)
             .await
     }
 
@@ -1286,17 +1290,42 @@ impl<Env: Environment> Client<Env> {
         committee: &Committee,
         certificate: ValidatedBlockCertificate,
     ) -> Result<ConfirmedBlockCertificate, chain_client::Error> {
-        debug!(round = %certificate.round, "Submitting block for confirmation");
-        let hashed_value = ConfirmedBlock::new(certificate.inner().block().clone());
+        debug!(round = %certificate.round(), "Submitting block for confirmation");
+        let hashed_value = ConfirmedBlock::new(certificate.block().clone());
         // Carry the retained owner authorization over from the validated certificate.
         let owner_authorization = certificate.owner_authorization().copied();
+        // The full chain of validated quorums for the block: this validated certificate's own
+        // quorum as the top link, then the chain below it. Whether the confirmed certificate
+        // actually carries it is decided *after* the quorum forms, from the attestation the
+        // confirming votes signed (below).
+        let full_justification = certificate.full_justification();
         let finalize_action = CommunicateAction::FinalizeBlock {
             certificate: Box::new(certificate),
             delivery: self.options.cross_chain_message_delivery,
         };
-        let certificate = self
+        let quorum = self
             .communicate_chain_action(committee, finalize_action, hashed_value)
-            .await?
+            .await?;
+        // Omit the chain iff the confirming votes attested that this is the chain's first round:
+        // such a block is always the lower one in any fork, so it never needs a chain of its own.
+        // Deciding from the quorum's signed attestation — rather than our local ownership view,
+        // which a concurrently finalized block could have advanced to a different first round —
+        // guarantees the certificate we assemble matches what the validators actually signed.
+        let justification = if quorum.first_round() {
+            JustificationChain::default()
+        } else {
+            full_justification
+        };
+        // The confirming votes committed to the chain they were shown; the chain we attach must
+        // be that one, or the assembled certificate would fail verification everywhere.
+        ensure!(
+            quorum.justification_commitment() == justification.commitment(quorum.hash()),
+            chain_client::Error::ProtocolError(
+                "A quorum confirmed with a justification commitment that does not match the \
+                 validated certificate's justification chain",
+            )
+        );
+        let certificate = ConfirmedBlockCertificate::from_parts(quorum, justification)
             .with_owner_authorization(owner_authorization);
         self.receive_certificate_with_checked_signatures(
             certificate.clone(),
@@ -1313,12 +1342,20 @@ impl<Env: Environment> Client<Env> {
         committee: Arc<Committee>,
         proposal: Box<BlockProposal>,
         value: T,
-        owner_authorization: Option<OwnerAuthorization>,
-    ) -> Result<GenericCertificate<T>, chain_client::Error> {
+    ) -> Result<T::Certificate, chain_client::Error> {
         debug!(
             round = %proposal.content.round,
             "Submitting block proposal to validators"
         );
+        let owner_authorization = proposal.owner_authorization();
+
+        // The certificate's justification chain comes from the proposal: a regular retry is
+        // justified by the validated certificate it carries (the new top link plus that
+        // certificate's own chain); a fresh proposal or fast-round proposal has none.
+        let justification = match proposal.original_proposal.as_ref() {
+            Some(OriginalProposal::Regular { certificate }) => certificate.full_justification(),
+            Some(OriginalProposal::Fast(_)) | None => JustificationChain::default(),
+        };
 
         // Check if the block timestamp is in the future and log INFO.
         let block_timestamp = proposal.content.block.timestamp;
@@ -1367,14 +1404,35 @@ impl<Env: Environment> Client<Env> {
             }
         });
 
-        let certificate = self
+        let quorum = self
             .communicate_chain_action(&committee, submit_action, value)
-            .await?
-            .with_owner_authorization(owner_authorization);
+            .await?;
 
         clock_skew_check_handle.await;
 
-        self.handle_certificate(certificate.clone()).await?;
+        // The justification chain comes from our own proposal, but the winning quorum may have
+        // been formed from a competing proposal that cited a different certificate: its votes then
+        // sign a different unlocking round and justification commitment, and gluing our chain onto
+        // them would build a certificate that fails verification downstream. Reject that here with
+        // a retryable error rather than assembling a mismatched certificate. (For confirmed and
+        // timeout quorums both sides are `None`, so this only bites the validated-retry case it is
+        // meant to guard.)
+        ensure!(
+            quorum.unlocking_round() == justification.top_unlocking_round(),
+            chain_client::Error::ProtocolError(
+                "A quorum voted with an unlocking round that does not match the proposal's \
+                 justification chain",
+            )
+        );
+        ensure!(
+            quorum.justification_commitment() == justification.commitment(quorum.hash()),
+            chain_client::Error::ProtocolError(
+                "A quorum voted with a justification commitment that does not match the \
+                 proposal's justification chain",
+            )
+        );
+        let certificate = T::make_certificate(quorum, justification, owner_authorization);
+        self.handle_certificate::<T>(certificate.clone()).await?;
         Ok(certificate)
     }
 
@@ -1386,7 +1444,7 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
         height: BlockHeight,
         delivery: CrossChainMessageDelivery,
-        latest_certificate: Option<CacheArc<GenericCertificate<ConfirmedBlock>>>,
+        latest_certificate: Option<CacheArc<ConfirmedBlockCertificate>>,
     ) -> Result<(), chain_client::Error> {
         let nodes = self.make_nodes(committee)?;
         communicate_with_quorum(
@@ -1425,10 +1483,22 @@ impl<Env: Environment> Client<Env> {
         value: T,
     ) -> Result<GenericCertificate<T>, chain_client::Error> {
         let nodes = self.make_nodes(committee)?;
-        let ((votes_hash, votes_round), votes) = communicate_with_quorum(
+        // Group votes by their full signed payload: signatures only aggregate into a
+        // certificate if they are unanimous on all signed fields, so a vote that diverges in
+        // the unlocking round, first-round attestation or justification commitment belongs to
+        // a separate candidate quorum.
+        let ((votes_hash, votes_round, _, _, _), votes) = communicate_with_quorum(
             &nodes,
             committee,
-            |vote: &LiteVote| (vote.value.value_hash, vote.round),
+            |vote: &LiteVote| {
+                (
+                    vote.value.value_hash,
+                    vote.round,
+                    vote.unlocking_round,
+                    vote.first_round,
+                    vote.justification_commitment,
+                )
+            },
             |remote_node| {
                 let mut updater = ValidatorUpdater {
                     remote_node,
@@ -2117,7 +2187,7 @@ impl<Env: Environment> Client<Env> {
         };
 
         if let Some(timeout) = remote_info.manager.timeout {
-            self.handle_certificate(*timeout).await?;
+            self.handle_certificate::<Timeout>(*timeout).await?;
         }
         let mut proposals = Vec::new();
         if let Some(proposal) = remote_info.manager.requested_signed_proposal {
@@ -2278,13 +2348,15 @@ impl<Env: Environment> Client<Env> {
     async fn try_process_locking_block_from(
         &self,
         remote_node: &RemoteNode<Env::ValidatorNode>,
-        certificate: GenericCertificate<ValidatedBlock>,
+        certificate: ValidatedBlockCertificate,
     ) -> Result<(), chain_client::Error> {
         let chain_id = certificate.inner().chain_id();
         let mut downloaded_blobs = HashSet::<BlobId>::new();
         let mut events = EventSetDownloader::new(self);
         loop {
-            let result = self.handle_certificate(certificate.clone()).await;
+            let result = self
+                .handle_certificate::<ValidatedBlock>(certificate.clone())
+                .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let new_blobs = filter_new(blob_ids, &downloaded_blobs);
                 if !new_blobs.is_empty() {

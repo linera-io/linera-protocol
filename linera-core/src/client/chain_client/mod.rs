@@ -1316,7 +1316,9 @@ impl<Env: Environment> ChainClient<Env> {
                 .communicate_chain_action(&committee, action, value)
                 .await?,
         );
-        self.client.handle_certificate(*certificate.clone()).await?;
+        self.client
+            .handle_certificate::<Timeout>(*certificate.clone())
+            .await?;
         // The block height didn't increase, but this will communicate the timeout as well.
         self.client
             .communicate_chain_updates(
@@ -2243,13 +2245,10 @@ impl<Env: Environment> ChainClient<Env> {
             .manager
             .already_handled_proposal(round, &proposed_block);
         // Create the final block proposal.
-        let mut carried_authorization = None;
         let proposal = if let Some(locking) = info.manager.requested_locking {
             Box::new(match *locking {
                 LockingBlock::Regular(cert) => {
-                    // The retry proposal doesn't contain the authorizing signature;
-                    // carry it over from the validated certificate, if retained.
-                    carried_authorization = cert.owner_authorization().copied();
+                    // The owner authorization is carried by the validated certificate.
                     BlockProposal::new_retry_regular(owner, round, cert, self.signer())
                         .await
                         .map_err(Error::signer_failure)?
@@ -2267,7 +2266,6 @@ impl<Env: Environment> ChainClient<Env> {
                     .map_err(Error::signer_failure)?,
             )
         };
-        let owner_authorization = proposal.owner_authorization().or(carried_authorization);
         if !already_handled_locally {
             // Check the final block proposal. This will be cheaper after #1401.
             if let Err(err) = local_node.handle_block_proposal(*proposal.clone()).await {
@@ -2294,23 +2292,13 @@ impl<Env: Environment> ChainClient<Env> {
         let certificate = if round.is_fast() {
             let hashed_value = ConfirmedBlock::new(block);
             self.client
-                .submit_block_proposal(
-                    committee.clone(),
-                    proposal,
-                    hashed_value,
-                    owner_authorization,
-                )
+                .submit_block_proposal(committee.clone(), proposal, hashed_value)
                 .await?
         } else {
             let hashed_value = ValidatedBlock::new(block);
             let certificate = self
                 .client
-                .submit_block_proposal(
-                    committee.clone(),
-                    proposal,
-                    hashed_value.clone(),
-                    owner_authorization,
-                )
+                .submit_block_proposal(committee.clone(), proposal, hashed_value.clone())
                 .await?;
             self.client.finalize_block(&committee, certificate).await?
         };

@@ -8,18 +8,20 @@
 use linera_base::{
     abi::ContractAbi,
     crypto::AccountSecretKey,
-    data_types::{Amount, ApplicationPermissions, Blob, Epoch, Round, Timestamp},
+    data_types::{Amount, ApplicationPermissions, Blob, Epoch, Timestamp},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
     ownership::TimeoutConfig,
 };
 use linera_chain::{
     data_types::{
-        BundleExecutionPolicy, IncomingBundle, LiteValue, LiteVote, MessageAction,
-        OwnerAuthorization, ProposalContent, ProposedBlock, SignatureAggregator, Transaction,
+        BundleExecutionPolicy, IncomingBundle, MessageAction, OwnerAuthorization, ProposalContent,
+        ProposedBlock, Transaction, Vote,
     },
+    justification::JustificationChain,
+    test::VoteTestExt,
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
-use linera_core::worker::WorkerError;
+use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{system::SystemOperation, Operation, ResourceTracker};
 
 use super::TestValidator;
@@ -261,30 +263,38 @@ impl BlockBuilder {
             .await?;
 
         let value = ConfirmedBlock::new(block);
+        // Confirm in the chain's first round so the votes can carry the first-round attestation
+        // and the certificate needs no justification chain. The chain's current ownership (the
+        // parent's, since this block isn't committed yet) is the one that governs this block's
+        // rounds.
+        let info = self
+            .validator
+            .worker()
+            .handle_chain_info_query(ChainInfoQuery::new(value.chain_id()))
+            .await
+            .expect("Failed to query chain ownership")
+            .info;
+        let round = info.manager.ownership.first_round();
         let owner_authorization = value.block().header.authenticated_owner.map(|_| {
             let content = ProposalContent {
                 block: value.block().to_proposed(),
-                round: Round::Fast,
+                round,
                 outcome: None,
             };
             OwnerAuthorization {
-                round: Round::Fast,
+                round,
                 signature: owner_key_pair.sign(&content),
             }
         });
-        let vote = LiteVote::new(
-            LiteValue::new(&value),
-            Round::Fast,
-            self.validator.key_pair(),
-        );
-        let committee = self.validator.committee().await;
         let public_key = self.validator.key_pair().public();
-        let mut builder = SignatureAggregator::new(value, Round::Fast, &committee);
-        let certificate = builder
-            .append(public_key, vote.signature)
-            .expect("Failed to sign block")
-            .expect("Committee has more than one test validator")
-            .with_owner_authorization(owner_authorization);
+        // A first-round confirmation attests that no lower round exists, so it commits to no
+        // justifying quorum.
+        let quorum =
+            Vote::new_with_first_round(value, round, true, None, self.validator.key_pair())
+                .into_certificate(public_key);
+        let certificate =
+            ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default())
+                .with_owner_authorization(owner_authorization);
 
         Ok((certificate, resource_tracker))
     }

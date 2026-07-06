@@ -450,11 +450,17 @@ ConfirmedBlockCertificate:
         TYPENAME: Block
     - round:
         TYPENAME: Round
+    - first_round: BOOL
+    - justification_commitment:
+        OPTION:
+          TYPENAME: CryptoHash
     - signatures:
         SEQ:
           TUPLE:
             - TYPENAME: Secp256k1PublicKey
             - TYPENAME: Secp256k1Signature
+    - justification:
+        TYPENAME: JustificationChain
     - owner_authorization:
         OPTION:
           TYPENAME: OwnerAuthorization
@@ -591,12 +597,35 @@ InitialChainConfig:
         TYPENAME: Amount
     - application_permissions:
         TYPENAME: ApplicationPermissions
+JustificationChain:
+  STRUCT:
+    - links:
+        SEQ:
+          TYPENAME: JustificationLink
+JustificationLink:
+  STRUCT:
+    - round:
+        TYPENAME: Round
+    - signatures:
+        SEQ:
+          TUPLE:
+            - TYPENAME: Secp256k1PublicKey
+            - TYPENAME: Secp256k1Signature
 LiteCertificate:
   STRUCT:
     - value:
         TYPENAME: LiteValue
     - round:
         TYPENAME: Round
+    - unlocking_round:
+        OPTION:
+          TYPENAME: Round
+    - first_round: BOOL
+    - justification_commitment:
+        OPTION:
+          TYPENAME: CryptoHash
+    - justification:
+        TYPENAME: JustificationChain
     - signatures:
         SEQ:
           TUPLE:
@@ -619,6 +648,13 @@ LiteVote:
         TYPENAME: LiteValue
     - round:
         TYPENAME: Round
+    - unlocking_round:
+        OPTION:
+          TYPENAME: Round
+    - first_round: BOOL
+    - justification_commitment:
+        OPTION:
+          TYPENAME: CryptoHash
     - signature:
         TYPENAME: Secp256k1Signature
 LockingBlock:
@@ -1415,11 +1451,19 @@ ValidatedBlockCertificate:
         TYPENAME: Block
     - round:
         TYPENAME: Round
+    - unlocking_round:
+        OPTION:
+          TYPENAME: Round
+    - justification_commitment:
+        OPTION:
+          TYPENAME: CryptoHash
     - signatures:
         SEQ:
           TUPLE:
             - TYPENAME: Secp256k1PublicKey
             - TYPENAME: Secp256k1Signature
+    - justification:
+        TYPENAME: JustificationChain
     - owner_authorization:
         OPTION:
           TYPENAME: OwnerAuthorization
