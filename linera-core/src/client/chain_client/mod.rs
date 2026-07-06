@@ -3497,18 +3497,17 @@ impl<Env: Environment> ChainClient<Env> {
                 Ok(()) => index += 1,
                 Err(Error::RemoteNodeError(NodeError::EpochRevoked { .. })) => {
                     // The validator no longer trusts the epoch that signed this
-                    // certificate. Push the remaining blocks in decreasing height
-                    // order instead: the newest block's epoch is still trusted (if
-                    // it isn't, its push fails and there is no way to re-certify
-                    // the chain), and each accepted child re-certifies its parent
-                    // via `previous_block_hash`. Then resume the ascending pass,
-                    // which executes the now-preprocessed blocks in order.
-                    for descendant in certificates[index + 1..].iter().rev() {
+                    // certificate. Push this and the remaining blocks in decreasing
+                    // height order instead: the newest block's epoch is still
+                    // trusted (if it isn't, its push fails and there is no way to
+                    // re-certify the chain), and each accepted child re-certifies
+                    // its parent via `previous_block_hash`. Then resume the
+                    // ascending pass, which executes the now-preprocessed blocks
+                    // in order.
+                    for descendant in certificates[index..].iter().rev() {
                         self.push_certificate_to_validator(&remote_node, descendant)
                             .await?;
                     }
-                    self.push_certificate_to_validator(&remote_node, certificate)
-                        .await?;
                     index += 1;
                 }
                 Err(err) => return Err(err),
