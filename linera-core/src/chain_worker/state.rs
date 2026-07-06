@@ -328,6 +328,53 @@ where
         })
     }
 
+    /// Ensures that the certificate's epoch is still a sufficient basis for trusting
+    /// its block.
+    ///
+    /// A certificate from a revoked epoch no longer proves anything by itself: the
+    /// committee that signed it is not trusted any more. Such a block is only
+    /// accepted if it is transitively re-certified by a block we accepted while its
+    /// epoch was still trusted — either the block itself is already in
+    /// `block_hashes`, or an accepted child block commits to it via its
+    /// `previous_block_hash`.
+    async fn ensure_epoch_trusted(
+        &self,
+        certificate: &ConfirmedBlockCertificate,
+    ) -> Result<(), WorkerError> {
+        let header = &certificate.block().header;
+        let is_revoked = self
+            .storage
+            .is_epoch_revoked(header.epoch)
+            .await
+            .map_err(|error| {
+                WorkerError::ChainError(Box::new(ChainError::ExecutionError(
+                    Box::new(error),
+                    ChainExecutionContext::Block,
+                )))
+            })?;
+        if !is_revoked {
+            return Ok(());
+        }
+        let block_hash = certificate.hash();
+        if self.chain.block_hashes.get(&header.height).await? == Some(block_hash) {
+            return Ok(());
+        }
+        let child_height = header.height.try_add_one()?;
+        if let Some(child_hash) = self.chain.block_hashes.get(&child_height).await? {
+            let child = self.storage.read_confirmed_block(child_hash).await?;
+            if child
+                .is_some_and(|child| child.block().header.previous_block_hash == Some(block_hash))
+            {
+                return Ok(());
+            }
+        }
+        Err(WorkerError::EpochRevoked {
+            chain_id: header.chain_id,
+            epoch: header.epoch,
+            height: header.height,
+        })
+    }
+
     /// Returns whether this chain is known to be active (initialized).
     pub(crate) fn knows_chain_is_active(&self) -> bool {
         self.knows_chain_is_active
@@ -975,6 +1022,14 @@ where
         // We haven't processed the block - verify the certificate first.
         let committee = self.committee_for_epoch(block.header.epoch).await?;
         certificate.check(&committee)?;
+        // If the epoch has been revoked, the quorum signature alone is no longer a
+        // sufficient basis for trust: the block must also be vouched for by a block
+        // this worker already trusts — a checkpoint trust mark, an earlier
+        // acceptance of the same block, or an accepted child block that commits to
+        // it via `previous_block_hash`.
+        if !in_trust_set {
+            self.ensure_epoch_trusted(&certificate).await?;
+        }
 
         // Certificate check passed - which means the blobs the block requires are legitimate and
         // we can take note of it, so that if any are missing, we will accept them when the client

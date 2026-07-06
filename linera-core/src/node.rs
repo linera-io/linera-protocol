@@ -12,7 +12,8 @@ use futures::stream::Stream;
 use linera_base::{
     crypto::{CryptoError, CryptoHash, ValidatorPublicKey},
     data_types::{
-        ArithmeticError, Blob, BlobContent, BlockHeight, NetworkDescription, Round, Timestamp,
+        ArithmeticError, Blob, BlobContent, BlockHeight, Epoch, NetworkDescription, Round,
+        Timestamp,
     },
     identifiers::{BlobId, ChainId, EventId},
     task::{MaybeSend, MaybeSync},
@@ -366,6 +367,16 @@ pub enum NodeError {
 
     #[error("No validators available to handle the request")]
     NoValidators,
+
+    #[error(
+        "Cannot trust the certificate for block at height {height} on chain {chain_id}: \
+        epoch {epoch} has been revoked and no trusted block vouches for the block"
+    )]
+    EpochRevoked {
+        chain_id: ChainId,
+        epoch: Epoch,
+        height: BlockHeight,
+    },
 }
 
 impl NodeError {
@@ -387,6 +398,7 @@ impl NodeError {
             | NodeError::UnexpectedBlockHeight { .. }
             | NodeError::InactiveChain(_)
             | NodeError::InvalidTimestamp { .. }
+            | NodeError::EpochRevoked { .. }
             | NodeError::MissingCertificateValue => true,
 
             // Unexpected: network issues, validator misbehavior, or internal problems.
@@ -519,6 +531,15 @@ impl From<WorkerError> for NodeError {
             } => NodeError::UnexpectedBlockHeight {
                 expected_block_height,
                 found_block_height,
+            },
+            WorkerError::EpochRevoked {
+                chain_id,
+                epoch,
+                height,
+            } => Self::EpochRevoked {
+                chain_id,
+                epoch,
+                height,
             },
             WorkerError::InvalidTimestamp {
                 block_timestamp,
