@@ -309,10 +309,20 @@ message LiteCertificate {
 
   CertificateKind kind = 6;
 
+  // The unlocking round (a bincode-encoded `Option<Round>`) the `ValidatedBlock` voters signed.
+  bytes unlocking_round = 7;
+
+  // The justification chain (a bincode-encoded `JustificationChain`) carried by the certificate.
+  bytes justification = 8;
+
+  // The first-round attestation the `ConfirmedBlock` voters signed. Only `true` for a confirmed
+  // block certificate confirming a block in the chain's first round; always `false` otherwise.
+  bool first_round = 9;
+
   // The chain owner's signature over the certified block's proposal content.
   // Required for blocks that declare an authenticated owner; otherwise optional.
   // Always absent for timeout certificates.
-  optional bytes owner_authorization = 7;
+  optional bytes owner_authorization = 10;
 }
 
 // A certified statement from the committee, together with other certificates
@@ -384,10 +394,18 @@ message Certificate {
   // The kind of certificate serialized in `value` field.
   CertificateKind kind = 4;
 
+  // The justification chain (a `JustificationChain`) carried by validated and confirmed block
+  // certificates. Empty for timeout certificates and for blocks needing no justification.
+  bytes justification = 5;
+
+  // The first-round attestation the `ConfirmedBlock` voters signed. Only `true` for a confirmed
+  // block certificate confirming a block in the chain's first round; always `false` otherwise.
+  bool first_round = 6;
+
   // The chain owner's signature over the certified block's proposal content.
   // Required for blocks that declare an authenticated owner; otherwise optional.
   // Always absent for timeout certificates.
-  optional bytes owner_authorization = 5;
+  optional bytes owner_authorization = 7;
 }
 
 enum CertificateKind {

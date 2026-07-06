@@ -19,6 +19,7 @@ mod chain;
 /// Data types exchanged while proposing, voting on, and confirming blocks.
 pub mod data_types;
 mod inbox;
+pub mod justification;
 pub mod manager;
 mod outbox;
 mod pending_blobs;
@@ -144,6 +145,26 @@ pub enum ChainError {
     CertificateValidatorReuse,
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
+    #[error("Justification chain rounds must be strictly increasing")]
+    JustificationRoundsNotIncreasing,
+    #[error("Certificate unlocking round does not match the top of its justification chain")]
+    JustificationUnlockingRoundMismatch,
+    #[error("Certificate justification commitment does not match its justification chain")]
+    JustificationCommitmentMismatch,
+    #[error("Justification chain must lie in rounds strictly below the certificate's round")]
+    JustificationChainNotBelowCertificate,
+    #[error("Certificate carries the first-round attestation but was not confirmed in the chain's first round")]
+    FalseFirstRoundAttestation,
+    #[error("Equivocation proof must reference two different blocks")]
+    EquivocationProofSameBlock,
+    #[error("Equivocation proof references blocks on different chains or at different heights")]
+    EquivocationProofDifferentChainOrHeight,
+    #[error("Equivocation proof does not violate the lock claim")]
+    EquivocationProofNoLockViolation,
+    #[error("Equivocation proof's earlier vote is not below the attested first round")]
+    EquivocationProofNoFirstRoundViolation,
+    #[error("Equivocation proof's opened justification is a valid quorum")]
+    EquivocationProofValidJustification,
     #[error(
         "Inbox gap on chain {chain_id} from origin {origin}: \
         expected height {expected_height}, got {actual_height}"
@@ -222,6 +243,16 @@ impl ChainError {
             | ChainError::MissingEarlierBlocks { .. }
             | ChainError::CertificateValidatorReuse
             | ChainError::CertificateRequiresQuorum
+            | ChainError::JustificationRoundsNotIncreasing
+            | ChainError::JustificationUnlockingRoundMismatch
+            | ChainError::JustificationCommitmentMismatch
+            | ChainError::JustificationChainNotBelowCertificate
+            | ChainError::FalseFirstRoundAttestation
+            | ChainError::EquivocationProofSameBlock
+            | ChainError::EquivocationProofDifferentChainOrHeight
+            | ChainError::EquivocationProofNoLockViolation
+            | ChainError::EquivocationProofNoFirstRoundViolation
+            | ChainError::EquivocationProofValidJustification
             | ChainError::BlockProposalTooLarge(_)
             | ChainError::MultipleEpochAdvances { .. }
             | ChainError::ClosedChain

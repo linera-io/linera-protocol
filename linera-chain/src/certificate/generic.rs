@@ -11,10 +11,7 @@ use linera_base::{
 use linera_execution::committee::Committee;
 
 use super::CertificateValue;
-use crate::{
-    data_types::{LiteValue, OwnerAuthorization},
-    ChainError,
-};
+use crate::{data_types::LiteValue, ChainError};
 
 /// Generic type representing a certificate for `value` of type `T`.
 #[derive(Debug)]
@@ -22,12 +19,24 @@ pub struct GenericCertificate<T: CertificateValue> {
     value: T,
     /// The round in which the value was certified.
     pub round: Round,
+    /// The unlocking round the `ValidatedBlock` voters signed (see [`VoteValue`]). Always `None`
+    /// for `ConfirmedBlock`/`Timeout` certificates and for validated blocks with no justification.
+    ///
+    /// [`VoteValue`]: crate::data_types::VoteValue
+    unlocking_round: Option<Round>,
+    /// The first-round attestation the `ConfirmedBlock` voters signed (see [`VoteValue`]). Only
+    /// `true` for a `ConfirmedBlock` certificate confirming a block in the chain's first round;
+    /// always `false` for `ValidatedBlock`/`Timeout` certificates.
+    ///
+    /// [`VoteValue`]: crate::data_types::VoteValue
+    first_round: bool,
+    /// The justification commitment the voters signed (see [`VoteValue`]): the hash of the
+    /// quorum the votes cite, or `None` if they cite none. Always `None` for `Timeout`
+    /// certificates.
+    ///
+    /// [`VoteValue`]: crate::data_types::VoteValue
+    justification_commitment: Option<CryptoHash>,
     signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
-    /// The chain owner's signature over the certified block's proposal content.
-    /// Not covered by the certified value's hash or the validator signatures.
-    /// Required for blocks with an `authenticated_owner`; optional otherwise.
-    /// Always `None` for timeouts.
-    owner_authorization: Option<OwnerAuthorization>,
 }
 
 impl<T: Allocative + CertificateValue> Allocative for GenericCertificate<T> {
@@ -38,9 +47,6 @@ impl<T: Allocative + CertificateValue> Allocative for GenericCertificate<T> {
             visitor.visit_field(Key::new("ValidatorPublicKey"), public_key);
             visitor.visit_field(Key::new("ValidatorSignature"), signature);
         }
-        if let Some(authorization) = &self.owner_authorization {
-            visitor.visit_field(Key::new("OwnerAuthorization"), authorization);
-        }
     }
 }
 
@@ -49,6 +55,23 @@ impl<T: CertificateValue> GenericCertificate<T> {
     pub fn new(
         value: T,
         round: Round,
+        signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
+    ) -> Self {
+        Self::new_with_payload(value, round, None, false, None, signatures)
+    }
+
+    /// Creates a new certificate that also records the signed payload fields beyond the value
+    /// and round: the unlocking round its `ValidatedBlock` voters signed, the first-round
+    /// attestation its `ConfirmedBlock` voters signed, and the justification commitment (see
+    /// [`VoteValue`]).
+    ///
+    /// [`VoteValue`]: crate::data_types::VoteValue
+    pub fn new_with_payload(
+        value: T,
+        round: Round,
+        unlocking_round: Option<Round>,
+        first_round: bool,
+        justification_commitment: Option<CryptoHash>,
         mut signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
     ) -> Self {
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
@@ -56,21 +79,31 @@ impl<T: CertificateValue> GenericCertificate<T> {
         Self {
             value,
             round,
+            unlocking_round,
+            first_round,
+            justification_commitment,
             signatures,
-            owner_authorization: None,
         }
     }
 
-    /// Returns the retained chain owner's signature over the certified block's
-    /// proposal content, if available.
-    pub fn owner_authorization(&self) -> Option<&OwnerAuthorization> {
-        self.owner_authorization.as_ref()
+    /// Returns the round in which the value was certified.
+    pub fn round(&self) -> Round {
+        self.round
     }
 
-    /// Sets the retained owner authorization.
-    pub fn with_owner_authorization(mut self, authorization: Option<OwnerAuthorization>) -> Self {
-        self.owner_authorization = authorization;
-        self
+    /// Returns the unlocking round the `ValidatedBlock` voters signed, if any.
+    pub fn unlocking_round(&self) -> Option<Round> {
+        self.unlocking_round
+    }
+
+    /// Returns the first-round attestation the `ConfirmedBlock` voters signed.
+    pub fn first_round(&self) -> bool {
+        self.first_round
+    }
+
+    /// Returns the justification commitment the voters signed, if any.
+    pub fn justification_commitment(&self) -> Option<CryptoHash> {
+        self.justification_commitment
     }
 
     /// Returns a reference to the `Hashed` value contained in this certificate.
@@ -135,26 +168,44 @@ impl<T: CertificateValue> GenericCertificate<T> {
     where
         T: CertificateValue,
     {
-        crate::data_types::check_signatures(
+        let value = crate::data_types::VoteValue(
             self.hash(),
-            T::KIND,
             self.round,
-            &self.signatures,
-            committee,
-        )?;
+            T::KIND,
+            self.unlocking_round,
+            self.first_round,
+            self.justification_commitment,
+        );
+        crate::data_types::check_signatures(&value, &self.signatures, committee)?;
         Ok(())
     }
 
-    /// Returns the `LiteCertificate` corresponding to this certificate, without the value.
-    pub fn lite_certificate(&self) -> crate::certificate::LiteCertificate<'_>
+    /// Returns the `LiteCertificate` corresponding to this certificate, without the value and
+    /// with an *empty* justification chain.
+    ///
+    /// Named explicitly because a block certificate's real chain lives on its wrapper
+    /// ([`ConfirmedBlockCertificate`]/[`ValidatedBlockCertificate`]), not on the inner quorum:
+    /// calling this on the quorum would silently produce a chainless lite certificate that fails
+    /// verification at the receiver. The wrappers use it and then attach their chain; `Timeout`
+    /// certificates carry no chain, so for them it is complete on its own.
+    ///
+    /// [`ConfirmedBlockCertificate`]: crate::certificate::ConfirmedBlockCertificate
+    /// [`ValidatedBlockCertificate`]: crate::certificate::ValidatedBlockCertificate
+    pub fn lite_certificate_without_justification(&self) -> crate::certificate::LiteCertificate<'_>
     where
         T: CertificateValue,
     {
         crate::certificate::LiteCertificate {
             value: LiteValue::new(&self.value),
             round: self.round,
+            unlocking_round: self.unlocking_round,
+            first_round: self.first_round,
+            justification_commitment: self.justification_commitment,
+            justification: std::borrow::Cow::Owned(
+                crate::justification::JustificationChain::default(),
+            ),
             signatures: std::borrow::Cow::Borrowed(&self.signatures),
-            owner_authorization: self.owner_authorization,
+            owner_authorization: None,
         }
     }
 }
@@ -164,8 +215,10 @@ impl<T: CertificateValue> Clone for GenericCertificate<T> {
         Self {
             value: self.value.clone(),
             round: self.round,
+            unlocking_round: self.unlocking_round,
+            first_round: self.first_round,
+            justification_commitment: self.justification_commitment,
             signatures: self.signatures.clone(),
-            owner_authorization: self.owner_authorization,
         }
     }
 }
@@ -177,7 +230,9 @@ impl<T: CertificateValue + Eq + PartialEq> PartialEq for GenericCertificate<T> {
     fn eq(&self, other: &Self) -> bool {
         self.hash() == other.hash()
             && self.round == other.round
+            && self.unlocking_round == other.unlocking_round
+            && self.first_round == other.first_round
+            && self.justification_commitment == other.justification_commitment
             && self.signatures == other.signatures
-            && self.owner_authorization == other.owner_authorization
     }
 }

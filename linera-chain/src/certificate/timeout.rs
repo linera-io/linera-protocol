@@ -2,17 +2,30 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::borrow::Cow;
+
 use linera_base::{
     crypto::{ValidatorPublicKey, ValidatorSignature},
     data_types::Round,
 };
 use serde::{
-    ser::{Serialize, SerializeStruct, Serializer},
+    ser::{Serialize, Serializer},
     Deserialize, Deserializer,
 };
 
 use super::{generic::GenericCertificate, Certificate};
 use crate::block::{ConversionError, Timeout};
+
+/// The serialized representation of a [`TimeoutCertificate`](super::TimeoutCertificate). Deriving
+/// the (de)serialization on this single type keeps both directions in sync and free of manual
+/// field bookkeeping; the manual impls only add the strictly-ordered-signatures invariant.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename = "TimeoutCertificate")]
+struct Repr<'a> {
+    value: Cow<'a, Timeout>,
+    round: Round,
+    signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
+}
 
 impl TryFrom<Certificate> for GenericCertificate<Timeout> {
     type Error = ConversionError;
@@ -33,11 +46,12 @@ impl From<GenericCertificate<Timeout>> for Certificate {
 
 impl Serialize for GenericCertificate<Timeout> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut state = serializer.serialize_struct("TimeoutCertificate", 4)?;
-        state.serialize_field("value", self.inner())?;
-        state.serialize_field("round", &self.round)?;
-        state.serialize_field("signatures", self.signatures())?;
-        state.end()
+        Repr {
+            value: Cow::Borrowed(self.inner()),
+            round: self.round(),
+            signatures: Cow::Borrowed(self.signatures().as_slice()),
+        }
+        .serialize(serializer)
     }
 }
 
@@ -46,18 +60,12 @@ impl<'de> Deserialize<'de> for GenericCertificate<Timeout> {
     where
         D: Deserializer<'de>,
     {
-        #[derive(Deserialize)]
-        #[serde(rename = "TimeoutCertificate")]
-        struct Inner {
-            value: Timeout,
-            round: Round,
-            signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
-        }
-        let inner = Inner::deserialize(deserializer)?;
-        if !crate::data_types::is_strictly_ordered(&inner.signatures) {
+        let repr = Repr::deserialize(deserializer)?;
+        let signatures = repr.signatures.into_owned();
+        if !crate::data_types::is_strictly_ordered(&signatures) {
             Err(serde::de::Error::custom("Vector is not strictly sorted"))
         } else {
-            Ok(Self::new(inner.value, inner.round, inner.signatures))
+            Ok(Self::new(repr.value.into_owned(), repr.round, signatures))
         }
     }
 }

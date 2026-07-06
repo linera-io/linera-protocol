@@ -335,13 +335,31 @@ where
                 ChainError::MustBeNewerThanLockingBlock(new_block.height, locking_block.round())
             );
         }
-        // If we have voted to confirm we cannot vote to validate a different block anymore,
-        // except if there is a validated block certificate from a later round, or if the
-        // proposal retries the same block we confirmed in the fast round.
+        // If we have voted to confirm a block, we may only vote to validate a *different* block
+        // if a validated block certificate justifies it from a round strictly after our
+        // confirmation. The validation vote will then sign the unlocking round `certificate.round`,
+        // and since our confirmation is in an earlier round, the claim "I have not voted to confirm
+        // a different block in any round at or above the unlocking round" stays truthful.
+        //
+        // Re-validating the very block we confirmed is also allowed, but the certificate must
+        // still be at least as recent as our confirmation. The unlocking round only constrains
+        // switching blocks, yet the round we sign is a claim about *ourselves*: an earlier
+        // confirmation of a different block could fall at or above an older certificate's round
+        // and turn the claim into a lie we could be slashed for. Our confirmed vote sits in the
+        // highest round we ever confirmed in, so `vote.round <= certificate.round` guarantees no
+        // different-block confirmation lies in the unlocking window `[certificate.round, round)`.
+        //
+        // Without a certificate, only a retry of the very block we confirmed in the fast round
+        // is acceptable.
         if let Some(vote) = self.confirmed_vote() {
             ensure!(
                 match proposal.validated_certificate.as_ref() {
-                    Some(certificate) => vote.round <= certificate.round,
+                    Some(certificate) =>
+                        if vote.value().matches_proposed_block(new_block) {
+                            vote.round <= certificate.round
+                        } else {
+                            vote.round < certificate.round
+                        },
                     None => vote.round.is_fast() && vote.value().matches_proposed_block(new_block),
                 },
                 ChainError::HasIncompatibleConfirmedVote(new_block.height, vote.round)
@@ -457,7 +475,7 @@ where
                 .is_none_or(|locking| locking.round() < certificate.round)
             {
                 let value = ValidatedBlock::new(block.clone());
-                if let Some(certificate) = certificate.clone().with_value(value) {
+                if let Some(certificate) = certificate.clone().into_validated_certificate(value) {
                     self.update_locking(LockingBlock::Regular(certificate), blobs.clone())?;
                 }
             }
@@ -499,13 +517,37 @@ where
         if round.is_fast() {
             self.validated_vote.set(None);
             let value = ConfirmedBlock::new(block);
-            let vote = Vote::new(value, round, key_pair);
+            // Attest that this confirmation is in the chain's first round, so the justification
+            // chain may be omitted: such a block is always the lower one in any fork. A fast
+            // block needs no validation, so there is no quorum to commit to.
+            let first_round = round == self.ownership.get().first_round();
+            let vote = Vote::new_with_first_round(value, round, first_round, None, key_pair);
             Ok(Some(Either::Right(
                 self.confirmed_vote.get_mut().insert(vote),
             )))
         } else {
+            // The unlocking round we sign is the round of the justification this proposal relies
+            // on, and the justification commitment is the hash of that justifying quorum — by
+            // signing it we attest that we verified the quorum, so later receivers only need to
+            // check the signatures built on top of it. A fresh proposal or one retrying a fast
+            // block has no justifying validated certificate, so both are `None`; a regular retry
+            // is justified by its certificate.
+            let (unlocking_round, justification_commitment) = match &proposal.validated_certificate
+            {
+                Some(certificate) => (
+                    Some(certificate.round),
+                    Some(certificate.full_justification_commitment()),
+                ),
+                None => (None, None),
+            };
             let value = ValidatedBlock::new(block);
-            let vote = Vote::new(value, round, key_pair);
+            let vote = Vote::new_with_unlocking_round(
+                value,
+                round,
+                unlocking_round,
+                justification_commitment,
+                key_pair,
+            );
             Ok(Some(Either::Left(
                 self.validated_vote.get_mut().insert(vote),
             )))
@@ -522,14 +564,29 @@ where
     ) -> Result<(), ViewError> {
         let round = validated.round;
         let confirmed_block = ConfirmedBlock::new(validated.inner().block().clone());
+        // Vote to confirm. Attest whether this confirmation is in the chain's first round, so the
+        // justification chain may be omitted: such a block is always the lower one in any fork.
+        // Otherwise commit to the quorum that validated the block, attesting that we verified it
+        // so later receivers only need to check the confirmation signatures built on top.
+        let first_round = round == self.ownership.get().first_round();
+        let justification_commitment = if first_round {
+            None
+        } else {
+            Some(validated.full_justification_commitment())
+        };
         self.update_locking(LockingBlock::Regular(validated), blobs)?;
         self.update_current_round(local_time);
         if let Some(key_pair) = key_pair {
             if self.current_round() != round {
                 return Ok(()); // We never vote in a past round.
             }
-            // Vote to confirm.
-            let vote = Vote::new(confirmed_block, round, key_pair);
+            let vote = Vote::new_with_first_round(
+                confirmed_block,
+                round,
+                first_round,
+                justification_commitment,
+                key_pair,
+            );
             // Ok to overwrite validation votes with confirmation votes at equal or higher round.
             self.confirmed_vote.set(Some(vote));
             self.validated_vote.set(None);
