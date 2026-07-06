@@ -13,7 +13,7 @@ use std::{
 use futures::{future, Future, StreamExt};
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{BlockHeight, Round, TimeDelta},
+    data_types::{ArithmeticError, BlockHeight, Round, TimeDelta},
     ensure,
     identifiers::{BlobId, BlobType, ChainId, StreamId},
     time::{timer::timeout, Duration, Instant},
@@ -256,6 +256,7 @@ where
         let mut sent_admin_chain = false;
         let mut sent_blobs = false;
         let mut sent_blocks = false;
+        let mut sent_descendants = false;
         loop {
             match result {
                 Err(NodeError::EventsNotFound(event_ids))
@@ -286,6 +287,34 @@ where
                         .upload_blobs(blobs.into_iter().map(|b| b.into_std()).collect())
                         .await?;
                     sent_blobs = true;
+                }
+                Err(NodeError::EpochRevoked {
+                    chain_id,
+                    epoch,
+                    height,
+                }) if !sent_descendants => {
+                    // The validator no longer trusts the epoch that signed the
+                    // certificate. Push the block's descendants from local storage
+                    // in decreasing height order: the newest one is in a
+                    // still-trusted epoch, and each accepted child then
+                    // re-certifies its parent via `previous_block_hash`.
+                    sent_descendants = true;
+                    let Some(descendants) = self
+                        .read_descendants_up_to_trusted_epoch(chain_id, height)
+                        .await?
+                    else {
+                        // We hold no descendant in a trusted epoch, so we cannot
+                        // re-certify the block for the validator.
+                        return Err(NodeError::EpochRevoked {
+                            chain_id,
+                            epoch,
+                            height,
+                        }
+                        .into());
+                    };
+                    for descendant in descendants.iter().rev() {
+                        Box::pin(self.send_confirmed_certificate(descendant, delivery)).await?;
+                    }
                 }
                 Err(NodeError::BlocksNotFound(hashes)) if !sent_blocks => {
                     // The validator has recorded these hashes as trusted by a
@@ -833,6 +862,52 @@ where
         }
 
         Ok(info)
+    }
+
+    /// Reads this chain's certificates from local storage, from `height + 1` up to
+    /// and including the first one whose epoch is not revoked. Returns `None` if
+    /// storage runs out of blocks before a trusted-epoch one is found — then the
+    /// vouching chain cannot be completed.
+    async fn read_descendants_up_to_trusted_epoch(
+        &self,
+        chain_id: ChainId,
+        height: BlockHeight,
+    ) -> Result<Option<Vec<CacheArc<ConfirmedBlockCertificate>>>, chain_client::Error> {
+        let storage = self.client.local_node.storage_client();
+        let batch_size = self.client.options().certificate_upload_batch_size as u64;
+        let mut certificates = Vec::new();
+        let mut next_height = height.try_add_one()?;
+        loop {
+            let heights = (0..batch_size)
+                .map(|offset| {
+                    u64::from(next_height)
+                        .checked_add(offset)
+                        .map(BlockHeight)
+                        .ok_or(ArithmeticError::Overflow)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let batch = storage
+                .read_certificates_by_heights(chain_id, &heights)
+                .await?
+                .into_iter()
+                .map_while(|maybe_certificate| maybe_certificate)
+                .collect::<Vec<_>>();
+            if batch.is_empty() {
+                return Ok(None);
+            }
+            for certificate in batch {
+                let epoch = certificate.block().header.epoch;
+                let is_revoked = storage
+                    .is_epoch_revoked(epoch)
+                    .await
+                    .map_err(LocalNodeError::from)?;
+                certificates.push(certificate);
+                if !is_revoked {
+                    return Ok(Some(certificates));
+                }
+                next_height = next_height.try_add_one()?;
+            }
+        }
     }
 
     /// Reads certificates for the given heights from storage.
