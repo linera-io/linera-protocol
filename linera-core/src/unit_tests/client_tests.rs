@@ -1413,6 +1413,113 @@ where
     assert_eq!(certificates.len(), 3);
     assert_eq!(user.chain_info().await?.epoch, Epoch::from(6));
 
+    // A fresh client, starting from genesis storage only, can still synchronize the
+    // user chain even though its first two blocks are signed by the revoked epochs
+    // 0 and 1: the local worker rejects them at first, and the client recovers by
+    // processing their descendants in decreasing height order.
+    let info = user.chain_info().await?;
+    let user2 = builder
+        .make_client(user.chain_id(), None, BlockHeight::ZERO)
+        .await?;
+    user2.synchronize_from_validators().await?;
+    let info2 = user2.chain_info().await?;
+    assert_eq!(info2.next_block_height, info.next_block_height);
+    assert_eq!(info2.epoch, Epoch::from(6));
+
+    Ok(())
+}
+
+/// Tests that a client can bring a lagging validator up to date across an epoch
+/// revocation: certificates signed by a revoked epoch are rejected by the validator
+/// at first, and the client recovers by uploading their descendants in decreasing
+/// height order, so that each accepted child re-certifies its parent.
+///
+/// Exercises both upload paths: the updater's certificate push (triggered by a block
+/// proposal that needs the lagging validator's vote) and the explicit
+/// `sync_validator` API.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_sync_lagging_validator_across_revoked_epoch<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let admin = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+    let user = builder.add_root_chain(1, Amount::from_tokens(6)).await?;
+    let validators = builder.initial_committee.validators().clone();
+
+    // Validator 0 misses the user chain's early history; the remaining three
+    // validators still form a quorum.
+    builder.set_fault_type([0], FaultType::Offline);
+
+    // Height 0, signed by epoch 0.
+    user.burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+
+    // Create epoch 1 and migrate the user chain to it. The migration block at
+    // height 1 still carries epoch 0 in its header; only the block at height 2 is
+    // signed by epoch 1.
+    let committee = Committee::new(validators, ResourceControlPolicy::default())?;
+    admin.stage_new_committee(committee.clone()).await?;
+    user.synchronize_from_validators().await?;
+    user.process_inbox().await?;
+    assert_eq!(user.chain_info().await?.epoch, Epoch::from(1));
+    user.burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+
+    // Validator 0 comes back online and learns that epoch 0 is revoked — but it
+    // still has none of the user chain's blocks.
+    builder.set_fault_type([0], FaultType::Honest);
+    admin.revoke_epochs(Epoch::ZERO).await?;
+    admin.sync_validator(builder.node(0)).await?;
+
+    // With validator 1 offline, the next block needs validator 0's vote, so the
+    // updater must bring it up to date — past the revoked-epoch blocks at heights
+    // 0 and 1.
+    builder.set_fault_type([1], FaultType::Offline);
+    user.burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    // Validator 1 is offline, so a count of 3 requires validator 0 to have the
+    // certificates.
+    builder
+        .check_that_validators_have_certificate(user.chain_id(), BlockHeight::ZERO, 3)
+        .await;
+    builder
+        .check_that_validators_have_certificate(user.chain_id(), BlockHeight::from(3), 3)
+        .await;
+
+    // Now validator 1 misses the epoch-1 blocks: the user chain migrates to epoch 2
+    // and epoch 1 gets revoked while validator 1 is offline.
+    admin.stage_new_committee(committee).await?;
+    user.synchronize_from_validators().await?;
+    user.process_inbox().await?;
+    assert_eq!(user.chain_info().await?.epoch, Epoch::from(2));
+    user.burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    builder.set_fault_type([1], FaultType::Honest);
+    admin.revoke_epochs(Epoch::from(1)).await?;
+    admin.sync_validator(builder.node(1)).await?;
+
+    // Validator 1 is at height 3; the blocks at heights 3 and 4 are signed by the
+    // now-revoked epoch 1. `sync_validator` recovers by pushing the epoch-2 block
+    // at height 5 first.
+    user.sync_validator(builder.node(1)).await?;
+    let response = builder
+        .node(1)
+        .handle_chain_info_query(crate::data_types::ChainInfoQuery::new(user.chain_id()))
+        .await?;
+    assert_eq!(response.info.next_block_height, BlockHeight::from(6));
+
     Ok(())
 }
 

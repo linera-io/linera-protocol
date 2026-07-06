@@ -916,7 +916,8 @@ impl<Env: Environment> Client<Env> {
                                 }
                             }
                             for cert in certificates {
-                                self.check_certificate(&cert)
+                                let check_result = self
+                                    .check_certificate(&cert)
                                     .await
                                     .map_err(|error| {
                                         tracing::debug!(
@@ -924,15 +925,19 @@ impl<Env: Environment> Client<Env> {
                                             "invalid certificate"
                                         );
                                         error
-                                    })?
-                                    .into_result()
-                                    .map_err(|error| {
+                                    })?;
+                                // Revoked-epoch certificates are passed through: the
+                                // local worker accepts them only if a trusted
+                                // descendant vouches for them.
+                                if !matches!(check_result, CheckCertificateResult::OldEpoch) {
+                                    check_result.into_result().map_err(|error| {
                                         tracing::debug!(
                                             %validator_address, %error,
                                             "could not check certificate"
                                         );
                                         error
                                     })?;
+                                }
                                 checked_certificates.push(cert);
                             }
                         }
@@ -1081,8 +1086,10 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Calls `handle_confirmed_certificate`, retrying with any missing blobs (downloaded
-    /// from `nodes`) and any missing events (downloaded from the publisher
-    /// chains via the current validators).
+    /// from `nodes`), any missing events (downloaded from the publisher
+    /// chains via the current validators), and — if the certificate's epoch is
+    /// revoked — the block's descendants (processed in decreasing height order so
+    /// they transitively re-certify the block).
     async fn handle_certificate_with_retry(
         &self,
         certificate: &ConfirmedBlockCertificate,
@@ -1091,11 +1098,31 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<ChainInfoResponse, chain_client::Error> {
         let mut downloaded_blobs = HashSet::<BlobId>::new();
         let mut downloaded_blocks = HashSet::<CryptoHash>::new();
+        let mut walked_descendants = false;
         let mut events = EventSetDownloader::new(self);
         loop {
             let result = self
                 .handle_confirmed_certificate(certificate.clone(), mode)
                 .await;
+            if let Err(LocalNodeError::WorkerError(WorkerError::EpochRevoked {
+                chain_id,
+                height,
+                ..
+            })) = &result
+            {
+                // The local worker doesn't trust the certificate's revoked epoch on
+                // its own. Try to establish trust by processing the block's
+                // descendants first.
+                if !walked_descendants {
+                    walked_descendants = true;
+                    if self
+                        .preprocess_descendants(*chain_id, *height, nodes)
+                        .await?
+                    {
+                        continue;
+                    }
+                }
+            }
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let new_blobs = filter_new(blob_ids, &downloaded_blobs);
                 if !new_blobs.is_empty() {
@@ -1155,6 +1182,95 @@ impl<Env: Environment> Client<Env> {
             }
         }
         Ok(())
+    }
+
+    /// Recovers a revoked-epoch block rejected by the local worker by processing the
+    /// block's descendants first, in decreasing height order.
+    ///
+    /// Collects the chain's certificates from `height + 1` up to and including the
+    /// first one whose epoch is not revoked (the anchor) — from local storage where
+    /// possible, otherwise from `nodes` — and feeds them through the local worker
+    /// newest-first: the anchor is trusted based on its own epoch, and each accepted
+    /// child then vouches for its parent via `previous_block_hash`. Returns `false`
+    /// if no anchor was found, e.g. because the chain's tip is itself in a revoked
+    /// epoch.
+    async fn preprocess_descendants(
+        &self,
+        chain_id: ChainId,
+        height: BlockHeight,
+        nodes: &[RemoteNode<Env::ValidatorNode>],
+    ) -> Result<bool, chain_client::Error> {
+        let batch_size = self.options.certificate_download_batch_size;
+        let mut certificates = Vec::new();
+        let mut next_height = height.try_add_one()?;
+        'anchor: loop {
+            let heights = (0..batch_size)
+                .map(|offset| {
+                    u64::from(next_height)
+                        .checked_add(offset)
+                        .map(BlockHeight)
+                        .ok_or(ArithmeticError::Overflow)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut batch = self
+                .storage_client()
+                .read_certificates_by_heights(chain_id, &heights)
+                .await?
+                .into_iter()
+                .map_while(|maybe_certificate| maybe_certificate)
+                .collect::<Vec<_>>();
+            if batch.is_empty() {
+                for node in nodes {
+                    match self
+                        .requests_scheduler
+                        .download_certificates_by_heights(node, chain_id, heights.clone())
+                        .await
+                    {
+                        Ok(downloaded) if !downloaded.is_empty() => {
+                            batch = downloaded
+                                .into_iter()
+                                .map(|certificate| {
+                                    self.storage_client().cache_certificate(certificate)
+                                })
+                                .collect();
+                            break;
+                        }
+                        Ok(_) | Err(_) => continue,
+                    }
+                }
+            }
+            if batch.is_empty() {
+                return Ok(false);
+            }
+            for certificate in batch {
+                if certificate.block().header.height != next_height {
+                    // A gap in the returned heights breaks the vouching chain.
+                    return Ok(false);
+                }
+                let epoch = certificate.block().header.epoch;
+                let is_revoked = self
+                    .storage_client()
+                    .is_epoch_revoked(epoch)
+                    .await
+                    .map_err(LocalNodeError::from)?;
+                certificates.push(certificate);
+                if !is_revoked {
+                    break 'anchor;
+                }
+                next_height = next_height.try_add_one()?;
+            }
+        }
+        // Process the descendants newest-first, so that each block is vouched for
+        // by the one processed just before it.
+        for certificate in certificates.iter().rev() {
+            Box::pin(self.handle_certificate_with_retry(
+                certificate,
+                nodes,
+                ProcessConfirmedBlockMode::Preprocess,
+            ))
+            .await?;
+        }
+        Ok(true)
     }
 
     async fn handle_certificate<T: ProcessableCertificate>(
@@ -1618,7 +1734,13 @@ impl<Env: Environment> Client<Env> {
                         check_result = self.check_certificate(&certificate).await?;
                     }
                 }
-                check_result.into_result()?;
+                // A certificate from a revoked epoch is not rejected here: the local
+                // worker accepts it if an already-trusted descendant vouches for it,
+                // and `handle_certificate_with_retry` below downloads and processes
+                // the descendants on demand.
+                if !matches!(check_result, CheckCertificateResult::OldEpoch) {
+                    check_result.into_result()?;
+                }
             }
             // Recover history from the network.
             let nodes = if let Some(nodes) = nodes {
@@ -1710,8 +1832,7 @@ impl<Env: Environment> Client<Env> {
                     let mut certificates_with_check_results = vec![];
                     for cert in certificates {
                         let check_result = self.check_certificate(&cert).await?;
-                        certificates_with_check_results
-                            .push((cert, check_result.into_result().is_ok()));
+                        certificates_with_check_results.push((cert, check_result));
                     }
                     Ok(certificates_with_check_results)
                 },
@@ -1758,13 +1879,16 @@ impl<Env: Environment> Client<Env> {
                 let hash = certificate.hash();
                 let chain_id = certificate.block().header.chain_id;
                 let height = certificate.block().header.height;
-                if !check_result {
+                if matches!(check_result, CheckCertificateResult::FutureEpoch) {
                     // The certificate was correctly signed, but we were missing a committee to
                     // validate it properly - do not receive it, but also do not attempt to
                     // re-download it.
                     to_remove_from_queue.insert(height);
                     continue;
                 }
+                // A revoked-epoch certificate is still received: the local worker
+                // accepts it if a trusted descendant vouches for it.
+                let old_epoch = matches!(check_result, CheckCertificateResult::OldEpoch);
                 // We checked the certificates right after downloading them.
                 let mode = ReceiveCertificateMode::AlreadyChecked;
                 if let Err(error) = self
@@ -1776,6 +1900,12 @@ impl<Env: Environment> Client<Env> {
                     .await
                 {
                     warn!(%error, %hash, "Received invalid certificate");
+                    if old_epoch {
+                        // The block could not be re-certified via descendants
+                        // either; drop it from the queue instead of re-downloading
+                        // it indefinitely.
+                        to_remove_from_queue.insert(height);
+                    }
                 } else {
                     to_remove_from_queue.insert(height);
                     if let Err(error) = sender.send(ChainAndHeight { chain_id, height }) {
@@ -1888,8 +2018,14 @@ impl<Env: Environment> Client<Env> {
                 self.storage_client().cache_certificate(certificate)
             };
 
-            // Validate the certificate.
-            self.check_certificate(&certificate).await?.into_result()?;
+            // Validate the certificate. Revoked-epoch certificates are passed
+            // through: they are processed via `receive_sender_certificate` below,
+            // and the local worker only accepts them if a trusted descendant
+            // vouches for them.
+            let check_result = self.check_certificate(&certificate).await?;
+            if !matches!(check_result, CheckCertificateResult::OldEpoch) {
+                check_result.into_result()?;
+            }
 
             // Check if there's a previous message block to our chain.
             let block = certificate.block();
@@ -1982,7 +2118,12 @@ impl<Env: Environment> Client<Env> {
                     continue;
                 };
 
-                self.check_certificate(&certificate).await?.into_result()?;
+                // Revoked-epoch certificates are passed through: the local worker
+                // only accepts them if a trusted descendant vouches for them.
+                let check_result = self.check_certificate(&certificate).await?;
+                if !matches!(check_result, CheckCertificateResult::OldEpoch) {
+                    check_result.into_result()?;
+                }
 
                 self.storage_client().cache_certificate(certificate)
             };
