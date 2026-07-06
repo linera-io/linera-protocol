@@ -1528,7 +1528,7 @@ where
 /// not heard of yet.
 ///
 /// The blob-recovery path downloads the publishing certificate from a validator, but
-/// validating it locally yields `CheckCertificateResult::FutureEpoch`. The client must
+/// validating it locally yields `CommitteeSynchronizationError`. The client must
 /// react by catching up on the admin chain and retrying, so the blob read succeeds.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]

@@ -284,12 +284,6 @@ pub enum Error {
     #[error("The state of the client is incompatible with the proposed block: {0}")]
     BlockProposalError(&'static str),
 
-    #[error(
-        "Cannot accept a certificate from a committee that was retired. \
-         Try a newer certificate from the same origin"
-    )]
-    CommitteeDeprecationError,
-
     #[error("Protocol error within chain client: {0}")]
     ProtocolError(&'static str),
 
