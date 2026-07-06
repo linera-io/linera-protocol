@@ -21,7 +21,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
     manager::LockingBlock,
-    types::{ConfirmedBlock, GenericCertificate, ValidatedBlock, ValidatedBlockCertificate},
+    types::{ConfirmedBlockCertificate, ValidatedBlockCertificate},
 };
 use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME, BlobOrigin};
 use linera_storage::{Arc as CacheArc, Clock, Storage};
@@ -245,7 +245,7 @@ where
     )]
     async fn send_confirmed_certificate(
         &mut self,
-        certificate: &CacheArc<GenericCertificate<ConfirmedBlock>>,
+        certificate: &CacheArc<ConfirmedBlockCertificate>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let mut result = self
@@ -272,8 +272,8 @@ where
                 }
                 Err(NodeError::BlobsNotFound(blob_ids)) if !sent_blobs => {
                     // The validator is missing the blobs required by the certificate.
-                    self.remote_node
-                        .check_blobs_not_found(certificate, &blob_ids)?;
+                    let cert: &ConfirmedBlockCertificate = certificate;
+                    self.remote_node.check_blobs_not_found(cert, &blob_ids)?;
                     // The certificate is confirmed, so the blobs must be in storage.
                     let maybe_blobs = self
                         .client
@@ -321,7 +321,7 @@ where
 
     async fn send_validated_certificate(
         &mut self,
-        certificate: GenericCertificate<ValidatedBlock>,
+        certificate: ValidatedBlockCertificate,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let result = self
@@ -724,7 +724,7 @@ where
         chain_id: ChainId,
         target_block_height: BlockHeight,
         delivery: CrossChainMessageDelivery,
-        latest_certificate: Option<CacheArc<GenericCertificate<ConfirmedBlock>>>,
+        latest_certificate: Option<CacheArc<ConfirmedBlockCertificate>>,
     ) -> Result<(), chain_client::Error> {
         // Phase 1: Height synchronization
         let info = if target_block_height.0 > 0 {
@@ -770,7 +770,7 @@ where
         chain_id: ChainId,
         target_block_height: BlockHeight,
         delivery: CrossChainMessageDelivery,
-        latest_certificate: Option<CacheArc<GenericCertificate<ConfirmedBlock>>>,
+        latest_certificate: Option<CacheArc<ConfirmedBlockCertificate>>,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let height = target_block_height.try_sub_one()?;
 
@@ -840,7 +840,7 @@ where
         &self,
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
-    ) -> Result<Vec<CacheArc<GenericCertificate<ConfirmedBlock>>>, chain_client::Error> {
+    ) -> Result<Vec<CacheArc<ConfirmedBlockCertificate>>, chain_client::Error> {
         let storage = self.client.local_node.storage_client();
 
         let certificates_by_height = storage

@@ -278,7 +278,9 @@ mod tests {
         use linera_chain::{
             block::ConfirmedBlock,
             data_types::{BlockExecutionOutcome, LiteValue, LiteVote},
+            justification::JustificationChain,
             test::{make_first_block, BlockTestExt, VoteTestExt},
+            types::ConfirmedBlockCertificate,
         };
 
         let keypair = ValidatorKeypair::generate();
@@ -304,7 +306,8 @@ mod tests {
         let vote = lite_vote.with_value(confirmed_block).unwrap();
 
         // Convert vote to certificate
-        vote.into_certificate(keypair.secret_key.public())
+        let quorum = vote.into_certificate(keypair.secret_key.public());
+        ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default())
     }
 
     #[test]
