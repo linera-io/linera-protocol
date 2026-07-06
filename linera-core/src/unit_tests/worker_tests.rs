@@ -3125,81 +3125,121 @@ where
         &[OperationResult::default()]
     );
 
-    // Have the admin chain create a new epoch and retire the old one immediately.
+    // Have the admin chain create a new epoch.
     let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
     let blob_hash = committee_blob.id().hash;
     env.write_blobs(std::slice::from_ref(&committee_blob))
         .await?;
 
-    let proposal1 = make_first_block(admin_chain_id)
-        .with_operation(SystemOperation::Admin(AdminOperation::CreateCommittee {
+    let proposal1 = make_first_block(admin_chain_id).with_operation(SystemOperation::Admin(
+        AdminOperation::CreateCommittee {
             epoch: Epoch::from(1),
             blob_hash,
-        }))
-        .with_operation(SystemOperation::Admin(AdminOperation::RemoveCommittee {
-            epoch: Epoch::ZERO,
-        }));
+        },
+    ));
 
     let certificate1 = env.execute_proposal(proposal1.clone(), vec![]).await?;
 
     assert!(certificate1.value().matches_proposed_block(&proposal1));
     assert_outcome_matches!(
         certificate1.block(),
-        &[vec![], vec![]],
+        &[vec![]],
         &BTreeMap::new(),
         &BTreeMap::new(),
-        &[vec![OracleResponse::Blob(committee_blob.id())], vec![]],
-        &[
-            vec![Event {
-                stream_id: StreamId::system(EPOCH_STREAM_NAME),
-                index: 1,
-                value: bcs::to_bytes(&EpochEventData {
-                    blob_hash: committee_blob.id().hash,
-                    timestamp: Timestamp::from(0),
-                })
-                .unwrap(),
-            }],
-            vec![Event {
-                stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
-                index: 0,
-                value: Vec::new(),
-            }],
-        ],
-        &[vec![], vec![]],
-        &[OperationResult::default(), OperationResult::default()],
+        &[vec![OracleResponse::Blob(committee_blob.id())]],
+        &[vec![Event {
+            stream_id: StreamId::system(EPOCH_STREAM_NAME),
+            index: 1,
+            value: bcs::to_bytes(&EpochEventData {
+                blob_hash: committee_blob.id().hash,
+                timestamp: Timestamp::from(0),
+            })
+            .unwrap(),
+        }]],
+        &[vec![]],
+        &[OperationResult::default()],
+    );
+
+    // Extend the user chain with two blocks while epoch 0 is still trusted: the
+    // block at height 1 advances the chain to epoch 1, but its header still
+    // carries epoch 0 — only the block at height 2 is signed by epoch 1.
+    let proposal_height1 = make_child_block(&certificate0.clone().into_value())
+        .with_operation(SystemOperation::ProcessNewEpoch(Epoch::from(1)))
+        .with_authenticated_owner(Some(owner1));
+    let certificate_height1 = env.execute_proposal(proposal_height1, vec![]).await?;
+    let proposal_height2 = make_child_block(&certificate_height1.clone().into_value())
+        .with_epoch(1)
+        .with_simple_transfer(user_id, Amount::ONE)
+        .with_authenticated_owner(Some(owner1));
+    let certificate_height2 = env.execute_proposal(proposal_height2, vec![]).await?;
+
+    // Now retire epoch 0.
+    let proposal_revoke = make_child_block(&certificate1.clone().into_value())
+        .with_epoch(1)
+        .with_operation(SystemOperation::Admin(AdminOperation::RemoveCommittee {
+            epoch: Epoch::ZERO,
+        }));
+    let certificate_revoke = env
+        .execute_proposal(proposal_revoke.clone(), vec![])
+        .await?;
+
+    assert!(certificate_revoke
+        .value()
+        .matches_proposed_block(&proposal_revoke));
+    assert_outcome_matches!(
+        certificate_revoke.block(),
+        &[vec![]],
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        &[vec![]],
+        &[vec![Event {
+            stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
+            index: 0,
+            value: Vec::new(),
+        }]],
+        &[vec![]],
+        &[OperationResult::default()],
     );
 
     env.worker()
         .fully_handle_certificate_with_notifications(certificate1.clone(), &())
         .await?;
-
-    // Try to execute the transfer from the user chain to the admin chain.
     env.worker()
-        .fully_handle_certificate_with_notifications(certificate0.clone(), &())
+        .fully_handle_certificate_with_notifications(certificate_revoke.clone(), &())
         .await?;
 
+    // Try to execute the transfer from the user chain to the admin chain. The
+    // certificate is rejected: epoch 0 is revoked on the admin chain, and no
+    // trusted block vouches for the user chain's block yet.
+    let error = env
+        .worker()
+        .fully_handle_certificate_with_notifications(certificate0.clone(), &())
+        .await
+        .unwrap_err();
+    assert_matches!(
+        error,
+        WorkerError::EpochRevoked {
+            epoch: Epoch::ZERO,
+            ..
+        }
+    );
+
     {
-        // The transfer was started..
+        // The transfer was not executed ..
         let user_chain = env.worker().chain_state_view(user_id).await?;
-        assert!(user_chain.is_active().await?);
         assert_eq!(
-            BlockHeight::from(1),
+            BlockHeight::ZERO,
             user_chain.tip_state.get().next_block_height
         );
-        assert_eq!(
-            *user_chain.execution_state.system.balance.get(),
-            Amount::from_tokens(2)
-        );
-        assert_eq!(*user_chain.execution_state.system.epoch.get(), Epoch::ZERO);
 
-        // .. but the message has been refused: epoch 0 is revoked on the admin chain.
+        // .. and no message has reached the admin chain.
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
         assert!(admin_chain.is_active().await?);
         assert!(admin_chain.inboxes.indices().await?.is_empty());
     }
 
     // Force the admin chain to receive the money nonetheless by anticipation.
-    let proposal2 = make_child_block(&certificate1.clone().into_value())
+    let proposal2 = make_child_block(&certificate_revoke.clone().into_value())
         .with_epoch(1)
         .with_incoming_bundle(IncomingBundle {
             origin: user_id,
@@ -3246,14 +3286,44 @@ where
             .is_some());
     }
 
-    // Try again to execute the transfer from the user chain to the admin chain.
-    // This time, normal delivery is allowed because the bundle's height is at most
-    // `last_anticipated_block_height` (it was already executed by anticipation).
-    env.worker()
-        .fully_handle_certificate_with_notifications(certificate0.clone(), &())
-        .await?;
+    // The block at height 1 is from the revoked epoch and nothing vouches for it
+    // yet, so it is rejected.
+    let error = env
+        .worker()
+        .fully_handle_certificate_with_notifications(certificate_height1.clone(), &())
+        .await
+        .unwrap_err();
+    assert_matches!(
+        error,
+        WorkerError::EpochRevoked {
+            epoch: Epoch::ZERO,
+            ..
+        }
+    );
+
+    // In decreasing height order, each block is accepted: the block at height 2 by
+    // its trusted epoch, and each revoked-epoch block by the child accepted just
+    // before it, which commits to it via `previous_block_hash`. The blocks at
+    // heights 2 and 1 are preprocessed (they have no parent yet); the block at
+    // height 0 executes, and its message is delivered too: the bundle's height is
+    // at most `last_anticipated_block_height` (it was already executed by
+    // anticipation).
+    for certificate in [
+        certificate_height2.clone(),
+        certificate_height1.clone(),
+        certificate0.clone(),
+    ] {
+        env.worker()
+            .fully_handle_certificate_with_notifications(certificate, &())
+            .await?;
+    }
 
     {
+        let user_chain = env.worker().chain_state_view(user_id).await?;
+        assert_eq!(
+            BlockHeight::from(1),
+            user_chain.tip_state.get().next_block_height
+        );
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
         assert!(admin_chain.is_active().await?);
         assert_no_removed_bundles(&admin_chain).await;
@@ -3306,7 +3376,7 @@ where
         .await?;
     assert_eq!(
         response.info.requested_previous_event_blocks,
-        BTreeMap::from([(stream_id, (BlockHeight(2), certificate3.hash()))]),
+        BTreeMap::from([(stream_id, (BlockHeight(3), certificate3.hash()))]),
     );
 
     Ok(())

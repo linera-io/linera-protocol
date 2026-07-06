@@ -376,6 +376,20 @@ pub enum WorkerError {
         chain_epoch: Epoch,
         epoch: Epoch,
     },
+    /// The certificate's epoch has been revoked on the admin chain, so its
+    /// signatures alone no longer prove anything, and no block this worker already
+    /// trusts vouches for the block. The client can recover by uploading the
+    /// block's descendants in decreasing height order: each accepted descendant
+    /// re-certifies its parent via `previous_block_hash`.
+    #[error(
+        "Cannot trust the certificate for block at height {height} on chain {chain_id}: \
+        epoch {epoch} has been revoked and no trusted block vouches for the block"
+    )]
+    EpochRevoked {
+        chain_id: ChainId,
+        epoch: Epoch,
+        height: BlockHeight,
+    },
 
     #[error("Events not found: {0:?}")]
     EventsNotFound(Vec<EventId>),
@@ -448,6 +462,7 @@ impl WorkerError {
             | WorkerError::InvalidSigner(_)
             | WorkerError::UnexpectedBlockHeight { .. }
             | WorkerError::InvalidEpoch { .. }
+            | WorkerError::EpochRevoked { .. }
             | WorkerError::EventsNotFound(_)
             | WorkerError::InvalidBlockChaining
             | WorkerError::InvalidTimestamp { .. }

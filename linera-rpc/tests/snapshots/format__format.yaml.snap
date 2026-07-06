@@ -870,6 +870,15 @@ NodeError:
           - block_time_grace_period_ms: U64
     33:
       NoValidators: UNIT
+    34:
+      EpochRevoked:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - epoch:
+              TYPENAME: Epoch
+          - height:
+              TYPENAME: BlockHeight
 Notification:
   STRUCT:
     - chain_id:
