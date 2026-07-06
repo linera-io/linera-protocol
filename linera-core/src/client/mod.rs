@@ -1783,7 +1783,7 @@ impl<Env: Environment> Client<Env> {
             }
 
             let remote_heights_ref = &remote_heights;
-            let certificates = match communicate_concurrently(
+            let (certificates, unknown_epoch_heights) = match communicate_concurrently(
                 &nodes,
                 async move |remote_node| {
                     let mut remote_heights = remote_heights_ref.clone();
@@ -1801,7 +1801,7 @@ impl<Env: Environment> Client<Env> {
                         // anything from the validator - let the function try the other validators
                         return Err(NodeError::MissingCertificateValue);
                     }
-                    let certificates = self
+                    let downloaded = self
                         .requests_scheduler
                         .download_certificates_by_heights(
                             &remote_node,
@@ -1809,28 +1809,34 @@ impl<Env: Environment> Client<Env> {
                             remote_heights,
                         )
                         .await?;
-                    let mut certificates_with_check_results = vec![];
-                    for cert in certificates {
-                        let committee_known = match self.check_certificate(&cert).await {
-                            Ok(()) => true,
-                            Err(chain_client::Error::CommitteeSynchronizationError) => false,
+                    // Set aside the certificates whose epochs we don't know yet:
+                    // they are not received - and not re-downloaded either, until a
+                    // future sync cycle after our view of the admin chain has
+                    // caught up.
+                    let mut certificates = Vec::new();
+                    let mut unknown_epoch_heights = Vec::new();
+                    for cert in downloaded {
+                        match self.check_certificate(&cert).await {
+                            Ok(()) => certificates.push(cert),
+                            Err(chain_client::Error::CommitteeSynchronizationError) => {
+                                unknown_epoch_heights.push(cert.block().header.height);
+                            }
                             Err(chain_client::Error::RemoteNodeError(error)) => return Err(error),
                             Err(error) => {
                                 return Err(NodeError::ResponseHandlingError {
                                     error: error.to_string(),
                                 })
                             }
-                        };
-                        certificates_with_check_results.push((cert, committee_known));
+                        }
                     }
-                    Ok(certificates_with_check_results)
+                    Ok((certificates, unknown_epoch_heights))
                 },
                 self.options.certificate_batch_download_hedge_delay,
                 self.storage_client().clock(),
             )
             .await
             {
-                Ok(certificates_with_check_results) => certificates_with_check_results,
+                Ok(result) => result,
                 Err(errors) => {
                     let faulty_validators = errors
                         .into_iter()
@@ -1862,19 +1868,12 @@ impl<Env: Environment> Client<Env> {
                 "received certificates",
             );
 
-            let mut to_remove_from_queue = BTreeSet::new();
+            let mut to_remove_from_queue = BTreeSet::from_iter(unknown_epoch_heights);
 
-            for (certificate, committee_known) in certificates {
+            for certificate in certificates {
                 let hash = certificate.hash();
                 let chain_id = certificate.block().header.chain_id;
                 let height = certificate.block().header.height;
-                if !committee_known {
-                    // The committee for the certificate's epoch is not known locally
-                    // yet - do not receive the certificate, but also do not attempt
-                    // to re-download it.
-                    to_remove_from_queue.insert(height);
-                    continue;
-                }
                 // We checked the certificates right after downloading them.
                 let mode = ReceiveCertificateMode::AlreadyChecked;
                 if let Err(error) = self
