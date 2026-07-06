@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fmt,
     hash::Hash,
     mem,
@@ -248,6 +248,63 @@ where
         certificate: &CacheArc<ConfirmedBlockCertificate>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
+        // Certificates still to be sent, in reverse sending order: when the validator
+        // rejects the top entry because its epoch is revoked, the descendants that
+        // re-certify it are stacked on top of it, so every rejected block is preceded
+        // by the child vouching for it via `previous_block_hash`.
+        let mut stack = vec![certificate.clone()];
+        let mut expanded = HashSet::new();
+        loop {
+            let certificate = stack.last().expect("stack is never empty").clone();
+            match self
+                .send_single_confirmed_certificate(&certificate, delivery)
+                .await
+            {
+                Err(chain_client::Error::RemoteNodeError(NodeError::EpochRevoked {
+                    chain_id,
+                    epoch,
+                    height,
+                })) if !expanded.contains(&certificate.hash()) => {
+                    // The validator no longer trusts the epoch that signed the
+                    // certificate. Send the block's descendants from local storage
+                    // first, in decreasing height order, up to the first one from a
+                    // later epoch. If the validator revoked the later epoch as well,
+                    // sending its first block fails in the same way and extends the
+                    // stack one epoch further.
+                    expanded.insert(certificate.hash());
+                    let Some(descendants) = self
+                        .read_descendants_up_to_next_epoch(chain_id, height, epoch)
+                        .await?
+                    else {
+                        // We hold no descendant from a later epoch, so we cannot
+                        // re-certify the block for the validator.
+                        return Err(NodeError::EpochRevoked {
+                            chain_id,
+                            epoch,
+                            height,
+                        }
+                        .into());
+                    };
+                    stack.extend(descendants);
+                }
+                Err(err) => return Err(err),
+                Ok(info) => {
+                    stack.pop();
+                    if stack.is_empty() {
+                        return Ok(info);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Sends one confirmed certificate to the validator, catching up the admin chain
+    /// and uploading any blobs or blocks the validator reports as missing.
+    async fn send_single_confirmed_certificate(
+        &mut self,
+        certificate: &CacheArc<ConfirmedBlockCertificate>,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let mut result = self
             .remote_node
             .handle_optimized_confirmed_certificate(certificate, delivery)
@@ -256,7 +313,6 @@ where
         let mut sent_admin_chain = false;
         let mut sent_blobs = false;
         let mut sent_blocks = false;
-        let mut sent_descendants = false;
         loop {
             match result {
                 Err(NodeError::EventsNotFound(event_ids))
@@ -287,36 +343,6 @@ where
                         .upload_blobs(blobs.into_iter().map(|b| b.into_std()).collect())
                         .await?;
                     sent_blobs = true;
-                }
-                Err(NodeError::EpochRevoked {
-                    chain_id,
-                    epoch,
-                    height,
-                }) if !sent_descendants => {
-                    // The validator no longer trusts the epoch that signed the
-                    // certificate. Push the block's descendants from local storage
-                    // in decreasing height order, up to the first one from a later
-                    // epoch: each accepted child re-certifies its parent via
-                    // `previous_block_hash`. If the validator revoked the later
-                    // epoch as well, pushing that descendant recursively triggers
-                    // the same recovery one epoch further up.
-                    sent_descendants = true;
-                    let Some(descendants) = self
-                        .read_descendants_up_to_next_epoch(chain_id, height, epoch)
-                        .await?
-                    else {
-                        // We hold no descendant in a trusted epoch, so we cannot
-                        // re-certify the block for the validator.
-                        return Err(NodeError::EpochRevoked {
-                            chain_id,
-                            epoch,
-                            height,
-                        }
-                        .into());
-                    };
-                    for descendant in descendants.iter().rev() {
-                        Box::pin(self.send_confirmed_certificate(descendant, delivery)).await?;
-                    }
                 }
                 Err(NodeError::BlocksNotFound(hashes)) if !sent_blocks => {
                     // The validator has recorded these hashes as trusted by a
