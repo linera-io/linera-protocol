@@ -13,7 +13,7 @@ use std::{
 use futures::{future, Future, StreamExt};
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{ArithmeticError, BlockHeight, Round, TimeDelta},
+    data_types::{ArithmeticError, BlockHeight, Epoch, Round, TimeDelta},
     ensure,
     identifiers::{BlobId, BlobType, ChainId, StreamId},
     time::{timer::timeout, Duration, Instant},
@@ -295,12 +295,14 @@ where
                 }) if !sent_descendants => {
                     // The validator no longer trusts the epoch that signed the
                     // certificate. Push the block's descendants from local storage
-                    // in decreasing height order: the newest one is in a
-                    // still-trusted epoch, and each accepted child then
-                    // re-certifies its parent via `previous_block_hash`.
+                    // in decreasing height order, up to the first one from a later
+                    // epoch: each accepted child re-certifies its parent via
+                    // `previous_block_hash`. If the validator revoked the later
+                    // epoch as well, pushing that descendant recursively triggers
+                    // the same recovery one epoch further up.
                     sent_descendants = true;
                     let Some(descendants) = self
-                        .read_descendants_up_to_trusted_epoch(chain_id, height)
+                        .read_descendants_up_to_next_epoch(chain_id, height, epoch)
                         .await?
                     else {
                         // We hold no descendant in a trusted epoch, so we cannot
@@ -865,13 +867,14 @@ where
     }
 
     /// Reads this chain's certificates from local storage, from `height + 1` up to
-    /// and including the first one whose epoch is not revoked. Returns `None` if
-    /// storage runs out of blocks before a trusted-epoch one is found — then the
+    /// and including the first one from an epoch later than `epoch`. Returns `None`
+    /// if storage runs out of blocks before a later-epoch one is found — then the
     /// vouching chain cannot be completed.
-    async fn read_descendants_up_to_trusted_epoch(
+    async fn read_descendants_up_to_next_epoch(
         &self,
         chain_id: ChainId,
         height: BlockHeight,
+        epoch: Epoch,
     ) -> Result<Option<Vec<CacheArc<ConfirmedBlockCertificate>>>, chain_client::Error> {
         let storage = self.client.local_node.storage_client();
         let batch_size = self.client.options().certificate_upload_batch_size as u64;
@@ -896,13 +899,9 @@ where
                 return Ok(None);
             }
             for certificate in batch {
-                let epoch = certificate.block().header.epoch;
-                let is_revoked = storage
-                    .is_epoch_revoked(epoch)
-                    .await
-                    .map_err(LocalNodeError::from)?;
+                let is_later_epoch = certificate.block().header.epoch > epoch;
                 certificates.push(certificate);
-                if !is_revoked {
+                if is_later_epoch {
                     return Ok(Some(certificates));
                 }
                 next_height = next_height.try_add_one()?;
