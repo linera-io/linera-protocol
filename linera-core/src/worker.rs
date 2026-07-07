@@ -390,6 +390,18 @@ pub enum WorkerError {
         epoch: Epoch,
         height: BlockHeight,
     },
+    /// The epoch has been revoked on the admin chain, so its committee must not
+    /// create any new signatures. A chain that failed to migrate to a newer epoch
+    /// before the revocation is frozen.
+    #[error(
+        "Cannot vote for the block at height {height} on chain {chain_id}: \
+        epoch {epoch} has been revoked"
+    )]
+    VoteInRevokedEpoch {
+        chain_id: ChainId,
+        epoch: Epoch,
+        height: BlockHeight,
+    },
 
     #[error("Events not found: {0:?}")]
     EventsNotFound(Vec<EventId>),
@@ -463,6 +475,7 @@ impl WorkerError {
             | WorkerError::UnexpectedBlockHeight { .. }
             | WorkerError::InvalidEpoch { .. }
             | WorkerError::EpochRevoked { .. }
+            | WorkerError::VoteInRevokedEpoch { .. }
             | WorkerError::EventsNotFound(_)
             | WorkerError::InvalidBlockChaining
             | WorkerError::InvalidTimestamp { .. }

@@ -375,6 +375,36 @@ where
         })
     }
 
+    /// Ensures that this worker may still create signatures for blocks in the given
+    /// epoch: once an epoch has been revoked on the admin chain, its committee must
+    /// not sign anything new. A chain that failed to migrate to a newer epoch before
+    /// the revocation is frozen.
+    async fn ensure_epoch_signable(
+        &self,
+        epoch: Epoch,
+        height: BlockHeight,
+    ) -> Result<(), WorkerError> {
+        let is_revoked = self
+            .storage
+            .is_epoch_revoked(epoch)
+            .await
+            .map_err(|error| {
+                WorkerError::ChainError(Box::new(ChainError::ExecutionError(
+                    Box::new(error),
+                    ChainExecutionContext::Block,
+                )))
+            })?;
+        ensure!(
+            !is_revoked,
+            WorkerError::VoteInRevokedEpoch {
+                chain_id: self.chain_id(),
+                epoch,
+                height,
+            }
+        );
+        Ok(())
+    }
+
     /// Returns whether this chain is known to be active (initialized).
     pub(crate) fn knows_chain_is_active(&self) -> bool {
         self.knows_chain_is_active
@@ -938,6 +968,7 @@ where
                 BlockOutcome::Skipped,
             ));
         }
+        self.ensure_epoch_signable(epoch, height).await?;
 
         self.block_values
             .insert_hashed(Cow::Borrowed(certificate.inner().inner()));
@@ -2143,21 +2174,22 @@ where
         height: BlockHeight,
         round: Round,
     ) -> Result<(), WorkerError> {
-        let chain = &mut self.chain;
         ensure!(
-            height == chain.tip_state.get().next_block_height,
+            height == self.chain.tip_state.get().next_block_height,
             WorkerError::UnexpectedBlockHeight {
-                expected_block_height: chain.tip_state.get().next_block_height,
+                expected_block_height: self.chain.tip_state.get().next_block_height,
                 found_block_height: height
             }
         );
-        let epoch = chain.execution_state.system.epoch.get();
-        let chain_id = chain.chain_id();
+        let epoch = *self.chain.execution_state.system.epoch.get();
+        self.ensure_epoch_signable(epoch, height).await?;
+        let chain_id = self.chain.chain_id();
         let key_pair = self.config.key_pair();
         let local_time = self.storage.clock().current_time();
-        if chain
+        if self
+            .chain
             .manager
-            .create_timeout_vote(chain_id, height, round, *epoch, key_pair, local_time)?
+            .create_timeout_vote(chain_id, height, round, epoch, key_pair, local_time)?
         {
             self.save().await?;
         }
@@ -2172,7 +2204,7 @@ where
         chain_id = %self.chain_id()
     ))]
     async fn vote_for_fallback(&mut self) -> Result<(), WorkerError> {
-        let chain = &mut self.chain;
+        let chain = &self.chain;
         let epoch = *chain.execution_state.system.epoch.get();
         let Some(admin_chain_id) = chain.execution_state.system.admin_chain_id.get() else {
             return Ok(());
@@ -2196,11 +2228,20 @@ where
             .clock()
             .current_time()
             .delta_since(event_data.timestamp);
-        if elapsed >= chain.ownership().await?.timeout_config.fallback_duration {
-            let chain_id = chain.chain_id();
-            let height = chain.tip_state.get().next_block_height;
+        if elapsed
+            >= self
+                .chain
+                .ownership()
+                .await?
+                .timeout_config
+                .fallback_duration
+        {
+            let chain_id = self.chain.chain_id();
+            let height = self.chain.tip_state.get().next_block_height;
+            self.ensure_epoch_signable(epoch, height).await?;
             let key_pair = self.config.key_pair();
-            if chain
+            if self
+                .chain
                 .manager
                 .vote_fallback(chain_id, height, epoch, key_pair)
             {
@@ -2484,6 +2525,7 @@ where
         // Check the epoch.
         let (epoch, committee) = chain.current_committee().await?;
         check_block_epoch(epoch, block.chain_id, block.epoch)?;
+        self.ensure_epoch_signable(epoch, block.height).await?;
         let policy = committee.policy().clone();
         block.check_proposal_size(policy.maximum_block_proposal_size)?;
         // Check the authentication of the block.

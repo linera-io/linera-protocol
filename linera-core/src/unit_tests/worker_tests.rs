@@ -3099,7 +3099,8 @@ where
 {
     let mut env =
         TestEnvironment::new_with_amount(&mut storage_builder, false, false, Amount::ZERO).await?;
-    let owner1 = AccountSecretKey::generate().public().into();
+    let mut signer = InMemorySigner::new(None);
+    let owner1 = signer.generate_new().into();
     let chain_1_desc = env.add_root_chain(1, owner1, Amount::from_tokens(3)).await;
     let mut committees = BTreeMap::new();
     let committee = env.committee().clone();
@@ -3237,6 +3238,19 @@ where
         assert!(admin_chain.is_active().await?);
         assert!(admin_chain.inboxes.indices().await?.is_empty());
     }
+
+    // The user chain is stuck in the revoked epoch 0, so it is frozen: the committee
+    // must not sign anything new for that epoch, and a block proposal is rejected.
+    let proposal_frozen = make_first_block(user_id)
+        .with_simple_transfer(admin_chain_id, Amount::ONE)
+        .into_first_proposal(owner1, &signer)
+        .await
+        .unwrap();
+    let (result, _actions) = env.worker().handle_block_proposal(proposal_frozen).await;
+    assert_matches!(
+        result,
+        Err(WorkerError::VoteInRevokedEpoch { epoch, .. }) if epoch == Epoch::ZERO
+    );
 
     // Force the admin chain to receive the money nonetheless by anticipation.
     let proposal2 = make_child_block(&certificate_revoke.clone().into_value())
