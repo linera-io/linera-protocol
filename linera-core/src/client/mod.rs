@@ -32,7 +32,7 @@ use linera_base::{data_types::Bytecode, identifiers::ModuleId, vm::VmRuntime};
 use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, ChainAndHeight, LiteVote,
-        OriginalProposal, ProposedBlock,
+        ProposedBlock,
     },
     justification::JustificationChain,
     manager::LockingBlock,
@@ -1349,12 +1349,12 @@ impl<Env: Environment> Client<Env> {
         );
         let owner_authorization = proposal.owner_authorization();
 
-        // The certificate's justification chain comes from the proposal: a regular retry is
-        // justified by the validated certificate it carries (the new top link plus that
-        // certificate's own chain); a fresh proposal or fast-round proposal has none.
-        let justification = match proposal.original_proposal.as_ref() {
-            Some(OriginalProposal::Regular { certificate }) => certificate.full_justification(),
-            Some(OriginalProposal::Fast(_)) | None => JustificationChain::default(),
+        // The certificate's justification chain comes from the proposal: a retry is justified
+        // by the validated certificate it carries (the new top link plus that certificate's own
+        // chain); a proposal without one has no justification.
+        let justification = match proposal.validated_certificate.as_ref() {
+            Some(certificate) => certificate.full_justification(),
+            None => JustificationChain::default(),
         };
 
         // Check if the block timestamp is in the future and log INFO.

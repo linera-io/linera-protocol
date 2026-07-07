@@ -4128,10 +4128,18 @@ where
     assert_eq!(response.info.manager.leader, None);
 
     // Now any owner can propose a block. But block1 is locked. Re-proposing it is allowed.
-    let proposal1b =
-        BlockProposal::new_retry_fast(owner1, Round::MultiLeader(0), proposal1.clone(), &signer)
-            .await
-            .unwrap();
+    let proposal1b = BlockProposal::new_initial(
+        owner1,
+        Round::MultiLeader(0),
+        proposal1.content.block.clone(),
+        &signer,
+    )
+    .await
+    .unwrap()
+    .with_owner_authorization(Some(OwnerAuthorization {
+        round: Round::Fast,
+        signature: proposal1.signature,
+    }));
     let response = env
         .executing_worker()
         .handle_block_proposal(proposal1b)
@@ -4158,10 +4166,18 @@ where
     assert_matches!(result, Err(WorkerError::ChainError(err))
         if matches!(*err, ChainError::HasIncompatibleConfirmedVote(_, Round::Fast))
     );
-    let proposal3 =
-        BlockProposal::new_retry_fast(owner0, Round::MultiLeader(2), proposal1.clone(), &signer)
-            .await
-            .unwrap();
+    let proposal3 = BlockProposal::new_initial(
+        owner0,
+        Round::MultiLeader(2),
+        proposal1.content.block.clone(),
+        &signer,
+    )
+    .await
+    .unwrap()
+    .with_owner_authorization(Some(OwnerAuthorization {
+        round: Round::Fast,
+        signature: proposal1.signature,
+    }));
     env.executing_worker()
         .handle_block_proposal(proposal3)
         .await
