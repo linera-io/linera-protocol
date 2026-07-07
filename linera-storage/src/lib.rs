@@ -24,6 +24,7 @@ use linera_base::{
 pub use linera_cache::{Arc, DEFAULT_CLEANUP_INTERVAL_SECS};
 use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
+    vote_ledger::{LedgerEntry, SupersededVote, VoteRecord},
     ChainError, ChainStateView,
 };
 use linera_execution::{
@@ -245,6 +246,38 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         &self,
         events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
     ) -> Result<(), ViewError>;
+
+    /// Records a confirmation vote this validator signed, in the vote ledger for
+    /// the given epoch. If the vote replaced an earlier confirmation vote at the
+    /// same height, the replaced vote must be passed as `superseded`.
+    async fn record_confirmed_vote(
+        &self,
+        epoch: Epoch,
+        chain_id: ChainId,
+        record: VoteRecord,
+        superseded: Option<SupersededVote>,
+    ) -> Result<(), ViewError>;
+
+    /// Records a superseded confirmation vote in the vote ledger for the given
+    /// epoch, without touching the chain's latest-vote entry. This is used when a
+    /// block other than the voted one is confirmed at the vote's height without
+    /// the validator casting a new vote there.
+    async fn record_superseded_vote(
+        &self,
+        epoch: Epoch,
+        chain_id: ChainId,
+        superseded: SupersededVote,
+    ) -> Result<(), ViewError>;
+
+    /// Reads the vote-ledger entry for the given epoch and chain.
+    async fn read_vote_ledger_entry(
+        &self,
+        epoch: Epoch,
+        chain_id: ChainId,
+    ) -> Result<Option<LedgerEntry>, ViewError>;
+
+    /// Lists the chains with a vote-ledger entry for the given epoch.
+    async fn vote_ledger_chain_ids(&self, epoch: Epoch) -> Result<Vec<ChainId>, ViewError>;
 
     /// Reads the network description.
     async fn read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
@@ -1010,6 +1043,89 @@ mod tests {
         Ok(())
     }
 
+    async fn test_storage_vote_ledger<S: Storage + Sync>(storage: &S) -> Result<(), ViewError> {
+        let epoch = Epoch::from(1);
+        let chain_id = ChainId(CryptoHash::test_hash("vote ledger chain"));
+        assert!(storage
+            .read_vote_ledger_entry(epoch, chain_id)
+            .await?
+            .is_none());
+        assert!(storage.vote_ledger_chain_ids(epoch).await?.is_empty());
+
+        // The first vote on the chain.
+        let vote1 = VoteRecord {
+            height: BlockHeight::ZERO,
+            round: Round::MultiLeader(0),
+            block_hash: CryptoHash::test_hash("block A"),
+        };
+        storage
+            .record_confirmed_vote(epoch, chain_id, vote1.clone(), None)
+            .await?;
+        let entry = storage
+            .read_vote_ledger_entry(epoch, chain_id)
+            .await?
+            .unwrap();
+        assert_eq!(entry.latest, vote1);
+        assert!(entry.superseded.is_empty());
+
+        // A justified re-vote at the same height supersedes the first vote.
+        let vote2 = VoteRecord {
+            height: BlockHeight::ZERO,
+            round: Round::MultiLeader(1),
+            block_hash: CryptoHash::test_hash("block B"),
+        };
+        let superseded = SupersededVote {
+            record: vote1,
+            justification: None,
+        };
+        storage
+            .record_confirmed_vote(epoch, chain_id, vote2, Some(superseded.clone()))
+            .await?;
+
+        // A vote at the next height overwrites the latest vote and keeps the
+        // superseded one.
+        let vote3 = VoteRecord {
+            height: BlockHeight::from(1),
+            round: Round::MultiLeader(0),
+            block_hash: CryptoHash::test_hash("block C"),
+        };
+        storage
+            .record_confirmed_vote(epoch, chain_id, vote3.clone(), None)
+            .await?;
+        let entry = storage
+            .read_vote_ledger_entry(epoch, chain_id)
+            .await?
+            .unwrap();
+        assert_eq!(entry.latest, vote3);
+        assert_eq!(entry.superseded, vec![superseded.clone()]);
+
+        // A different block gets confirmed at height 1 without this validator's
+        // vote: the bypassed vote is recorded as superseded on its own, without
+        // touching the latest-vote entry.
+        let bypassed = SupersededVote {
+            record: vote3.clone(),
+            justification: None,
+        };
+        storage
+            .record_superseded_vote(epoch, chain_id, bypassed.clone())
+            .await?;
+        let entry = storage
+            .read_vote_ledger_entry(epoch, chain_id)
+            .await?
+            .unwrap();
+        assert_eq!(entry.latest, vote3);
+        assert_eq!(entry.superseded, vec![superseded, bypassed]);
+
+        // Entries are kept per epoch and per chain.
+        assert!(storage
+            .read_vote_ledger_entry(Epoch::from(2), chain_id)
+            .await?
+            .is_none());
+        assert_eq!(storage.vote_ledger_chain_ids(epoch).await?, vec![chain_id]);
+
+        Ok(())
+    }
+
     /// Generic test function to test Storage trait features
     #[test_case(DbStorage::<MemoryDatabase, _>::make_test_storage(None).await; "memory")]
     #[cfg_attr(feature = "scylladb", test_case(DbStorage::<ScyllaDbDatabase, _>::make_test_storage(None).await; "scylla_db"))]
@@ -1023,6 +1139,7 @@ mod tests {
         test_storage_certificate(&storage).await?;
         test_storage_event(&storage).await?;
         test_storage_network_description(&storage).await?;
+        test_storage_vote_ledger(&storage).await?;
         Ok(())
     }
 }
