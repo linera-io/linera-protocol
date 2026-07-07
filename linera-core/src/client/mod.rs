@@ -32,7 +32,7 @@ use linera_base::{data_types::Bytecode, identifiers::ModuleId, vm::VmRuntime};
 use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, ChainAndHeight, LiteVote,
-        ProposedBlock,
+        OwnerAuthorization, ProposedBlock,
     },
     justification::JustificationChain,
     manager::LockingBlock,
@@ -2709,6 +2709,10 @@ pub struct PendingProposal {
     /// The round in which this proposal was first submitted, if any.
     #[serde(default)]
     pub round: Option<Round>,
+    /// The staging owner's signature over the block, created when the block was
+    /// staged so that the block can later be proposed by any owner.
+    #[serde(default)]
+    pub owner_authorization: Option<OwnerAuthorization>,
 }
 
 enum ReceiveCertificateMode {

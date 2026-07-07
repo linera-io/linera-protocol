@@ -2442,7 +2442,8 @@ where
         );
         let old_round = self.chain.manager.current_round();
         // Check the authentication of the block: a block with an authenticated owner
-        // is only valid together with that owner's signature over the whole block.
+        // is only valid together with that owner's signature over the whole block. The
+        // proposer may differ from the authenticated owner.
         match proposal.owner_authorization() {
             Some(authorization) => {
                 let signer = authorization.verify_proposed_block(block.clone())?;
@@ -2460,16 +2461,6 @@ where
                 block.authenticated_owner.is_none(),
                 ChainError::MissingOwnerAuthorization
             ),
-        }
-        // An explicit authorization is only accepted on retries — of a fast-round block
-        // or of a validated block. A fresh proposal must be signed by the authenticated
-        // owner themselves: without an explicit authorization, the proposal signature
-        // doubles as the authorization, so the check above enforces exactly that.
-        if let Some(authorization) = &proposal.owner_authorization {
-            ensure!(
-                authorization.round.is_fast() || validated_certificate.is_some(),
-                WorkerError::InvalidSigner(owner)
-            );
         }
         if let Some(certificate) = validated_certificate {
             // Verify that this block has been validated by a quorum before.
