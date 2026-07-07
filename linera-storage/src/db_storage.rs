@@ -254,6 +254,27 @@ pub mod metrics {
         )
     });
 
+    /// The metric counting how often a confirmation vote is written to the vote
+    /// ledger.
+    #[doc(hidden)]
+    pub(super) static WRITE_CONFIRMED_VOTE_COUNTER: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "write_confirmed_vote",
+            "The metric counting how often a confirmation vote is written to the vote ledger",
+        )
+    });
+
+    /// The metric counting how often a superseded confirmation vote is written to
+    /// the vote ledger.
+    #[doc(hidden)]
+    pub(super) static WRITE_SUPERSEDED_VOTE_COUNTER: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "write_superseded_vote",
+            "The metric counting how often a superseded confirmation vote is written to the \
+            vote ledger",
+        )
+    });
+
     /// The metric counting how often a block hash is read by height from storage.
     #[doc(hidden)]
     pub(super) static READ_BLOCK_HASH_BY_HEIGHT_COUNTER: LazyLock<IntCounterVec> =
@@ -431,15 +452,32 @@ impl MultiPartitionBatch {
         record: &VoteRecord,
         superseded: Option<&SupersededVote>,
     ) -> Result<(), ViewError> {
+        #[cfg(with_metrics)]
+        metrics::WRITE_CONFIRMED_VOTE_COUNTER.inc();
         let root_key = RootKey::VoteLedger(epoch).bytes();
         let key = to_vote_ledger_latest_key(chain_id);
         let value = bcs::to_bytes(record)?;
         self.put_key_value(root_key.clone(), key, value);
         if let Some(superseded) = superseded {
-            let key = to_vote_ledger_superseded_key(chain_id, &superseded.record);
-            let value = bcs::to_bytes(superseded)?;
-            self.put_key_value(root_key, key, value);
+            self.add_superseded_vote(epoch, chain_id, superseded)?;
         }
+        Ok(())
+    }
+
+    /// Adds a superseded confirmation vote to the epoch's vote ledger, without
+    /// touching the chain's latest-vote entry.
+    fn add_superseded_vote(
+        &mut self,
+        epoch: Epoch,
+        chain_id: &ChainId,
+        superseded: &SupersededVote,
+    ) -> Result<(), ViewError> {
+        #[cfg(with_metrics)]
+        metrics::WRITE_SUPERSEDED_VOTE_COUNTER.inc();
+        let root_key = RootKey::VoteLedger(epoch).bytes();
+        let key = to_vote_ledger_superseded_key(chain_id, &superseded.record);
+        let value = bcs::to_bytes(superseded)?;
+        self.put_key_value(root_key, key, value);
         Ok(())
     }
 
@@ -1631,10 +1669,7 @@ where
         superseded: SupersededVote,
     ) -> Result<(), ViewError> {
         let mut batch = MultiPartitionBatch::new();
-        let root_key = RootKey::VoteLedger(epoch).bytes();
-        let key = to_vote_ledger_superseded_key(&chain_id, &superseded.record);
-        let value = bcs::to_bytes(&superseded)?;
-        batch.put_key_value(root_key, key, value);
+        batch.add_superseded_vote(epoch, &chain_id, &superseded)?;
         self.write_batch(batch).await
     }
 
