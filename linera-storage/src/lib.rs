@@ -1123,6 +1123,16 @@ mod tests {
             .is_none());
         assert_eq!(storage.vote_ledger_chain_ids(epoch).await?, vec![chain_id]);
 
+        // Chains land in different buckets of the epoch's ledger; the listing spans
+        // all of them and is ordered by serialized chain ID.
+        let chain_id2 = ChainId(CryptoHash::test_hash("vote ledger chain 2"));
+        storage
+            .record_confirmed_vote(epoch, chain_id2, vote3, None)
+            .await?;
+        let mut expected = vec![chain_id, chain_id2];
+        expected.sort_by_key(|id| bcs::to_bytes(id).unwrap());
+        assert_eq!(storage.vote_ledger_chain_ids(epoch).await?, expected);
+
         Ok(())
     }
 

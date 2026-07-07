@@ -454,7 +454,7 @@ impl MultiPartitionBatch {
     ) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         metrics::WRITE_CONFIRMED_VOTE_COUNTER.inc();
-        let root_key = RootKey::VoteLedger(epoch).bytes();
+        let root_key = to_vote_ledger_root_key(epoch, chain_id);
         let key = to_vote_ledger_latest_key(chain_id);
         let value = bcs::to_bytes(record)?;
         self.put_key_value(root_key.clone(), key, value);
@@ -474,7 +474,7 @@ impl MultiPartitionBatch {
     ) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         metrics::WRITE_SUPERSEDED_VOTE_COUNTER.inc();
-        let root_key = RootKey::VoteLedger(epoch).bytes();
+        let root_key = to_vote_ledger_root_key(epoch, chain_id);
         let key = to_vote_ledger_superseded_key(chain_id, &superseded.record);
         let value = bcs::to_bytes(superseded)?;
         self.put_key_value(root_key, key, value);
@@ -627,8 +627,10 @@ pub enum RootKey {
     BlockByHeight(ChainId),
     /// The event-to-block-height index of a chain.
     EventBlockHeight(ChainId),
-    /// This validator's own confirmation votes in an epoch, keyed by chain.
-    VoteLedger(Epoch),
+    /// One bucket of this validator's own confirmation votes in an epoch, keyed
+    /// by chain. Buckets split the ledger by the chain ID's first byte, so that no
+    /// single partition has to hold a whole epoch's votes.
+    VoteLedger(Epoch, u8),
 }
 
 const CHAIN_ID_TAG: u8 = 2;
@@ -665,6 +667,14 @@ const VOTE_LEDGER_LATEST_TAG: u8 = 0;
 /// Tag prefix for a chain's superseded confirmation votes in a `VoteLedger`
 /// partition.
 const VOTE_LEDGER_SUPERSEDED_TAG: u8 = 1;
+
+/// Returns the root key of the vote-ledger bucket holding this chain's entries.
+/// Chain IDs are hashes, so the buckets split an epoch's ledger uniformly into
+/// 256 partitions.
+fn to_vote_ledger_root_key(epoch: Epoch, chain_id: &ChainId) -> Vec<u8> {
+    let bucket = bcs::to_bytes(chain_id).unwrap()[0];
+    RootKey::VoteLedger(epoch, bucket).bytes()
+}
 
 fn to_vote_ledger_latest_key(chain_id: &ChainId) -> Vec<u8> {
     let mut key = vec![VOTE_LEDGER_LATEST_TAG];
@@ -1679,7 +1689,7 @@ where
         epoch: Epoch,
         chain_id: ChainId,
     ) -> Result<Option<LedgerEntry>, ViewError> {
-        let root_key = RootKey::VoteLedger(epoch).bytes();
+        let root_key = to_vote_ledger_root_key(epoch, &chain_id);
         let store = self.database.open_shared(&root_key)?;
         let Some(latest) = store
             .read_value::<VoteRecord>(&to_vote_ledger_latest_key(&chain_id))
@@ -1697,11 +1707,15 @@ where
 
     #[instrument(skip_all, fields(epoch = %epoch))]
     async fn vote_ledger_chain_ids(&self, epoch: Epoch) -> Result<Vec<ChainId>, ViewError> {
-        let root_key = RootKey::VoteLedger(epoch).bytes();
-        let store = self.database.open_shared(&root_key)?;
+        // Ascending buckets, and sorted keys within each, so the result is ordered
+        // by serialized chain ID.
         let mut chain_ids = Vec::new();
-        for short_key in store.find_keys_by_prefix(&[VOTE_LEDGER_LATEST_TAG]).await? {
-            chain_ids.push(bcs::from_bytes(&short_key)?);
+        for bucket in 0..=u8::MAX {
+            let root_key = RootKey::VoteLedger(epoch, bucket).bytes();
+            let store = self.database.open_shared(&root_key)?;
+            for short_key in store.find_keys_by_prefix(&[VOTE_LEDGER_LATEST_TAG]).await? {
+                chain_ids.push(bcs::from_bytes(&short_key)?);
+            }
         }
         Ok(chain_ids)
     }
