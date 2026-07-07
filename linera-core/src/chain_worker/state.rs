@@ -28,11 +28,12 @@ use linera_chain::{
         BlockProposal, BundleExecutionPolicy, IncomingBundle, MessageAction, MessageBundle,
         OriginalProposal, ProposalContent, ProposedBlock,
     },
-    manager::{self, ManagerSafetySnapshot},
+    manager::{self, LockingBlock, ManagerSafetySnapshot},
     types::{
-        Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
-        ValidatedBlockCertificate,
+        Block, CertificateValue as _, ConfirmedBlock, ConfirmedBlockCertificate,
+        TimeoutCertificate, ValidatedBlockCertificate,
     },
+    vote_ledger::{SupersededVote, VoteRecord},
     BlockExecutionPhase, ChainError, ChainExecutionContext, ChainIdSet, ChainStateView,
     ChainTipState, ExecutionResultExt as _, StreamCounts,
 };
@@ -326,6 +327,118 @@ where
         } else {
             vec![]
         })
+    }
+
+    /// Returns this validator's pending confirmation vote, paired with the
+    /// justification it cited: the manager's locking certificate, if the vote was
+    /// based on one. The pairing only holds while the locking certificate is still
+    /// the one the vote cited, which its round tells us; fast-round votes cite no
+    /// certificate.
+    fn pending_confirmed_vote(&self) -> Option<PendingConfirmedVote> {
+        let vote = self.chain.manager.confirmed_vote()?;
+        let header = &vote.value().block().header;
+        let record = VoteRecord {
+            height: header.height,
+            round: vote.round,
+            block_hash: vote.value().hash(),
+        };
+        let justification = match self.chain.manager.locking_block.get() {
+            Some(LockingBlock::Regular(certificate)) if certificate.round == vote.round => {
+                Some(certificate.clone())
+            }
+            _ => None,
+        };
+        Some(PendingConfirmedVote {
+            epoch: header.epoch,
+            record,
+            justification,
+        })
+    }
+
+    /// Brings the vote ledger up to date after a manager operation that may have
+    /// created a confirmation vote, or overwritten the previous vote or the locking
+    /// certificate it cited. `old_vote` must be captured before the operation, and
+    /// this must be called before the chain state is saved, so that no vote can
+    /// leave this worker without being in the ledger.
+    async fn reconcile_vote_ledger(
+        &self,
+        old_vote: Option<PendingConfirmedVote>,
+    ) -> Result<(), WorkerError> {
+        let new_vote = self.pending_confirmed_vote();
+        match (old_vote, new_vote) {
+            (old, Some(new)) if old.as_ref().is_none_or(|old| old.record != new.record) => {
+                // A new confirmation vote was created. The old vote is superseded if
+                // it was for a different block at the same height. (A missing
+                // justification means the pairing was broken earlier and the pair is
+                // already in the ledger — don't overwrite it, unless the vote was a
+                // fast-round one, which never had a justification.)
+                let superseded = old
+                    .filter(|old| {
+                        old.record.height == new.record.height
+                            && old.record.block_hash != new.record.block_hash
+                            && (old.justification.is_some() || old.record.round.is_fast())
+                    })
+                    .map(|old| SupersededVote {
+                        record: old.record,
+                        justification: old.justification,
+                    });
+                self.storage
+                    .record_confirmed_vote(new.epoch, self.chain_id(), new.record, superseded)
+                    .await?;
+            }
+            (Some(old), new) => {
+                // The vote is unchanged, but the manager may have stopped pairing it
+                // with its justification — e.g. the locking certificate was replaced
+                // by a newer one without a new vote being cast. Then the ledger is
+                // the pairing's only remaining home.
+                if old.justification.is_some() && new.is_none_or(|new| new.justification.is_none())
+                {
+                    self.storage
+                        .record_superseded_vote(
+                            old.epoch,
+                            self.chain_id(),
+                            SupersededVote {
+                                record: old.record,
+                                justification: old.justification,
+                            },
+                        )
+                        .await?;
+                }
+            }
+            (None, _) => {}
+        }
+        Ok(())
+    }
+
+    /// If this validator's pending confirmation vote is for a different block than
+    /// the confirmed one about to be executed, persists it in the vote ledger: the
+    /// chain is moving past the vote's height, and the manager state holding the
+    /// vote and its justification is about to be cleared. (As in
+    /// `reconcile_vote_ledger`, a round-based vote without its justification is
+    /// already in the ledger and must not be overwritten.)
+    async fn record_bypassed_vote(
+        &self,
+        certificate: &ConfirmedBlockCertificate,
+    ) -> Result<(), WorkerError> {
+        let Some(old) = self.pending_confirmed_vote() else {
+            return Ok(());
+        };
+        if old.record.block_hash == certificate.hash()
+            || (old.justification.is_none() && !old.record.round.is_fast())
+        {
+            return Ok(());
+        }
+        self.storage
+            .record_superseded_vote(
+                old.epoch,
+                self.chain_id(),
+                SupersededVote {
+                    record: old.record,
+                    justification: old.justification,
+                },
+            )
+            .await?;
+        Ok(())
     }
 
     /// Returns whether this chain is known to be active (initialized).
@@ -911,12 +1024,14 @@ where
             .filter_map(|(blob_id, maybe_blob)| Some((blob_id, maybe_blob?)))
             .collect();
         let old_round = self.chain.manager.current_round();
+        let old_vote = self.pending_confirmed_vote();
         self.chain.manager.create_final_vote(
             certificate,
             self.config.key_pair(),
             self.storage.clock().current_time(),
             blobs,
         )?;
+        self.reconcile_vote_ledger(old_vote).await?;
         self.save().await?;
         let actions = self.create_network_actions(Some(old_round)).await?;
         Ok((
@@ -1128,6 +1243,8 @@ where
                 inbox_cursors.clone(),
             )
         };
+        self.record_bypassed_vote(&certificate).await?;
+
         // Every pre-checkpoint sender block the oracle response names must already
         // be in storage before we touch any chain state. If some aren't, record
         // their hashes as trusted-by-this-checkpoint and error with `BlocksNotFound`
@@ -1266,6 +1383,8 @@ where
         self.initialize_and_save_if_needed().await?;
         let (epoch, _) = self.chain.current_committee().await?;
         check_block_epoch(epoch, chain_id, block.header.epoch)?;
+
+        self.record_bypassed_vote(&certificate).await?;
 
         // The chain is initialized and this block has not executed yet, so the current ownership
         // is the configuration the block was proposed under — even for the chain's first block,
@@ -2562,6 +2681,7 @@ where
         let blobs = self
             .get_required_blobs(proposal.expected_blob_ids(), block.created_blobs())
             .await?;
+        let old_vote = self.pending_confirmed_vote();
         let key_pair = self.config.key_pair();
         let manager = &mut self.chain.manager;
         match manager.create_vote(&proposal, block, key_pair, local_time, blobs)? {
@@ -2576,6 +2696,7 @@ where
             }
             None => (),
         }
+        self.reconcile_vote_ledger(old_vote).await?;
         self.save().await?;
         let actions = self.create_network_actions(Some(old_round)).await?;
         Ok((self.chain_info_response().await?, actions))
@@ -2861,6 +2982,17 @@ fn missing_blob_ids<'a>(
         .filter(|(_, maybe_blob)| maybe_blob.is_none())
         .map(|(blob_id, _)| *blob_id)
         .collect()
+}
+
+/// A pending confirmation vote paired with the justification it cited, captured
+/// from the chain manager before an operation that may overwrite either.
+struct PendingConfirmedVote {
+    /// The epoch of the voted block.
+    epoch: Epoch,
+    /// The vote, as recorded in the vote ledger.
+    record: VoteRecord,
+    /// The validated-block certificate the vote cited, if any.
+    justification: Option<ValidatedBlockCertificate>,
 }
 
 /// Returns an error if the block is not at the expected epoch.

@@ -59,6 +59,7 @@ use linera_chain::{
         CertificateKind, CertificateValue, Certified, ConfirmedBlock, ConfirmedBlockCertificate,
         Timeout, ValidatedBlock, ValidatedBlockCertificate,
     },
+    vote_ledger::VoteRecord,
     ChainError, ChainExecutionContext, ChainStateView,
 };
 use linera_execution::{
@@ -3659,6 +3660,23 @@ where
     let value = ConfirmedBlock::new(block1.clone());
     assert_eq!(vote.value, LiteValue::new(&value));
 
+    // The confirmation vote is recorded in the vote ledger.
+    let entry = env
+        .executing_worker()
+        .storage_client()
+        .read_vote_ledger_entry(Epoch::ZERO, chain_1)
+        .await?
+        .unwrap();
+    assert_eq!(
+        entry.latest,
+        VoteRecord {
+            height: BlockHeight::from(1),
+            round: Round::SingleLeader(1),
+            block_hash: LiteValue::new(&value).value_hash,
+        }
+    );
+    assert!(entry.superseded.is_empty());
+
     // Instead of submitting the confirmed block certificate, let rounds 2 to 4 time out, too.
     let certificate_timeout =
         env.make_certificate_with_round(value_timeout.clone(), Round::SingleLeader(4));
@@ -3792,6 +3810,57 @@ where
         response.info.manager.pending.unwrap().kind(),
         CertificateKind::Confirmed
     );
+
+    // In round 8, a validated certificate for block2 lets the worker vote to
+    // confirm it, superseding its earlier confirmation vote for block1. The vote
+    // ledger lists the superseded vote together with the justification it cited:
+    // `certificate1` — captured at the moment the locking block moved on from it.
+    let certificate2b = env.make_certificate_with_round(value2.clone(), Round::SingleLeader(8));
+    worker
+        .handle_validated_certificate(certificate2b.clone())
+        .await?;
+    let entry = worker
+        .storage_client()
+        .read_vote_ledger_entry(Epoch::ZERO, chain_1)
+        .await?
+        .unwrap();
+    assert_eq!(
+        entry.latest,
+        VoteRecord {
+            height: BlockHeight::from(1),
+            round: Round::SingleLeader(8),
+            block_hash: LiteValue::new(&ConfirmedBlock::new(block2.clone())).value_hash,
+        }
+    );
+    assert_eq!(entry.superseded.len(), 1);
+    assert_eq!(
+        entry.superseded[0].record,
+        VoteRecord {
+            height: BlockHeight::from(1),
+            round: Round::SingleLeader(1),
+            block_hash: LiteValue::new(&ConfirmedBlock::new(block1.clone())).value_hash,
+        }
+    );
+    assert_eq!(entry.superseded[0].justification, Some(certificate1));
+
+    // Block1 gets confirmed without this validator's vote: the bypassed vote for
+    // block2 is preserved in the ledger too, with its justification, while the
+    // latest-vote entry is untouched.
+    let confirmed1 = env
+        .make_certificate_with_round(ConfirmedBlock::new(block1.clone()), Round::SingleLeader(1));
+    worker
+        .fully_handle_certificate_with_notifications(confirmed1, &())
+        .await?;
+    let entry = worker
+        .storage_client()
+        .read_vote_ledger_entry(Epoch::ZERO, chain_1)
+        .await?
+        .unwrap();
+    assert_eq!(entry.latest.round, Round::SingleLeader(8));
+    assert_eq!(entry.superseded.len(), 2);
+    assert_eq!(entry.superseded[1].record.round, Round::SingleLeader(8));
+    assert_eq!(entry.superseded[1].justification, Some(certificate2b));
+
     Ok(())
 }
 
