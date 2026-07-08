@@ -215,7 +215,8 @@ library BridgeTypes {
         Committee,
         ChainDescription,
         ApplicationFormats,
-        CheckpointExecutionState
+        CheckpointExecutionState,
+        EpochCommitment
     }
 
     function bcs_serialize_BlobType(BlobType input) internal pure returns (bytes memory) {
@@ -230,7 +231,7 @@ library BridgeTypes {
         uint256 new_pos;
         uint256 choice;
         (new_pos, choice) = bcs_deserialize_offset_uleb128(pos, input);
-        require(choice < 9, "invalid variant index");
+        require(choice < 10, "invalid variant index");
         return (new_pos, BlobType(uint8(choice)));
     }
 
