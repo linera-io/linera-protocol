@@ -87,7 +87,7 @@ use crate::test_utils::RocksDbStorageBuilder;
 use crate::test_utils::ScyllaDbStorageBuilder;
 use crate::{
     chain_worker::{ChainWorkerConfig, ProcessConfirmedBlockMode},
-    commitment::assemble_commitment,
+    commitment::{assemble_commitment, CommitmentAgent},
     data_types::*,
     test_utils::{MemoryStorageBuilder, StorageBuilder},
     worker::{
@@ -3311,6 +3311,49 @@ where
         response.info.requested_previous_event_blocks,
         BTreeMap::from([(stream_id, (BlockHeight(2), certificate3.hash()))]),
     );
+
+    // The commitment agent notices the revoked epoch, freezes it, and persists a
+    // signed commitment. A second pass finds nothing new to do.
+    let member = env.executing_worker().clone();
+    let mut agent = CommitmentAgent::new(
+        member.storage_client().clone(),
+        member.clone(),
+        member.public_key(),
+        usize::MAX,
+    );
+    assert_eq!(agent.process_revoked_epochs().await?, vec![Epoch::ZERO]);
+    let pending = member
+        .storage_client()
+        .read_pending_commitment(Epoch::ZERO)
+        .await?
+        .unwrap();
+    pending.check()?;
+    assert_eq!(pending.manifest.epoch, Epoch::ZERO);
+    assert_eq!(pending.manifest.validator, member.public_key());
+    // No confirmation votes were cast in this test, so the commitment is empty.
+    assert!(pending.manifest.blob_hashes.is_empty());
+    assert_eq!(
+        member.storage_client().max_frozen_epoch().await?,
+        Some(Epoch::ZERO)
+    );
+    assert_eq!(agent.process_revoked_epochs().await?, Vec::new());
+
+    // A validator that was not in the revoked epoch's committee neither commits
+    // nor freezes.
+    let non_member = env.worker().clone();
+    let mut agent = CommitmentAgent::new(
+        non_member.storage_client().clone(),
+        non_member.clone(),
+        non_member.public_key(),
+        usize::MAX,
+    );
+    assert_eq!(agent.process_revoked_epochs().await?, Vec::new());
+    assert!(non_member
+        .storage_client()
+        .read_pending_commitment(Epoch::ZERO)
+        .await?
+        .is_none());
+    assert_eq!(non_member.storage_client().max_frozen_epoch().await?, None);
 
     Ok(())
 }

@@ -18,6 +18,7 @@ use linera_base::{
 };
 use linera_cache::{Arc as CacheArc, ValueCache};
 use linera_chain::{
+    epoch_commitment::SignedCommitmentManifest,
     types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, LiteCertificate},
     vote_ledger::{JustifiedVote, LedgerEntry, VoteRecord},
     ChainStateView,
@@ -472,6 +473,18 @@ impl MultiPartitionBatch {
         self.put_key_value(root_key, key, Vec::new());
     }
 
+    /// Adds a signed commitment manifest awaiting publication on the admin chain.
+    fn add_pending_commitment(
+        &mut self,
+        manifest: &SignedCommitmentManifest,
+    ) -> Result<(), ViewError> {
+        let root_key = RootKey::PendingCommitments.bytes();
+        let key = bcs::to_bytes(&manifest.manifest.epoch)?;
+        let value = bcs::to_bytes(manifest)?;
+        self.put_key_value(root_key, key, value);
+        Ok(())
+    }
+
     /// Adds a superseded confirmation vote to the epoch's vote ledger, without
     /// touching the chain's latest-vote entry.
     fn add_superseded_vote(
@@ -642,6 +655,9 @@ pub enum RootKey {
     /// Markers for the epochs in which this validator has permanently stopped
     /// signing votes, keyed by epoch.
     FrozenEpochs,
+    /// This validator's signed commitment manifests awaiting publication on the
+    /// admin chain, keyed by epoch.
+    PendingCommitments,
 }
 
 const CHAIN_ID_TAG: u8 = 2;
@@ -1749,6 +1765,39 @@ where
             max_epoch = max_epoch.max(Some(epoch));
         }
         Ok(max_epoch)
+    }
+
+    #[instrument(skip_all, fields(epoch = %manifest.manifest.epoch))]
+    async fn write_pending_commitment(
+        &self,
+        manifest: &SignedCommitmentManifest,
+    ) -> Result<(), ViewError> {
+        let mut batch = MultiPartitionBatch::new();
+        batch.add_pending_commitment(manifest)?;
+        self.write_batch(batch).await
+    }
+
+    #[instrument(skip_all, fields(epoch = %epoch))]
+    async fn read_pending_commitment(
+        &self,
+        epoch: Epoch,
+    ) -> Result<Option<SignedCommitmentManifest>, ViewError> {
+        let root_key = RootKey::PendingCommitments.bytes();
+        let store = self.database.open_shared(&root_key)?;
+        Ok(store.read_value(&bcs::to_bytes(&epoch)?).await?)
+    }
+
+    #[instrument(skip_all)]
+    async fn pending_commitments(&self) -> Result<Vec<SignedCommitmentManifest>, ViewError> {
+        let root_key = RootKey::PendingCommitments.bytes();
+        let store = self.database.open_shared(&root_key)?;
+        let mut manifests = Vec::<SignedCommitmentManifest>::new();
+        for (_, value) in store.find_key_values_by_prefix(&[]).await? {
+            manifests.push(bcs::from_bytes(&value)?);
+        }
+        // BCS-serialized epochs don't sort numerically.
+        manifests.sort_by_key(|manifest| manifest.manifest.epoch);
+        Ok(manifests)
     }
 
     #[instrument(skip_all)]

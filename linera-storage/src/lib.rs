@@ -23,6 +23,7 @@ use linera_base::{
 };
 pub use linera_cache::{Arc, DEFAULT_CLEANUP_INTERVAL_SECS};
 use linera_chain::{
+    epoch_commitment::SignedCommitmentManifest,
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
     vote_ledger::{JustifiedVote, LedgerEntry, VoteRecord},
     ChainError, ChainStateView,
@@ -285,6 +286,22 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
 
     /// Returns the highest epoch marked as frozen for signing, if any.
     async fn max_frozen_epoch(&self) -> Result<Option<Epoch>, ViewError>;
+
+    /// Stores a signed commitment manifest of this validator, to be held until the
+    /// commitment is published on the admin chain.
+    async fn write_pending_commitment(
+        &self,
+        manifest: &SignedCommitmentManifest,
+    ) -> Result<(), ViewError>;
+
+    /// Reads this validator's pending commitment manifest for the given epoch.
+    async fn read_pending_commitment(
+        &self,
+        epoch: Epoch,
+    ) -> Result<Option<SignedCommitmentManifest>, ViewError>;
+
+    /// Lists this validator's pending commitment manifests, in epoch order.
+    async fn pending_commitments(&self) -> Result<Vec<SignedCommitmentManifest>, ViewError>;
 
     /// Reads the network description.
     async fn read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
@@ -715,7 +732,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use linera_base::{
-        crypto::{AccountPublicKey, CryptoHash},
+        crypto::{AccountPublicKey, CryptoHash, ValidatorKeypair, ValidatorSignature},
         data_types::{
             Amount, ApplicationPermissions, Blob, BlockHeight, ChainDescription, ChainOrigin,
             Epoch, InitialChainConfig, NetworkDescription, Round, Timestamp,
@@ -726,6 +743,7 @@ mod tests {
     use linera_chain::{
         block::{Block, ConfirmedBlock},
         data_types::{BlockExecutionOutcome, ProposedBlock},
+        epoch_commitment::CommitmentManifest,
     };
     use linera_execution::{BlobOrigin, BlobState};
     #[cfg(feature = "scylladb")]
@@ -1149,6 +1167,35 @@ mod tests {
         assert_eq!(storage.max_frozen_epoch().await?, Some(Epoch::from(3)));
         storage.mark_epoch_frozen(Epoch::from(1)).await?;
         assert_eq!(storage.max_frozen_epoch().await?, Some(Epoch::from(3)));
+
+        // Pending commitments are stored by epoch and listed in epoch order.
+        assert!(storage.read_pending_commitment(epoch).await?.is_none());
+        assert!(storage.pending_commitments().await?.is_empty());
+        let keypair = ValidatorKeypair::generate();
+        let signed_manifest = |epoch| {
+            let manifest = CommitmentManifest {
+                epoch,
+                validator: keypair.public_key,
+                blob_hashes: Vec::new(),
+            };
+            let signature = ValidatorSignature::new(&manifest, &keypair.secret_key);
+            SignedCommitmentManifest {
+                manifest,
+                signature,
+            }
+        };
+        let commitment3 = signed_manifest(Epoch::from(3));
+        let commitment1 = signed_manifest(Epoch::from(1));
+        storage.write_pending_commitment(&commitment3).await?;
+        storage.write_pending_commitment(&commitment1).await?;
+        assert_eq!(
+            storage.read_pending_commitment(Epoch::from(1)).await?,
+            Some(commitment1.clone())
+        );
+        assert_eq!(
+            storage.pending_commitments().await?,
+            vec![commitment1, commitment3]
+        );
 
         Ok(())
     }
