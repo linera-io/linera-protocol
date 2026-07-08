@@ -582,7 +582,9 @@ where
             | UploadBlobResponse(_)
             | DownloadCertificatesByHeightsResponse(_)
             | SubscribeNotifications(_)
-            | Notification(_) => Err(anyhow::Error::from(NodeError::UnexpectedMessage)),
+            | Notification(_)
+            | FreezeEpoch(_)
+            | FreezeEpochResponse => Err(anyhow::Error::from(NodeError::UnexpectedMessage)),
         }
     }
 }

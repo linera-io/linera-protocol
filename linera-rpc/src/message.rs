@@ -4,7 +4,7 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlobContent, BlockHeight, NetworkDescription},
+    data_types::{BlobContent, BlockHeight, Epoch, NetworkDescription},
     identifiers::{BlobId, ChainId, EventId},
 };
 use linera_chain::{
@@ -87,6 +87,11 @@ pub enum RpcMessage {
     // Notification subscription
     SubscribeNotifications(Vec<ChainId>),
     Notification(Box<Notification>),
+
+    // Internal to a validator: permanently stop signing votes in this epoch and
+    // all earlier ones. Sent directly to each shard, not routed via the proxy.
+    FreezeEpoch(Epoch),
+    FreezeEpochResponse,
 }
 
 impl RpcMessage {
@@ -136,7 +141,9 @@ impl RpcMessage {
             | ShardInfoResponse(_)
             | DownloadCertificatesResponse(_)
             | SubscribeNotifications(_)
-            | Notification(_) => {
+            | Notification(_)
+            | FreezeEpoch(_)
+            | FreezeEpochResponse => {
                 return None;
             }
         };
@@ -189,7 +196,20 @@ impl RpcMessage {
             | DownloadCertificatesResponse(_)
             | DownloadCertificatesByHeightsResponse(_)
             | SubscribeNotifications(_)
-            | Notification(_) => false,
+            | Notification(_)
+            | FreezeEpoch(_)
+            | FreezeEpochResponse => false,
+        }
+    }
+}
+
+impl TryFrom<RpcMessage> for () {
+    type Error = NodeError;
+    fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
+        match message {
+            RpcMessage::FreezeEpochResponse => Ok(()),
+            RpcMessage::Error(error) => Err(*error),
+            _ => Err(NodeError::UnexpectedMessage),
         }
     }
 }

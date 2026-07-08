@@ -387,6 +387,14 @@ where
                 Ok(Some(RpcMessage::VersionInfoResponse(Box::default())))
             }
 
+            RpcMessage::FreezeEpoch(epoch) => match self.server.state.freeze_epoch(epoch).await {
+                Ok(()) => Ok(Some(RpcMessage::FreezeEpochResponse)),
+                Err(error) => {
+                    self.log_error(&error, "Failed to freeze epoch");
+                    Err(error.into())
+                }
+            },
+
             RpcMessage::SubscribeNotifications(_) | RpcMessage::Notification(_) => {
                 // Subscriptions are handled at the transport level, not here.
                 Err(NodeError::UnexpectedMessage)
@@ -419,9 +427,8 @@ where
             | RpcMessage::UploadBlob(_)
             | RpcMessage::UploadBlobResponse(_)
             | RpcMessage::DownloadCertificatesByHeights(_, _)
-            | RpcMessage::DownloadCertificatesByHeightsResponse(_) => {
-                Err(NodeError::UnexpectedMessage)
-            }
+            | RpcMessage::DownloadCertificatesByHeightsResponse(_)
+            | RpcMessage::FreezeEpochResponse => Err(NodeError::UnexpectedMessage),
         };
 
         self.server.packets_processed += 1;

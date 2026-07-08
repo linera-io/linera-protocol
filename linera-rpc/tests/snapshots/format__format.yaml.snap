@@ -1246,6 +1246,12 @@ RpcMessage:
       Notification:
         NEWTYPE:
           TYPENAME: Notification
+    40:
+      FreezeEpoch:
+        NEWTYPE:
+          TYPENAME: Epoch
+    41:
+      FreezeEpochResponse: UNIT
 Secp256k1PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:

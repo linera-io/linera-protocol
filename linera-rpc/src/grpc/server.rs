@@ -12,7 +12,11 @@ use futures::{
 };
 #[cfg(with_metrics)]
 use linera_base::time::Instant;
-use linera_base::{data_types::Blob, identifiers::ChainId, time::Duration};
+use linera_base::{
+    data_types::{Blob, Epoch},
+    identifiers::ChainId,
+    time::Duration,
+};
 use linera_core::{
     join_set_ext::JoinSet,
     node::NodeError,
@@ -32,7 +36,7 @@ use super::{
         notifier_service_client::NotifierServiceClient,
         validator_worker_client::ValidatorWorkerClient,
         validator_worker_server::{ValidatorWorker as ValidatorWorkerRpc, ValidatorWorkerServer},
-        BlockProposal, ChainInfoQuery, ChainInfoResult, CrossChainRequest,
+        BlockProposal, ChainInfoQuery, ChainInfoResult, CrossChainRequest, FreezeEpochRequest,
         HandlePendingBlobRequest, LiteCertificate, PendingBlobRequest, PendingBlobResult,
     },
     pool::GrpcConnectionPool,
@@ -1070,6 +1074,34 @@ where
             }
         }
         Ok(Response::new(()))
+    }
+
+    #[instrument(
+        target = "grpc_server",
+        skip_all,
+        err,
+        fields(
+            nickname = self.state.nickname(),
+            epoch = ?request.get_ref().epoch
+        )
+    )]
+    async fn freeze_epoch(
+        &self,
+        request: Request<FreezeEpochRequest>,
+    ) -> Result<Response<()>, Status> {
+        let traffic_type = Self::get_traffic_type(&request);
+        let epoch = Epoch(request.into_inner().epoch);
+        match self.state.freeze_epoch(epoch).await {
+            Ok(()) => {
+                Self::log_request_success("freeze_epoch", traffic_type);
+                Ok(Response::new(()))
+            }
+            Err(error) => {
+                Self::log_request_error("freeze_epoch", traffic_type, &error.error_type());
+                self.log_error(&error, "Failed to freeze epoch");
+                Err(Status::internal(error.to_string()))
+            }
+        }
     }
 }
 

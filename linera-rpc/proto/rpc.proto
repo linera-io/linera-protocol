@@ -38,6 +38,10 @@ service ValidatorWorker {
 
   // Handle a (trusted!) cross-chain request.
   rpc HandleCrossChainRequest(CrossChainRequest) returns (google.protobuf.Empty);
+
+  // Permanently stop signing votes in this epoch and all earlier ones (trusted!).
+  // Only returns once every vote created before the call is durably recorded.
+  rpc FreezeEpoch(FreezeEpochRequest) returns (google.protobuf.Empty);
 }
 
 // How to communicate with a validator or a local node.
@@ -203,6 +207,11 @@ message CrossChainRequest {
     ConfirmUpdatedRecipient confirm_updated_recipient = 2;
     RevertConfirm revert_confirm = 3;
   }
+}
+
+// A request to permanently stop signing votes in this epoch and all earlier ones.
+message FreezeEpochRequest {
+  uint32 epoch = 1;
 }
 
 // Communicate a number of messages from the sender to the recipient.
