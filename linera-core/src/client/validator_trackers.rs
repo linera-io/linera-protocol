@@ -3,28 +3,34 @@
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 
-use linera_base::{crypto::ValidatorPublicKey, data_types::BlockHeight, identifiers::ChainId};
+use linera_base::{
+    crypto::ValidatorPublicKey,
+    data_types::{BlockHeight, Epoch},
+    identifiers::ChainId,
+};
 use linera_chain::data_types::ChainAndHeight;
 
 use super::received_log::ReceivedLogs;
 
-/// Keeps multiple `ValidatorTracker`s for multiple validators.
-pub(super) struct ValidatorTrackers(BTreeMap<ValidatorPublicKey, ValidatorTracker>);
+/// Keeps a `ValidatorTracker` per validator and sender epoch.
+pub(super) struct ValidatorTrackers(BTreeMap<(ValidatorPublicKey, Epoch), ValidatorTracker>);
 
 impl ValidatorTrackers {
     /// Creates a new `ValidatorTrackers`.
     pub(super) fn new(
-        received_logs: Vec<(ValidatorPublicKey, Vec<ChainAndHeight>)>,
-        trackers: &HashMap<ValidatorPublicKey, u64>,
+        received_logs: Vec<(ValidatorPublicKey, Epoch, Vec<ChainAndHeight>)>,
+        trackers: &HashMap<ValidatorPublicKey, BTreeMap<Epoch, u64>>,
     ) -> Self {
         Self(
             received_logs
                 .into_iter()
-                .map(|(validator, log)| {
-                    (
-                        validator,
-                        ValidatorTracker::new(*trackers.get(&validator).unwrap_or(&0), log),
-                    )
+                .map(|(validator, epoch, log)| {
+                    let tracker = trackers
+                        .get(&validator)
+                        .and_then(|trackers| trackers.get(&epoch))
+                        .copied()
+                        .unwrap_or(0);
+                    ((validator, epoch), ValidatorTracker::new(tracker, log))
                 })
                 .collect(),
         )
@@ -38,13 +44,16 @@ impl ValidatorTrackers {
         }
     }
 
-    /// Converts the `ValidatorTrackers` into a map of per-validator tracker values
-    /// (indices into the validators' received logs).
-    pub(super) fn to_map(&self) -> BTreeMap<ValidatorPublicKey, u64> {
-        self.0
-            .iter()
-            .map(|(validator, tracker)| (*validator, tracker.current_tracker_value))
-            .collect()
+    /// Converts the `ValidatorTrackers` into a map of per-validator and per-epoch
+    /// tracker values (indices into the validators' per-epoch received logs).
+    pub(super) fn to_map(&self) -> BTreeMap<ValidatorPublicKey, BTreeMap<Epoch, u64>> {
+        let mut map = BTreeMap::<ValidatorPublicKey, BTreeMap<Epoch, u64>>::new();
+        for ((validator, epoch), tracker) in &self.0 {
+            map.entry(*validator)
+                .or_default()
+                .insert(*epoch, tracker.current_tracker_value);
+        }
+        map
     }
 
     /// Compares validators' received logs of sender chains with local node information and returns
@@ -127,9 +136,11 @@ impl ValidatorTracker {
 
 #[cfg(test)]
 mod test {
+    use std::collections::BTreeMap;
+
     use linera_base::{
         crypto::{CryptoHash, ValidatorKeypair},
-        data_types::BlockHeight,
+        data_types::{BlockHeight, Epoch},
         identifiers::ChainId,
     };
     use linera_chain::data_types::ChainAndHeight;
@@ -193,14 +204,17 @@ mod test {
         })
         .collect();
 
-        let mut received_log = ReceivedLogs::from_received_result(vec![(validator, log.clone())]);
+        let mut received_log =
+            ReceivedLogs::from_received_result(vec![(validator, Epoch::ZERO, log.clone())]);
 
         assert_eq!(received_log.num_chains(), 2);
         assert_eq!(received_log.num_certs(), 7);
 
         let mut tracker = ValidatorTrackers::new(
-            vec![(validator, log)],
-            &vec![(validator, 0)].into_iter().collect(),
+            vec![(validator, Epoch::ZERO, log)],
+            &vec![(validator, BTreeMap::from([(Epoch::ZERO, 0)]))]
+                .into_iter()
+                .collect(),
         );
 
         let local_heights = vec![(chain1, BlockHeight(3)), (chain2, BlockHeight(3))]
@@ -213,6 +227,9 @@ mod test {
         assert_eq!(received_log.num_certs(), 1);
 
         // tracker should have shifted to point to (chain1, 3)
-        assert_eq!(tracker.0[&validator].current_tracker_value, 5);
+        assert_eq!(
+            tracker.0[&(validator, Epoch::ZERO)].current_tracker_value,
+            5
+        );
     }
 }

@@ -10,7 +10,7 @@ use std::{
 use futures::{stream::FuturesUnordered, TryStreamExt as _};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{ArithmeticError, Blob, BlockHeight},
+    data_types::{ArithmeticError, Blob, BlockHeight, Epoch},
     identifiers::{BlobId, ChainId, EventId, StreamId},
 };
 use linera_chain::{
@@ -391,7 +391,7 @@ where
     pub async fn update_received_certificate_trackers(
         &self,
         chain_id: ChainId,
-        new_trackers: BTreeMap<ValidatorPublicKey, u64>,
+        new_trackers: BTreeMap<ValidatorPublicKey, BTreeMap<Epoch, u64>>,
     ) -> Result<(), LocalNodeError> {
         self.node
             .state
@@ -495,7 +495,7 @@ where
     pub async fn get_received_certificate_trackers(
         &self,
         chain_id: ChainId,
-    ) -> Result<HashMap<ValidatorPublicKey, u64>, LocalNodeError> {
+    ) -> Result<HashMap<ValidatorPublicKey, BTreeMap<Epoch, u64>>, LocalNodeError> {
         Ok(self
             .node
             .state

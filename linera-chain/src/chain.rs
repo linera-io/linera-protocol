@@ -25,6 +25,7 @@ use linera_execution::{
     ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
+    collection_view::CollectionView,
     context::Context,
     log_view::LogView,
     map_view::{CustomMapView, MapView},
@@ -306,10 +307,17 @@ where
     /// `height < next_block_height` is executed; a block at `height >= next_block_height`
     /// is preprocessed (verified but not yet executed) and may not be contiguous.
     pub block_hashes: CustomMapView<C, BlockHeight, CryptoHash>,
-    /// Sender chain and height of all certified blocks known as a receiver (local ordering).
-    pub received_log: LogView<C, ChainAndHeight>,
-    /// The number of `received_log` entries we have synchronized, for each validator.
-    pub received_certificate_trackers: RegisterView<C, HashMap<ValidatorPublicKey, u64>>,
+    /// Sender chain and height of all certified blocks known as a receiver (local
+    /// ordering), keyed by the epoch of the sender block's certificate. Partitioned
+    /// by epoch so that a revoked epoch's log can be dropped wholesale: clients
+    /// cannot verify those certificates on their own anymore, and blocks that still
+    /// matter are re-certified via `previous_block_hash` /
+    /// `previous_message_blocks` links instead.
+    pub received_log: CollectionView<C, Epoch, LogView<C, ChainAndHeight>>,
+    /// The number of `received_log` entries we have synchronized, per validator and
+    /// per sender epoch.
+    pub received_certificate_trackers:
+        RegisterView<C, HashMap<ValidatorPublicKey, BTreeMap<Epoch, u64>>>,
 
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: ReentrantCollectionView<C, ChainId, InboxStateView<C>>,
@@ -598,6 +606,7 @@ where
         &mut self,
         inbox: &mut InboxStateView<C>,
         origin: &ChainId,
+        epoch: Epoch,
         bundle: MessageBundle,
         local_time: Timestamp,
         add_to_received_log: bool,
@@ -643,7 +652,10 @@ where
 
         // Remember the certificate for future validator/client synchronizations.
         if add_to_received_log {
-            self.received_log.push(chain_and_height);
+            self.received_log
+                .load_entry_mut(&epoch)
+                .await?
+                .push(chain_and_height);
         }
         Ok(())
     }
@@ -651,20 +663,26 @@ where
     /// Updates the `received_log` trackers.
     pub fn update_received_certificate_trackers(
         &mut self,
-        new_trackers: BTreeMap<ValidatorPublicKey, u64>,
+        new_trackers: BTreeMap<ValidatorPublicKey, BTreeMap<Epoch, u64>>,
     ) {
-        for (name, tracker) in new_trackers {
-            self.received_certificate_trackers
+        for (name, epoch_trackers) in new_trackers {
+            let trackers = self
+                .received_certificate_trackers
                 .get_mut()
                 .entry(name)
-                .and_modify(|t| {
-                    // Because several synchronizations could happen in parallel, we need to make
-                    // sure to never go backward.
-                    if tracker > *t {
-                        *t = tracker;
-                    }
-                })
-                .or_insert(tracker);
+                .or_default();
+            for (epoch, tracker) in epoch_trackers {
+                trackers
+                    .entry(epoch)
+                    .and_modify(|t| {
+                        // Because several synchronizations could happen in parallel, we need to
+                        // make sure to never go backward.
+                        if tracker > *t {
+                            *t = tracker;
+                        }
+                    })
+                    .or_insert(tracker);
+            }
         }
     }
 

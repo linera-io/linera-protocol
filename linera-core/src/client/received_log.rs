@@ -3,7 +3,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use linera_base::{crypto::ValidatorPublicKey, data_types::BlockHeight, identifiers::ChainId};
+use linera_base::{
+    crypto::ValidatorPublicKey,
+    data_types::{BlockHeight, Epoch},
+    identifiers::ChainId,
+};
 use linera_chain::data_types::ChainAndHeight;
 
 /// Struct keeping track of the blocks sending messages to some chain, from chains identified by
@@ -14,15 +18,19 @@ pub(super) struct ReceivedLogs(
 );
 
 impl ReceivedLogs {
-    /// Converts a set of logs received from validators into a single log.
+    /// Converts a set of per-epoch logs received from validators into a single log.
     pub(super) fn from_received_result(
-        result: Vec<(ValidatorPublicKey, Vec<ChainAndHeight>)>,
+        result: Vec<(ValidatorPublicKey, Epoch, Vec<ChainAndHeight>)>,
     ) -> Self {
-        Self::from_iterator(result.into_iter().flat_map(|(validator, received_log)| {
-            received_log
+        Self::from_iterator(
+            result
                 .into_iter()
-                .map(move |chain_and_height| (chain_and_height, validator))
-        }))
+                .flat_map(|(validator, _epoch, received_log)| {
+                    received_log
+                        .into_iter()
+                        .map(move |chain_and_height| (chain_and_height, validator))
+                }),
+        )
     }
 
     /// Returns a map that assigns to each chain ID the set of heights. The returned map contains
@@ -203,6 +211,7 @@ impl Iterator for BatchingHelper {
 mod tests {
     use linera_base::{
         crypto::{CryptoHash, ValidatorKeypair},
+        data_types::Epoch,
         identifiers::ChainId,
     };
     use linera_chain::data_types::ChainAndHeight;
@@ -224,6 +233,7 @@ mod tests {
         let validator = ValidatorKeypair::generate().public_key;
         let test_log = ReceivedLogs::from_received_result(vec![(
             validator,
+            Epoch::ZERO,
             vec![
                 (chain1, 1),
                 (chain1, 2),
@@ -330,6 +340,7 @@ mod tests {
         let validator = ValidatorKeypair::generate().public_key;
         let test_log = ReceivedLogs::from_received_result(vec![(
             validator,
+            Epoch::ZERO,
             vec![
                 (chain1, 1),
                 (chain1, 2),
@@ -436,6 +447,7 @@ mod tests {
         let test_log = ReceivedLogs::from_received_result(vec![
             (
                 validator1,
+                Epoch::ZERO,
                 vec![
                     (chain1, 1),
                     (chain1, 2),
@@ -456,6 +468,7 @@ mod tests {
             ),
             (
                 validator2,
+                Epoch::ZERO,
                 vec![
                     (chain1, 1),
                     (chain1, 2),

@@ -54,7 +54,9 @@ use tracing::{debug, info, instrument, trace, warn};
 use crate::{
     chain_worker::{handle::AtomicTimestamp, ChainWorkerConfig, DeliveryNotifier},
     client::{ChainModes, ListeningMode},
-    data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
+    data_types::{
+        ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest, ReceivedLogQuery,
+    },
     worker::{BatchRequest, NetworkActions, Notification, Reason, WorkerError},
 };
 
@@ -272,7 +274,7 @@ where
         origin: &ChainId,
         next_height_to_receive: BlockHeight,
         mut bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Vec<MessageBundle>, WorkerError> {
+    ) -> Result<Vec<(Epoch, MessageBundle)>, WorkerError> {
         let mut latest_height = None;
         let mut skipped_len = 0;
         for (i, (_, bundle)) in bundles.iter().enumerate() {
@@ -293,10 +295,7 @@ where
                 sample_bundle.height,
             );
         }
-        Ok(bundles
-            .drain(skipped_len..)
-            .map(|(_, bundle)| bundle)
-            .collect())
+        Ok(bundles.drain(skipped_len..).collect())
     }
 
     /// Returns whether the given epoch has been revoked on the admin chain,
@@ -437,7 +436,42 @@ where
         if query.request_fallback {
             self.vote_for_fallback().await?;
         }
+        if let Some(ReceivedLogQuery { epoch, .. }) = query.request_received_log {
+            self.prune_revoked_received_logs(epoch).await?;
+        }
         self.prepare_chain_info_response(query).await
+    }
+
+    /// Removes the received logs of revoked epochs below `up_to`. Run whenever a
+    /// client asks for a received log: entries of revoked epochs are useless to
+    /// clients — the certificates they point to can no longer be verified on their
+    /// own, and blocks that still matter are re-certified via
+    /// `previous_block_hash` / `previous_message_blocks` links instead.
+    async fn prune_revoked_received_logs(&mut self, up_to: Epoch) -> Result<(), WorkerError> {
+        let mut pruned = false;
+        for stored_epoch in self.chain.received_log.indices().await? {
+            if stored_epoch >= up_to {
+                continue;
+            }
+            let is_revoked =
+                self.storage
+                    .is_epoch_revoked(stored_epoch)
+                    .await
+                    .map_err(|error| {
+                        WorkerError::ChainError(Box::new(ChainError::ExecutionError(
+                            Box::new(error),
+                            ChainExecutionContext::Block,
+                        )))
+                    })?;
+            if is_revoked {
+                self.chain.received_log.remove_entry(&stored_epoch)?;
+                pruned = true;
+            }
+        }
+        if pruned {
+            self.save().await?;
+        }
+        Ok(())
     }
 
     /// Returns the requested blob, if it belongs to the current locking block or pending proposal.
@@ -1504,13 +1538,13 @@ where
         }
 
         let bundles = self.select_message_bundles(&origin, next_height_to_receive, bundles)?;
-        let Some(last_updated_height) = bundles.last().map(|bundle| bundle.height) else {
+        let Some(last_updated_height) = bundles.last().map(|(_, bundle)| bundle.height) else {
             return Ok(CrossChainUpdateResult::NothingToDo);
         };
         // Process the received messages in certificates.
         let local_time = self.storage.clock().current_time();
         let mut previous_height = None;
-        for bundle in bundles {
+        for (epoch, bundle) in bundles {
             let add_to_received_log = previous_height != Some(bundle.height);
             previous_height = Some(bundle.height);
             // Update the staged chain state with the received block.
@@ -1518,6 +1552,7 @@ where
                 .receive_message_bundle_with_inbox(
                     &mut inbox,
                     &origin,
+                    epoch,
                     bundle,
                     local_time,
                     add_to_received_log,
@@ -1948,7 +1983,7 @@ where
     ))]
     pub(crate) async fn update_received_certificate_trackers(
         &mut self,
-        new_trackers: BTreeMap<ValidatorPublicKey, u64>,
+        new_trackers: BTreeMap<ValidatorPublicKey, BTreeMap<Epoch, u64>>,
     ) -> Result<(), WorkerError> {
         self.chain
             .update_received_certificate_trackers(new_trackers);
@@ -2096,7 +2131,7 @@ where
     /// Gets received certificate trackers.
     pub(crate) async fn get_received_certificate_trackers(
         &self,
-    ) -> Result<HashMap<ValidatorPublicKey, u64>, WorkerError> {
+    ) -> Result<HashMap<ValidatorPublicKey, BTreeMap<Epoch, u64>>, WorkerError> {
         Ok(self.chain.received_certificate_trackers.get().clone())
     }
 
@@ -2706,13 +2741,17 @@ where
             .block_hashes_for_heights(query.request_sent_certificate_hashes_by_heights)
             .await?;
         info.requested_sent_certificate_hashes = hashes;
-        if let Some(start) = query.request_received_log_excluding_first_n {
-            let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
+        if let Some(ReceivedLogQuery { epoch, skip }) = query.request_received_log {
+            let skip = usize::try_from(skip).map_err(|_| ArithmeticError::Overflow)?;
             let max_received_log_entries = self.config.chain_info_max_received_log_entries;
-            let end = start
-                .saturating_add(max_received_log_entries)
-                .min(chain.received_log.count());
-            info.requested_received_log = chain.received_log.read(start..end).await?;
+            if let Some(log) = chain.received_log.try_load_entry(&epoch).await? {
+                let end = skip
+                    .saturating_add(max_received_log_entries)
+                    .min(log.count());
+                if skip < end {
+                    info.requested_received_log = log.read(skip..end).await?;
+                }
+            }
         }
         if query.request_manager_values {
             info.manager.add_values(&chain.manager);
