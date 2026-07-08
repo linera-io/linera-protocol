@@ -7,6 +7,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use linera_base::{crypto::ValidatorSecretKey, identifiers::ChainId, time::Duration};
 
+use super::SignatureFreezer;
 use crate::CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES;
 
 /// Configuration parameters for the chain worker and its owning
@@ -56,6 +57,10 @@ pub struct ChainWorkerConfig {
     /// mechanisms. If `None`, every chain is eligible (subject to the
     /// respective feature flag). If `Some`, only chains in the set are.
     pub recovery_whitelist: Option<HashSet<ChainId>>,
+    /// The barrier that stops the validator from signing votes in frozen epochs.
+    /// Cloning the config shares it, so all chain workers of a
+    /// [`WorkerState`][`crate::worker::WorkerState`] see the same frozen epochs.
+    pub freezer: SignatureFreezer,
 }
 
 impl ChainWorkerConfig {
@@ -98,6 +103,7 @@ impl Default for ChainWorkerConfig {
             allow_revert_confirm: false,
             reset_on_corrupted_chain_state: None,
             recovery_whitelist: None,
+            freezer: SignatureFreezer::default(),
         }
     }
 }

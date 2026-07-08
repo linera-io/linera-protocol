@@ -270,6 +270,10 @@ impl Runnable for ServerContext {
             }
         };
 
+        for (state, _, _) in &states {
+            state.load_frozen_epochs().await?;
+        }
+
         let mut join_set = match self.server_config.internal_network.protocol {
             NetworkProtocol::Simple(protocol) => self.spawn_simple(
                 &listen_address,

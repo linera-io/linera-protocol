@@ -464,6 +464,14 @@ impl MultiPartitionBatch {
         Ok(())
     }
 
+    /// Adds a marker recording that this validator has permanently stopped
+    /// signing votes in the given epoch.
+    fn add_frozen_epoch(&mut self, epoch: Epoch) {
+        let root_key = RootKey::FrozenEpochs.bytes();
+        let key = bcs::to_bytes(&epoch).unwrap();
+        self.put_key_value(root_key, key, Vec::new());
+    }
+
     /// Adds a superseded confirmation vote to the epoch's vote ledger, without
     /// touching the chain's latest-vote entry.
     fn add_superseded_vote(
@@ -631,6 +639,9 @@ pub enum RootKey {
     /// by chain. Buckets split the ledger by the chain ID's first byte, so that no
     /// single partition has to hold a whole epoch's votes.
     VoteLedger(Epoch, u8),
+    /// Markers for the epochs in which this validator has permanently stopped
+    /// signing votes, keyed by epoch.
+    FrozenEpochs,
 }
 
 const CHAIN_ID_TAG: u8 = 2;
@@ -1718,6 +1729,26 @@ where
             }
         }
         Ok(chain_ids)
+    }
+
+    #[instrument(skip_all, fields(epoch = %epoch))]
+    async fn mark_epoch_frozen(&self, epoch: Epoch) -> Result<(), ViewError> {
+        let mut batch = MultiPartitionBatch::new();
+        batch.add_frozen_epoch(epoch);
+        self.write_batch(batch).await
+    }
+
+    #[instrument(skip_all)]
+    async fn max_frozen_epoch(&self) -> Result<Option<Epoch>, ViewError> {
+        let root_key = RootKey::FrozenEpochs.bytes();
+        let store = self.database.open_shared(&root_key)?;
+        let mut max_epoch = None;
+        // BCS-serialized epochs don't sort numerically, so scan all markers.
+        for key in store.find_keys_by_prefix(&[]).await? {
+            let epoch = bcs::from_bytes::<Epoch>(&key)?;
+            max_epoch = max_epoch.max(Some(epoch));
+        }
+        Ok(max_epoch)
     }
 
     #[instrument(skip_all)]

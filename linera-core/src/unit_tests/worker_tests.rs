@@ -3861,6 +3861,31 @@ where
     assert_eq!(entry.superseded[1].record.round, Round::SingleLeader(8));
     assert_eq!(entry.superseded[1].justification, Some(certificate2b));
 
+    // After freezing the epoch, the validator refuses to vote for a validated
+    // block at the next height.
+    worker.freeze_epoch(Epoch::ZERO).await?;
+    let proposed_block3 = make_child_block(&ConfirmedBlock::new(block1.clone()))
+        .with_simple_transfer(chain_1, small_transfer);
+    let (_, block3, _, _, _) = worker
+        .stage_block_execution(
+            proposed_block3,
+            None,
+            vec![],
+            BundleExecutionPolicy::committed(),
+        )
+        .await?;
+    let certificate3 = env
+        .make_certificate_with_round(ValidatedBlock::new(block3.clone()), Round::SingleLeader(0));
+    let result = worker.handle_validated_certificate(certificate3).await;
+    assert_matches!(result, Err(WorkerError::VoteInFrozenEpoch(Epoch::ZERO)));
+
+    // But confirmed blocks are still processed: only signing is frozen.
+    let confirmed3 =
+        env.make_certificate_with_round(ConfirmedBlock::new(block3), Round::SingleLeader(0));
+    worker
+        .fully_handle_certificate_with_notifications(confirmed3, &())
+        .await?;
+
     Ok(())
 }
 

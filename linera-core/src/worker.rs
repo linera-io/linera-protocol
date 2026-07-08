@@ -400,6 +400,10 @@ pub enum WorkerError {
     InvalidLiteCertificate,
     #[error("Fast blocks cannot query oracles")]
     FastBlockUsingOracles,
+    /// The validator has permanently stopped signing votes in this epoch, in
+    /// preparation for committing to the votes it made in it.
+    #[error("Cannot vote in epoch {0}: this validator has frozen its signatures for it")]
+    VoteInFrozenEpoch(Epoch),
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
     /// Variant raised when the chain references these block hashes via a
@@ -454,6 +458,7 @@ impl WorkerError {
             | WorkerError::MissingCertificateValue
             | WorkerError::InvalidLiteCertificate
             | WorkerError::FastBlockUsingOracles
+            | WorkerError::VoteInFrozenEpoch(_)
             | WorkerError::BlobsNotFound(_)
             | WorkerError::BlocksNotFound(_)
             | WorkerError::InvalidBlockProposal(_)
@@ -935,6 +940,25 @@ where
             chain_batches: Arc::new(papaya::HashMap::new()),
             outbound_cross_chain_sender: None,
         }
+    }
+
+    /// Permanently stops this worker from signing votes in the given epoch and
+    /// all earlier ones, and persists the freeze across restarts. When this
+    /// returns, no more votes in those epochs can be created, and every vote
+    /// created before the call is durably recorded in the vote ledger.
+    pub async fn freeze_epoch(&self, epoch: Epoch) -> Result<(), WorkerError> {
+        self.storage.mark_epoch_frozen(epoch).await?;
+        self.chain_worker_config.freezer.freeze(epoch).await;
+        Ok(())
+    }
+
+    /// Loads the persisted signature freeze into memory. Validators must call
+    /// this on startup, before handling requests.
+    pub async fn load_frozen_epochs(&self) -> Result<(), WorkerError> {
+        if let Some(epoch) = self.storage.max_frozen_epoch().await? {
+            self.chain_worker_config.freezer.freeze(epoch).await;
+        }
+        Ok(())
     }
 
     /// Installs a shard-routing dispatcher used for outbound cross-chain requests

@@ -1024,6 +1024,7 @@ where
             .filter_map(|(blob_id, maybe_blob)| Some((blob_id, maybe_blob?)))
             .collect();
         let old_round = self.chain.manager.current_round();
+        let signing_guard = self.config.freezer.guard_signing(epoch).await?;
         let old_vote = self.pending_confirmed_vote();
         self.chain.manager.create_final_vote(
             certificate,
@@ -1033,6 +1034,7 @@ where
         )?;
         self.reconcile_vote_ledger(old_vote).await?;
         self.save().await?;
+        drop(signing_guard);
         let actions = self.create_network_actions(Some(old_round)).await?;
         Ok((
             self.chain_info_response().await?,
@@ -2215,13 +2217,14 @@ where
                 found_block_height: height
             }
         );
-        let epoch = chain.execution_state.system.epoch.get();
+        let epoch = *chain.execution_state.system.epoch.get();
         let chain_id = chain.chain_id();
         let key_pair = self.config.key_pair();
         let local_time = self.storage.clock().current_time();
+        let _signing_guard = self.config.freezer.guard_signing(epoch).await?;
         if chain
             .manager
-            .create_timeout_vote(chain_id, height, round, *epoch, key_pair, local_time)?
+            .create_timeout_vote(chain_id, height, round, epoch, key_pair, local_time)?
         {
             self.save().await?;
         }
@@ -2264,6 +2267,7 @@ where
             let chain_id = chain.chain_id();
             let height = chain.tip_state.get().next_block_height;
             let key_pair = self.config.key_pair();
+            let _signing_guard = self.config.freezer.guard_signing(epoch).await?;
             if chain
                 .manager
                 .vote_fallback(chain_id, height, epoch, key_pair)
@@ -2681,6 +2685,7 @@ where
         let blobs = self
             .get_required_blobs(proposal.expected_blob_ids(), block.created_blobs())
             .await?;
+        let signing_guard = self.config.freezer.guard_signing(epoch).await?;
         let old_vote = self.pending_confirmed_vote();
         let key_pair = self.config.key_pair();
         let manager = &mut self.chain.manager;
@@ -2698,6 +2703,7 @@ where
         }
         self.reconcile_vote_ledger(old_vote).await?;
         self.save().await?;
+        drop(signing_guard);
         let actions = self.create_network_actions(Some(old_round)).await?;
         Ok((self.chain_info_response().await?, actions))
     }

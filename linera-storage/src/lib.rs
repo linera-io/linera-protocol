@@ -279,6 +279,13 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     /// Lists the chains with a vote-ledger entry for the given epoch.
     async fn vote_ledger_chain_ids(&self, epoch: Epoch) -> Result<Vec<ChainId>, ViewError>;
 
+    /// Durably marks the given epoch, and implicitly all earlier ones, as frozen
+    /// for signing, so that the freeze outlives restarts.
+    async fn mark_epoch_frozen(&self, epoch: Epoch) -> Result<(), ViewError>;
+
+    /// Returns the highest epoch marked as frozen for signing, if any.
+    async fn max_frozen_epoch(&self) -> Result<Option<Epoch>, ViewError>;
+
     /// Reads the network description.
     async fn read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
 
@@ -1132,6 +1139,13 @@ mod tests {
         let mut expected = vec![chain_id, chain_id2];
         expected.sort_by_key(|id| bcs::to_bytes(id).unwrap());
         assert_eq!(storage.vote_ledger_chain_ids(epoch).await?, expected);
+
+        // Freeze markers: the highest marked epoch wins, regardless of order.
+        assert_eq!(storage.max_frozen_epoch().await?, None);
+        storage.mark_epoch_frozen(Epoch::from(3)).await?;
+        assert_eq!(storage.max_frozen_epoch().await?, Some(Epoch::from(3)));
+        storage.mark_epoch_frozen(Epoch::from(1)).await?;
+        assert_eq!(storage.max_frozen_epoch().await?, Some(Epoch::from(3)));
 
         Ok(())
     }

@@ -5,9 +5,12 @@
 
 mod config;
 mod delivery_notifier;
+mod freezer;
 pub(crate) mod handle;
 pub(crate) mod state;
 
 pub(super) use self::delivery_notifier::DeliveryNotifier;
 pub(crate) use self::state::{BlockOutcome, CrossChainUpdateResult, EventSubscriptionsResult};
-pub use self::{config::ChainWorkerConfig, state::ProcessConfirmedBlockMode};
+pub use self::{
+    config::ChainWorkerConfig, freezer::SignatureFreezer, state::ProcessConfirmedBlockMode,
+};
