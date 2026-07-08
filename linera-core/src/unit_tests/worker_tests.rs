@@ -52,7 +52,7 @@ use linera_chain::{
         IncomingBundle, LiteValue, LiteVote, MessageAction, MessageBundle, OperationResult,
         PostedMessage, ProposedBlock, Transaction, Vote,
     },
-    epoch_commitment::CommitmentChunk,
+    epoch_commitment::{CommitmentChunk, CommitmentEntry},
     justification::{JustificationChain, JustificationLink},
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
@@ -60,7 +60,7 @@ use linera_chain::{
         CertificateKind, CertificateValue, Certified, ConfirmedBlock, ConfirmedBlockCertificate,
         Timeout, ValidatedBlock, ValidatedBlockCertificate,
     },
-    vote_ledger::VoteRecord,
+    vote_ledger::{JustifiedVote, VoteRecord},
     ChainError, ChainExecutionContext, ChainStateView,
 };
 use linera_execution::{
@@ -3388,7 +3388,7 @@ where
         }
     };
     let mut forged = pending.clone();
-    forged.manifest.blob_hashes = vec![CryptoHash::test_hash("forged")];
+    forged.manifest.validator = outsider.public_key;
     for (manifest, expected) in [
         (signed_by_outsider(Epoch::from(1)), "revoked epochs"),
         (
@@ -3409,6 +3409,125 @@ where
         let error = result.err().unwrap().to_string();
         assert!(error.contains(expected), "{error:?} vs {expected:?}");
     }
+
+    // Before voting on a registration, the worker checks the commitment's
+    // entries in depth. A vote carrying exactly the justification it signed,
+    // for a block grounded in this worker's storage, passes; a vote whose
+    // record does not match its justification is rejected; and a committed
+    // block with an unknown parent surfaces as `BlocksNotFound`, so the
+    // proposer can push it.
+    let make_signed_commitment = |entries: Vec<CommitmentEntry>| {
+        let chunk = CommitmentChunk { entries };
+        let chunk_blob = Blob::new_epoch_commitment(bcs::to_bytes(&chunk).unwrap());
+        let manifest = CommitmentManifest {
+            epoch: Epoch::ZERO,
+            validator: member.public_key(),
+            blob_hashes: vec![chunk_blob.id().hash],
+        };
+        (manifest, chunk_blob)
+    };
+    let justification = env.make_certificate_with_round(
+        ValidatedBlock::new(certificate0.block().clone()),
+        Round::SingleLeader(0),
+    );
+    let valid_entry = CommitmentEntry {
+        chain_id: user_id,
+        committed: JustifiedVote {
+            record: VoteRecord {
+                height: BlockHeight::ZERO,
+                round: Round::SingleLeader(0),
+                block_hash: certificate0.hash(),
+                justification_commitment: Some(justification.full_justification_commitment()),
+            },
+            justification: Some(justification.clone()),
+        },
+        superseded: Vec::new(),
+    };
+    let mut mismatched_entry = valid_entry.clone();
+    mismatched_entry.committed.record.round = Round::SingleLeader(1);
+    let ungrounded_block = BlockExecutionOutcome::default().with(
+        make_child_block(&ConfirmedBlock::new(
+            BlockExecutionOutcome::default().with(make_first_block(user_id)),
+        ))
+        .with_simple_transfer(admin_chain_id, Amount::ONE),
+    );
+    let ungrounded_justification = env.make_certificate_with_round(
+        ValidatedBlock::new(ungrounded_block.clone()),
+        Round::SingleLeader(0),
+    );
+    let ungrounded_entry = CommitmentEntry {
+        chain_id: user_id,
+        committed: JustifiedVote {
+            record: VoteRecord {
+                height: BlockHeight::from(1),
+                round: Round::SingleLeader(0),
+                block_hash: ungrounded_block.hash(),
+                justification_commitment: Some(
+                    ungrounded_justification.full_justification_commitment(),
+                ),
+            },
+            justification: Some(ungrounded_justification),
+        },
+        superseded: Vec::new(),
+    };
+    let mut parent = certificate4;
+    for (entries, expected) in [
+        (vec![valid_entry], None),
+        (
+            vec![mismatched_entry],
+            Some("not for the voted block and round"),
+        ),
+        (vec![ungrounded_entry], Some("Blocks not found")),
+    ] {
+        let (manifest, chunk_blob) = make_signed_commitment(entries);
+        env.write_blobs(std::slice::from_ref(&chunk_blob)).await?;
+        let signature = member.sign_commitment_manifest(&manifest).await?;
+        let proposal = make_child_block(&parent.clone().into_value())
+            .with_epoch(2)
+            .with_operation(SystemOperation::Admin(AdminOperation::RegisterCommitment {
+                manifest: Box::new(SignedCommitmentManifest {
+                    manifest,
+                    signature,
+                }),
+            }));
+        let (_, block, _, _, _) = env
+            .executing_worker()
+            .stage_block_execution(
+                proposal,
+                None,
+                vec![chunk_blob],
+                BundleExecutionPolicy::committed(),
+            )
+            .await?;
+        let validated = env
+            .make_certificate_with_round(ValidatedBlock::new(block.clone()), Round::MultiLeader(0));
+        let result = env
+            .executing_worker()
+            .handle_validated_certificate(validated)
+            .await;
+        match expected {
+            None => {
+                result?;
+                // Advance the tip so the next iteration builds on a fresh height.
+                let confirmed = env
+                    .make_certificate_with_round(ConfirmedBlock::new(block), Round::MultiLeader(0));
+                env.executing_worker()
+                    .fully_handle_certificate_with_notifications(confirmed.clone(), &())
+                    .await?;
+                parent = confirmed;
+            }
+            Some(expected) => {
+                let error = result.err().unwrap().to_string();
+                assert!(error.contains(expected), "{error:?} vs {expected:?}");
+            }
+        }
+    }
+
+    // The single validator holds all the stake and has registered its
+    // commitment for epoch 0, so the epoch is settled; epoch 1 is not.
+    let storage = env.executing_worker().storage_client();
+    assert!(storage.commitment_quorum_reached(Epoch::ZERO).await?);
+    assert!(!storage.commitment_quorum_reached(Epoch::from(1)).await?);
 
     Ok(())
 }

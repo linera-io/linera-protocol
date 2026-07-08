@@ -1566,6 +1566,14 @@ impl Operation {
             Some(SystemOperation::Admin(AdminOperation::PublishCommitteeBlob { blob_hash })) => {
                 vec![BlobId::new(*blob_hash, BlobType::Committee)]
             }
+            Some(SystemOperation::Admin(AdminOperation::RegisterCommitment { manifest })) => {
+                manifest
+                    .manifest
+                    .blob_hashes
+                    .iter()
+                    .map(|hash| BlobId::new(*hash, BlobType::EpochCommitment))
+                    .collect()
+            }
             Some(SystemOperation::PublishModule { module_id }) => module_id.bytecode_blob_ids(),
             _ => vec![],
         }

@@ -413,6 +413,10 @@ pub enum WorkerError {
     EpochNotFrozen(Epoch),
     #[error("The commitment manifest names a different validator")]
     CommitmentValidatorMismatch,
+    /// A `RegisterCommitment` operation's entries failed verification against
+    /// this worker's storage.
+    #[error("Invalid epoch commitment: {0}")]
+    InvalidEpochCommitment(&'static str),
     /// The vote ledger, chain state and stored certificates together no longer
     /// yield the justification this validator's latest vote on the chain cited.
     /// This indicates local storage corruption: the write hooks preserve the
@@ -476,6 +480,7 @@ impl WorkerError {
             | WorkerError::VoteInFrozenEpoch(_)
             | WorkerError::EpochNotFrozen(_)
             | WorkerError::CommitmentValidatorMismatch
+            | WorkerError::InvalidEpochCommitment(_)
             | WorkerError::BlobsNotFound(_)
             | WorkerError::BlocksNotFound(_)
             | WorkerError::InvalidBlockProposal(_)

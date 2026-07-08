@@ -28,6 +28,7 @@ use linera_chain::{
         BlockProposal, BundleExecutionPolicy, IncomingBundle, MessageAction, MessageBundle,
         OriginalProposal, ProposalContent, ProposedBlock,
     },
+    epoch_commitment::{CommitmentChunk, CommitmentEntry},
     manager::{self, LockingBlock, ManagerSafetySnapshot},
     types::{
         Block, CertificateValue as _, ConfirmedBlock, ConfirmedBlockCertificate,
@@ -38,8 +39,11 @@ use linera_chain::{
     ChainTipState, ExecutionResultExt as _, StreamCounts,
 };
 use linera_execution::{
-    system::{EpochEventData, EventSubscriptions, EPOCH_STREAM_NAME},
-    ExecutionRuntimeContext as _, ExecutionStateView, Query, QueryContext, QueryOutcome,
+    committee::Committee,
+    system::{
+        AdminOperation, EpochEventData, EventSubscriptions, SystemOperation, EPOCH_STREAM_NAME,
+    },
+    ExecutionRuntimeContext as _, ExecutionStateView, Operation, Query, QueryContext, QueryOutcome,
     ResourceTracker, ServiceRuntimeEndpoint,
 };
 use linera_storage::{Clock as _, Storage};
@@ -455,6 +459,114 @@ where
                 },
             )
             .await?;
+        Ok(())
+    }
+
+    /// Verifies the epoch commitments registered by the block's
+    /// `RegisterCommitment` operations, against this worker's own storage: every
+    /// vote must carry exactly the justification it signed, verified against the
+    /// revoked epoch's committee, and the committed block must be grounded in a
+    /// certified parent. Data this worker is missing surfaces as
+    /// `BlocksNotFound`, so the proposing client can push it — validators never
+    /// fetch. Execution itself only checks the manifest (signature, membership,
+    /// blob presence); this is the deep check that runs before this worker signs
+    /// a vote for the block.
+    async fn check_epoch_commitments<'a>(
+        &self,
+        operations: impl Iterator<Item = &'a Operation>,
+        blobs: &BTreeMap<BlobId, &Blob>,
+    ) -> Result<(), WorkerError> {
+        for operation in operations {
+            let Operation::System(operation) = operation else {
+                continue;
+            };
+            let SystemOperation::Admin(AdminOperation::RegisterCommitment { manifest }) =
+                &**operation
+            else {
+                continue;
+            };
+            let epoch = manifest.manifest.epoch;
+            let committee = self.committee_for_epoch(epoch).await?;
+            // Entries must be strictly sorted by serialized chain ID across the
+            // whole commitment: the canonical form, and no chain appears twice.
+            let mut previous_chain = None;
+            for blob_hash in &manifest.manifest.blob_hashes {
+                let blob_id = BlobId::new(*blob_hash, BlobType::EpochCommitment);
+                let chunk = match blobs.get(&blob_id) {
+                    Some(blob) => bcs::from_bytes::<CommitmentChunk>(blob.bytes())?,
+                    None => {
+                        let Some(blob) = self.storage.read_blob(blob_id).await? else {
+                            return Err(WorkerError::BlobsNotFound(vec![blob_id]));
+                        };
+                        bcs::from_bytes::<CommitmentChunk>(blob.bytes())?
+                    }
+                };
+                for entry in &chunk.entries {
+                    let chain_key = bcs::to_bytes(&entry.chain_id)?;
+                    ensure!(
+                        previous_chain.as_ref() < Some(&chain_key),
+                        WorkerError::InvalidEpochCommitment("entries are not sorted by chain ID")
+                    );
+                    previous_chain = Some(chain_key);
+                    self.check_commitment_entry(entry, &committee).await?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Verifies one commitment entry: the committed and superseded votes with
+    /// their justifications, their mutual consistency, and the committed block's
+    /// grounding in a certified parent block.
+    async fn check_commitment_entry(
+        &self,
+        entry: &CommitmentEntry,
+        committee: &Committee,
+    ) -> Result<(), WorkerError> {
+        let committed = &entry.committed.record;
+        check_justified_vote(&entry.committed, committee)?;
+        if let Some(justification) = &entry.committed.justification {
+            // Grounding: the committed block's parent must be certified. The
+            // justification carries the committed block itself, so the parent
+            // link can be checked. (A first-round vote cites no justification;
+            // grounding it — like verifying the creation edge of a block at
+            // height zero — needs the block or chain description pushed
+            // separately and is not implemented yet.)
+            let header = &justification.block().header;
+            ensure!(
+                header.chain_id == entry.chain_id && header.height == committed.height,
+                WorkerError::InvalidEpochCommitment(
+                    "the justification is for a different chain or height"
+                )
+            );
+            if let Some(parent_hash) = header.previous_block_hash {
+                let Some(parent) = self.storage.read_certificate(parent_hash).await? else {
+                    return Err(WorkerError::BlocksNotFound(vec![parent_hash]));
+                };
+                let parent_header = &parent.block().header;
+                ensure!(
+                    parent_header.chain_id == entry.chain_id
+                        && parent_header.height.try_add_one()? == committed.height,
+                    WorkerError::InvalidEpochCommitment(
+                        "the committed block's parent is not the previous block"
+                    )
+                );
+            }
+        }
+        for superseded in &entry.superseded {
+            check_justified_vote(superseded, committee)?;
+            // A superseded vote lies at or below the committed height; at the
+            // same height, the committed vote must be from a later round — the
+            // justified re-vote that superseded it.
+            let record = &superseded.record;
+            ensure!(
+                record.height < committed.height
+                    || (record.height == committed.height && record.round < committed.round),
+                WorkerError::InvalidEpochCommitment(
+                    "a superseded vote is not below the committed vote"
+                )
+            );
+        }
         Ok(())
     }
 
@@ -1039,7 +1151,10 @@ where
         let blobs = maybe_blobs
             .into_iter()
             .filter_map(|(blob_id, maybe_blob)| Some((blob_id, maybe_blob?)))
-            .collect();
+            .collect::<BTreeMap<_, _>>();
+        let provided_blobs = blobs.iter().map(|(id, blob)| (*id, blob)).collect();
+        self.check_epoch_commitments(block.body.operations(), &provided_blobs)
+            .await?;
         let old_round = self.chain.manager.current_round();
         let signing_guard = self.config.freezer.guard_signing(epoch).await?;
         let old_vote = self.pending_confirmed_vote();
@@ -2659,6 +2774,13 @@ where
             outcome,
         } = content;
 
+        let provided_blobs = published_blobs
+            .iter()
+            .map(|blob| (blob.id(), blob))
+            .collect::<BTreeMap<_, _>>();
+        self.check_epoch_commitments(block.operations(), &provided_blobs)
+            .await?;
+
         if self.config.key_pair().is_some()
             && block.timestamp.duration_since(local_time) > self.config.block_time_grace_period
         {
@@ -3016,6 +3138,37 @@ struct PendingConfirmedVote {
     record: VoteRecord,
     /// The validated-block certificate the vote cited, if any.
     justification: Option<ValidatedBlockCertificate>,
+}
+
+/// Verifies that a committed or superseded vote carries exactly the
+/// justification it signed: the certificate is for the voted block and round,
+/// its commitment is the one the vote's signature covers, and its quorum
+/// verifies against the epoch's committee. A vote that signed no justification
+/// commitment must carry none.
+fn check_justified_vote(vote: &JustifiedVote, committee: &Committee) -> Result<(), WorkerError> {
+    match (&vote.justification, vote.record.justification_commitment) {
+        (Some(certificate), Some(commitment)) => {
+            ensure!(
+                certificate.hash() == vote.record.block_hash
+                    && certificate.round == vote.record.round,
+                WorkerError::InvalidEpochCommitment(
+                    "the justification is not for the voted block and round"
+                )
+            );
+            ensure!(
+                certificate.full_justification_commitment() == commitment,
+                WorkerError::InvalidEpochCommitment(
+                    "the justification is not the quorum the vote signed"
+                )
+            );
+            certificate.check(committee)?;
+            Ok(())
+        }
+        (None, None) => Ok(()),
+        _ => Err(WorkerError::InvalidEpochCommitment(
+            "a vote and its justification do not match",
+        )),
+    }
 }
 
 /// Returns an error if the block is not at the expected epoch.

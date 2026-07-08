@@ -555,6 +555,42 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         Ok(Some(self.get_or_load_committee_by_hash(blob_hash).await?))
     }
 
+    /// Returns whether validators holding a quorum of the given epoch's stake
+    /// have registered commitments for it on the admin chain, according to the
+    /// commitment events in local storage. Duplicate registrations by the same
+    /// validator count once.
+    async fn commitment_quorum_reached(&self, epoch: Epoch) -> Result<bool, ExecutionError> {
+        let Some(committee) = self.committee_for_epoch(epoch).await? else {
+            return Ok(false);
+        };
+        let admin_chain_id = self
+            .read_network_description()
+            .await?
+            .ok_or(ExecutionError::NoNetworkDescriptionFound)?
+            .admin_chain_id;
+        let stream_id = StreamId::system(linera_execution::system::COMMITMENT_STREAM_NAME);
+        let mut committed = std::collections::BTreeSet::new();
+        for index in 0.. {
+            let event_id = EventId {
+                chain_id: admin_chain_id,
+                stream_id: stream_id.clone(),
+                index,
+            };
+            let Some(bytes) = self.read_event(event_id).await? else {
+                break;
+            };
+            let manifest: SignedCommitmentManifest = bcs::from_bytes(&bytes)?;
+            if manifest.manifest.epoch == epoch {
+                committed.insert(manifest.manifest.validator);
+            }
+        }
+        let weight = committed
+            .iter()
+            .map(|validator| committee.weight(validator))
+            .sum::<u64>();
+        Ok(weight >= committee.quorum_threshold())
+    }
+
     /// Lists the blob IDs in storage.
     async fn list_blob_ids(&self) -> Result<Vec<BlobId>, ViewError>;
 
