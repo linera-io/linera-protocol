@@ -3895,6 +3895,7 @@ where
     // recovers its justification from the manager's locking certificate.
     let assembled = assemble_commitment(
         worker.storage_client(),
+        &worker,
         Epoch::ZERO,
         worker.public_key(),
         usize::MAX,
@@ -3943,6 +3944,7 @@ where
     // record instead, and does not list that record as superseded.
     let assembled = assemble_commitment(
         worker.storage_client(),
+        &worker,
         Epoch::ZERO,
         worker.public_key(),
         usize::MAX,

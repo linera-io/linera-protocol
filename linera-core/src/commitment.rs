@@ -22,7 +22,10 @@ use linera_views::ViewError;
 use thiserror::Error;
 use tracing::info;
 
-use crate::worker::{WorkerError, WorkerState};
+use crate::{
+    data_types::ChainInfoQuery,
+    worker::{WorkerError, WorkerState},
+};
 
 /// An error while assembling or driving an epoch commitment.
 #[derive(Debug, Error)]
@@ -39,6 +42,9 @@ pub enum CommitmentError {
     /// An epoch number overflowed.
     #[error(transparent)]
     Arithmetic(#[from] ArithmeticError),
+    /// A serialization error.
+    #[error(transparent)]
+    Bcs(#[from] bcs::Error),
     /// A shard could not be reached or refused the request.
     #[error("Shard request failed: {0}")]
     Shard(String),
@@ -66,6 +72,14 @@ pub trait ShardControl {
         &self,
         manifest: &CommitmentManifest,
     ) -> Result<ValidatorSignature, CommitmentError>;
+
+    /// Returns the chain manager's current locking block, obtained from the
+    /// chain worker responsible for the chain — only that worker may access the
+    /// chain's state.
+    async fn locking_block(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<Option<LockingBlock>, CommitmentError>;
 }
 
 impl<S> ShardControl for WorkerState<S>
@@ -81,6 +95,15 @@ where
         manifest: &CommitmentManifest,
     ) -> Result<ValidatorSignature, CommitmentError> {
         Ok(WorkerState::sign_commitment_manifest(self, manifest).await?)
+    }
+
+    async fn locking_block(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<Option<LockingBlock>, CommitmentError> {
+        let query = ChainInfoQuery::new(chain_id).with_manager_values();
+        let response = self.handle_chain_info_query(query).await?;
+        Ok(response.info.manager.requested_locking.map(|boxed| *boxed))
     }
 }
 
@@ -150,8 +173,14 @@ where
             return Ok(false);
         }
         self.shards.freeze_epoch(epoch).await?;
-        let assembled =
-            assemble_commitment(&self.storage, epoch, self.validator, self.max_chunk_bytes).await?;
+        let assembled = assemble_commitment(
+            &self.storage,
+            &self.shards,
+            epoch,
+            self.validator,
+            self.max_chunk_bytes,
+        )
+        .await?;
         let signature = self
             .shards
             .sign_commitment_manifest(&assembled.manifest)
@@ -187,13 +216,16 @@ pub struct AssembledCommitment {
 ///
 /// This must only run after the epoch has been frozen on every worker sharing the
 /// storage: the freeze is what makes the ledger complete, and it keeps a pending
-/// latest vote from being bypassed unrecorded while we read.
-pub async fn assemble_commitment<S: Storage>(
+/// latest vote from being bypassed unrecorded while we read. Chain state is never
+/// read from storage directly — a pending vote's locking certificate is obtained
+/// through the chain's worker, via [`ShardControl::locking_block`].
+pub async fn assemble_commitment<S: Storage, C: ShardControl>(
     storage: &S,
+    shards: &C,
     epoch: Epoch,
     validator: ValidatorPublicKey,
     max_chunk_bytes: usize,
-) -> Result<AssembledCommitment, WorkerError> {
+) -> Result<AssembledCommitment, CommitmentError> {
     let mut chunks = Vec::new();
     let mut entries = Vec::new();
     let mut entries_bytes = 0;
@@ -204,7 +236,7 @@ pub async fn assemble_commitment<S: Storage>(
             .read_vote_ledger_entry(epoch, chain_id)
             .await?
             .ok_or(WorkerError::MissingVoteJustification(chain_id))?;
-        let entry = commitment_entry(storage, chain_id, ledger_entry).await?;
+        let entry = commitment_entry(storage, shards, chain_id, ledger_entry).await?;
         let entry_bytes = bcs::serialized_size(&entry)?;
         if !entries.is_empty() && entries_bytes + entry_bytes > max_chunk_bytes {
             chunks.push(CommitmentChunk {
@@ -221,7 +253,7 @@ pub async fn assemble_commitment<S: Storage>(
     let blobs = chunks
         .iter()
         .map(|chunk| Ok(Blob::new_epoch_commitment(bcs::to_bytes(chunk)?)))
-        .collect::<Result<Vec<_>, bcs::Error>>()?;
+        .collect::<Result<Vec<_>, CommitmentError>>()?;
     let manifest = CommitmentManifest {
         epoch,
         validator,
@@ -232,11 +264,12 @@ pub async fn assemble_commitment<S: Storage>(
 
 /// Builds the commitment entry for one chain: the ledger entry with the latest
 /// vote's justification recovered.
-async fn commitment_entry<S: Storage>(
+async fn commitment_entry<S: Storage, C: ShardControl>(
     storage: &S,
+    shards: &C,
     chain_id: ChainId,
     ledger_entry: LedgerEntry,
-) -> Result<CommitmentEntry, WorkerError> {
+) -> Result<CommitmentEntry, CommitmentError> {
     let LedgerEntry {
         latest,
         mut superseded,
@@ -250,12 +283,12 @@ async fn commitment_entry<S: Storage>(
             if let Some(index) = superseded.iter().position(|vote| vote.record == latest) {
                 superseded.remove(index).justification
             } else {
-                Some(recover_justification(storage, chain_id, &latest).await?)
+                Some(recover_justification(storage, shards, chain_id, &latest).await?)
             }
         }
     };
     if justification.is_none() && latest.justification_commitment.is_some() {
-        return Err(WorkerError::MissingVoteJustification(chain_id));
+        return Err(WorkerError::MissingVoteJustification(chain_id).into());
     }
     Ok(CommitmentEntry {
         chain_id,
@@ -271,18 +304,18 @@ async fn commitment_entry<S: Storage>(
 /// manager's locking certificate if the vote is still pending at the tip, or from
 /// the stored confirmed certificate's justification chain if the voted block was
 /// finalized.
-async fn recover_justification<S: Storage>(
+async fn recover_justification<S: Storage, C: ShardControl>(
     storage: &S,
+    shards: &C,
     chain_id: ChainId,
     latest: &VoteRecord,
-) -> Result<linera_chain::types::ValidatedBlockCertificate, WorkerError> {
+) -> Result<linera_chain::types::ValidatedBlockCertificate, CommitmentError> {
     let commitment = latest
         .justification_commitment
         .expect("only called for votes that cited a quorum");
-    let chain = storage.load_chain(chain_id).await?;
-    if let Some(LockingBlock::Regular(certificate)) = chain.manager.locking_block.get() {
+    if let Some(LockingBlock::Regular(certificate)) = shards.locking_block(chain_id).await? {
         if certificate.full_justification_commitment() == commitment {
-            return Ok(certificate.clone());
+            return Ok(certificate);
         }
     }
     if let Some(certificate) = storage.read_certificate(latest.block_hash).await? {
@@ -290,5 +323,5 @@ async fn recover_justification<S: Storage>(
             return Ok(cited);
         }
     }
-    Err(WorkerError::MissingVoteJustification(chain_id))
+    Err(WorkerError::MissingVoteJustification(chain_id).into())
 }

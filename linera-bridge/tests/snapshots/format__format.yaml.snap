@@ -52,6 +52,8 @@ BlobType:
       ApplicationFormats: UNIT
     8:
       CheckpointExecutionState: UNIT
+    9:
+      EpochCommitment: UNIT
 BlockHeader:
   STRUCT:
     - chain_id:
