@@ -33,7 +33,7 @@ use linera_chain::{
         Block, CertificateValue as _, ConfirmedBlock, ConfirmedBlockCertificate,
         TimeoutCertificate, ValidatedBlockCertificate,
     },
-    vote_ledger::{SupersededVote, VoteRecord},
+    vote_ledger::{JustifiedVote, VoteRecord},
     BlockExecutionPhase, ChainError, ChainExecutionContext, ChainIdSet, ChainStateView,
     ChainTipState, ExecutionResultExt as _, StreamCounts,
 };
@@ -378,7 +378,7 @@ where
                             && old.record.block_hash != new.record.block_hash
                             && (old.justification.is_some() || old.record.round.is_fast())
                     })
-                    .map(|old| SupersededVote {
+                    .map(|old| JustifiedVote {
                         record: old.record,
                         justification: old.justification,
                     });
@@ -397,7 +397,7 @@ where
                         .record_superseded_vote(
                             old.epoch,
                             self.chain_id(),
-                            SupersededVote {
+                            JustifiedVote {
                                 record: old.record,
                                 justification: old.justification,
                             },
@@ -432,7 +432,7 @@ where
             .record_superseded_vote(
                 old.epoch,
                 self.chain_id(),
-                SupersededVote {
+                JustifiedVote {
                     record: old.record,
                     justification: old.justification,
                 },

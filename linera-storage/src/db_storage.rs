@@ -19,7 +19,7 @@ use linera_base::{
 use linera_cache::{Arc as CacheArc, ValueCache};
 use linera_chain::{
     types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, LiteCertificate},
-    vote_ledger::{LedgerEntry, SupersededVote, VoteRecord},
+    vote_ledger::{JustifiedVote, LedgerEntry, VoteRecord},
     ChainStateView,
 };
 use linera_execution::{
@@ -450,7 +450,7 @@ impl MultiPartitionBatch {
         epoch: Epoch,
         chain_id: &ChainId,
         record: &VoteRecord,
-        superseded: Option<&SupersededVote>,
+        superseded: Option<&JustifiedVote>,
     ) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         metrics::WRITE_CONFIRMED_VOTE_COUNTER.inc();
@@ -478,7 +478,7 @@ impl MultiPartitionBatch {
         &mut self,
         epoch: Epoch,
         chain_id: &ChainId,
-        superseded: &SupersededVote,
+        superseded: &JustifiedVote,
     ) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         metrics::WRITE_SUPERSEDED_VOTE_COUNTER.inc();
@@ -1675,7 +1675,7 @@ where
         epoch: Epoch,
         chain_id: ChainId,
         record: VoteRecord,
-        superseded: Option<SupersededVote>,
+        superseded: Option<JustifiedVote>,
     ) -> Result<(), ViewError> {
         let mut batch = MultiPartitionBatch::new();
         batch.add_confirmed_vote(epoch, &chain_id, &record, superseded.as_ref())?;
@@ -1687,7 +1687,7 @@ where
         &self,
         epoch: Epoch,
         chain_id: ChainId,
-        superseded: SupersededVote,
+        superseded: JustifiedVote,
     ) -> Result<(), ViewError> {
         let mut batch = MultiPartitionBatch::new();
         batch.add_superseded_vote(epoch, &chain_id, &superseded)?;

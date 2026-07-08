@@ -24,7 +24,7 @@ use linera_base::{
 pub use linera_cache::{Arc, DEFAULT_CLEANUP_INTERVAL_SECS};
 use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
-    vote_ledger::{LedgerEntry, SupersededVote, VoteRecord},
+    vote_ledger::{JustifiedVote, LedgerEntry, VoteRecord},
     ChainError, ChainStateView,
 };
 use linera_execution::{
@@ -255,7 +255,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         epoch: Epoch,
         chain_id: ChainId,
         record: VoteRecord,
-        superseded: Option<SupersededVote>,
+        superseded: Option<JustifiedVote>,
     ) -> Result<(), ViewError>;
 
     /// Records a superseded confirmation vote in the vote ledger for the given
@@ -266,7 +266,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         &self,
         epoch: Epoch,
         chain_id: ChainId,
-        superseded: SupersededVote,
+        superseded: JustifiedVote,
     ) -> Result<(), ViewError>;
 
     /// Reads the vote-ledger entry for the given epoch and chain.
@@ -1081,7 +1081,7 @@ mod tests {
             round: Round::MultiLeader(1),
             block_hash: CryptoHash::test_hash("block B"),
         };
-        let superseded = SupersededVote {
+        let superseded = JustifiedVote {
             record: vote1,
             justification: None,
         };
@@ -1109,7 +1109,7 @@ mod tests {
         // A different block gets confirmed at height 1 without this validator's
         // vote: the bypassed vote is recorded as superseded on its own, without
         // touching the latest-vote entry.
-        let bypassed = SupersededVote {
+        let bypassed = JustifiedVote {
             record: vote3.clone(),
             justification: None,
         };

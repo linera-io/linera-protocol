@@ -35,19 +35,20 @@ pub struct VoteRecord {
     pub block_hash: CryptoHash,
 }
 
-/// A confirmation vote for a block that lost out at its height: either the
-/// validator later cast a justified confirmation vote for a different block at the
-/// same height, or a different block was confirmed there without the validator's
-/// vote.
+/// A confirmation vote together with the justification it cited. The
+/// justification is what distinguishes a legitimate re-vote from double-signing,
+/// so a vote must never be shown without it.
 ///
-/// The protocol allows both, so a superseded vote is not by itself evidence of
-/// double-signing — but only as long as it can be shown together with its
-/// justification. It is kept here because the certificate it cited is not
-/// otherwise retained once the chain moves on.
+/// In a [`LedgerEntry`] this is a *superseded* vote — one for a block that lost
+/// out at its height, either because the validator later cast a justified
+/// confirmation vote for a different block there, or because a different block was
+/// confirmed there without the validator's vote. The protocol allows both, and the
+/// certificate the vote cited is not otherwise retained once the chain moves on.
+/// In a commitment entry, the *committed* vote takes this form too.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
-pub struct SupersededVote {
-    /// The superseded vote.
+pub struct JustifiedVote {
+    /// The vote.
     pub record: VoteRecord,
     /// The validated-block certificate the vote cited, or `None` for a vote cast in
     /// a chain's first round, which cites no validated quorum.
@@ -71,5 +72,5 @@ pub struct LedgerEntry {
     /// The latest confirmation vote on this chain.
     pub latest: VoteRecord,
     /// Votes for blocks that lost out at their height.
-    pub superseded: Vec<SupersededVote>,
+    pub superseded: Vec<JustifiedVote>,
 }
