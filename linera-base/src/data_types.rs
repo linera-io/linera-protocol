@@ -1900,6 +1900,11 @@ impl Blob {
     pub fn is_checkpoint_blob(&self) -> bool {
         self.content().blob_type().is_checkpoint_blob()
     }
+
+    /// Returns whether the blob carries a chunk of a validator's epoch commitment.
+    pub fn is_epoch_commitment_blob(&self) -> bool {
+        self.content().blob_type().is_epoch_commitment_blob()
+    }
 }
 
 impl Serialize for Blob {

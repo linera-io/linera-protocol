@@ -296,6 +296,13 @@ impl BlobType {
     pub fn is_checkpoint_blob(&self) -> bool {
         matches!(self, BlobType::CheckpointExecutionState)
     }
+
+    /// Returns whether the blob carries a chunk of a validator's epoch commitment.
+    /// Such blobs are exempt from per-block published-blob counts and per-blob
+    /// fees.
+    pub fn is_epoch_commitment_blob(&self) -> bool {
+        matches!(self, BlobType::EpochCommitment)
+    }
 }
 
 impl fmt::Display for BlobType {

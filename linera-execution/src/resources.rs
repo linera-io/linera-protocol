@@ -704,11 +704,15 @@ where
     pub fn track_blob_published(&mut self, blob: &Blob) -> Result<(), ExecutionError> {
         self.policy.check_blob_size(blob.content())?;
         let size = blob.content().bytes().len() as u64;
-        // Committee and checkpoint-execution-state blobs are exempt from fees and the
-        // per-block published-blob limit. Committee blobs are produced by network-level
-        // governance; checkpoint blobs are produced by `SystemOperation::Checkpoint`
-        // and their size is bounded by the policy's `maximum_blob_size` per chunk.
-        if blob.is_committee_blob() || blob.is_checkpoint_blob() {
+        // Committee, checkpoint-execution-state and epoch-commitment blobs are exempt
+        // from fees and the per-block published-blob limit. Committee blobs are
+        // produced by network-level governance; checkpoint and commitment blobs are
+        // size-bounded by the policy's `maximum_blob_size` per chunk, but a checkpoint
+        // or a revoked epoch's commitment can need arbitrarily many chunks, and every
+        // validator of a revoked epoch is protocol-bound to publish its commitment —
+        // capping the count per block would make large commitments unpublishable.
+        if blob.is_committee_blob() || blob.is_checkpoint_blob() || blob.is_epoch_commitment_blob()
+        {
             return Ok(());
         }
         {
