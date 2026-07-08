@@ -52,7 +52,7 @@ use linera_chain::{
         IncomingBundle, LiteValue, LiteVote, MessageAction, MessageBundle, OperationResult,
         PostedMessage, ProposedBlock, Transaction, Vote,
     },
-    justification::{JustificationChain, JustificationLink},
+    justification::{EquivocationProof, JustificationChain, JustificationLink},
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
@@ -3554,6 +3554,161 @@ where
             "the re-certified height-0 message should have been delivered",
         );
     }
+
+    Ok(())
+}
+
+/// Tests that a block committing to a different hash than the one already accepted
+/// at that height is rejected: two certified blocks at the same height prove that
+/// the height's committee equivocated, and neither the conflicting block nor the
+/// block vouching for it must be accepted.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_conflicting_certified_blocks_are_rejected<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let owner_pubkey = signer.generate_new();
+    let owner = AccountOwner::from(owner_pubkey);
+    let balance = Amount::from_tokens(5);
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    let chain_1_desc = env.add_root_chain(1, owner, balance).await;
+    let chain_2_desc = env.add_root_chain(2, owner, Amount::ZERO).await;
+    let user_id = chain_1_desc.id();
+    let target = Account::chain(chain_2_desc.id());
+
+    // Two conflicting certified blocks at height 0, and a child of the second one.
+    let cert_a = env
+        .make_transfer_certificate_for_epoch_unprocessable(
+            chain_1_desc.clone(),
+            owner_pubkey,
+            owner,
+            AccountOwner::CHAIN,
+            target,
+            Amount::ONE,
+            vec![],
+            Epoch::ZERO,
+            balance,
+            BTreeMap::new(),
+            vec![],
+        )
+        .await;
+    let cert_b = env
+        .make_transfer_certificate_for_epoch_unprocessable(
+            chain_1_desc.clone(),
+            owner_pubkey,
+            owner,
+            AccountOwner::CHAIN,
+            target,
+            Amount::from_tokens(2),
+            vec![],
+            Epoch::ZERO,
+            balance,
+            BTreeMap::new(),
+            vec![],
+        )
+        .await;
+    assert_ne!(cert_a.hash(), cert_b.hash());
+    let cert_child = env
+        .make_transfer_certificate_for_epoch_unprocessable(
+            chain_1_desc.clone(),
+            owner_pubkey,
+            owner,
+            AccountOwner::CHAIN,
+            target,
+            Amount::ONE,
+            vec![],
+            Epoch::ZERO,
+            balance,
+            BTreeMap::new(),
+            vec![&cert_b],
+        )
+        .await;
+
+    // Preprocess the first block at height 0, then a child of the *conflicting*
+    // block: the child's `previous_block_hash` commitment exposes the equivocation
+    // and the child is rejected instead of vouching for the conflicting block.
+    env.worker()
+        .handle_confirmed_certificate(cert_a.clone(), ProcessConfirmedBlockMode::Preprocess, None)
+        .await?;
+    let error = env
+        .worker()
+        .handle_confirmed_certificate(
+            cert_child.clone(),
+            ProcessConfirmedBlockMode::Preprocess,
+            None,
+        )
+        .await
+        .unwrap_err();
+    let WorkerError::Equivocation(evidence) = &error else {
+        panic!("expected an equivocation error, got {error}");
+    };
+    assert_eq!(evidence.conflict.existing_block, cert_a.hash());
+    assert_eq!(evidence.conflict.conflicting_block, cert_b.hash());
+    assert_eq!(evidence.conflict.witness_block, cert_child.hash());
+    assert_eq!(evidence.conflict.height, BlockHeight::ZERO);
+    // The evidence carries the two signed certificates themselves.
+    assert_eq!(evidence.existing.hash(), cert_a.hash());
+    assert_eq!(evidence.witness.hash(), cert_child.hash());
+    assert!(!evidence.existing.signatures().is_empty());
+    assert!(!evidence.witness.signatures().is_empty());
+    // The witness only commits to the conflicting block via its parent link; the
+    // certificates are at different heights, so no individual signature pair is
+    // contradictory. Per-validator proofs require the conflicting block's own
+    // certificate.
+    assert!(evidence.proofs.is_empty());
+
+    // Nothing was vouched for, and the child was not accepted. (The view holds a
+    // read lock on the chain worker, so drop it before the next request.)
+    {
+        let user_chain = env.worker().chain_state_view(user_id).await?;
+        assert!(user_chain.vouched_blocks.indices().await?.is_empty());
+        assert_eq!(
+            user_chain.block_hashes.get(&BlockHeight::from(1)).await?,
+            None
+        );
+    }
+
+    // Pushing the conflicting height-0 block itself is rejected the same way —
+    // and this time the two certificates confirm different blocks at the same
+    // height, so per-validator equivocation proofs can be extracted.
+    let error = env
+        .worker()
+        .handle_confirmed_certificate(cert_b.clone(), ProcessConfirmedBlockMode::Preprocess, None)
+        .await
+        .unwrap_err();
+    let WorkerError::Equivocation(evidence) = &error else {
+        panic!("expected an equivocation error, got {error}");
+    };
+    assert_eq!(evidence.conflict.existing_block, cert_a.hash());
+    assert_eq!(evidence.conflict.conflicting_block, cert_b.hash());
+    assert_eq!(evidence.conflict.witness_block, cert_b.hash());
+    assert_eq!(evidence.witness.hash(), cert_b.hash());
+    // The conflicting certificate is carried only in the evidence — it was never
+    // written to storage.
+    assert!(
+        !env.worker()
+            .storage
+            .contains_certificate(cert_b.hash())
+            .await?,
+        "the rejected conflicting certificate must not be persisted",
+    );
+    assert_eq!(
+        evidence.proofs.len(),
+        1,
+        "expected one proof per double-signing validator"
+    );
+    let proof = &evidence.proofs[0];
+    assert_matches!(proof, EquivocationProof::DoubleVote { .. });
+    assert_eq!(proof.validator(), env.executing_worker().public_key());
+    proof
+        .check(env.committee())
+        .expect("the extracted proof should be self-contained and valid");
 
     Ok(())
 }

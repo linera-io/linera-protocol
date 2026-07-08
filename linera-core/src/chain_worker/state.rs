@@ -34,7 +34,7 @@ use linera_chain::{
         ValidatedBlockCertificate,
     },
     BlockExecutionPhase, ChainError, ChainExecutionContext, ChainIdSet, ChainStateView,
-    ChainTipState, ExecutionResultExt as _, StreamCounts,
+    ChainTipState, ConflictingCertifiedBlocks, ExecutionResultExt as _, StreamCounts,
 };
 use linera_execution::{
     system::{EpochEventData, EventSubscriptions, EPOCH_STREAM_NAME},
@@ -55,7 +55,9 @@ use crate::{
     chain_worker::{handle::AtomicTimestamp, ChainWorkerConfig, DeliveryNotifier},
     client::{ChainModes, ListeningMode},
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
-    worker::{BatchRequest, NetworkActions, Notification, Reason, WorkerError},
+    worker::{
+        BatchRequest, EquivocationEvidence, NetworkActions, Notification, Reason, WorkerError,
+    },
 };
 
 /// Type alias for event subscriptions result.
@@ -1090,6 +1092,18 @@ where
             self.ensure_epoch_trusted(&certificate).await?;
         }
 
+        // A different certified block already accepted at this height means a
+        // committee equivocated. Detect this before the certificate is written
+        // anywhere: the conflicting certificate is only carried inside the
+        // returned evidence, never persisted.
+        if let Some(existing_hash) = self.chain.block_hashes.get(&height).await? {
+            if existing_hash != block_hash {
+                return Err(self
+                    .same_height_equivocation(existing_hash, certificate)
+                    .await);
+            }
+        }
+
         // Certificate check passed - which means the blobs the block requires are legitimate and
         // we can take note of it, so that if any are missing, we will accept them when the client
         // sends them.
@@ -1134,7 +1148,7 @@ where
         use ProcessConfirmedBlockMode::{Auto, Execute, Preprocess};
         let gap = tip.next_block_height != height;
         let starts_with_checkpoint = block.starts_with_checkpoint();
-        match (mode, gap, starts_with_checkpoint) {
+        let result = match (mode, gap, starts_with_checkpoint) {
             (Preprocess, _, _) | (Auto, true, false) => {
                 self.preprocess_certified_block(certificate, notify_when_messages_are_delivered)
                     .await
@@ -1157,6 +1171,78 @@ where
                 )
                 .await
             }
+        };
+        match result {
+            Err(WorkerError::ChainError(chain_error)) => Err(match *chain_error {
+                ChainError::ConflictingCertifiedBlocks(conflict) => {
+                    self.attach_equivocation_evidence(*conflict).await
+                }
+                chain_error => WorkerError::ChainError(Box::new(chain_error)),
+            }),
+            result => result,
+        }
+    }
+
+    /// Builds the [`WorkerError::Equivocation`] error for a certificate of a
+    /// different block at a height where one is already accepted. The rejected
+    /// certificate goes into the returned evidence as its own witness, without
+    /// ever being written to storage.
+    async fn same_height_equivocation(
+        &self,
+        existing_block: CryptoHash,
+        certificate: ConfirmedBlockCertificate,
+    ) -> WorkerError {
+        let header = &certificate.block().header;
+        let conflict = ConflictingCertifiedBlocks {
+            chain_id: header.chain_id,
+            height: header.height,
+            existing_block,
+            conflicting_block: certificate.hash(),
+            witness_block: certificate.hash(),
+        };
+        tracing::error!(
+            chain_id = %conflict.chain_id,
+            height = %conflict.height,
+            %existing_block,
+            conflicting_block = %conflict.conflicting_block,
+            "conflicting certified blocks at the same height: a committee equivocated",
+        );
+        match self.storage.read_certificate(existing_block).await {
+            Ok(Some(existing)) => WorkerError::Equivocation(Box::new(EquivocationEvidence::new(
+                conflict,
+                CacheArc::unwrap_or_clone(existing),
+                certificate,
+            ))),
+            _ => WorkerError::ChainError(Box::new(ChainError::ConflictingCertifiedBlocks(
+                Box::new(conflict),
+            ))),
+        }
+    }
+
+    /// Upgrades a [`ChainError::ConflictingCertifiedBlocks`] error from the
+    /// vouching step into [`WorkerError::Equivocation`] by attaching the two
+    /// certificates that prove the fault: the certificate of the block already
+    /// accepted at the conflicting height, and the certificate of the witness
+    /// block that commits to a different block there. Both are legitimately in
+    /// storage — the witness is a block of the chain in its own right, not the
+    /// conflicting block itself. Falls back to the plain chain error if either
+    /// certificate cannot be read.
+    async fn attach_equivocation_evidence(
+        &self,
+        conflict: ConflictingCertifiedBlocks,
+    ) -> WorkerError {
+        let existing = self.storage.read_certificate(conflict.existing_block).await;
+        let witness = self.storage.read_certificate(conflict.witness_block).await;
+        if let (Ok(Some(existing)), Ok(Some(witness))) = (existing, witness) {
+            WorkerError::Equivocation(Box::new(EquivocationEvidence::new(
+                conflict,
+                CacheArc::unwrap_or_clone(existing),
+                CacheArc::unwrap_or_clone(witness),
+            )))
+        } else {
+            WorkerError::ChainError(Box::new(ChainError::ConflictingCertifiedBlocks(Box::new(
+                conflict,
+            ))))
         }
     }
 

@@ -17,7 +17,7 @@ use super::{generic::GenericCertificate, Certificate, Certified, LiteCertificate
 use crate::{
     block::{Block, ConfirmedBlock, ConversionError},
     data_types::MessageBundle,
-    justification::JustificationChain,
+    justification::{JustificationChain, JustifiedConfirmation},
     ChainError,
 };
 
@@ -84,6 +84,18 @@ impl ConfirmedBlockCertificate {
     /// Returns the full chain of validated quorums for the block.
     pub fn justification(&self) -> &JustificationChain {
         &self.justification
+    }
+
+    /// Returns this confirmation in the form used for fault attribution and
+    /// justification audits.
+    pub fn justified_confirmation(&self) -> JustifiedConfirmation {
+        JustifiedConfirmation {
+            header: self.block().header.clone(),
+            round: self.round(),
+            first_round: self.quorum.first_round(),
+            confirmed_signatures: self.quorum.signatures().clone(),
+            justification: self.justification.clone(),
+        }
     }
 
     /// Consumes this certificate, returning the signed quorum and the justification chain.
