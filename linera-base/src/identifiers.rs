@@ -279,6 +279,9 @@ pub enum BlobType {
     /// A single checkpoint produces a sequence of such blobs whose content hashes
     /// are listed in `OracleResponse::Checkpoint`.
     CheckpointExecutionState,
+    /// A blob containing one ordered chunk of a validator's commitment to the
+    /// confirmation votes it signed in a revoked epoch.
+    EpochCommitment,
 }
 
 impl BlobType {

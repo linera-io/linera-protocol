@@ -45,6 +45,14 @@ impl SignatureFreezer {
             *max_frozen = Some(epoch);
         }
     }
+
+    /// Returns whether the given epoch is frozen.
+    pub(crate) async fn is_frozen(&self, epoch: Epoch) -> bool {
+        self.max_frozen
+            .read()
+            .await
+            .is_some_and(|max_frozen| epoch <= max_frozen)
+    }
 }
 
 /// Keeps signing open while alive: a freeze started while a `SigningGuard`

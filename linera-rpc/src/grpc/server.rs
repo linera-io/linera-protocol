@@ -17,6 +17,7 @@ use linera_base::{
     identifiers::ChainId,
     time::Duration,
 };
+use linera_chain::epoch_commitment::CommitmentManifest;
 use linera_core::{
     join_set_ext::JoinSet,
     node::NodeError,
@@ -38,6 +39,7 @@ use super::{
         validator_worker_server::{ValidatorWorker as ValidatorWorkerRpc, ValidatorWorkerServer},
         BlockProposal, ChainInfoQuery, ChainInfoResult, CrossChainRequest, FreezeEpochRequest,
         HandlePendingBlobRequest, LiteCertificate, PendingBlobRequest, PendingBlobResult,
+        SignCommitmentManifestRequest, SignCommitmentManifestResponse,
     },
     pool::GrpcConnectionPool,
     GrpcError, GRPC_MAX_MESSAGE_SIZE,
@@ -1099,6 +1101,38 @@ where
             Err(error) => {
                 Self::log_request_error("freeze_epoch", traffic_type, &error.error_type());
                 self.log_error(&error, "Failed to freeze epoch");
+                Err(Status::internal(error.to_string()))
+            }
+        }
+    }
+
+    #[instrument(
+        target = "grpc_server",
+        skip_all,
+        err,
+        fields(nickname = self.state.nickname())
+    )]
+    async fn sign_commitment_manifest(
+        &self,
+        request: Request<SignCommitmentManifestRequest>,
+    ) -> Result<Response<SignCommitmentManifestResponse>, Status> {
+        let traffic_type = Self::get_traffic_type(&request);
+        let manifest = bcs::from_bytes::<CommitmentManifest>(&request.into_inner().manifest)
+            .map_err(|error| Status::invalid_argument(error.to_string()))?;
+        match self.state.sign_commitment_manifest(&manifest).await {
+            Ok(signature) => {
+                Self::log_request_success("sign_commitment_manifest", traffic_type);
+                let signature = bcs::to_bytes(&signature)
+                    .map_err(|error| Status::internal(error.to_string()))?;
+                Ok(Response::new(SignCommitmentManifestResponse { signature }))
+            }
+            Err(error) => {
+                Self::log_request_error(
+                    "sign_commitment_manifest",
+                    traffic_type,
+                    &error.error_type(),
+                );
+                self.log_error(&error, "Failed to sign commitment manifest");
                 Err(Status::internal(error.to_string()))
             }
         }

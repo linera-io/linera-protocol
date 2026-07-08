@@ -395,6 +395,18 @@ where
                 }
             },
 
+            RpcMessage::SignCommitmentManifest(manifest) => {
+                match self.server.state.sign_commitment_manifest(&manifest).await {
+                    Ok(signature) => Ok(Some(RpcMessage::SignCommitmentManifestResponse(
+                        Box::new(signature),
+                    ))),
+                    Err(error) => {
+                        self.log_error(&error, "Failed to sign commitment manifest");
+                        Err(error.into())
+                    }
+                }
+            }
+
             RpcMessage::SubscribeNotifications(_) | RpcMessage::Notification(_) => {
                 // Subscriptions are handled at the transport level, not here.
                 Err(NodeError::UnexpectedMessage)
@@ -428,7 +440,8 @@ where
             | RpcMessage::UploadBlobResponse(_)
             | RpcMessage::DownloadCertificatesByHeights(_, _)
             | RpcMessage::DownloadCertificatesByHeightsResponse(_)
-            | RpcMessage::FreezeEpochResponse => Err(NodeError::UnexpectedMessage),
+            | RpcMessage::FreezeEpochResponse
+            | RpcMessage::SignCommitmentManifestResponse(_) => Err(NodeError::UnexpectedMessage),
         };
 
         self.server.packets_processed += 1;

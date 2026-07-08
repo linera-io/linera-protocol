@@ -138,6 +138,8 @@ BlobType:
       ApplicationFormats: UNIT
     8:
       CheckpointExecutionState: UNIT
+    9:
+      EpochCommitment: UNIT
 Block:
   STRUCT:
     - header:
@@ -444,6 +446,29 @@ ChainOwnership:
     - open_multi_leader_rounds: BOOL
     - timeout_config:
         TYPENAME: TimeoutConfig
+CommitmentChunk:
+  STRUCT:
+    - entries:
+        SEQ:
+          TYPENAME: CommitmentEntry
+CommitmentEntry:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - committed:
+        TYPENAME: JustifiedVote
+    - superseded:
+        SEQ:
+          TYPENAME: JustifiedVote
+CommitmentManifest:
+  STRUCT:
+    - epoch:
+        TYPENAME: Epoch
+    - validator:
+        TYPENAME: Secp256k1PublicKey
+    - blob_hashes:
+        SEQ:
+          TYPENAME: CryptoHash
 ConfirmedBlockCertificate:
   STRUCT:
     - value:
@@ -608,6 +633,13 @@ JustificationLink:
           TUPLE:
             - TYPENAME: Secp256k1PublicKey
             - TYPENAME: Secp256k1Signature
+JustifiedVote:
+  STRUCT:
+    - record:
+        TYPENAME: VoteRecord
+    - justification:
+        OPTION:
+          TYPENAME: ValidatedBlockCertificate
 LiteCertificate:
   STRUCT:
     - value:
@@ -1252,6 +1284,14 @@ RpcMessage:
           TYPENAME: Epoch
     41:
       FreezeEpochResponse: UNIT
+    42:
+      SignCommitmentManifest:
+        NEWTYPE:
+          TYPENAME: CommitmentManifest
+    43:
+      SignCommitmentManifestResponse:
+        NEWTYPE:
+          TYPENAME: Secp256k1Signature
 Secp256k1PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -1266,6 +1306,12 @@ ShardInfo:
   STRUCT:
     - shard_id: U64
     - total_shards: U64
+SignedCommitmentManifest:
+  STRUCT:
+    - manifest:
+        TYPENAME: CommitmentManifest
+    - signature:
+        TYPENAME: Secp256k1Signature
 StreamId:
   STRUCT:
     - application_id:
@@ -1473,3 +1519,11 @@ VmRuntime:
       Wasm: UNIT
     1:
       Evm: UNIT
+VoteRecord:
+  STRUCT:
+    - height:
+        TYPENAME: BlockHeight
+    - round:
+        TYPENAME: Round
+    - block_hash:
+        TYPENAME: CryptoHash

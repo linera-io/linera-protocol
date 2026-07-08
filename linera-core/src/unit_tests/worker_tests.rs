@@ -52,6 +52,7 @@ use linera_chain::{
         IncomingBundle, LiteValue, LiteVote, MessageAction, MessageBundle, OperationResult,
         PostedMessage, ProposedBlock, Transaction, Vote,
     },
+    epoch_commitment::{CommitmentManifest, SignedCommitmentManifest},
     justification::{JustificationChain, JustificationLink},
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
@@ -3885,6 +3886,36 @@ where
     worker
         .fully_handle_certificate_with_notifications(confirmed3, &())
         .await?;
+
+    // The worker signs commitment manifests for the frozen epoch — but not for an
+    // unfrozen epoch, and not in another validator's name.
+    let manifest = CommitmentManifest {
+        epoch: Epoch::ZERO,
+        validator: worker.public_key(),
+        blob_hashes: vec![CryptoHash::test_hash("commitment chunk")],
+    };
+    let signature = worker.sign_commitment_manifest(&manifest).await?;
+    let signed = SignedCommitmentManifest {
+        manifest: manifest.clone(),
+        signature,
+    };
+    signed.check()?;
+    let unfrozen_manifest = CommitmentManifest {
+        epoch: Epoch::from(1),
+        ..manifest.clone()
+    };
+    assert_matches!(
+        worker.sign_commitment_manifest(&unfrozen_manifest).await,
+        Err(WorkerError::EpochNotFrozen(_))
+    );
+    let foreign_manifest = CommitmentManifest {
+        validator: ValidatorKeypair::generate().public_key,
+        ..manifest
+    };
+    assert_matches!(
+        worker.sign_commitment_manifest(&foreign_manifest).await,
+        Err(WorkerError::CommitmentValidatorMismatch)
+    );
 
     Ok(())
 }

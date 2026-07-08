@@ -15,12 +15,12 @@ use futures::{
     FutureExt as _,
 };
 use linera_base::{
-    crypto::{CryptoError, CryptoHash, ValidatorPublicKey},
+    crypto::{CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSignature},
     data_types::{
         ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, TimeDelta,
         Timestamp,
     },
-    doc_scalar,
+    doc_scalar, ensure,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
 };
 use linera_cache::{Arc as CacheArc, UniqueValueCache, ValueCache, DEFAULT_CLEANUP_INTERVAL_SECS};
@@ -28,6 +28,7 @@ use linera_cache::{Arc as CacheArc, UniqueValueCache, ValueCache, DEFAULT_CLEANU
 use linera_chain::ChainExecutionContext;
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, MessageBundle, ProposedBlock},
+    epoch_commitment::CommitmentManifest,
     types::{
         Block, CertificateValue, Certified, ConfirmedBlock, ConfirmedBlockCertificate,
         GenericCertificate, LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock,
@@ -404,6 +405,15 @@ pub enum WorkerError {
     /// preparation for committing to the votes it made in it.
     #[error("Cannot vote in epoch {0}: this validator has frozen its signatures for it")]
     VoteInFrozenEpoch(Epoch),
+    #[error("This worker has no validator key configured")]
+    MissingValidatorKey,
+    /// A commitment manifest can only be signed once the epoch is frozen: before
+    /// that, votes could still be added to the ledger the commitment was built
+    /// from.
+    #[error("Cannot sign a commitment manifest for epoch {0}: it is not frozen")]
+    EpochNotFrozen(Epoch),
+    #[error("The commitment manifest names a different validator")]
+    CommitmentValidatorMismatch,
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
     /// Variant raised when the chain references these block hashes via a
@@ -459,6 +469,8 @@ impl WorkerError {
             | WorkerError::InvalidLiteCertificate
             | WorkerError::FastBlockUsingOracles
             | WorkerError::VoteInFrozenEpoch(_)
+            | WorkerError::EpochNotFrozen(_)
+            | WorkerError::CommitmentValidatorMismatch
             | WorkerError::BlobsNotFound(_)
             | WorkerError::BlocksNotFound(_)
             | WorkerError::InvalidBlockProposal(_)
@@ -471,6 +483,7 @@ impl WorkerError {
             | WorkerError::BlockHashNotFound { .. }
             | WorkerError::LocalBlockNotFound { .. }
             | WorkerError::MissingNetworkDescription
+            | WorkerError::MissingValidatorKey
             | WorkerError::Thread(_)
             | WorkerError::ReadCertificatesError(_)
             | WorkerError::PoisonedWorker
@@ -959,6 +972,32 @@ where
             self.chain_worker_config.freezer.freeze(epoch).await;
         }
         Ok(())
+    }
+
+    /// Signs a manifest of this validator's commitment with the validator key.
+    /// Refuses unless the manifest names this validator and its epoch is frozen:
+    /// before the freeze, votes could still be added to the ledger the commitment
+    /// was built from.
+    pub async fn sign_commitment_manifest(
+        &self,
+        manifest: &CommitmentManifest,
+    ) -> Result<ValidatorSignature, WorkerError> {
+        let key_pair = self
+            .chain_worker_config
+            .key_pair()
+            .ok_or(WorkerError::MissingValidatorKey)?;
+        ensure!(
+            manifest.validator == key_pair.public(),
+            WorkerError::CommitmentValidatorMismatch
+        );
+        ensure!(
+            self.chain_worker_config
+                .freezer
+                .is_frozen(manifest.epoch)
+                .await,
+            WorkerError::EpochNotFrozen(manifest.epoch)
+        );
+        Ok(ValidatorSignature::new(manifest, key_pair))
     }
 
     /// Installs a shard-routing dispatcher used for outbound cross-chain requests

@@ -584,7 +584,11 @@ where
             | SubscribeNotifications(_)
             | Notification(_)
             | FreezeEpoch(_)
-            | FreezeEpochResponse => Err(anyhow::Error::from(NodeError::UnexpectedMessage)),
+            | FreezeEpochResponse
+            | SignCommitmentManifest(_)
+            | SignCommitmentManifestResponse(_) => {
+                Err(anyhow::Error::from(NodeError::UnexpectedMessage))
+            }
         }
     }
 }

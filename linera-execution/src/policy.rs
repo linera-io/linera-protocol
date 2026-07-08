@@ -463,7 +463,8 @@ impl ResourceControlPolicy {
             | BlobType::ApplicationFormats
             | BlobType::Committee
             | BlobType::ChainDescription
-            | BlobType::CheckpointExecutionState => {}
+            | BlobType::CheckpointExecutionState
+            | BlobType::EpochCommitment => {}
         }
         Ok(())
     }

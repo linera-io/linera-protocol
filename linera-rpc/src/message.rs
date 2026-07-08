@@ -3,12 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{
-    crypto::CryptoHash,
+    crypto::{CryptoHash, ValidatorSignature},
     data_types::{BlobContent, BlockHeight, Epoch, NetworkDescription},
     identifiers::{BlobId, ChainId, EventId},
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
+    epoch_commitment::CommitmentManifest,
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
 use linera_core::{
@@ -92,6 +93,11 @@ pub enum RpcMessage {
     // all earlier ones. Sent directly to each shard, not routed via the proxy.
     FreezeEpoch(Epoch),
     FreezeEpochResponse,
+
+    // Internal to a validator: sign a manifest of this validator's commitment
+    // for a frozen epoch. Sent directly to a shard, not routed via the proxy.
+    SignCommitmentManifest(Box<CommitmentManifest>),
+    SignCommitmentManifestResponse(Box<ValidatorSignature>),
 }
 
 impl RpcMessage {
@@ -143,7 +149,9 @@ impl RpcMessage {
             | SubscribeNotifications(_)
             | Notification(_)
             | FreezeEpoch(_)
-            | FreezeEpochResponse => {
+            | FreezeEpochResponse
+            | SignCommitmentManifest(_)
+            | SignCommitmentManifestResponse(_) => {
                 return None;
             }
         };
@@ -198,7 +206,9 @@ impl RpcMessage {
             | SubscribeNotifications(_)
             | Notification(_)
             | FreezeEpoch(_)
-            | FreezeEpochResponse => false,
+            | FreezeEpochResponse
+            | SignCommitmentManifest(_)
+            | SignCommitmentManifestResponse(_) => false,
         }
     }
 }
@@ -208,6 +218,17 @@ impl TryFrom<RpcMessage> for () {
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         match message {
             RpcMessage::FreezeEpochResponse => Ok(()),
+            RpcMessage::Error(error) => Err(*error),
+            _ => Err(NodeError::UnexpectedMessage),
+        }
+    }
+}
+
+impl TryFrom<RpcMessage> for ValidatorSignature {
+    type Error = NodeError;
+    fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
+        match message {
+            RpcMessage::SignCommitmentManifestResponse(signature) => Ok(*signature),
             RpcMessage::Error(error) => Err(*error),
             _ => Err(NodeError::UnexpectedMessage),
         }

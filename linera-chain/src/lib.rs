@@ -18,6 +18,7 @@ mod block_tracker;
 mod chain;
 /// Data types exchanged while proposing, voting on, and confirming blocks.
 pub mod data_types;
+pub mod epoch_commitment;
 mod inbox;
 pub mod justification;
 pub mod manager;

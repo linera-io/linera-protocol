@@ -11,6 +11,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{MessageAction, OriginalProposal, Transaction},
+    epoch_commitment::{CommitmentChunk, SignedCommitmentManifest},
     manager::{ChainManagerInfo, LockingBlock},
     types::{Certificate, CertificateKind, ConfirmedBlock, Timeout, ValidatedBlock},
 };
@@ -83,6 +84,8 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<NodeError>(&samples)?;
     tracer.trace_type::<Reason>(&samples)?;
     tracer.trace_type::<RpcMessage>(&samples)?;
+    tracer.trace_type::<CommitmentChunk>(&samples)?;
+    tracer.trace_type::<SignedCommitmentManifest>(&samples)?;
     tracer.trace_type::<BlobType>(&samples)?;
     tracer.trace_type::<BlobContent>(&samples)?;
     tracer.trace_type::<AccountOwner>(&samples)?;
