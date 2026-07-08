@@ -81,6 +81,11 @@ AdminOperation:
         STRUCT:
           - epoch:
               TYPENAME: Epoch
+    3:
+      RegisterCommitment:
+        STRUCT:
+          - manifest:
+              TYPENAME: SignedCommitmentManifest
 Amount:
   NEWTYPESTRUCT: U128
 ApplicationId:

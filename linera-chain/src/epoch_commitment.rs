@@ -15,13 +15,10 @@
 //! double-signing.
 //!
 //! The entries are chunked into size-bounded blobs of type `EpochCommitment`,
-//! identified by a [`CommitmentManifest`] signed with the validator's key.
+//! identified by a [`CommitmentManifest`](linera_base::data_types::CommitmentManifest)
+//! signed with the validator's key.
 
-use linera_base::{
-    crypto::{BcsSignable, CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSignature},
-    data_types::Epoch,
-    identifiers::ChainId,
-};
+use linera_base::identifiers::ChainId;
 use serde::{Deserialize, Serialize};
 
 use crate::vote_ledger::JustifiedVote;
@@ -51,43 +48,12 @@ pub struct CommitmentChunk {
     pub entries: Vec<CommitmentEntry>,
 }
 
-/// Identifies one validator's commitment for one epoch: the hashes of the blobs
-/// holding its [`CommitmentChunk`]s, in order.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CommitmentManifest {
-    /// The revoked epoch the commitment is for.
-    pub epoch: Epoch,
-    /// The committing validator.
-    pub validator: ValidatorPublicKey,
-    /// The hashes of the `EpochCommitment` blobs, in chunk order.
-    pub blob_hashes: Vec<CryptoHash>,
-}
-
-impl BcsSignable<'_> for CommitmentManifest {}
-
-/// A [`CommitmentManifest`] signed by the committing validator.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SignedCommitmentManifest {
-    /// The manifest.
-    pub manifest: CommitmentManifest,
-    /// The signature of the validator named in the manifest.
-    pub signature: ValidatorSignature,
-}
-
-impl SignedCommitmentManifest {
-    /// Verifies that the signature is valid for the manifest, by the validator the
-    /// manifest names.
-    pub fn check(&self) -> Result<(), CryptoError> {
-        self.signature
-            .check(&self.manifest, self.manifest.validator)
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use linera_base::crypto::ValidatorKeypair;
-
-    use super::*;
+    use linera_base::{
+        crypto::{CryptoHash, ValidatorKeypair, ValidatorSignature},
+        data_types::{CommitmentManifest, Epoch, SignedCommitmentManifest},
+    };
 
     #[test]
     fn test_signed_commitment_manifest() {

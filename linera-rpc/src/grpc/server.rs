@@ -13,11 +13,10 @@ use futures::{
 #[cfg(with_metrics)]
 use linera_base::time::Instant;
 use linera_base::{
-    data_types::{Blob, Epoch},
+    data_types::{Blob, CommitmentManifest, Epoch},
     identifiers::ChainId,
     time::Duration,
 };
-use linera_chain::epoch_commitment::CommitmentManifest;
 use linera_core::{
     join_set_ext::JoinSet,
     node::NodeError,

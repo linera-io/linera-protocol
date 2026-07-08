@@ -18,7 +18,7 @@ use linera_base::{
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
         ChainDescription, ChainOrigin, Cursor, Epoch, InitialChainConfig, OracleResponse,
-        Timestamp,
+        SignedCommitmentManifest, Timestamp,
     },
     ensure, hex_debug,
     identifiers::{
@@ -49,6 +49,8 @@ use crate::{
 pub static EPOCH_STREAM_NAME: &[u8] = &[0];
 /// The event stream name for removed epochs.
 pub static REMOVED_EPOCH_STREAM_NAME: &[u8] = &[1];
+/// The event stream name for validators' epoch commitments.
+pub static COMMITMENT_STREAM_NAME: &[u8] = &[2];
 
 /// The data stored in an epoch creation event.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -340,6 +342,11 @@ pub enum AdminOperation {
     /// Removes a committee. Blocks signed by this committee will only be accepted once they
     /// have been followed (hence re-certified) by a block certified by a recent committee.
     RemoveCommittee { epoch: Epoch },
+    /// Registers a validator's commitment to the confirmation votes it signed in a
+    /// revoked epoch. The commitment's blobs must be published by the same block.
+    RegisterCommitment {
+        manifest: Box<SignedCommitmentManifest>,
+    },
 }
 
 /// A system message meant to be executed on a remote chain.
@@ -546,6 +553,58 @@ where
                         let next_index = epoch.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
                         self.stream_event_counts.insert(&stream_id, next_index)?;
                         txn_tracker.add_event(stream_id, epoch.0, vec![]);
+                    }
+                    AdminOperation::RegisterCommitment { manifest } => {
+                        let epoch = manifest.manifest.epoch;
+                        // Commitments are only registrable for revoked epochs; before
+                        // the revocation, the validator could still sign votes.
+                        let removed_stream = StreamId::system(REMOVED_EPOCH_STREAM_NAME);
+                        let removed_count = self
+                            .stream_event_counts
+                            .get(&removed_stream)
+                            .await?
+                            .unwrap_or(0);
+                        ensure!(
+                            epoch.0 < removed_count,
+                            ExecutionError::CommitmentEpochNotRevoked
+                        );
+                        manifest
+                            .check()
+                            .map_err(ExecutionError::InvalidCommitmentSignature)?;
+                        // The committing validator must have been in the epoch's
+                        // committee. The committee is resolved from the admin chain's
+                        // own event history, which every executor of this block has.
+                        let committee_hash = self
+                            .context()
+                            .extra()
+                            .get_committee_hashes(epoch..=epoch)
+                            .await?
+                            .remove(&epoch)
+                            .ok_or(ExecutionError::InternalError(
+                                "missing committee for a revoked epoch",
+                            ))?;
+                        let committee = self
+                            .context()
+                            .extra()
+                            .get_or_load_committee_by_hash(committee_hash)
+                            .await?;
+                        ensure!(
+                            committee
+                                .validators()
+                                .contains_key(&manifest.manifest.validator),
+                            ExecutionError::CommitmentValidatorNotInCommittee
+                        );
+                        for blob_hash in &manifest.manifest.blob_hashes {
+                            self.blob_published(
+                                &BlobId::new(*blob_hash, BlobType::EpochCommitment),
+                                txn_tracker,
+                            )?;
+                        }
+                        let stream_id = StreamId::system(COMMITMENT_STREAM_NAME);
+                        let index = self.stream_event_counts.get(&stream_id).await?.unwrap_or(0);
+                        let next_index = index.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+                        self.stream_event_counts.insert(&stream_id, next_index)?;
+                        txn_tracker.add_event(stream_id, index, bcs::to_bytes(&manifest)?);
                     }
                 }
             }

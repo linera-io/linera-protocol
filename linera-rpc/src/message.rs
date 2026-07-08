@@ -4,12 +4,11 @@
 
 use linera_base::{
     crypto::{CryptoHash, ValidatorSignature},
-    data_types::{BlobContent, BlockHeight, Epoch, NetworkDescription},
+    data_types::{BlobContent, BlockHeight, CommitmentManifest, Epoch, NetworkDescription},
     identifiers::{BlobId, ChainId, EventId},
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
-    epoch_commitment::CommitmentManifest,
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
 use linera_core::{

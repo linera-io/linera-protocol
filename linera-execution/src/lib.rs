@@ -36,7 +36,7 @@ use derive_more::Display;
 use js_sys::wasm_bindgen::JsValue;
 use linera_base::{
     abi::Abi,
-    crypto::{BcsHashable, CryptoHash},
+    crypto::{BcsHashable, CryptoError, CryptoHash},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
         Bytecode, DecompressionError, Epoch, NetworkDescription, SendMessageRequest, StreamUpdate,
@@ -367,6 +367,12 @@ pub enum ExecutionError {
     InvalidCommitteeEpoch { expected: Epoch, provided: Epoch },
     #[error("Failed to remove committee")]
     InvalidCommitteeRemoval,
+    #[error("Epoch commitments can only be registered for revoked epochs")]
+    CommitmentEpochNotRevoked,
+    #[error("The committing validator was not in the epoch's committee")]
+    CommitmentValidatorNotInCommittee,
+    #[error("The commitment manifest's signature is invalid: {0}")]
+    InvalidCommitmentSignature(CryptoError),
     #[error("No recorded response for oracle query")]
     MissingOracleResponse,
     #[error("process_streams was not called for all stream updates")]
@@ -429,6 +435,9 @@ impl ExecutionError {
             | ExecutionError::AdminOperationOnNonAdminChain
             | ExecutionError::InvalidCommitteeEpoch { .. }
             | ExecutionError::InvalidCommitteeRemoval
+            | ExecutionError::CommitmentEpochNotRevoked
+            | ExecutionError::CommitmentValidatorNotInCommittee
+            | ExecutionError::InvalidCommitmentSignature(_)
             | ExecutionError::MissingOracleResponse
             | ExecutionError::UnprocessedStreams
             | ExecutionError::OutdatedUpdateStream

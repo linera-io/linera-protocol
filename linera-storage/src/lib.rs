@@ -15,7 +15,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{
         ApplicationDescription, Blob, BlockHeight, ChainDescription, CompressedBytecode, Epoch,
-        NetworkDescription, TimeDelta, Timestamp,
+        NetworkDescription, SignedCommitmentManifest, TimeDelta, Timestamp,
     },
     identifiers::{ApplicationId, BlobId, BlobType, ChainId, EventId, IndexAndEvent, StreamId},
     time::Duration,
@@ -23,7 +23,6 @@ use linera_base::{
 };
 pub use linera_cache::{Arc, DEFAULT_CLEANUP_INTERVAL_SECS};
 use linera_chain::{
-    epoch_commitment::SignedCommitmentManifest,
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
     vote_ledger::{JustifiedVote, LedgerEntry, VoteRecord},
     ChainError, ChainStateView,
@@ -735,7 +734,7 @@ mod tests {
         crypto::{AccountPublicKey, CryptoHash, ValidatorKeypair, ValidatorSignature},
         data_types::{
             Amount, ApplicationPermissions, Blob, BlockHeight, ChainDescription, ChainOrigin,
-            Epoch, InitialChainConfig, NetworkDescription, Round, Timestamp,
+            CommitmentManifest, Epoch, InitialChainConfig, NetworkDescription, Round, Timestamp,
         },
         identifiers::{BlobId, BlobType, ChainId, EventId, StreamId},
         ownership::ChainOwnership,
@@ -743,7 +742,6 @@ mod tests {
     use linera_chain::{
         block::{Block, ConfirmedBlock},
         data_types::{BlockExecutionOutcome, ProposedBlock},
-        epoch_commitment::CommitmentManifest,
     };
     use linera_execution::{BlobOrigin, BlobState};
     #[cfg(feature = "scylladb")]

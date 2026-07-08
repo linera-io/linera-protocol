@@ -17,8 +17,8 @@ use futures::{
 use linera_base::{
     crypto::{CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSignature},
     data_types::{
-        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, TimeDelta,
-        Timestamp,
+        ApplicationDescription, ArithmeticError, Blob, BlockHeight, CommitmentManifest, Epoch,
+        Round, TimeDelta, Timestamp,
     },
     doc_scalar, ensure,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
@@ -28,7 +28,6 @@ use linera_cache::{Arc as CacheArc, UniqueValueCache, ValueCache, DEFAULT_CLEANU
 use linera_chain::ChainExecutionContext;
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, MessageBundle, ProposedBlock},
-    epoch_commitment::CommitmentManifest,
     types::{
         Block, CertificateValue, Certified, ConfirmedBlock, ConfirmedBlockCertificate,
         GenericCertificate, LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock,

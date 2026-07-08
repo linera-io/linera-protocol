@@ -4,14 +4,16 @@
 
 use linera_base::{
     crypto::{AccountPublicKey, AccountSignature, CryptoHash, TestString},
-    data_types::{BlobContent, ChainDescription, ChainOrigin, OracleResponse, Round},
+    data_types::{
+        BlobContent, ChainDescription, ChainOrigin, OracleResponse, Round, SignedCommitmentManifest,
+    },
     identifiers::{Account, AccountOwner, BlobType, GenericApplicationId},
     ownership::ChainOwnership,
     vm::VmRuntime,
 };
 use linera_chain::{
     data_types::{MessageAction, OriginalProposal, Transaction},
-    epoch_commitment::{CommitmentChunk, SignedCommitmentManifest},
+    epoch_commitment::CommitmentChunk,
     manager::{ChainManagerInfo, LockingBlock},
     types::{Certificate, CertificateKind, ConfirmedBlock, Timeout, ValidatedBlock},
 };

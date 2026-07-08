@@ -29,7 +29,9 @@ use tracing::instrument;
 #[cfg(with_metrics)]
 use crate::prometheus_util::MeasureLatency as _;
 use crate::{
-    crypto::{BcsHashable, CryptoError, CryptoHash},
+    crypto::{
+        BcsHashable, BcsSignable, CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSignature,
+    },
     doc_scalar, hex_debug, http,
     identifiers::{
         ApplicationId, BlobId, BlobType, ChainId, EventId, GenericApplicationId, ModuleId, StreamId,
@@ -2109,6 +2111,39 @@ doc_scalar!(
     "A blob of binary data, with its content-addressed blob ID."
 );
 doc_scalar!(ApplicationDescription, "Description of a user application");
+
+/// Identifies one validator's commitment for one epoch: the hashes of the blobs
+/// holding the commitment's chunks, in order. The chunks list all confirmation
+/// votes the validator signed in the epoch.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Allocative)]
+pub struct CommitmentManifest {
+    /// The revoked epoch the commitment is for.
+    pub epoch: Epoch,
+    /// The committing validator.
+    pub validator: ValidatorPublicKey,
+    /// The hashes of the `EpochCommitment` blobs, in chunk order.
+    pub blob_hashes: Vec<CryptoHash>,
+}
+
+impl BcsSignable<'_> for CommitmentManifest {}
+
+/// A [`CommitmentManifest`] signed by the committing validator.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Allocative)]
+pub struct SignedCommitmentManifest {
+    /// The manifest.
+    pub manifest: CommitmentManifest,
+    /// The signature of the validator named in the manifest.
+    pub signature: ValidatorSignature,
+}
+
+impl SignedCommitmentManifest {
+    /// Verifies that the signature is valid for the manifest, by the validator the
+    /// manifest names.
+    pub fn check(&self) -> Result<(), CryptoError> {
+        self.signature
+            .check(&self.manifest, self.manifest.validator)
+    }
+}
 
 #[cfg(with_metrics)]
 mod metrics {

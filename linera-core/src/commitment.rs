@@ -6,13 +6,11 @@
 
 use linera_base::{
     crypto::{ValidatorPublicKey, ValidatorSignature},
-    data_types::{ArithmeticError, Blob, Epoch},
+    data_types::{ArithmeticError, Blob, CommitmentManifest, Epoch, SignedCommitmentManifest},
     identifiers::ChainId,
 };
 use linera_chain::{
-    epoch_commitment::{
-        CommitmentChunk, CommitmentEntry, CommitmentManifest, SignedCommitmentManifest,
-    },
+    epoch_commitment::{CommitmentChunk, CommitmentEntry},
     manager::LockingBlock,
     vote_ledger::{JustifiedVote, LedgerEntry, VoteRecord},
 };

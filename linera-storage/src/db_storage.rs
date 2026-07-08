@@ -12,13 +12,15 @@ use async_trait::async_trait;
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, BlockHeight, Epoch, NetworkDescription, TimeDelta, Timestamp},
+    data_types::{
+        Blob, BlockHeight, Epoch, NetworkDescription, SignedCommitmentManifest, TimeDelta,
+        Timestamp,
+    },
     identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
     time::Duration,
 };
 use linera_cache::{Arc as CacheArc, ValueCache};
 use linera_chain::{
-    epoch_commitment::SignedCommitmentManifest,
     types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, LiteCertificate},
     vote_ledger::{JustifiedVote, LedgerEntry, VoteRecord},
     ChainStateView,

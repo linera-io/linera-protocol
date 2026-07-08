@@ -16,8 +16,12 @@ use std::{
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt as _};
-use linera_base::{crypto::ValidatorSignature, data_types::Epoch, identifiers::ChainId};
-use linera_chain::{epoch_commitment::CommitmentManifest, manager::LockingBlock};
+use linera_base::{
+    crypto::ValidatorSignature,
+    data_types::{CommitmentManifest, Epoch},
+    identifiers::ChainId,
+};
+use linera_chain::manager::LockingBlock;
 use linera_core::{
     commitment::{CommitmentAgent, CommitmentError, ShardControl},
     data_types::{CertificatesByHeightRequest, ChainInfoQuery},

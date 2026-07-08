@@ -465,6 +465,11 @@ impl From<&AdminOperation> for AdminOperationMetadata {
                 epoch: Some(epoch.0 as i32),
                 blob_hash: None,
             },
+            AdminOperation::RegisterCommitment { manifest } => AdminOperationMetadata {
+                admin_operation_type: "RegisterCommitment".to_string(),
+                epoch: Some(manifest.manifest.epoch.0 as i32),
+                blob_hash: None,
+            },
         }
     }
 }

@@ -40,7 +40,7 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::{
         AccountPublicKey, AccountSecretKey, AccountSignature, CryptoHash, InMemorySigner,
-        ValidatorKeypair,
+        ValidatorKeypair, ValidatorSignature,
     },
     data_types::*,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, EventId, StreamId},
@@ -52,7 +52,7 @@ use linera_chain::{
         IncomingBundle, LiteValue, LiteVote, MessageAction, MessageBundle, OperationResult,
         PostedMessage, ProposedBlock, Transaction, Vote,
     },
-    epoch_commitment::{CommitmentChunk, CommitmentManifest, SignedCommitmentManifest},
+    epoch_commitment::CommitmentChunk,
     justification::{JustificationChain, JustificationLink},
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
@@ -67,7 +67,7 @@ use linera_execution::{
     committee::Committee,
     system::{
         AdminOperation, EpochEventData, OpenChainConfig, SystemMessage, SystemOperation,
-        EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME,
+        COMMITMENT_STREAM_NAME, EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME,
     },
     test_utils::{
         dummy_chain_description, ExpectedCall, MockApplication, RegisterMockApplication,
@@ -3354,6 +3354,61 @@ where
         .await?
         .is_none());
     assert_eq!(non_member.storage_client().max_frozen_epoch().await?, None);
+
+    // The pending commitment can be registered on the admin chain; the signed
+    // manifest is emitted as a commitment event.
+    let proposal4 = make_child_block(&certificate3.into_value())
+        .with_epoch(2)
+        .with_operation(SystemOperation::Admin(AdminOperation::RegisterCommitment {
+            manifest: Box::new(pending.clone()),
+        }));
+    let certificate4 = env.execute_proposal(proposal4.clone(), vec![]).await?;
+    assert_eq!(
+        certificate4.block().body.events,
+        vec![vec![Event {
+            stream_id: StreamId::system(COMMITMENT_STREAM_NAME),
+            index: 0,
+            value: bcs::to_bytes(&pending)?,
+        }]]
+    );
+
+    // Commitments are rejected for epochs that are not revoked, from validators
+    // outside the epoch's committee, and with invalid signatures.
+    let outsider = ValidatorKeypair::generate();
+    let signed_by_outsider = |epoch| {
+        let manifest = CommitmentManifest {
+            epoch,
+            validator: outsider.public_key,
+            blob_hashes: Vec::new(),
+        };
+        let signature = ValidatorSignature::new(&manifest, &outsider.secret_key);
+        SignedCommitmentManifest {
+            manifest,
+            signature,
+        }
+    };
+    let mut forged = pending.clone();
+    forged.manifest.blob_hashes = vec![CryptoHash::test_hash("forged")];
+    for (manifest, expected) in [
+        (signed_by_outsider(Epoch::from(1)), "revoked epochs"),
+        (
+            signed_by_outsider(Epoch::ZERO),
+            "not in the epoch's committee",
+        ),
+        (forged, "signature is invalid"),
+    ] {
+        let proposal = make_child_block(&certificate4.clone().into_value())
+            .with_epoch(2)
+            .with_operation(SystemOperation::Admin(AdminOperation::RegisterCommitment {
+                manifest: Box::new(manifest),
+            }));
+        let result = env
+            .executing_worker()
+            .stage_block_execution(proposal, None, vec![], BundleExecutionPolicy::committed())
+            .await;
+        let error = result.err().unwrap().to_string();
+        assert!(error.contains(expected), "{error:?} vs {expected:?}");
+    }
 
     Ok(())
 }

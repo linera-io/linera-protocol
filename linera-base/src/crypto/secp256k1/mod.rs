@@ -70,6 +70,12 @@ pub struct Secp256k1KeyPair {
 #[derive(Eq, PartialEq, Copy, Clone)]
 pub struct Secp256k1Signature(pub Signature);
 
+impl std::hash::Hash for Secp256k1Signature {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.as_bytes().hash(state);
+    }
+}
+
 impl Allocative for Secp256k1Signature {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
         visitor.visit_simple_sized::<Self>();
