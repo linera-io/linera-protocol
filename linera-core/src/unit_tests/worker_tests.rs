@@ -2252,7 +2252,12 @@ where
     );
     assert_eq!(chain.tip_state.get().next_block_height, BlockHeight(0));
     assert_eq!(None, chain.tip_state.get().block_hash);
-    assert_eq!(chain.received_log.count(), 1);
+    let received_log = chain
+        .received_log
+        .try_load_entry(&Epoch::ZERO)
+        .await?
+        .expect("no received log for epoch 0");
+    assert_eq!(received_log.count(), 1);
     Ok(())
 }
 
@@ -2495,9 +2500,14 @@ where
             recipient_chain.tip_state.get().block_hash,
             Some(certificate.hash())
         );
-        assert_eq!(recipient_chain.received_log.count(), 1);
+        let received_log = recipient_chain
+            .received_log
+            .try_load_entry(&Epoch::ZERO)
+            .await?
+            .expect("no received log for epoch 0");
+        assert_eq!(received_log.count(), 1);
     }
-    let query = ChainInfoQuery::new(chain_2).with_received_log_excluding_first_n(0);
+    let query = ChainInfoQuery::new(chain_2).with_received_log(Epoch::ZERO, 0);
     let response = env
         .executing_worker()
         .handle_chain_info_query(query)
@@ -3653,15 +3663,6 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         .chain(bundles3.iter().cloned())
         .collect::<Vec<_>>();
 
-    fn without_epochs<'a>(
-        bundles: impl IntoIterator<Item = &'a (Epoch, MessageBundle)>,
-    ) -> Vec<MessageBundle> {
-        bundles
-            .into_iter()
-            .map(|(_, bundle)| bundle.clone())
-            .collect()
-    }
-
     let worker = env.worker();
     // Bundles from a revoked epoch are rejected.
     assert_eq!(
@@ -3702,14 +3703,18 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         worker
             .select_message_bundles(id1, &id0, BlockHeight::ZERO, None, bundles0123.clone())
             .await?,
-        without_epochs(&bundles012)
+        bundles012
     );
     // Skipping bundle 0 still works with re-certification across epochs.
     assert_eq!(
         worker
             .select_message_bundles(id1, &id0, BlockHeight::from(1), None, bundles012.clone())
             .await?,
-        without_epochs(bundles1.iter().chain(&bundles2))
+        bundles1
+            .iter()
+            .cloned()
+            .chain(bundles2.iter().cloned())
+            .collect::<Vec<_>>()
     );
     // Anticipation: bundles up to `last_anticipated_block_height` are accepted even
     // from a revoked epoch.
@@ -3723,7 +3728,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
                 bundles01.clone()
             )
             .await?,
-        without_epochs(&bundles1)
+        bundles1
     );
     assert_eq!(
         worker
@@ -3735,7 +3740,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
                 bundles01.clone()
             )
             .await?,
-        without_epochs(&bundles01)
+        bundles01
     );
     Ok(())
 }

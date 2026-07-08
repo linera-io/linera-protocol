@@ -1914,12 +1914,14 @@ impl<Env: Environment> Client<Env> {
         trace!("find_received_certificates: finished processing chain");
     }
 
-    /// Downloads the log of received messages for a chain from a validator.
+    /// Downloads the log of messages received from senders in the given epoch for a
+    /// chain from a validator.
     #[instrument(level = "trace", skip(self))]
     async fn get_received_log_from_validator(
         &self,
         chain_id: ChainId,
         remote_node: &RemoteNode<Env::ValidatorNode>,
+        epoch: Epoch,
         tracker: u64,
     ) -> Result<Vec<ChainAndHeight>, chain_client::Error> {
         let mut offset = tracker;
@@ -1928,7 +1930,7 @@ impl<Env: Environment> Client<Env> {
         let mut remote_log = Vec::new();
         loop {
             trace!("get_received_log_from_validator: looping");
-            let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(offset);
+            let query = ChainInfoQuery::new(chain_id).with_received_log(epoch, offset);
             let info = remote_node.handle_chain_info_query(query).await?;
             let received_entries = info.requested_received_log.len();
             offset += received_entries as u64;

@@ -1590,7 +1590,7 @@ where
         next_height_to_receive: BlockHeight,
         last_anticipated_block_height: Option<BlockHeight>,
         bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Vec<MessageBundle>, WorkerError> {
+    ) -> Result<Vec<(Epoch, MessageBundle)>, WorkerError> {
         let state = self.get_or_create_chain_worker(recipient).await?;
         let guard = handle::read_lock(&state).await?;
         guard
@@ -1945,7 +1945,7 @@ where
     pub async fn update_received_certificate_trackers(
         &self,
         chain_id: ChainId,
-        new_trackers: BTreeMap<ValidatorPublicKey, u64>,
+        new_trackers: BTreeMap<ValidatorPublicKey, BTreeMap<Epoch, u64>>,
     ) -> Result<(), WorkerError> {
         self.chain_write(chain_id, move |mut guard| async move {
             guard
@@ -2073,7 +2073,7 @@ where
     pub async fn get_received_certificate_trackers(
         &self,
         chain_id: ChainId,
-    ) -> Result<HashMap<ValidatorPublicKey, u64>, WorkerError> {
+    ) -> Result<HashMap<ValidatorPublicKey, BTreeMap<Epoch, u64>>, WorkerError> {
         self.chain_read(chain_id, |guard| async move {
             guard.get_received_certificate_trackers().await
         })

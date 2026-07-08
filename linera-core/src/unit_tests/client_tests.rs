@@ -19,7 +19,9 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
-    data_types::{IncomingBundle, MessageAction, MessageBundle, PostedMessage, Transaction},
+    data_types::{
+        ChainAndHeight, IncomingBundle, MessageAction, MessageBundle, PostedMessage, Transaction,
+    },
     manager::LockingBlock,
     types::Timeout,
     ChainError, ChainExecutionContext,
@@ -1819,9 +1821,10 @@ where
 
     // `process_notification_from` does not advance the client's
     // `received_certificate_trackers`, so a subsequent `synchronize_from_validators`
-    // still sees (sender, 1) and (sender, 3) in the received log. But the sender's
-    // outbox has those heights scheduled locally now, so `find_received_certificates`
-    // filters them out and routes the sender through
+    // still sees (sender, 3) in epoch 1's received log (epoch 0's log is not even
+    // queried: the epoch is revoked). But the sender's outbox has that height
+    // scheduled locally now, so `find_received_certificates` filters it out and
+    // routes the sender through
     // `retry_pending_cross_chain_requests_from_sender_chains`. Before the fix this
     // initialized the sender's chain worker inside the receiver's node and, on
     // failing to find the `ChainDescription` blob in storage, triggered a download.
@@ -1830,6 +1833,37 @@ where
         !storage.contains_blob(sender_chain_desc_blob_id).await?,
         "retry_pending_cross_chain_requests must not download the ChainDescription",
     );
+
+    // Serving a live epoch's received log prunes the revoked epochs' logs: after
+    // the query below, validator 0 holds only epoch 1's log for the receiver.
+    let response = builder
+        .node(0)
+        .handle_chain_info_query(
+            crate::data_types::ChainInfoQuery::new(receiver_id)
+                .with_received_log(Epoch::from(1), 0),
+        )
+        .await?;
+    assert_eq!(
+        response.info.requested_received_log,
+        vec![ChainAndHeight {
+            chain_id: sender_id,
+            height: cert3.block().header.height,
+        }],
+    );
+    {
+        let validator_0_key = builder.node(0).name();
+        let validator_0_storage = builder
+            .validator_storages
+            .get(&validator_0_key)
+            .expect("validator 0 storage")
+            .clone();
+        let chain_view = validator_0_storage.load_chain(receiver_id).await?;
+        assert_eq!(
+            chain_view.received_log.indices().await?,
+            vec![Epoch::from(1)],
+            "the revoked epoch's received log should have been pruned",
+        );
+    }
 
     Ok(())
 }
