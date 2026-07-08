@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     sync::Arc,
 };
 
@@ -25,7 +25,7 @@ use linera_execution::{
     ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
-    collection_view::CollectionView,
+    collection_view::CustomCollectionView,
     context::Context,
     log_view::LogView,
     map_view::{CustomMapView, MapView},
@@ -313,11 +313,12 @@ where
     /// cannot verify those certificates on their own anymore, and blocks that still
     /// matter are re-certified via `previous_block_hash` /
     /// `previous_message_blocks` links instead.
-    pub received_log: CollectionView<C, Epoch, LogView<C, ChainAndHeight>>,
+    pub received_log: CustomCollectionView<C, Epoch, LogView<C, ChainAndHeight>>,
     /// The number of `received_log` entries we have synchronized, per validator and
-    /// per sender epoch.
-    pub received_certificate_trackers:
-        RegisterView<C, HashMap<ValidatorPublicKey, BTreeMap<Epoch, u64>>>,
+    /// per sender epoch. Node-local synchronization bookkeeping, not exposed via
+    /// GraphQL.
+    #[cfg_attr(with_graphql, graphql(skip))]
+    pub received_certificate_trackers: MapView<C, (ValidatorPublicKey, Epoch), u64>,
 
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: ReentrantCollectionView<C, ChainId, InboxStateView<C>>,
@@ -661,29 +662,22 @@ where
     }
 
     /// Updates the `received_log` trackers.
-    pub fn update_received_certificate_trackers(
+    pub async fn update_received_certificate_trackers(
         &mut self,
         new_trackers: BTreeMap<ValidatorPublicKey, BTreeMap<Epoch, u64>>,
-    ) {
+    ) -> Result<(), ChainError> {
         for (name, epoch_trackers) in new_trackers {
-            let trackers = self
-                .received_certificate_trackers
-                .get_mut()
-                .entry(name)
-                .or_default();
             for (epoch, tracker) in epoch_trackers {
-                trackers
-                    .entry(epoch)
-                    .and_modify(|t| {
-                        // Because several synchronizations could happen in parallel, we need to
-                        // make sure to never go backward.
-                        if tracker > *t {
-                            *t = tracker;
-                        }
-                    })
-                    .or_insert(tracker);
+                let key = (name, epoch);
+                // Because several synchronizations could happen in parallel, we need to
+                // make sure to never go backward.
+                let current = self.received_certificate_trackers.get(&key).await?;
+                if current.is_none_or(|current| tracker > current) {
+                    self.received_certificate_trackers.insert(&key, tracker)?;
+                }
             }
         }
+        Ok(())
     }
 
     /// Returns the current epoch and committee of this chain.

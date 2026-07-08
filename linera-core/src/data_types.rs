@@ -41,11 +41,11 @@ pub struct ChainInfoQuery {
     #[debug(skip_if = Not::not)]
     pub request_pending_message_bundles: bool,
     /// Query new certificate sender chain IDs and block heights received from the
-    /// chain: the entries of the given sender epoch's received log, excluding the
-    /// first `skip`.
-    #[debug(skip_if = Option::is_none)]
-    #[cfg_attr(with_testing, strategy(proptest::strategy::Just(None)))]
-    pub request_received_log: Option<ReceivedLogQuery>,
+    /// chain: for each requested sender epoch, the entries of that epoch's received
+    /// log, excluding the first `skip`.
+    #[debug(skip_if = BTreeMap::is_empty)]
+    #[cfg_attr(with_testing, strategy(proptest::strategy::Just(BTreeMap::new())))]
+    pub request_received_log: BTreeMap<Epoch, u64>,
     /// Query values from the chain manager, not just votes.
     #[debug(skip_if = Not::not)]
     pub request_manager_values: bool,
@@ -77,7 +77,7 @@ impl ChainInfoQuery {
             test_next_block_height: None,
             request_owner_balance: AccountOwner::CHAIN,
             request_pending_message_bundles: false,
-            request_received_log: None,
+            request_received_log: BTreeMap::new(),
             request_manager_values: false,
             request_leader_timeout: None,
             request_fallback: false,
@@ -111,10 +111,17 @@ impl ChainInfoQuery {
         self
     }
 
-    /// Also requests the given sender epoch's received log entries, excluding the
-    /// first `skip`.
+    /// Also requests one sender epoch's received log entries, excluding the first
+    /// `skip`. Can be called repeatedly to request several epochs' logs at once.
     pub fn with_received_log(mut self, epoch: Epoch, skip: u64) -> Self {
-        self.request_received_log = Some(ReceivedLogQuery { epoch, skip });
+        self.request_received_log.insert(epoch, skip);
+        self
+    }
+
+    /// Also requests the given sender epochs' received log entries, each excluding
+    /// the given number of entries at the front of that epoch's log.
+    pub fn with_received_logs(mut self, queries: impl IntoIterator<Item = (Epoch, u64)>) -> Self {
+        self.request_received_log.extend(queries);
         self
     }
 
@@ -136,16 +143,6 @@ impl ChainInfoQuery {
         self.request_fallback = true;
         self
     }
-}
-
-/// A request for entries of one sender epoch's received log.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-#[cfg_attr(with_testing, derive(Eq, PartialEq))]
-pub struct ReceivedLogQuery {
-    /// The sender epoch whose received log to read.
-    pub epoch: Epoch,
-    /// The number of entries at the front of that epoch's log to skip.
-    pub skip: u64,
 }
 
 /// Information about a chain, returned in response to a [`ChainInfoQuery`].
@@ -186,10 +183,12 @@ pub struct ChainInfo {
     /// The response to `request_sent_certificate_hashes_by_heights`.
     #[debug(skip_if = Vec::is_empty)]
     pub requested_sent_certificate_hashes: Vec<CryptoHash>,
-    /// The response to `request_received_log`: the entries of the requested sender
-    /// epoch's received log, after the requested offset.
-    #[debug(skip_if = Vec::is_empty)]
-    pub requested_received_log: Vec<ChainAndHeight>,
+    /// The response to `request_received_log`: per requested sender epoch, the
+    /// entries of that epoch's received log after the requested offset. The total
+    /// number of entries is bounded, so epochs may be missing or cut short; the
+    /// client continues with adjusted offsets.
+    #[debug(skip_if = BTreeMap::is_empty)]
+    pub requested_received_log: BTreeMap<Epoch, Vec<ChainAndHeight>>,
     /// The response to `request_previous_event_blocks`.
     #[debug(skip_if = BTreeMap::is_empty)]
     pub requested_previous_event_blocks: BTreeMap<StreamId, (BlockHeight, CryptoHash)>,
@@ -312,7 +311,7 @@ impl ChainInfo {
             requested_owner_balance: None,
             requested_pending_message_bundles: Vec::new(),
             requested_sent_certificate_hashes: Vec::new(),
-            requested_received_log: Vec::new(),
+            requested_received_log: BTreeMap::new(),
             requested_previous_event_blocks: BTreeMap::new(),
             requested_latest_checkpoint_height: None,
         })

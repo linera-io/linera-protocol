@@ -1941,32 +1941,37 @@ impl<Env: Environment> Client<Env> {
         trace!("find_received_certificates: finished processing chain");
     }
 
-    /// Downloads the log of messages received from senders in the given epoch for a
-    /// chain from a validator.
-    #[instrument(level = "trace", skip(self))]
+    /// Downloads the per-epoch logs of messages received from senders in the given
+    /// epochs for a chain from a validator, starting at the given per-epoch
+    /// offsets. All epochs are requested in a single query; the validator bounds
+    /// the total number of entries per response, so the request is repeated with
+    /// advanced offsets until nothing is cut short anymore.
+    #[instrument(level = "trace", skip(self, offsets))]
     async fn get_received_log_from_validator(
         &self,
         chain_id: ChainId,
         remote_node: &RemoteNode<Env::ValidatorNode>,
-        epoch: Epoch,
-        tracker: u64,
-    ) -> Result<Vec<ChainAndHeight>, chain_client::Error> {
-        let mut offset = tracker;
-
+        mut offsets: BTreeMap<Epoch, u64>,
+    ) -> Result<BTreeMap<Epoch, Vec<ChainAndHeight>>, chain_client::Error> {
         // Retrieve the list of newly received certificates from this validator.
-        let mut remote_log = Vec::new();
+        let mut remote_logs = BTreeMap::<Epoch, Vec<ChainAndHeight>>::new();
         loop {
             trace!("get_received_log_from_validator: looping");
-            let query = ChainInfoQuery::new(chain_id).with_received_log(epoch, offset);
+            let query = ChainInfoQuery::new(chain_id).with_received_logs(offsets.clone());
             let info = remote_node.handle_chain_info_query(query).await?;
-            let received_entries = info.requested_received_log.len();
-            offset += received_entries as u64;
-            remote_log.extend(info.requested_received_log);
+            let received_entries: usize = info.requested_received_log.values().map(Vec::len).sum();
+            for (epoch, entries) in info.requested_received_log {
+                if let Some(offset) = offsets.get_mut(&epoch) {
+                    *offset += entries.len() as u64;
+                    remote_logs.entry(epoch).or_default().extend(entries);
+                }
+            }
             trace!(
                 remote_node = remote_node.address(),
                 %received_entries,
                 "get_received_log_from_validator: received log batch",
             );
+            // A response below the total bound means no epoch's log was cut short.
             if received_entries < CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES {
                 break;
             }
@@ -1974,11 +1979,11 @@ impl<Env: Environment> Client<Env> {
 
         trace!(
             remote_node = remote_node.address(),
-            num_entries = remote_log.len(),
+            num_entries = remote_logs.values().map(Vec::len).sum::<usize>(),
             "get_received_log_from_validator: returning downloaded log",
         );
 
-        Ok(remote_log)
+        Ok(remote_logs)
     }
 
     /// Downloads a specific sender block and recursively downloads any earlier blocks

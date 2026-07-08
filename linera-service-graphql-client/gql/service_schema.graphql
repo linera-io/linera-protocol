@@ -376,12 +376,7 @@ type ChainStateExtendedView {
 	matter are re-certified via `previous_block_hash` /
 	`previous_message_blocks` links instead.
 	"""
-	receivedLog: CollectionView_Epoch_LogView_ChainAndHeight_7af83576_e5e7eea2!
-	"""
-	The number of `received_log` entries we have synchronized, per validator and
-	per sender epoch.
-	"""
-	receivedCertificateTrackers: JSONObject!
+	receivedLog: CustomCollectionView_Epoch_LogView_ChainAndHeight_7af83576_e5e7eea2!
 	"""
 	Mailboxes used to receive messages indexed by their origin.
 	"""
@@ -556,13 +551,6 @@ type ClaimOperationMetadata {
 	amount: Amount!
 }
 
-type CollectionView_Epoch_LogView_ChainAndHeight_7af83576_e5e7eea2 {
-	keys: [Epoch!]!
-	count: Int!
-	entry(key: Epoch!): Entry_Epoch_LogView_ChainAndHeight_7af83576_a2d4b47a!
-	entries(input: MapInput_Epoch_530caf4b): [Entry_Epoch_LogView_ChainAndHeight_7af83576_a2d4b47a!]!
-}
-
 """
 A set of validators (identified by their public keys) and their voting rights.
 """
@@ -655,6 +643,13 @@ type Cursor {
 	The transaction index within the block.
 	"""
 	index: Int!
+}
+
+type CustomCollectionView_Epoch_LogView_ChainAndHeight_7af83576_e5e7eea2 {
+	keys: [Epoch!]!
+	count: Int!
+	entry(key: Epoch!): Entry_Epoch_LogView_ChainAndHeight_7af83576_a2d4b47a!
+	entries(input: MapInput_Epoch_530caf4b): [Entry_Epoch_LogView_ChainAndHeight_7af83576_a2d4b47a!]!
 }
 
 type CustomMapView_BlockHeight_CryptoHash_1bae6d76 {

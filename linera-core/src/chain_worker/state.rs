@@ -54,9 +54,7 @@ use tracing::{debug, info, instrument, trace, warn};
 use crate::{
     chain_worker::{handle::AtomicTimestamp, ChainWorkerConfig, DeliveryNotifier},
     client::{ChainModes, ListeningMode},
-    data_types::{
-        ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest, ReceivedLogQuery,
-    },
+    data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     worker::{BatchRequest, NetworkActions, Notification, Reason, WorkerError},
 };
 
@@ -436,41 +434,49 @@ where
         if query.request_fallback {
             self.vote_for_fallback().await?;
         }
-        if let Some(ReceivedLogQuery { epoch, .. }) = query.request_received_log {
-            self.prune_revoked_received_logs(epoch).await?;
+        if let Some(up_to) = query.request_received_log.keys().next().copied() {
+            self.prune_revoked_received_logs(up_to).await?;
         }
         self.prepare_chain_info_response(query).await
     }
 
     /// Removes the received logs of revoked epochs below `up_to`. Run whenever a
-    /// client asks for a received log: entries of revoked epochs are useless to
-    /// clients — the certificates they point to can no longer be verified on their
-    /// own, and blocks that still matter are re-certified via
-    /// `previous_block_hash` / `previous_message_blocks` links instead.
+    /// client asks for received logs, with `up_to` the lowest requested epoch:
+    /// entries of revoked epochs are useless to clients — the certificates they
+    /// point to can no longer be verified on their own, and blocks that still
+    /// matter are re-certified via `previous_block_hash` /
+    /// `previous_message_blocks` links instead.
     async fn prune_revoked_received_logs(&mut self, up_to: Epoch) -> Result<(), WorkerError> {
-        let mut pruned = false;
-        for stored_epoch in self.chain.received_log.indices().await? {
-            if stored_epoch >= up_to {
-                continue;
-            }
-            let is_revoked =
-                self.storage
-                    .is_epoch_revoked(stored_epoch)
-                    .await
-                    .map_err(|error| {
-                        WorkerError::ChainError(Box::new(ChainError::ExecutionError(
-                            Box::new(error),
-                            ChainExecutionContext::Block,
-                        )))
-                    })?;
+        // `indices` returns the stored epochs in ascending order. Walk the ones
+        // below `up_to` from newest to oldest: revocation is monotone, so the
+        // first revoked epoch found — and everything below it — can be pruned
+        // without further checks.
+        let mut stored = self.chain.received_log.indices().await?;
+        stored.retain(|epoch| *epoch < up_to);
+        let mut prunable = None;
+        for (position, epoch) in stored.iter().enumerate().rev() {
+            let is_revoked = self
+                .storage
+                .is_epoch_revoked(*epoch)
+                .await
+                .map_err(|error| {
+                    WorkerError::ChainError(Box::new(ChainError::ExecutionError(
+                        Box::new(error),
+                        ChainExecutionContext::Block,
+                    )))
+                })?;
             if is_revoked {
-                self.chain.received_log.remove_entry(&stored_epoch)?;
-                pruned = true;
+                prunable = Some(position);
+                break;
             }
         }
-        if pruned {
-            self.save().await?;
+        let Some(position) = prunable else {
+            return Ok(());
+        };
+        for epoch in &stored[..=position] {
+            self.chain.received_log.remove_entry(epoch)?;
         }
+        self.save().await?;
         Ok(())
     }
 
@@ -1986,7 +1992,38 @@ where
         new_trackers: BTreeMap<ValidatorPublicKey, BTreeMap<Epoch, u64>>,
     ) -> Result<(), WorkerError> {
         self.chain
-            .update_received_certificate_trackers(new_trackers);
+            .update_received_certificate_trackers(new_trackers)
+            .await?;
+        // Drop tracker entries for revoked epochs: those epochs' received logs are
+        // pruned by validators and never queried again. Revocation is monotone, so
+        // the walk over the ascending epoch set can stop at the first live one.
+        let keys = self.chain.received_certificate_trackers.indices().await?;
+        let epochs = keys
+            .iter()
+            .map(|(_, epoch)| *epoch)
+            .collect::<BTreeSet<_>>();
+        let mut revoked_epochs = BTreeSet::new();
+        for epoch in epochs {
+            let is_revoked = self
+                .storage
+                .is_epoch_revoked(epoch)
+                .await
+                .map_err(|error| {
+                    WorkerError::ChainError(Box::new(ChainError::ExecutionError(
+                        Box::new(error),
+                        ChainExecutionContext::Block,
+                    )))
+                })?;
+            if !is_revoked {
+                break;
+            }
+            revoked_epochs.insert(epoch);
+        }
+        for key in keys {
+            if revoked_epochs.contains(&key.1) {
+                self.chain.received_certificate_trackers.remove(&key)?;
+            }
+        }
         self.save().await?;
         Ok(())
     }
@@ -2132,7 +2169,19 @@ where
     pub(crate) async fn get_received_certificate_trackers(
         &self,
     ) -> Result<HashMap<ValidatorPublicKey, BTreeMap<Epoch, u64>>, WorkerError> {
-        Ok(self.chain.received_certificate_trackers.get().clone())
+        let mut trackers = HashMap::<_, BTreeMap<Epoch, u64>>::new();
+        for ((validator, epoch), tracker) in self
+            .chain
+            .received_certificate_trackers
+            .index_values()
+            .await?
+        {
+            trackers
+                .entry(validator)
+                .or_default()
+                .insert(epoch, tracker);
+        }
+        Ok(trackers)
     }
 
     /// Gets tip state and outbox info for next_outbox_heights calculation.
@@ -2741,15 +2790,24 @@ where
             .block_hashes_for_heights(query.request_sent_certificate_hashes_by_heights)
             .await?;
         info.requested_sent_certificate_hashes = hashes;
-        if let Some(ReceivedLogQuery { epoch, skip }) = query.request_received_log {
-            let skip = usize::try_from(skip).map_err(|_| ArithmeticError::Overflow)?;
-            let max_received_log_entries = self.config.chain_info_max_received_log_entries;
-            if let Some(log) = chain.received_log.try_load_entry(&epoch).await? {
-                let end = skip
-                    .saturating_add(max_received_log_entries)
-                    .min(log.count());
+        if !query.request_received_log.is_empty() {
+            // Serve the requested epochs in ascending order, bounding the total
+            // number of entries in the response: if the bound cuts an epoch's log
+            // short, the client repeats the request with advanced offsets.
+            let mut remaining = self.config.chain_info_max_received_log_entries;
+            for (epoch, skip) in query.request_received_log {
+                if remaining == 0 {
+                    break;
+                }
+                let skip = usize::try_from(skip).map_err(|_| ArithmeticError::Overflow)?;
+                let Some(log) = chain.received_log.try_load_entry(&epoch).await? else {
+                    continue;
+                };
+                let end = skip.saturating_add(remaining).min(log.count());
                 if skip < end {
-                    info.requested_received_log = log.read(skip..end).await?;
+                    let entries = log.read(skip..end).await?;
+                    remaining -= entries.len();
+                    info.requested_received_log.insert(epoch, entries);
                 }
             }
         }

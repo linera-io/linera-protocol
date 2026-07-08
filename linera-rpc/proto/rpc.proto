@@ -230,15 +230,6 @@ message RevertConfirm {
   BlockHeight retransmit_from = 3;
 }
 
-// A request for entries of one sender epoch's received log.
-message ReceivedLogQuery {
-  // The sender epoch whose received log to read.
-  uint32 epoch = 1;
-
-  // The number of entries at the front of that epoch's log to skip.
-  uint64 skip = 2;
-}
-
 // Request information on a chain.
 message ChainInfoQuery {
   // The chain ID
@@ -250,9 +241,9 @@ message ChainInfoQuery {
   // Query the received messages that are waiting to be picked in the next block.
   bool request_pending_message_bundles = 3;
 
-  // Query the entries of one sender epoch's received log, skipping the first
-  // `skip` entries.
-  optional ReceivedLogQuery request_received_log = 4;
+  // Query the entries of the given sender epochs' received logs, skipping the
+  // given number of entries at the front of each epoch's log.
+  map<uint32, uint64> request_received_log = 4;
 
   // Query values from the chain manager, not just votes.
   bool request_manager_values = 5;

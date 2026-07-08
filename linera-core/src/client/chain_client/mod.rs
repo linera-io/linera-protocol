@@ -1046,22 +1046,23 @@ impl<Env: Environment> ChainClient<Env> {
                 let trackers = &trackers;
                 let received_log_batches = Arc::clone(&received_log_batches);
                 Box::pin(async move {
-                    for epoch in live_epochs {
-                        let tracker = trackers
-                            .get(&remote_node.public_key)
-                            .and_then(|trackers| trackers.get(epoch))
-                            .copied()
-                            .unwrap_or(0);
-                        let batch = client
-                            .get_received_log_from_validator(
-                                chain_id,
-                                &remote_node,
-                                *epoch,
-                                tracker,
-                            )
-                            .await?;
-                        let mut batches = received_log_batches.lock().unwrap();
-                        batches.push((remote_node.public_key, *epoch, batch));
+                    let offsets = live_epochs
+                        .iter()
+                        .map(|epoch| {
+                            let tracker = trackers
+                                .get(&remote_node.public_key)
+                                .and_then(|trackers| trackers.get(epoch))
+                                .copied()
+                                .unwrap_or(0);
+                            (*epoch, tracker)
+                        })
+                        .collect();
+                    let remote_logs = client
+                        .get_received_log_from_validator(chain_id, &remote_node, offsets)
+                        .await?;
+                    let mut batches = received_log_batches.lock().unwrap();
+                    for (epoch, batch) in remote_logs {
+                        batches.push((remote_node.public_key, epoch, batch));
                     }
                     Ok(())
                 })

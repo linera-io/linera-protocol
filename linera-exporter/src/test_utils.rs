@@ -225,7 +225,7 @@ impl ValidatorNode for DummyValidator {
             committee_hash: None,
             requested_pending_message_bundles: vec![],
             requested_sent_certificate_hashes: vec![],
-            requested_received_log: vec![],
+            requested_received_log: BTreeMap::new(),
             requested_previous_event_blocks: BTreeMap::new(),
             requested_latest_checkpoint_height: None,
         };
