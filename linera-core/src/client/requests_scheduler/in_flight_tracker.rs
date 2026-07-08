@@ -27,7 +27,9 @@ use crate::node::NodeError;
 ///
 /// The entries map is guarded by a synchronous [`Mutex`] (never held across an `.await`)
 /// so that an owner's [`InFlightGuard`] can remove its entry from `Drop`, which is what
-/// makes deduplication cancel-safe — see [`InFlightTracker::insert_new`].
+/// makes deduplication cancel-safe — see [`InFlightTracker::insert_new`]. A `Mutex` is
+/// preferred over an `RwLock` because every critical section is only a few map
+/// operations: too short for reader parallelism to pay for the more expensive lock.
 #[derive(Debug, Clone)]
 pub(super) struct InFlightTracker<N> {
     /// Maps request keys to in-flight entries containing broadcast senders and metadata
@@ -105,24 +107,37 @@ impl<N: Clone> InFlightTracker<N> {
     /// dropping the broadcast sender so subscribers wake with `RecvError::Closed`
     /// and execute the request themselves rather than waiting forever.
     ///
+    /// If an entry already exists for this key (its owner went stale or lost an
+    /// insertion race), the new entry adopts its broadcast sender: the existing
+    /// subscribers are waiting for exactly this data, so they receive the new
+    /// owner's result instead of being disconnected. The previous owner's guard
+    /// is invalidated by the generation bump.
+    ///
     /// # Arguments
     /// - `key`: The request key to insert
     /// - `now`: The current time, recorded as the entry's start time
     pub(super) fn insert_new(&self, key: RequestKey, now: Timestamp) -> InFlightGuard<N> {
-        let (sender, _receiver) = broadcast::channel(1);
         let generation = self.next_generation.fetch_add(1, Ordering::Relaxed);
-        self.entries
+        let mut in_flight = self
+            .entries
             .lock()
-            .expect("in-flight tracker mutex poisoned")
-            .insert(
-                key.clone(),
-                InFlightEntry {
-                    sender,
-                    started_at: now,
-                    generation,
-                    alternative_peers: Arc::new(tokio::sync::RwLock::new(Vec::new())),
-                },
-            );
+            .expect("in-flight tracker mutex poisoned");
+        // The owner never listens on this channel — it produces the result itself.
+        // Subscribers create their receivers later via `Sender::subscribe`.
+        let sender = match in_flight.remove(&key) {
+            Some(previous) => previous.sender,
+            None => broadcast::channel(1).0,
+        };
+        in_flight.insert(
+            key.clone(),
+            InFlightEntry {
+                sender,
+                started_at: now,
+                generation,
+                alternative_peers: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+            },
+        );
+        drop(in_flight);
         InFlightGuard {
             entries: self.entries.clone(),
             key,

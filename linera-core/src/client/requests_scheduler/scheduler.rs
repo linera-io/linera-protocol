@@ -1287,6 +1287,44 @@ mod tests {
         assert!(manager.in_flight_tracker.try_subscribe(&key, now).is_none());
     }
 
+    /// A new owner for a key adopts the previous entry's broadcast sender, so waiters
+    /// subscribed to the replaced entry receive the new owner's result instead of being
+    /// disconnected — and the stale owner can neither broadcast nor remove the new entry.
+    #[tokio::test]
+    async fn test_new_owner_adopts_existing_waiters() {
+        use linera_base::identifiers::BlobType;
+
+        let manager = create_test_manager(Duration::from_secs(60), Duration::from_secs(60));
+        let key = RequestKey::Blob(BlobId::new(
+            CryptoHash::test_hash("test_blob"),
+            BlobType::Data,
+        ));
+        let now = manager.clock.current_time();
+
+        let first_owner = manager.in_flight_tracker.insert_new(key.clone(), now);
+        let Some(InFlightMatch::Exact(Subscribed(mut receiver))) =
+            manager.in_flight_tracker.try_subscribe(&key, now)
+        else {
+            panic!("expected to subscribe to the in-flight request");
+        };
+
+        // A second owner takes over the same key (e.g. the first went stale).
+        let second_owner = manager.in_flight_tracker.insert_new(key.clone(), now);
+
+        // The stale owner completing late neither broadcasts nor removes the new entry.
+        assert_eq!(
+            first_owner.complete_and_broadcast(Arc::new(Ok(RequestResult::Blob(None)))),
+            0
+        );
+
+        // The waiter subscribed before the takeover receives the new owner's result.
+        assert_eq!(
+            second_owner.complete_and_broadcast(Arc::new(Ok(RequestResult::Blob(None)))),
+            1
+        );
+        assert!(receiver.recv().await.is_ok());
+    }
+
     #[tokio::test]
     async fn test_staggered_parallel_retry_on_failure() {
         use crate::test_utils::{MemoryStorageBuilder, TestBuilder};
