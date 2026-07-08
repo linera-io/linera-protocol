@@ -414,6 +414,12 @@ pub enum WorkerError {
     EpochNotFrozen(Epoch),
     #[error("The commitment manifest names a different validator")]
     CommitmentValidatorMismatch,
+    /// The vote ledger, chain state and stored certificates together no longer
+    /// yield the justification this validator's latest vote on the chain cited.
+    /// This indicates local storage corruption: the write hooks preserve the
+    /// pairing before every state transition that would lose it.
+    #[error("Cannot recover the justification for this validator's vote on chain {0}")]
+    MissingVoteJustification(ChainId),
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
     /// Variant raised when the chain references these block hashes via a
@@ -484,6 +490,7 @@ impl WorkerError {
             | WorkerError::LocalBlockNotFound { .. }
             | WorkerError::MissingNetworkDescription
             | WorkerError::MissingValidatorKey
+            | WorkerError::MissingVoteJustification(_)
             | WorkerError::Thread(_)
             | WorkerError::ReadCertificatesError(_)
             | WorkerError::PoisonedWorker

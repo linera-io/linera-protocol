@@ -13,6 +13,8 @@ mod chain_worker;
 pub use chain_worker::{ChainWorkerConfig, ProcessConfirmedBlockMode};
 /// The high-level client for interacting with chains and validators.
 pub mod client;
+/// Assembly of a validator's epoch commitment from its vote ledger.
+pub mod commitment;
 pub use client::Client;
 /// Data types exchanged between clients, workers, and validator nodes.
 pub mod data_types;

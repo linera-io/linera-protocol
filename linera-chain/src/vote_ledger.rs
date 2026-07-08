@@ -23,8 +23,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::ValidatedBlockCertificate;
 
-/// A confirmation vote a validator signed: the voted block's height and hash, and
-/// the round the vote was cast in.
+/// A confirmation vote a validator signed: the voted block's height and hash, the
+/// round the vote was cast in, and the justification commitment it signed.
+///
+/// Together these identify the vote's entire signed payload (see
+/// [`VoteValue`](crate::data_types::VoteValue)): a confirmation vote signs no
+/// unlocking round, and its first-round attestation is `true` exactly when it
+/// cites no quorum.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VoteRecord {
     /// The height of the voted block.
@@ -33,6 +38,10 @@ pub struct VoteRecord {
     pub round: Round,
     /// The hash of the voted block.
     pub block_hash: CryptoHash,
+    /// The justification commitment the vote signed: the hash of the validated
+    /// quorum it cited, or `None` for a vote in the chain's first round (including
+    /// the fast round), which cites none.
+    pub justification_commitment: Option<CryptoHash>,
 }
 
 /// A confirmation vote together with the justification it cited. The

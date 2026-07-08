@@ -1527,3 +1527,6 @@ VoteRecord:
         TYPENAME: Round
     - block_hash:
         TYPENAME: CryptoHash
+    - justification_commitment:
+        OPTION:
+          TYPENAME: CryptoHash

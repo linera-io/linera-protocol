@@ -341,9 +341,13 @@ where
             height: header.height,
             round: vote.round,
             block_hash: vote.value().hash(),
+            justification_commitment: vote.justification_commitment,
         };
         let justification = match self.chain.manager.locking_block.get() {
-            Some(LockingBlock::Regular(certificate)) if certificate.round == vote.round => {
+            Some(LockingBlock::Regular(certificate))
+                if vote.justification_commitment
+                    == Some(certificate.full_justification_commitment()) =>
+            {
                 Some(certificate.clone())
             }
             _ => None,
@@ -369,14 +373,15 @@ where
             (old, Some(new)) if old.as_ref().is_none_or(|old| old.record != new.record) => {
                 // A new confirmation vote was created. The old vote is superseded if
                 // it was for a different block at the same height. (A missing
-                // justification means the pairing was broken earlier and the pair is
-                // already in the ledger — don't overwrite it, unless the vote was a
-                // fast-round one, which never had a justification.)
+                // justification for a vote that cited one means the pairing was
+                // broken earlier and the pair is already in the ledger — don't
+                // overwrite it.)
                 let superseded = old
                     .filter(|old| {
                         old.record.height == new.record.height
                             && old.record.block_hash != new.record.block_hash
-                            && (old.justification.is_some() || old.record.round.is_fast())
+                            && (old.justification.is_some()
+                                || old.record.justification_commitment.is_none())
                     })
                     .map(|old| JustifiedVote {
                         record: old.record,
@@ -410,12 +415,15 @@ where
         Ok(())
     }
 
-    /// If this validator's pending confirmation vote is for a different block than
-    /// the confirmed one about to be executed, persists it in the vote ledger: the
-    /// chain is moving past the vote's height, and the manager state holding the
-    /// vote and its justification is about to be cleared. (As in
-    /// `reconcile_vote_ledger`, a round-based vote without its justification is
-    /// already in the ledger and must not be overwritten.)
+    /// If this validator's pending confirmation vote would become unrecoverable
+    /// once the confirmed block about to be executed clears the manager state,
+    /// persists it in the vote ledger. That is the case when a different block was
+    /// confirmed at the vote's height (the vote was bypassed), and also when the
+    /// vote is for the confirmed block itself but the certificate's justification
+    /// chain does not contain the quorum the vote cited — then the certificate
+    /// cannot reproduce it later. (As in `reconcile_vote_ledger`, a vote whose
+    /// justification pairing was broken earlier is already in the ledger and must
+    /// not be overwritten.)
     async fn record_bypassed_vote(
         &self,
         certificate: &ConfirmedBlockCertificate,
@@ -423,9 +431,18 @@ where
         let Some(old) = self.pending_confirmed_vote() else {
             return Ok(());
         };
-        if old.record.block_hash == certificate.hash()
-            || (old.justification.is_none() && !old.record.round.is_fast())
-        {
+        if old.record.block_hash == certificate.hash() {
+            let recoverable_from_certificate = match old.record.justification_commitment {
+                None => true, // The vote cited nothing; the latest-vote entry suffices.
+                Some(commitment) => certificate
+                    .cited_validated_certificate(commitment)
+                    .is_some(),
+            };
+            if recoverable_from_certificate {
+                return Ok(());
+            }
+        }
+        if old.justification.is_none() && old.record.justification_commitment.is_some() {
             return Ok(());
         }
         self.storage

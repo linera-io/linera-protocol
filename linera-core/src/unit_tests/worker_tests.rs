@@ -52,7 +52,7 @@ use linera_chain::{
         IncomingBundle, LiteValue, LiteVote, MessageAction, MessageBundle, OperationResult,
         PostedMessage, ProposedBlock, Transaction, Vote,
     },
-    epoch_commitment::{CommitmentManifest, SignedCommitmentManifest},
+    epoch_commitment::{CommitmentChunk, CommitmentManifest, SignedCommitmentManifest},
     justification::{JustificationChain, JustificationLink},
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
@@ -87,6 +87,7 @@ use crate::test_utils::RocksDbStorageBuilder;
 use crate::test_utils::ScyllaDbStorageBuilder;
 use crate::{
     chain_worker::{ChainWorkerConfig, ProcessConfirmedBlockMode},
+    commitment::assemble_commitment,
     data_types::*,
     test_utils::{MemoryStorageBuilder, StorageBuilder},
     worker::{
@@ -3674,6 +3675,7 @@ where
             height: BlockHeight::from(1),
             round: Round::SingleLeader(1),
             block_hash: LiteValue::new(&value).value_hash,
+            justification_commitment: Some(certificate1.full_justification_commitment()),
         }
     );
     assert!(entry.superseded.is_empty());
@@ -3831,6 +3833,7 @@ where
             height: BlockHeight::from(1),
             round: Round::SingleLeader(8),
             block_hash: LiteValue::new(&ConfirmedBlock::new(block2.clone())).value_hash,
+            justification_commitment: Some(certificate2b.full_justification_commitment()),
         }
     );
     assert_eq!(entry.superseded.len(), 1);
@@ -3840,9 +3843,37 @@ where
             height: BlockHeight::from(1),
             round: Round::SingleLeader(1),
             block_hash: LiteValue::new(&ConfirmedBlock::new(block1.clone())).value_hash,
+            justification_commitment: Some(certificate1.full_justification_commitment()),
         }
     );
     assert_eq!(entry.superseded[0].justification, Some(certificate1));
+
+    // Assembling the commitment while the latest vote is pending at the tip
+    // recovers its justification from the manager's locking certificate.
+    let assembled = assemble_commitment(
+        worker.storage_client(),
+        Epoch::ZERO,
+        worker.public_key(),
+        usize::MAX,
+    )
+    .await?;
+    assert_eq!(assembled.manifest.epoch, Epoch::ZERO);
+    assert_eq!(assembled.manifest.validator, worker.public_key());
+    assert_eq!(assembled.blobs.len(), 1);
+    assert_eq!(
+        assembled.manifest.blob_hashes,
+        vec![assembled.blobs[0].id().hash]
+    );
+    let chunk = bcs::from_bytes::<CommitmentChunk>(assembled.blobs[0].bytes())?;
+    assert_eq!(chunk.entries.len(), 1);
+    let commitment_entry = &chunk.entries[0];
+    assert_eq!(commitment_entry.chain_id, chain_1);
+    assert_eq!(commitment_entry.committed.record, entry.latest);
+    assert_eq!(
+        commitment_entry.committed.justification,
+        Some(certificate2b.clone())
+    );
+    assert_eq!(commitment_entry.superseded, entry.superseded);
 
     // Block1 gets confirmed without this validator's vote: the bypassed vote for
     // block2 is preserved in the ledger too, with its justification, while the
@@ -3860,7 +3891,32 @@ where
     assert_eq!(entry.latest.round, Round::SingleLeader(8));
     assert_eq!(entry.superseded.len(), 2);
     assert_eq!(entry.superseded[1].record.round, Round::SingleLeader(8));
-    assert_eq!(entry.superseded[1].justification, Some(certificate2b));
+    assert_eq!(
+        entry.superseded[1].justification,
+        Some(certificate2b.clone())
+    );
+
+    // Assembly now takes the committed vote's justification from the bypass
+    // record instead, and does not list that record as superseded.
+    let assembled = assemble_commitment(
+        worker.storage_client(),
+        Epoch::ZERO,
+        worker.public_key(),
+        usize::MAX,
+    )
+    .await?;
+    let chunk = bcs::from_bytes::<CommitmentChunk>(assembled.blobs[0].bytes())?;
+    let commitment_entry = &chunk.entries[0];
+    assert_eq!(commitment_entry.committed.record, entry.latest);
+    assert_eq!(
+        commitment_entry.committed.justification,
+        Some(certificate2b)
+    );
+    assert_eq!(commitment_entry.superseded.len(), 1);
+    assert_eq!(
+        commitment_entry.superseded[0].record.round,
+        Round::SingleLeader(1)
+    );
 
     // After freezing the epoch, the validator refuses to vote for a validated
     // block at the next height.

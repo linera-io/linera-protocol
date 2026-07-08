@@ -1064,6 +1064,7 @@ mod tests {
             height: BlockHeight::ZERO,
             round: Round::MultiLeader(0),
             block_hash: CryptoHash::test_hash("block A"),
+            justification_commitment: None,
         };
         storage
             .record_confirmed_vote(epoch, chain_id, vote1.clone(), None)
@@ -1080,6 +1081,7 @@ mod tests {
             height: BlockHeight::ZERO,
             round: Round::MultiLeader(1),
             block_hash: CryptoHash::test_hash("block B"),
+            justification_commitment: Some(CryptoHash::test_hash("quorum B")),
         };
         let superseded = JustifiedVote {
             record: vote1,
@@ -1095,6 +1097,7 @@ mod tests {
             height: BlockHeight::from(1),
             round: Round::MultiLeader(0),
             block_hash: CryptoHash::test_hash("block C"),
+            justification_commitment: None,
         };
         storage
             .record_confirmed_vote(epoch, chain_id, vote3.clone(), None)
