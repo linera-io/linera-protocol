@@ -2037,6 +2037,34 @@ impl<Env: Environment> Client<Env> {
                 .await?;
         }
 
+        // If the oldest collected block's epoch has been revoked, its certificate
+        // alone won't convince the local worker. Preprocess the collected chain
+        // newest-first: accepting each block marks the `previous_message_blocks`
+        // hash it commits to as vouched, so the next-older block is accepted
+        // despite its revoked epoch — without downloading any of the intermediate
+        // blocks that sent no message to our chain. (Epoch revocation is monotone,
+        // so only the oldest block needs checking; if even the newest block's
+        // epoch is revoked, its retry logic falls back to walking contiguous
+        // descendants.)
+        if let Some(certificate) = certificates.values().next() {
+            let epoch = certificate.block().header.epoch;
+            if self
+                .storage_client()
+                .is_epoch_revoked(epoch)
+                .await
+                .map_err(LocalNodeError::from)?
+            {
+                for certificate in certificates.values().rev() {
+                    Box::pin(self.handle_certificate_with_retry(
+                        certificate,
+                        std::slice::from_ref(remote_node),
+                        ProcessConfirmedBlockMode::Preprocess,
+                    ))
+                    .await?;
+                }
+            }
+        }
+
         // Process certificates in ascending block height order (BTreeMap keeps them sorted).
         for certificate in certificates.into_values() {
             self.receive_sender_certificate(

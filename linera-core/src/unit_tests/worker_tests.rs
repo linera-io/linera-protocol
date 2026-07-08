@@ -3396,6 +3396,156 @@ where
     Ok(())
 }
 
+/// Tests that a revoked-epoch sender block is accepted when a later accepted block
+/// commits to it via `previous_message_blocks` — without the worker ever seeing the
+/// non-sender block in between. This is what lets a receiver's client re-certify a
+/// sender's old messages by downloading only the message-bearing blocks.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_revoked_epoch_block_vouched_via_previous_message_blocks<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut env =
+        TestEnvironment::new_with_amount(&mut storage_builder, false, false, Amount::ZERO).await?;
+    let mut signer = InMemorySigner::new(None);
+    let owner1 = signer.generate_new().into();
+    let chain_1_desc = env.add_root_chain(1, owner1, Amount::from_tokens(3)).await;
+    let committee = env.committee().clone();
+    let admin_chain_id = env.admin_chain_id();
+    let user_id = chain_1_desc.id();
+
+    // Height 0 (epoch 0): a transfer to the admin chain — the sender block that
+    // will later need re-certification.
+    let proposal_msg0 = make_first_block(user_id)
+        .with_simple_transfer(admin_chain_id, Amount::ONE)
+        .with_authenticated_owner(Some(owner1));
+    let cert_msg0 = env.execute_proposal(proposal_msg0, vec![]).await?;
+
+    // Have the admin chain create epoch 1.
+    let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
+    let blob_hash = committee_blob.id().hash;
+    env.write_blobs(std::slice::from_ref(&committee_blob))
+        .await?;
+    let proposal_create = make_first_block(admin_chain_id).with_operation(SystemOperation::Admin(
+        AdminOperation::CreateCommittee {
+            epoch: Epoch::from(1),
+            blob_hash,
+        },
+    ));
+    let cert_create = env.execute_proposal(proposal_create, vec![]).await?;
+
+    // Height 1 (epoch 0): the user chain migrates to epoch 1 without sending any
+    // message. Height 2 (epoch 1): another transfer to the admin chain, which
+    // commits to the height-0 block via `previous_message_blocks`.
+    let proposal_mid = make_child_block(&cert_msg0.clone().into_value())
+        .with_operation(SystemOperation::ProcessNewEpoch(Epoch::from(1)))
+        .with_authenticated_owner(Some(owner1));
+    let cert_mid = env.execute_proposal(proposal_mid, vec![]).await?;
+    let proposal_msg1 = make_child_block(&cert_mid.clone().into_value())
+        .with_epoch(1)
+        .with_simple_transfer(admin_chain_id, Amount::ONE)
+        .with_authenticated_owner(Some(owner1));
+    let cert_msg1 = env.execute_proposal(proposal_msg1, vec![]).await?;
+    assert_eq!(
+        cert_msg1.block().body.previous_message_blocks,
+        BTreeMap::from([(admin_chain_id, (cert_msg0.hash(), BlockHeight::ZERO))]),
+    );
+
+    // Retire epoch 0.
+    let proposal_revoke = make_child_block(&cert_create.clone().into_value())
+        .with_epoch(1)
+        .with_operation(SystemOperation::Admin(AdminOperation::RemoveCommittee {
+            epoch: Epoch::ZERO,
+        }));
+    let cert_revoke = env.execute_proposal(proposal_revoke, vec![]).await?;
+    env.worker()
+        .fully_handle_certificate_with_notifications(cert_create.clone(), &())
+        .await?;
+    env.worker()
+        .fully_handle_certificate_with_notifications(cert_revoke.clone(), &())
+        .await?;
+
+    // The height-0 block is rejected: its epoch is revoked and nothing vouches for
+    // it yet.
+    let error = env
+        .worker()
+        .fully_handle_certificate_with_notifications(cert_msg0.clone(), &())
+        .await
+        .unwrap_err();
+    assert_matches!(
+        error,
+        WorkerError::EpochRevoked {
+            epoch: Epoch::ZERO,
+            ..
+        }
+    );
+
+    // Preprocessing the epoch-1 sender block at height 2 vouches for the height-0
+    // block via `previous_message_blocks` (and for its parent at height 1 via
+    // `previous_block_hash`). The height-0 block is then accepted and executes —
+    // the worker never saw the non-sender block at height 1.
+    env.worker()
+        .fully_handle_certificate_with_notifications(cert_msg1.clone(), &())
+        .await?;
+    env.worker()
+        .fully_handle_certificate_with_notifications(cert_msg0.clone(), &())
+        .await?;
+
+    {
+        let user_chain = env.worker().chain_state_view(user_id).await?;
+        assert_eq!(
+            BlockHeight::from(1),
+            user_chain.tip_state.get().next_block_height
+        );
+        // The height-0 message has not reached the admin chain yet:
+        // `select_message_bundles` refuses a revoked-epoch bundle that arrives on
+        // its own. It is only accepted once a later bundle from a trusted epoch is
+        // in the same batch.
+        let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
+        assert!(admin_chain.inboxes.indices().await?.is_empty());
+    }
+
+    // The migration block at height 1 is also vouched for (as the height-2 block's
+    // parent), so it is accepted despite its revoked epoch. With the chain tip then
+    // at height 2, re-sending the height-2 block executes it, which schedules its
+    // message: the outbox batch now pairs the revoked-epoch bundle with the epoch-1
+    // bundle behind it, and the admin chain accepts both.
+    env.worker()
+        .fully_handle_certificate_with_notifications(cert_mid.clone(), &())
+        .await?;
+    env.worker()
+        .fully_handle_certificate_with_notifications(cert_msg1.clone(), &())
+        .await?;
+    {
+        let user_chain = env.worker().chain_state_view(user_id).await?;
+        assert_eq!(
+            BlockHeight::from(3),
+            user_chain.tip_state.get().next_block_height
+        );
+        // All trust marks have been consumed.
+        assert!(user_chain.vouched_blocks.indices().await?.is_empty());
+        let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
+        let inbox = admin_chain
+            .inboxes
+            .try_load_entry(&user_id)
+            .await?
+            .expect("admin chain should have an inbox for the user chain");
+        let first_bundle = inbox.added_bundles.front().await?;
+        assert_eq!(
+            first_bundle.map(|bundle| bundle.height),
+            Some(BlockHeight::ZERO),
+            "the re-certified height-0 message should have been delivered",
+        );
+    }
+
+    Ok(())
+}
+
 #[test(tokio::test)]
 async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let mut storage_builder = MemoryStorageBuilder::default();
