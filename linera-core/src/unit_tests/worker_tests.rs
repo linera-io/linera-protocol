@@ -2512,13 +2512,15 @@ where
         .executing_worker()
         .handle_chain_info_query(query)
         .await?;
-    assert_eq!(response.info.requested_received_log.len(), 1);
     assert_eq!(
-        response.info.requested_received_log[0],
-        ChainAndHeight {
-            chain_id: chain_1,
-            height: BlockHeight::ZERO
-        }
+        response.info.requested_received_log,
+        BTreeMap::from([(
+            Epoch::ZERO,
+            vec![ChainAndHeight {
+                chain_id: chain_1,
+                height: BlockHeight::ZERO,
+            }],
+        )])
     );
     Ok(())
 }

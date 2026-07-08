@@ -22,7 +22,6 @@ use linera_chain::{
 use linera_core::{
     data_types::{
         CertificatesByHeightRequest, ChainInfoQuery, ChainInfoResponse, CrossChainRequest,
-        ReceivedLogQuery,
     },
     node::NodeError,
     worker::Notification,
@@ -699,12 +698,11 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
             request_owner_balance: try_proto_convert(chain_info_query.request_owner_balance)?,
             request_pending_message_bundles: chain_info_query.request_pending_message_bundles,
             chain_id: try_proto_convert(chain_info_query.chain_id)?,
-            request_received_log: chain_info_query.request_received_log.map(|query| {
-                ReceivedLogQuery {
-                    epoch: Epoch(query.epoch),
-                    skip: query.skip,
-                }
-            }),
+            request_received_log: chain_info_query
+                .request_received_log
+                .into_iter()
+                .map(|(epoch, skip)| (Epoch(epoch), skip))
+                .collect(),
             test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
             request_manager_values: chain_info_query.request_manager_values,
             request_leader_timeout,
@@ -738,12 +736,11 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             request_sent_certificate_hashes_by_heights: Some(
                 request_sent_certificate_hashes_by_heights,
             ),
-            request_received_log: chain_info_query.request_received_log.map(|query| {
-                api::ReceivedLogQuery {
-                    epoch: query.epoch.0,
-                    skip: query.skip,
-                }
-            }),
+            request_received_log: chain_info_query
+                .request_received_log
+                .into_iter()
+                .map(|(epoch, skip)| (epoch.0, skip))
+                .collect(),
             request_manager_values: chain_info_query.request_manager_values,
             request_leader_timeout,
             request_fallback: chain_info_query.request_fallback,
@@ -1257,7 +1254,7 @@ pub mod tests {
             requested_owner_balance: None,
             requested_pending_message_bundles: vec![],
             requested_sent_certificate_hashes: vec![],
-            requested_received_log: vec![],
+            requested_received_log: BTreeMap::new(),
             requested_previous_event_blocks: BTreeMap::new(),
             requested_latest_checkpoint_height: None,
         });
@@ -1290,7 +1287,7 @@ pub mod tests {
             test_next_block_height: Some(BlockHeight::from(10)),
             request_owner_balance: AccountOwner::CHAIN,
             request_pending_message_bundles: false,
-            request_received_log: None,
+            request_received_log: BTreeMap::from([(Epoch(3), 7)]),
             request_manager_values: false,
             request_leader_timeout: None,
             request_fallback: true,

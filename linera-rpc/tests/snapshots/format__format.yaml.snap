@@ -327,8 +327,12 @@ ChainInfo:
         SEQ:
           TYPENAME: CryptoHash
     - requested_received_log:
-        SEQ:
-          TYPENAME: ChainAndHeight
+        MAP:
+          KEY:
+            TYPENAME: Epoch
+          VALUE:
+            SEQ:
+              TYPENAME: ChainAndHeight
     - requested_previous_event_blocks:
         MAP:
           KEY:
@@ -351,8 +355,10 @@ ChainInfoQuery:
         TYPENAME: AccountOwner
     - request_pending_message_bundles: BOOL
     - request_received_log:
-        OPTION:
-          TYPENAME: ReceivedLogQuery
+        MAP:
+          KEY:
+            TYPENAME: Epoch
+          VALUE: U64
     - request_manager_values: BOOL
     - request_leader_timeout:
         OPTION:
@@ -1061,11 +1067,6 @@ Reason:
               TYPENAME: BlockHeight
           - hash:
               TYPENAME: CryptoHash
-ReceivedLogQuery:
-  STRUCT:
-    - epoch:
-        TYPENAME: Epoch
-    - skip: U64
 Response:
   STRUCT:
     - status: U16

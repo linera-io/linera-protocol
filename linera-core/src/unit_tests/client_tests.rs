@@ -1845,10 +1845,13 @@ where
         .await?;
     assert_eq!(
         response.info.requested_received_log,
-        vec![ChainAndHeight {
-            chain_id: sender_id,
-            height: cert3.block().header.height,
-        }],
+        BTreeMap::from([(
+            Epoch::from(1),
+            vec![ChainAndHeight {
+                chain_id: sender_id,
+                height: cert3.block().header.height,
+            }],
+        )]),
     );
     {
         let validator_0_key = builder.node(0).name();
