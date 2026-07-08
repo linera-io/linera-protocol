@@ -16,9 +16,13 @@ use std::{
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt as _};
-use linera_base::identifiers::ChainId;
+use linera_base::{crypto::ValidatorSignature, data_types::Epoch, identifiers::ChainId};
+use linera_chain::{epoch_commitment::CommitmentManifest, manager::LockingBlock};
 use linera_core::{
-    data_types::CertificatesByHeightRequest, notifier::ChannelNotifier, JoinSetExt as _,
+    commitment::{CommitmentAgent, CommitmentError, ShardControl},
+    data_types::{CertificatesByHeightRequest, ChainInfoQuery},
+    notifier::ChannelNotifier,
+    JoinSetExt as _,
 };
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
@@ -35,10 +39,10 @@ use linera_rpc::{
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
             validator_worker_client::ValidatorWorkerClient,
             BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificatesBatchRequest,
-            CertificatesBatchResponse, ChainInfoResult, CryptoHash, HandlePendingBlobRequest,
-            LiteCertificate, NetworkDescription, Notification, NotificationBatch,
-            PendingBlobRequest, PendingBlobResult, RawCertificate, RawCertificatesBatch,
-            SubscriptionRequest, VersionInfo,
+            CertificatesBatchResponse, ChainInfoResult, CryptoHash, FreezeEpochRequest,
+            HandlePendingBlobRequest, LiteCertificate, NetworkDescription, Notification,
+            NotificationBatch, PendingBlobRequest, PendingBlobResult, RawCertificate,
+            RawCertificatesBatch, SignCommitmentManifestRequest, SubscriptionRequest, VersionInfo,
         },
         pool::GrpcConnectionPool,
         GrpcProtoConversionError, GrpcProxyable, GRPC_CHUNKED_MESSAGE_FILL_LIMIT,
@@ -57,7 +61,7 @@ use tonic::{
 };
 use tonic_web::GrpcWebLayer;
 use tower::{builder::ServiceBuilder, Layer, Service};
-use tracing::{debug, info, instrument, Instrument as _, Level};
+use tracing::{debug, info, instrument, warn, Instrument as _, Level};
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -199,6 +203,9 @@ where
     }
 }
 
+/// How often the commitment agent checks for newly revoked epochs.
+const COMMITMENT_CHECK_INTERVAL: Duration = Duration::from_secs(60);
+
 #[derive(Clone)]
 pub struct GrpcProxy<S>(Arc<GrpcProxyInner<S>>);
 
@@ -320,6 +327,11 @@ where
         health_reporter
             .set_serving::<ValidatorNodeServer<GrpcProxy<S>>>()
             .await;
+        let _commitment_agent = join_set.spawn_task(
+            self.clone()
+                .run_commitment_agent(shutdown_signal.clone())
+                .in_current_span(),
+        );
         let internal_server = join_set.spawn_task(
             Server::builder()
                 .add_service(self.as_notifier_service())
@@ -370,6 +382,38 @@ where
             public_res = public_server => public_res??,
         }
         Ok(())
+    }
+
+    /// Periodically commits this validator's votes in newly revoked epochs: for
+    /// each one, the commitment agent freezes signing on all shards, assembles
+    /// the commitment from the vote ledger, has a shard sign the manifest, and
+    /// stores the result for publication on the admin chain. Every proxy runs
+    /// the agent — each step is idempotent, and concurrent runs write the same
+    /// records.
+    async fn run_commitment_agent(self, shutdown_signal: CancellationToken) {
+        let validator = self.0.internal_config.public_key;
+        let storage = self.0.storage.clone();
+        let mut agent = CommitmentAgent::new(storage, self.clone(), validator, usize::MAX);
+        let mut interval = tokio::time::interval(COMMITMENT_CHECK_INTERVAL);
+        loop {
+            select! {
+                _ = shutdown_signal.cancelled() => return,
+                _ = interval.tick() => {}
+            }
+            match agent.process_revoked_epochs().await {
+                Ok(epochs) => {
+                    if !epochs.is_empty() {
+                        info!(
+                            ?epochs,
+                            "committed this validator's votes in revoked epochs"
+                        );
+                    }
+                }
+                Err(error) => {
+                    warn!(%error, "failed to process revoked epochs; will retry");
+                }
+            }
+        }
     }
 
     /// Pre-configures the public server with no services attached.
@@ -442,6 +486,73 @@ where
         };
         status.set_source(Arc::new(err));
         status
+    }
+}
+
+impl<S> ShardControl for GrpcProxy<S>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+{
+    async fn freeze_epoch(&self, epoch: Epoch) -> Result<(), CommitmentError> {
+        let requests = self
+            .0
+            .internal_config
+            .shards
+            .iter()
+            .map(|shard| async move {
+                self.worker_client_for_shard(shard)
+                    .map_err(|error| CommitmentError::Shard(error.to_string()))?
+                    .freeze_epoch(FreezeEpochRequest { epoch: epoch.0 })
+                    .await
+                    .map_err(|status| CommitmentError::Shard(status.to_string()))?;
+                Ok::<_, CommitmentError>(())
+            });
+        futures::future::try_join_all(requests).await?;
+        Ok(())
+    }
+
+    async fn sign_commitment_manifest(
+        &self,
+        manifest: &CommitmentManifest,
+    ) -> Result<ValidatorSignature, CommitmentError> {
+        // The validator key lives in the shards; any of them can sign.
+        let shard = self
+            .0
+            .internal_config
+            .shards
+            .first()
+            .ok_or_else(|| CommitmentError::Shard("no shards configured".to_string()))?;
+        let request = SignCommitmentManifestRequest {
+            manifest: bcs::to_bytes(manifest)?,
+        };
+        let response = self
+            .worker_client_for_shard(shard)
+            .map_err(|error| CommitmentError::Shard(error.to_string()))?
+            .sign_commitment_manifest(request)
+            .await
+            .map_err(|status| CommitmentError::Shard(status.to_string()))?
+            .into_inner();
+        Ok(bcs::from_bytes(&response.signature)?)
+    }
+
+    async fn locking_block(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<Option<LockingBlock>, CommitmentError> {
+        let shard = self.0.internal_config.get_shard_for(chain_id).clone();
+        let query = ChainInfoQuery::new(chain_id).with_manager_values();
+        let request = api::ChainInfoQuery::try_from(query)
+            .map_err(|error| CommitmentError::Shard(error.to_string()))?;
+        let result = self
+            .worker_client_for_shard(&shard)
+            .map_err(|error| CommitmentError::Shard(error.to_string()))?
+            .handle_chain_info_query(request)
+            .await
+            .map_err(|status| CommitmentError::Shard(status.to_string()))?
+            .into_inner();
+        let response = linera_core::data_types::ChainInfoResponse::try_from(result)
+            .map_err(|error| CommitmentError::Shard(error.to_string()))?;
+        Ok(response.info.manager.requested_locking.map(|boxed| *boxed))
     }
 }
 

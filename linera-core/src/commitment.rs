@@ -127,7 +127,9 @@ where
     S: Storage,
     C: ShardControl,
 {
-    /// Creates an agent committing in the given validator's name.
+    /// Creates an agent committing in the given validator's name. Commitment
+    /// blobs are capped at `max_chunk_bytes` or the committee policy's maximum
+    /// blob size, whichever is lower.
     pub fn new(
         storage: S,
         shards: C,
@@ -172,13 +174,19 @@ where
         if !committee.validators().contains_key(&self.validator) {
             return Ok(false);
         }
+        // Chunks must satisfy the blob size limit at publication time; the margin
+        // leaves room for the chunk's own length prefix.
+        let policy_chunk_bytes = usize::try_from(committee.policy().maximum_blob_size)
+            .unwrap_or(usize::MAX)
+            .saturating_sub(16);
+        let max_chunk_bytes = self.max_chunk_bytes.min(policy_chunk_bytes);
         self.shards.freeze_epoch(epoch).await?;
         let assembled = assemble_commitment(
             &self.storage,
             &self.shards,
             epoch,
             self.validator,
-            self.max_chunk_bytes,
+            max_chunk_bytes,
         )
         .await?;
         let signature = self

@@ -197,6 +197,14 @@ impl GrpcClient {
     fn try_into_chain_info(
         result: api::ChainInfoResult,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
+        result.try_into()
+    }
+}
+
+impl TryFrom<api::ChainInfoResult> for linera_core::data_types::ChainInfoResponse {
+    type Error = NodeError;
+
+    fn try_from(result: api::ChainInfoResult) -> Result<Self, Self::Error> {
         let inner = result.inner.ok_or_else(|| NodeError::GrpcError {
             error: "missing body from response".to_string(),
         })?;
