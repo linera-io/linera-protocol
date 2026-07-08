@@ -333,10 +333,10 @@ where
     ///
     /// A certificate from a revoked epoch no longer proves anything by itself: the
     /// committee that signed it is not trusted any more. Such a block is only
-    /// accepted if it is transitively re-certified by a block we accepted while its
-    /// epoch was still trusted — either the block itself is already in
-    /// `block_hashes`, or an accepted child block commits to it via its
-    /// `previous_block_hash`.
+    /// accepted if it was already accepted while its epoch was still trusted, i.e.
+    /// it is in `block_hashes`. (Blocks vouched for by an accepted block's
+    /// `previous_block_hash` or `previous_message_blocks` links, or by a checkpoint
+    /// cert, carry a `vouched_blocks` trust mark and bypass this check.)
     async fn ensure_epoch_trusted(
         &self,
         certificate: &ConfirmedBlockCertificate,
@@ -355,18 +355,8 @@ where
         if !is_revoked {
             return Ok(());
         }
-        let block_hash = certificate.hash();
-        if self.chain.block_hashes.get(&header.height).await? == Some(block_hash) {
+        if self.chain.block_hashes.get(&header.height).await? == Some(certificate.hash()) {
             return Ok(());
-        }
-        let child_height = header.height.try_add_one()?;
-        if let Some(child_hash) = self.chain.block_hashes.get(&child_height).await? {
-            let child = self.storage.read_confirmed_block(child_hash).await?;
-            if child
-                .is_some_and(|child| child.block().header.previous_block_hash == Some(block_hash))
-            {
-                return Ok(());
-            }
         }
         Err(WorkerError::EpochRevoked {
             chain_id: header.chain_id,
@@ -1021,20 +1011,17 @@ where
         let height = block.header.height;
         let chain_id = block.header.chain_id;
 
-        // Trust-mark accept path: an earlier checkpoint cert recorded this block's
-        // hash in `pre_checkpoint_block_trust`. Removing the trust mark here is
+        // Trust-mark accept path: a checkpoint cert or an accepted block's
+        // `previous_block_hash` / `previous_message_blocks` links recorded this
+        // block's hash in `vouched_blocks`. Removing the trust mark here is
         // only an in-memory change; if anything below fails before `save`, the
         // mark survives on the next reload. The dispatch's `gap` definition
         // (`!=` rather than `<`) routes both above-tip and below-tip trust
         // uploads to `preprocess_certified_block` so the chain can write the
         // cert without advancing the tip.
-        let in_trust_set = self
-            .chain
-            .pre_checkpoint_block_trust
-            .contains(&block_hash)
-            .await?;
+        let in_trust_set = self.chain.vouched_blocks.contains(&block_hash).await?;
         if in_trust_set {
-            self.chain.pre_checkpoint_block_trust.remove(&block_hash)?;
+            self.chain.vouched_blocks.remove(&block_hash)?;
         }
 
         // Check if we already processed this block.
@@ -1054,10 +1041,11 @@ where
         let committee = self.committee_for_epoch(block.header.epoch).await?;
         certificate.check(&committee)?;
         // If the epoch has been revoked, the quorum signature alone is no longer a
-        // sufficient basis for trust: the block must also be vouched for by a block
-        // this worker already trusts — a checkpoint trust mark, an earlier
-        // acceptance of the same block, or an accepted child block that commits to
-        // it via `previous_block_hash`.
+        // sufficient basis for trust: the block must also be vouched for by data
+        // this worker already trusts — a `vouched_blocks` trust mark (written by a
+        // checkpoint cert or by an accepted block that commits to this one via
+        // `previous_block_hash` or `previous_message_blocks`) or an earlier
+        // acceptance of the same block.
         if !in_trust_set {
             self.ensure_epoch_trusted(&certificate).await?;
         }
@@ -1229,7 +1217,7 @@ where
         }
         if !missing_blocks.is_empty() {
             for hash in &missing_blocks {
-                self.chain.pre_checkpoint_block_trust.insert(hash)?;
+                self.chain.vouched_blocks.insert(hash)?;
             }
             self.save().await?;
             return Err(WorkerError::BlocksNotFound(missing_blocks));

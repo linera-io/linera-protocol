@@ -339,14 +339,15 @@ where
     /// `SystemOperation::Checkpoint` is executed.
     pub latest_checkpoint_height: RegisterView<C, Option<BlockHeight>>,
 
-    /// Hashes of pre-checkpoint sender blocks the chain has seen a checkpoint cert
-    /// vouch for via `outbox_block_hashes`, but whose actual cert bytes are not yet
-    /// in storage. The worker errors a checkpoint push with
-    /// `BlocksNotFound` when this set is non-empty, then accepts each
-    /// referenced cert (regardless of its own — possibly revoked — epoch) and
-    /// removes the entry. Once the set is empty, the checkpoint restoration can run
-    /// end-to-end.
-    pub pre_checkpoint_block_trust: SetView<C, CryptoHash>,
+    /// Hashes of blocks that are vouched for by data this chain already trusts, but
+    /// have not been processed here yet. A hash is inserted when a trusted source
+    /// commits to it: a checkpoint cert's `outbox_block_hashes`, or an accepted
+    /// block's `previous_block_hash` or `previous_message_blocks` links (unless the
+    /// referenced block is already in `block_hashes`). The worker accepts a cert
+    /// whose hash is in this set regardless of its epoch — the epoch may be revoked,
+    /// but the hash commitment makes the block trustworthy — and removes the entry
+    /// upon acceptance.
+    pub vouched_blocks: SetView<C, CryptoHash>,
 
     /// The hash of the set of fully-tracked chains that `nonempty_outboxes` and
     /// `outbox_counters` were last reconciled against. On a client these two indices only hold
@@ -1506,6 +1507,7 @@ where
         }
         let updated_streams = self.process_emitted_events(block).await?;
         self.process_outgoing_messages(block, tracked).await?;
+        self.vouch_for_block_references(block).await?;
 
         // Last, reset the consensus state based on the current ownership.
         self.reset_chain_manager(block.header.height.try_add_one()?, local_time)
@@ -1520,6 +1522,50 @@ where
             self.latest_checkpoint_height.set(Some(block.header.height));
         }
         Ok(updated_streams)
+    }
+
+    /// Records the block references an accepted block commits to — its parent via
+    /// `previous_block_hash` and the latest message block per recipient via
+    /// `previous_message_blocks` — in `vouched_blocks`, unless the referenced block
+    /// is already in `block_hashes`. The accepted block is trusted, so these hash
+    /// commitments remain a sufficient basis for accepting the referenced blocks
+    /// even after the epochs that certified them are revoked.
+    async fn vouch_for_block_references(&mut self, block: &Block) -> Result<(), ChainError> {
+        let mut references = Vec::new();
+        if let Some(parent_hash) = block.header.previous_block_hash {
+            references.push((block.header.height.try_sub_one()?, parent_hash));
+        }
+        for (hash, height) in block.body.previous_message_blocks.values() {
+            references.push((*height, *hash));
+        }
+        let known_hashes = self
+            .block_hashes
+            .multi_get(references.iter().map(|(height, _)| height))
+            .await?;
+        for (known, (height, hash)) in known_hashes.into_iter().zip(references) {
+            match known {
+                Some(known_hash) if known_hash == hash => {}
+                None => self.vouched_blocks.insert(&hash)?,
+                Some(known_hash) => {
+                    // A chain has one certified block per height, so a trusted
+                    // block committing to a different hash than the one already
+                    // accepted is evidence of equivocation — two conflicting
+                    // certificates signed by that height's committee. Follow the
+                    // newly accepted block's commitment (it is the one backed by
+                    // a currently trusted certificate), but flag the conflict.
+                    warn!(
+                        chain_id = %self.chain_id(),
+                        %height,
+                        %known_hash,
+                        vouched_hash = %hash,
+                        "conflicting certified blocks at the same height: \
+                         the committee for this height equivocated",
+                    );
+                    self.vouched_blocks.insert(&hash)?;
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Adds a block to `block_hashes` as preprocessed, and updates the outboxes where possible.
@@ -1541,6 +1587,7 @@ where
         }
         self.process_outgoing_messages(block, tracked).await?;
         let updated_streams = self.process_emitted_events(block).await?;
+        self.vouch_for_block_references(block).await?;
         self.insert_block_hash(height, hash)?;
         Ok(updated_streams)
     }
