@@ -1205,23 +1205,35 @@ impl<Env: Environment> Client<Env> {
                 .map_while(|maybe_certificate| maybe_certificate)
                 .collect::<Vec<_>>();
             if batch.is_empty() {
-                for node in nodes {
-                    match self
-                        .requests_scheduler
-                        .download_certificates_by_heights(node, chain_id, heights.clone())
-                        .await
-                    {
-                        Ok(downloaded) if !downloaded.is_empty() => {
-                            batch = downloaded
-                                .into_iter()
-                                .map(|certificate| {
-                                    self.storage_client().cache_certificate(certificate)
-                                })
-                                .collect();
-                            break;
+                // Race the validators instead of trying them one by one: a slow or
+                // faulty validator must not stall the walk. A validator that
+                // returns nothing counts as a failure so the others take over.
+                let heights = &heights;
+                let downloaded = communicate_concurrently(
+                    nodes,
+                    async move |remote_node| {
+                        let downloaded = self
+                            .requests_scheduler
+                            .download_certificates_by_heights(
+                                &remote_node,
+                                chain_id,
+                                heights.clone(),
+                            )
+                            .await?;
+                        if downloaded.is_empty() {
+                            return Err(NodeError::MissingCertificateValue);
                         }
-                        Ok(_) | Err(_) => continue,
-                    }
+                        Ok(downloaded)
+                    },
+                    self.options.certificate_batch_download_hedge_delay,
+                    self.storage_client().clock(),
+                )
+                .await;
+                if let Ok(downloaded) = downloaded {
+                    batch = downloaded
+                        .into_iter()
+                        .map(|certificate| self.storage_client().cache_certificate(certificate))
+                        .collect();
                 }
             }
             if batch.is_empty() {
