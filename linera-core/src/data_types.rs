@@ -111,13 +111,6 @@ impl ChainInfoQuery {
         self
     }
 
-    /// Also requests one sender epoch's received log entries, excluding the first
-    /// `skip`. Can be called repeatedly to request several epochs' logs at once.
-    pub fn with_received_log(mut self, epoch: Epoch, skip: u64) -> Self {
-        self.request_received_log.insert(epoch, skip);
-        self
-    }
-
     /// Also requests the given sender epochs' received log entries, each excluding
     /// the given number of entries at the front of that epoch's log.
     pub fn with_received_logs(mut self, queries: impl IntoIterator<Item = (Epoch, u64)>) -> Self {
