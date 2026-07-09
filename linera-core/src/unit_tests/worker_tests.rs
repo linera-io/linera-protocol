@@ -52,7 +52,7 @@ use linera_chain::{
         IncomingBundle, LiteValue, LiteVote, MessageAction, MessageBundle, OperationResult,
         PostedMessage, ProposedBlock, Transaction, Vote,
     },
-    justification::{EquivocationProof, JustificationChain, JustificationLink},
+    justification::{JustificationChain, JustificationLink},
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
@@ -3645,23 +3645,19 @@ where
         )
         .await
         .unwrap_err();
-    let WorkerError::Equivocation(evidence) = &error else {
-        panic!("expected an equivocation error, got {error}");
+    let conflict = match &error {
+        WorkerError::ChainError(chain_error) => match &**chain_error {
+            ChainError::ConflictingCertifiedBlocks(conflict) => conflict,
+            other => panic!("expected a conflicting-blocks error, got {other}"),
+        },
+        other => panic!("expected a conflicting-blocks error, got {other}"),
     };
-    assert_eq!(evidence.conflict.existing_block, cert_a.hash());
-    assert_eq!(evidence.conflict.conflicting_block, cert_b.hash());
-    assert_eq!(evidence.conflict.witness_block, cert_child.hash());
-    assert_eq!(evidence.conflict.height, BlockHeight::ZERO);
-    // The evidence carries the two signed certificates themselves.
-    assert_eq!(evidence.existing.hash(), cert_a.hash());
-    assert_eq!(evidence.witness.hash(), cert_child.hash());
-    assert!(!evidence.existing.signatures().is_empty());
-    assert!(!evidence.witness.signatures().is_empty());
-    // The witness only commits to the conflicting block via its parent link; the
-    // certificates are at different heights, so no individual signature pair is
-    // contradictory. Per-validator proofs require the conflicting block's own
-    // certificate.
-    assert!(evidence.proofs.is_empty());
+    // The child commits to the conflicting height-0 block via its parent link, so
+    // it is the witness; the existing block is the one accepted at that height.
+    assert_eq!(conflict.existing_block, cert_a.hash());
+    assert_eq!(conflict.conflicting_block, cert_b.hash());
+    assert_eq!(conflict.witness_block, cert_child.hash());
+    assert_eq!(conflict.height, BlockHeight::ZERO);
 
     // Nothing was vouched for, and the child was not accepted. (The view holds a
     // read lock on the chain worker, so drop it before the next request.)
@@ -3674,23 +3670,23 @@ where
         );
     }
 
-    // Pushing the conflicting height-0 block itself is rejected the same way —
-    // and this time the two certificates confirm different blocks at the same
-    // height, so per-validator equivocation proofs can be extracted.
+    // Pushing the conflicting height-0 block itself is rejected the same way, with
+    // the block as its own witness — and rejected before it is written anywhere.
     let error = env
         .worker()
         .handle_confirmed_certificate(cert_b.clone(), ProcessConfirmedBlockMode::Preprocess, None)
         .await
         .unwrap_err();
-    let WorkerError::Equivocation(evidence) = &error else {
-        panic!("expected an equivocation error, got {error}");
+    let conflict = match &error {
+        WorkerError::ChainError(chain_error) => match &**chain_error {
+            ChainError::ConflictingCertifiedBlocks(conflict) => conflict,
+            other => panic!("expected a conflicting-blocks error, got {other}"),
+        },
+        other => panic!("expected a conflicting-blocks error, got {other}"),
     };
-    assert_eq!(evidence.conflict.existing_block, cert_a.hash());
-    assert_eq!(evidence.conflict.conflicting_block, cert_b.hash());
-    assert_eq!(evidence.conflict.witness_block, cert_b.hash());
-    assert_eq!(evidence.witness.hash(), cert_b.hash());
-    // The conflicting certificate is carried only in the evidence — it was never
-    // written to storage.
+    assert_eq!(conflict.existing_block, cert_a.hash());
+    assert_eq!(conflict.conflicting_block, cert_b.hash());
+    assert_eq!(conflict.witness_block, cert_b.hash());
     assert!(
         !env.worker()
             .storage
@@ -3698,17 +3694,6 @@ where
             .await?,
         "the rejected conflicting certificate must not be persisted",
     );
-    assert_eq!(
-        evidence.proofs.len(),
-        1,
-        "expected one proof per double-signing validator"
-    );
-    let proof = &evidence.proofs[0];
-    assert_matches!(proof, EquivocationProof::DoubleVote { .. });
-    assert_eq!(proof.validator(), env.executing_worker().public_key());
-    proof
-        .check(env.committee())
-        .expect("the extracted proof should be self-contained and valid");
 
     Ok(())
 }

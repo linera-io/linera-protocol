@@ -28,13 +28,12 @@ use linera_cache::{Arc as CacheArc, UniqueValueCache, ValueCache, DEFAULT_CLEANU
 use linera_chain::ChainExecutionContext;
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, MessageBundle, ProposedBlock},
-    justification::{extract_equivocations, EquivocationProof},
     types::{
         Block, CertificateValue, Certified, ConfirmedBlock, ConfirmedBlockCertificate,
         GenericCertificate, LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock,
         ValidatedBlockCertificate,
     },
-    ChainError, ChainStateView, ConflictingCertifiedBlocks, StreamCounts,
+    ChainError, ChainStateView, StreamCounts,
 };
 use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome, ResourceTracker};
 use linera_storage::{Clock as _, Storage};
@@ -392,11 +391,6 @@ pub enum WorkerError {
         epoch: Epoch,
         height: BlockHeight,
     },
-    /// Two certificates jointly certify conflicting blocks at the same height of
-    /// the same chain: proof that a committee equivocated. Neither block is
-    /// accepted.
-    #[error("{}", .0.conflict)]
-    Equivocation(Box<EquivocationEvidence>),
     /// The epoch has been revoked on the admin chain, so its committee must not
     /// create any new signatures. A chain that failed to migrate to a newer epoch
     /// before the revocation is frozen.
@@ -469,54 +463,6 @@ pub enum WorkerError {
     BatchRolledBack,
 }
 
-/// The evidence for [`WorkerError::Equivocation`]: two certificates that jointly
-/// assert conflicting blocks at the same height of the same chain. `existing`
-/// certifies the block already accepted there; `witness` asserts a different one
-/// — it is either the conflicting block's own certificate, or the certificate of
-/// an accepted block that commits to the conflicting block via
-/// `previous_block_hash` or `previous_message_blocks`. Either way, at least one
-/// of the two signing quorums violated the protocol.
-#[derive(Debug)]
-pub struct EquivocationEvidence {
-    /// The conflict, naming the chain, the height and the block hashes involved.
-    pub conflict: ConflictingCertifiedBlocks,
-    /// The certificate of the block already accepted at the conflicting height.
-    pub existing: ConfirmedBlockCertificate,
-    /// The certificate asserting a conflicting block at that height.
-    pub witness: ConfirmedBlockCertificate,
-    /// Per-validator [`EquivocationProof`]s extracted from the two certificates:
-    /// one for every validator whose own signatures on them contradict each
-    /// other. When the witness is the conflicting block's own certificate and the
-    /// two blocks were confirmed by the same committee, the proven validators
-    /// hold at least a third of the committee's weight. The list is empty when
-    /// the witness only commits to the conflicting block via its parent or
-    /// previous-message-block links (no vote of its quorum is at the conflicting
-    /// height), or when the two certificates' committees do not intersect; the
-    /// certificate pair itself remains the evidence then.
-    pub proofs: Vec<EquivocationProof>,
-}
-
-impl EquivocationEvidence {
-    /// Assembles the evidence for a conflict from the two certificates involved,
-    /// extracting whatever per-validator proofs they support.
-    pub fn new(
-        conflict: ConflictingCertifiedBlocks,
-        existing: ConfirmedBlockCertificate,
-        witness: ConfirmedBlockCertificate,
-    ) -> Self {
-        let proofs = extract_equivocations(
-            &existing.justified_confirmation(),
-            &witness.justified_confirmation(),
-        );
-        Self {
-            conflict,
-            existing,
-            witness,
-            proofs,
-        }
-    }
-}
-
 impl WorkerError {
     /// Returns whether this error is caused by an issue in the local node.
     ///
@@ -531,7 +477,6 @@ impl WorkerError {
             | WorkerError::InvalidEpoch { .. }
             | WorkerError::EpochRevoked { .. }
             | WorkerError::VoteInRevokedEpoch { .. }
-            | WorkerError::Equivocation(_)
             | WorkerError::EventsNotFound(_)
             | WorkerError::InvalidBlockChaining
             | WorkerError::InvalidTimestamp { .. }
