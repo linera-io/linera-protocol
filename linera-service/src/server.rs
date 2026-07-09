@@ -367,6 +367,12 @@ struct ValidatorOptions {
     /// The network protocol for workers.
     internal_protocol: NetworkProtocol,
 
+    /// The TLS mode the proxy binds its public listener with, when it differs
+    /// from `external_protocol` (the advertised one) — e.g. `"ClearText"` when
+    /// an ingress terminates TLS in front of the proxy. Optional.
+    #[serde(default)]
+    public_listen_protocol: Option<TlsConfig>,
+
     /// The public name and the port of each of the shards
     shards: Vec<ShardConfig>,
 
@@ -405,6 +411,7 @@ fn make_server_config<R: CryptoRng>(
             validator,
             validator_secret: validator_keypair.secret_key,
             internal_network,
+            public_listen_protocol: options.public_listen_protocol,
         },
     )?)
 }
@@ -818,6 +825,7 @@ mod test {
                 internal_protocol: NetworkProtocol::Simple(TransportProtocol::Udp),
                 host: "host".into(),
                 port: 9000,
+                public_listen_protocol: None,
                 proxies: vec![ProxyConfig {
                     host: "proxy".into(),
                     public_port: 20100,

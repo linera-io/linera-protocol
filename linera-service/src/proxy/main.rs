@@ -26,7 +26,7 @@ use linera_core::{node::NodeError, JoinSetExt as _};
 use linera_metrics::monitoring_server;
 use linera_rpc::{
     config::{
-        NetworkProtocol, ShardConfig, TlsConfig, ValidatorInternalNetworkPreConfig,
+        NetworkProtocol, ShardConfig, ValidatorInternalNetworkPreConfig,
         ValidatorPublicNetworkPreConfig,
     },
     simple::{MessageHandler, TransportProtocol},
@@ -90,15 +90,6 @@ pub struct ProxyOptions {
     #[arg(long)]
     id: Option<usize>,
 
-    /// Overrides the TLS mode of the proxy's public listener, independently of the
-    /// protocol advertised for this validator in the committee
-    /// (`validator.network.protocol` in the server configuration). Set to `cleartext`
-    /// when an ingress in front of the proxy (e.g. a gateway) terminates TLS, so
-    /// clients keep dialing the advertised `tls` endpoint while the proxy itself
-    /// listens in plaintext. Only supported for gRPC networks.
-    #[arg(long, env = "LINERA_PROXY_PUBLIC_PROTOCOL", value_parser = parse_tls_config)]
-    public_protocol: Option<TlsConfig>,
-
     /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
     #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
     otlp_exporter_endpoint: Option<String>,
@@ -107,14 +98,6 @@ pub struct ProxyOptions {
     #[cfg(feature = "jemalloc")]
     #[arg(long, env = "LINERA_ENABLE_MEMORY_PROFILING")]
     enable_memory_profiling: bool,
-}
-
-fn parse_tls_config(value: &str) -> Result<TlsConfig, String> {
-    match value.to_lowercase().as_str() {
-        "tls" => Ok(TlsConfig::Tls),
-        "cleartext" => Ok(TlsConfig::ClearText),
-        _ => Err(format!("expected 'tls' or 'cleartext', got '{value}'")),
-    }
 }
 
 impl ProxyOptions {
@@ -147,7 +130,6 @@ struct ProxyContext {
     recv_timeout: Duration,
     id: usize,
     enable_memory_profiling: bool,
-    public_protocol: Option<TlsConfig>,
 }
 
 impl ProxyContext {
@@ -160,7 +142,6 @@ impl ProxyContext {
             recv_timeout: options.recv_timeout,
             id: options.id.unwrap_or(0),
             enable_memory_profiling: options.enable_memory_profiling(),
-            public_protocol: options.public_protocol,
         })
     }
 }
@@ -201,10 +182,11 @@ where
     fn from_context(context: ProxyContext, storage: S) -> Result<Self> {
         let internal_protocol = context.config.internal_network.protocol;
         let external_protocol = context.config.validator.network.protocol;
-        if context.public_protocol.is_some()
+        let public_listen_protocol = context.config.public_listen_protocol;
+        if public_listen_protocol.is_some()
             && !matches!(external_protocol, NetworkProtocol::Grpc(_))
         {
-            bail!("--public-protocol is only supported for gRPC networks");
+            bail!("public_listen_protocol is only supported for gRPC networks");
         }
         let proxy = match (internal_protocol, external_protocol) {
             (NetworkProtocol::Grpc { .. }, NetworkProtocol::Grpc(tls)) => {
@@ -212,7 +194,10 @@ where
                     context.config.internal_network,
                     context.send_timeout,
                     context.recv_timeout,
-                    context.public_protocol.unwrap_or(tls),
+                    // The listener binds with the configured override (e.g. an
+                    // ingress terminates TLS in front of the proxy), while the
+                    // committee keeps advertising the external protocol.
+                    public_listen_protocol.unwrap_or(tls),
                     storage,
                     context.id,
                 ))

@@ -13,7 +13,7 @@ use linera_execution::{
     committee::{Committee, ValidatorState},
     ResourceControlPolicy,
 };
-use linera_rpc::config::{ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
+use linera_rpc::config::{TlsConfig, ValidatorInternalNetworkConfig, ValidatorPublicNetworkConfig};
 use serde::{Deserialize, Serialize};
 
 /// The public configuration of a validator.
@@ -36,6 +36,13 @@ pub struct ValidatorServerConfig {
     pub validator_secret: ValidatorSecretKey,
     /// The internal network configuration of the validator.
     pub internal_network: ValidatorInternalNetworkConfig,
+    /// The TLS mode of the proxy's public listener, when it differs from the
+    /// protocol advertised for this validator in the committee (e.g. an ingress
+    /// in front of the proxy terminates TLS, so clients dial `tls` while the
+    /// proxy itself listens in cleartext). `None` = listen with the advertised
+    /// protocol. Only meaningful for gRPC networks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub public_listen_protocol: Option<TlsConfig>,
 }
 
 /// The (public) configuration for all validators.
