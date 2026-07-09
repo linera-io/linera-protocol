@@ -1253,9 +1253,8 @@ mod tests {
     }
 
     /// Dropping the owner guard without completing must wake subscribers — they fall back to
-    /// executing the request themselves — rather than leaving them blocked forever. Regression
-    /// test for the cold-sync hang where a cancelled `communicate_with_quorum` branch leaked the
-    /// in-flight entry, so its subscribers' `recv().await` never returned.
+    /// executing the request themselves — rather than leaving them blocked forever, since a
+    /// dropped owner leaves the in-flight entry that the subscribers' `recv().await` waits on.
     #[tokio::test]
     async fn test_owner_drop_wakes_subscribers() {
         use linera_base::identifiers::BlobType;
