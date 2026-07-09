@@ -268,9 +268,10 @@ where
     }
 
     /// Filters bundles destined for this chain to drop ones already received and to refuse
-    /// ones whose epoch has been revoked on the admin chain.
+    /// ones whose epoch has settled on the admin chain (a quorum of the next epoch's
+    /// commitments; revocation alone leaves the committee bonded and its bundles trusted).
     ///
-    /// A revoked-epoch bundle is still accepted if (a) it has already been executed by
+    /// A settled-epoch bundle is still accepted if (a) it has already been executed by
     /// anticipation (`bundle.height <= last_anticipated_block_height`), or (b) a later
     /// bundle in the same batch is in a still-trusted epoch — that bundle's certificate
     /// transitively re-certifies all preceding ones via prev-hash chaining.
@@ -294,9 +295,9 @@ where
             if bundle.height < next_height_to_receive {
                 skipped_len = i + 1;
             }
-            let is_revoked = self
+            let is_settled = self
                 .storage
-                .is_epoch_revoked(*epoch)
+                .is_epoch_settled(*epoch)
                 .await
                 .map_err(|error| {
                     WorkerError::ChainError(Box::new(ChainError::ExecutionError(
@@ -304,7 +305,7 @@ where
                         ChainExecutionContext::Block,
                     )))
                 })?;
-            if !is_revoked || Some(bundle.height) <= last_anticipated_block_height {
+            if !is_settled || Some(bundle.height) <= last_anticipated_block_height {
                 trusted_len = i + 1;
             }
         }

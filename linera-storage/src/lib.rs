@@ -591,6 +591,19 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         Ok(weight >= committee.quorum_threshold())
     }
 
+    /// Returns whether the given epoch is *settled*: a quorum of the next epoch's
+    /// committee has published commitments on the admin chain. Once an epoch is
+    /// settled, its committee may unbond, so its raw signatures are no longer
+    /// trustworthy — only blocks covered by a quorum of its commitments are. Until
+    /// then the committee is still bonded and its signatures remain acceptable,
+    /// even after the epoch has been revoked (see PoS.md).
+    async fn is_epoch_settled(&self, epoch: Epoch) -> Result<bool, ExecutionError> {
+        let Ok(next_epoch) = epoch.try_add_one() else {
+            return Ok(false);
+        };
+        self.commitment_quorum_reached(next_epoch).await
+    }
+
     /// Lists the blob IDs in storage.
     async fn list_blob_ids(&self) -> Result<Vec<BlobId>, ViewError>;
 

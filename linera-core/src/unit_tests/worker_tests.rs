@@ -236,6 +236,63 @@ where
         Ok(())
     }
 
+    /// Makes the given epoch *settled* in both workers' storage: creates the next
+    /// epoch's committee (reusing the genesis committee) and records a quorum of
+    /// its commitments, so `is_epoch_settled(epoch)` returns true. The stored
+    /// manifests are only read for their `(epoch, validator)`, so a throwaway
+    /// signature suffices.
+    async fn settle_epoch(&self, epoch: Epoch) -> Result<(), anyhow::Error> {
+        let next_epoch = epoch.try_add_one()?;
+        let admin_chain_id = self.admin_chain_id();
+        let blob_hash = self
+            .worker
+            .storage_client()
+            .read_network_description()
+            .await?
+            .unwrap()
+            .genesis_committee_blob_hash;
+        let mut events = vec![(
+            EventId {
+                chain_id: admin_chain_id,
+                stream_id: StreamId::system(EPOCH_STREAM_NAME),
+                index: next_epoch.0,
+            },
+            bcs::to_bytes(&EpochEventData {
+                blob_hash,
+                timestamp: Timestamp::from(0),
+            })?,
+        )];
+        let throwaway = ValidatorKeypair::generate();
+        for (index, validator) in (0u32..).zip(self.committee.validators().keys()) {
+            let manifest = CommitmentManifest {
+                epoch: next_epoch,
+                validator: *validator,
+                blob_hashes: Vec::new(),
+            };
+            let signature = ValidatorSignature::new(&manifest, &throwaway.secret_key);
+            events.push((
+                EventId {
+                    chain_id: admin_chain_id,
+                    stream_id: StreamId::system(COMMITMENT_STREAM_NAME),
+                    index,
+                },
+                bcs::to_bytes(&SignedCommitmentManifest {
+                    manifest,
+                    signature,
+                })?,
+            ));
+        }
+        self.worker
+            .storage_client()
+            .write_events(events.clone())
+            .await?;
+        self.executing_worker
+            .storage_client()
+            .write_events(events)
+            .await?;
+        Ok(())
+    }
+
     pub async fn register_mock_application(
         &self,
         chain_id: ChainId,
@@ -3176,6 +3233,10 @@ where
         .fully_handle_certificate_with_notifications(certificate1.clone(), &())
         .await?;
 
+    // Settle epoch 0 (a quorum of epoch-1 commitments): only then is it distrusted,
+    // and its cross-chain messages refused. Revocation alone leaves it trusted.
+    env.settle_epoch(Epoch::ZERO).await?;
+
     // Try to execute the transfer from the user chain to the admin chain.
     env.worker()
         .fully_handle_certificate_with_notifications(certificate0.clone(), &())
@@ -3195,7 +3256,7 @@ where
         );
         assert_eq!(*user_chain.execution_state.system.epoch.get(), Epoch::ZERO);
 
-        // .. but the message has been refused: epoch 0 is revoked on the admin chain.
+        // .. but the message has been refused: epoch 0 has settled on the admin chain.
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
         assert!(admin_chain.is_active().await?);
         assert!(admin_chain.inboxes.indices().await?.is_empty());
@@ -3539,19 +3600,10 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let chain_1 = env
         .add_root_chain(1, AccountOwner::CHAIN, Amount::ZERO)
         .await;
-    // Mark epoch 0 as revoked so the helper rejects bundles signed by it,
-    // unless they're re-certified by a later trusted-epoch bundle.
-    env.worker()
-        .storage_client()
-        .write_events([(
-            EventId {
-                chain_id: env.admin_chain_id(),
-                stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
-                index: 0,
-            },
-            Vec::new(),
-        )])
-        .await?;
+    // Settle epoch 0 so the helper rejects bundles signed by it, unless they're
+    // re-certified by a later trusted-epoch bundle. (Revocation alone leaves the
+    // committee bonded and its bundles trusted; only settlement distrusts them.)
+    env.settle_epoch(Epoch::ZERO).await?;
 
     let chain_0 = env.admin_description.clone();
     let key_pair0 = AccountSecretKey::generate();

@@ -2071,7 +2071,10 @@ impl<Env: Environment> Client<Env> {
         let view_err = |error: ExecutionError| NodeError::ViewError {
             error: error.to_string(),
         };
-        if storage.is_epoch_revoked(epoch).await.map_err(view_err)? {
+        // A revoked epoch's certificates stay acceptable until the epoch settles —
+        // a quorum of the next epoch's commitments — because its committee is still
+        // bonded until then. After settlement, only covered blocks are trusted.
+        if storage.is_epoch_settled(epoch).await.map_err(view_err)? {
             return Ok(CheckCertificateResult::OldEpoch);
         }
         let Some(committee) = storage.committee_for_epoch(epoch).await.map_err(view_err)? else {
