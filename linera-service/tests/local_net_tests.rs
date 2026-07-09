@@ -233,6 +233,26 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         )
         .await?;
 
+    if matches!(network, Network::Grpc) {
+        // Epochs 0–2 are revoked. The last remaining validator belonged to the
+        // epoch-1 and epoch-2 committees, so its proxy's commitment agent (which
+        // ticks every 60 seconds) freezes those epochs and prepares signed
+        // commitments; `register-commitments` collects and publishes them on the
+        // admin chain. (The removed validators' commitments are unreachable and
+        // simply skipped.)
+        let mut registered = 0;
+        for _ in 0..30 {
+            registered += client.register_commitments().await?;
+            if registered >= 2 {
+                break;
+            }
+            linera_base::time::timer::sleep(Duration::from_secs(5)).await;
+        }
+        assert_eq!(registered, 2);
+        // Everything pending is registered now; another run is a no-op.
+        assert_eq!(client.register_commitments().await?, 0);
+    }
+
     if let Some((service, notifications)) = &mut node_service_2 {
         let height = client
             .load_wallet()?

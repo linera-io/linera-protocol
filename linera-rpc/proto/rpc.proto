@@ -288,6 +288,9 @@ message ChainInfoQuery {
   // Query the height of the most recent block whose certificate records an
   // OracleResponse::Checkpoint, if any.
   bool request_latest_checkpoint_height = 11;
+
+  // Query the validator's own pending epoch commitments.
+  bool request_pending_commitments = 12;
 }
 
 // An authenticated proposal for a new block.

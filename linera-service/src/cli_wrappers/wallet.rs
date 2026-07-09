@@ -1318,6 +1318,27 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera register-commitments` and returns the number of newly
+    /// registered commitments.
+    pub async fn register_commitments(&self) -> Result<usize> {
+        let stdout = self
+            .command()
+            .await?
+            .arg("register-commitments")
+            .spawn_and_wait_for_stdout()
+            .await?;
+        let count = stdout
+            .lines()
+            .find_map(|line| {
+                line.strip_prefix("Registered ")?
+                    .strip_suffix(" commitment(s)")?
+                    .parse()
+                    .ok()
+            })
+            .context("missing commitment count in output")?;
+        Ok(count)
+    }
+
     /// Runs `linera resource-control-policy` with the given overrides.
     pub async fn set_resource_control_policy(
         &self,

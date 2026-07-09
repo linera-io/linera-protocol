@@ -752,6 +752,25 @@ impl Runnable for Job {
                 );
             }
 
+            RegisterCommitments => {
+                let mut context = options
+                    .create_client_context(storage, wallet, keystore)
+                    .await?;
+                let chain_client = context
+                    .make_chain_client(context.wallet().genesis_admin_chain_id())
+                    .await?;
+                let count = context
+                    .apply_client_command(&chain_client, |chain_client| {
+                        let chain_client = chain_client.clone();
+                        async move { chain_client.register_commitments().await }
+                    })
+                    .await
+                    .context("Failed to register commitments")?;
+                context.wallet().save()?;
+                // Parsed by tooling; keep the format stable.
+                println!("Registered {count} commitment(s)");
+            }
+
             #[cfg_attr(
                 not(feature = "opentelemetry"),
                 allow(unreachable_code, unused_variables)

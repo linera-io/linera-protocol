@@ -21,7 +21,8 @@ use linera_base::{
     crypto::{signer, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlobContent,
-        BlockHeight, ChainDescription, Epoch, MessagePolicy, Round, TimeDelta, Timestamp,
+        BlockHeight, ChainDescription, Epoch, MessagePolicy, Round, SignedCommitmentManifest,
+        TimeDelta, Timestamp,
     },
     ensure,
     identifiers::{
@@ -48,8 +49,8 @@ use linera_chain::{
 use linera_execution::{
     committee::Committee,
     system::{
-        AdminOperation, OpenChainConfig, SystemOperation, EPOCH_STREAM_NAME,
-        REMOVED_EPOCH_STREAM_NAME,
+        AdminOperation, OpenChainConfig, SystemOperation, COMMITMENT_STREAM_NAME,
+        EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME,
     },
     ExecutionError, Operation, Query, QueryOutcome,
 };
@@ -2945,6 +2946,77 @@ impl<Env: Environment> ChainClient<Env> {
         }
         ensure!(!operations.is_empty(), Error::EpochAlreadyRevoked);
         self.execute_operations(operations, vec![]).await
+    }
+
+    /// Registers validators' pending epoch commitments on the admin chain:
+    /// queries every current validator for the signed commitment manifests it
+    /// holds, downloads their blobs, and publishes the ones not registered yet.
+    /// Unreachable validators are skipped — their commitments are picked up by a
+    /// later call. Returns the number of newly registered commitments.
+    #[instrument(level = "trace")]
+    pub async fn register_commitments(&self) -> Result<ClientOutcome<usize>, Error> {
+        self.prepare_chain().await?;
+        let registered = self
+            .events_from_index(StreamId::system(COMMITMENT_STREAM_NAME), 0)
+            .await?
+            .into_iter()
+            .map(|index_and_event| {
+                let manifest: SignedCommitmentManifest = bcs::from_bytes(&index_and_event.event)?;
+                Ok((manifest.manifest.epoch, manifest.manifest.validator))
+            })
+            .collect::<Result<BTreeSet<_>, bcs::Error>>()?;
+        // Collect each validator's pending manifests and their blobs, concurrently.
+        let nodes = self.client.validator_nodes().await?;
+        let query = ChainInfoQuery::new(self.chain_id).with_pending_commitments();
+        let collected = future::join_all(nodes.iter().map(|remote| {
+            let query = query.clone();
+            async move {
+                let response = remote.node.handle_chain_info_query(query).await.ok()?;
+                let mut result = Vec::new();
+                'manifests: for manifest in response.info.requested_pending_commitments {
+                    if manifest.check().is_err() {
+                        continue;
+                    }
+                    let mut blobs = Vec::new();
+                    for blob_hash in &manifest.manifest.blob_hashes {
+                        let blob_id = BlobId::new(*blob_hash, BlobType::EpochCommitment);
+                        let Ok(content) = remote.node.download_blob(blob_id).await else {
+                            continue 'manifests;
+                        };
+                        let blob = Blob::new(content);
+                        if blob.id() != blob_id {
+                            continue 'manifests;
+                        }
+                        blobs.push(blob);
+                    }
+                    result.push((manifest, blobs));
+                }
+                Some(result)
+            }
+        }))
+        .await;
+        let mut operations = Vec::new();
+        let mut blobs = Vec::new();
+        let mut seen = registered;
+        for (manifest, manifest_blobs) in collected.into_iter().flatten().flatten() {
+            if !seen.insert((manifest.manifest.epoch, manifest.manifest.validator)) {
+                continue;
+            }
+            operations.push(Operation::system(SystemOperation::Admin(
+                AdminOperation::RegisterCommitment {
+                    manifest: Box::new(manifest),
+                },
+            )));
+            blobs.extend(manifest_blobs);
+        }
+        if operations.is_empty() {
+            return Ok(ClientOutcome::Committed(0));
+        }
+        let count = operations.len();
+        Ok(self
+            .execute_operations(operations, blobs)
+            .await?
+            .map(|_| count))
     }
 
     /// Sends money to a chain.

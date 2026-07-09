@@ -545,6 +545,12 @@ pub enum ClientCommand {
         epoch: Epoch,
     },
 
+    /// Registers validators' pending epoch commitments on the admin chain:
+    /// queries every validator for the signed commitment manifests it holds for
+    /// revoked epochs, downloads their blobs, and publishes the ones not
+    /// registered yet.
+    RegisterCommitments,
+
     /// View or update the resource control policy
     ResourceControlPolicy {
         /// Overrides for individual resource control policy parameters.
@@ -1136,6 +1142,7 @@ impl ClientCommand {
             | ClientCommand::QueryShardInfo { .. }
             | ClientCommand::ResourceControlPolicy { .. }
             | ClientCommand::RevokeEpochs { .. }
+            | ClientCommand::RegisterCommitments
             | ClientCommand::CreateGenesisConfig { .. }
             | ClientCommand::PublishModule { .. }
             | ClientCommand::ListEventsFromIndex { .. }

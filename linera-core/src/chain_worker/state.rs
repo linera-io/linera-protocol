@@ -470,12 +470,16 @@ where
     /// `BlocksNotFound`, so the proposing client can push it — validators never
     /// fetch. Execution itself only checks the manifest (signature, membership,
     /// blob presence); this is the deep check that runs before this worker signs
-    /// a vote for the block.
+    /// a vote for the block — a node without a validator key creates no votes
+    /// and skips it, since it may not hold the other chains' certificates.
     async fn check_epoch_commitments<'a>(
         &self,
         operations: impl Iterator<Item = &'a Operation>,
         blobs: &BTreeMap<BlobId, &Blob>,
     ) -> Result<(), WorkerError> {
+        if self.config.key_pair().is_none() {
+            return Ok(());
+        }
         for operation in operations {
             let Operation::System(operation) = operation else {
                 continue;
@@ -2957,6 +2961,9 @@ where
         }
         if query.request_latest_checkpoint_height {
             info.requested_latest_checkpoint_height = *self.chain.latest_checkpoint_height.get();
+        }
+        if query.request_pending_commitments {
+            info.requested_pending_commitments = self.storage.pending_commitments().await?;
         }
         Ok(ChainInfoResponse::new(info, self.config.key_pair()))
     }

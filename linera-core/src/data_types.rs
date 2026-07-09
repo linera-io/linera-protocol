@@ -10,7 +10,9 @@ use linera_base::{
         BcsSignable, CryptoError, CryptoHash, ValidatorPublicKey, ValidatorSecretKey,
         ValidatorSignature,
     },
-    data_types::{Amount, BlockHeight, ChainDescription, Epoch, Round, Timestamp},
+    data_types::{
+        Amount, BlockHeight, ChainDescription, Epoch, Round, SignedCommitmentManifest, Timestamp,
+    },
     identifiers::{AccountOwner, ChainId, StreamId},
 };
 use linera_chain::{
@@ -64,6 +66,10 @@ pub struct ChainInfoQuery {
     /// to skip downloading and replaying pre-checkpoint blocks.
     #[debug(skip_if = Not::not)]
     pub request_latest_checkpoint_height: bool,
+    /// Query the validator's own pending epoch commitments, so the admin chain's
+    /// proposer can register them.
+    #[debug(skip_if = Not::not)]
+    pub request_pending_commitments: bool,
 }
 
 impl ChainInfoQuery {
@@ -81,12 +87,19 @@ impl ChainInfoQuery {
             request_sent_certificate_hashes_by_heights: Vec::new(),
             request_previous_event_blocks: Vec::new(),
             request_latest_checkpoint_height: false,
+            request_pending_commitments: false,
         }
     }
 
     /// Also requests the height of the most recent checkpoint block.
     pub fn with_latest_checkpoint_height(mut self) -> Self {
         self.request_latest_checkpoint_height = true;
+        self
+    }
+
+    /// Also requests the validator's own pending epoch commitments.
+    pub fn with_pending_commitments(mut self) -> Self {
+        self.request_pending_commitments = true;
         self
     }
 
@@ -185,6 +198,10 @@ pub struct ChainInfo {
     /// `None` if no such block exists or the field was not requested.
     #[debug(skip_if = Option::is_none)]
     pub requested_latest_checkpoint_height: Option<BlockHeight>,
+    /// The response to `request_pending_commitments`: the queried validator's own
+    /// signed commitment manifests awaiting publication on the admin chain.
+    #[debug(skip_if = Vec::is_empty)]
+    pub requested_pending_commitments: Vec<SignedCommitmentManifest>,
 }
 
 impl ChainInfo {
@@ -303,6 +320,7 @@ impl ChainInfo {
             requested_received_log: Vec::new(),
             requested_previous_event_blocks: BTreeMap::new(),
             requested_latest_checkpoint_height: None,
+            requested_pending_commitments: Vec::new(),
         })
     }
 }

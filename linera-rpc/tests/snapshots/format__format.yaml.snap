@@ -348,6 +348,9 @@ ChainInfo:
     - requested_latest_checkpoint_height:
         OPTION:
           TYPENAME: BlockHeight
+    - requested_pending_commitments:
+        SEQ:
+          TYPENAME: SignedCommitmentManifest
 ChainInfoQuery:
   STRUCT:
     - chain_id:
@@ -374,6 +377,7 @@ ChainInfoQuery:
         SEQ:
           TYPENAME: StreamId
     - request_latest_checkpoint_height: BOOL
+    - request_pending_commitments: BOOL
 ChainInfoResponse:
   STRUCT:
     - info:
