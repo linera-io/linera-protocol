@@ -22,6 +22,7 @@ use async_graphql::{InputObject, SimpleObject};
 use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_name::{DeserializeNameAdapter, SerializeNameAdapter};
 use serde_with::{serde_as, Bytes};
 use thiserror::Error;
 use tracing::instrument;
@@ -291,7 +292,7 @@ where
     }
 }
 
-/// A non-negative amount of tokens.
+/// A non-negative amount of tokens with default precision.
 ///
 /// This is a fixed-point fraction, with [`Amount::DECIMAL_PLACES`] digits after the point.
 /// [`Amount::ONE`] is one whole token, divisible into `10.pow(Amount::DECIMAL_PLACES)` parts.
@@ -365,6 +366,327 @@ impl TryFrom<U256> for Amount {
     fn try_from(value: U256) -> Result<Amount, Self::Error> {
         let value = u128::try_from(&value).map_err(|_| AmountConversionError(value))?;
         Ok(Amount(value))
+    }
+}
+
+/// A non-negative amount of tokens with fixed (yet configurable) precision.
+///
+/// The type is "branded" by a type `T` implementing [`Token`]
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, WitType, WitLoad, WitStore,
+)]
+#[cfg_attr(
+    all(with_testing, not(target_arch = "wasm32")),
+    derive(test_strategy::Arbitrary)
+)]
+pub struct TokenAmount<T> {
+    inner: u128,
+    tag: std::marker::PhantomData<T>,
+}
+
+/// The specification of a token for [`TokenAmount`].
+pub trait Token:
+    Eq
+    + PartialEq
+    + Ord
+    + PartialOrd
+    + Copy
+    + Clone
+    + Hash
+    + Default
+    + std::fmt::Debug
+    + WitType
+    + WitLoad
+    + WitStore
+{
+    /// The name of the token.
+    const NAME: &'static str;
+
+    /// The precision given as a number of decimals.
+    fn decimals() -> u8;
+}
+
+/// The native token.
+// TODO: remove this
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, WitType, WitLoad, WitStore,
+)]
+pub struct NativeToken;
+
+impl Token for NativeToken {
+    const NAME: &str = "Amount";
+
+    fn decimals() -> u8 {
+        // For compatibility until we remove `Amount` entirely
+        Amount::DECIMAL_PLACES
+    }
+}
+
+impl<T: Token> Allocative for TokenAmount<T> {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        visitor.visit_simple_sized::<Self>();
+    }
+}
+
+impl<T: Token> Display for TokenAmount<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Print the wrapped integer, padded with zeros to cover a digit before the decimal point.
+        let places = T::decimals() as usize;
+        let min_digits = places + 1;
+        let decimals = format!("{:0min_digits$}", self.inner);
+        let integer_part = &decimals[..(decimals.len() - places)];
+        let fractional_part = decimals[(decimals.len() - places)..].trim_end_matches('0');
+
+        // For now, we never trim non-zero digits so we don't lose any precision.
+        let precision = f.precision().unwrap_or(0).max(fractional_part.len());
+        let sign = if f.sign_plus() && self.inner > 0 {
+            "+"
+        } else {
+            ""
+        };
+        // The amount of padding: desired width minus sign, point and number of digits.
+        let pad_width = f.width().map_or(0, |w| {
+            w.saturating_sub(precision)
+                .saturating_sub(sign.len() + integer_part.len() + 1)
+        });
+        let left_pad = match f.align() {
+            None | Some(fmt::Alignment::Right) => pad_width,
+            Some(fmt::Alignment::Center) => pad_width / 2,
+            Some(fmt::Alignment::Left) => 0,
+        };
+
+        for _ in 0..left_pad {
+            write!(f, "{}", f.fill())?;
+        }
+        write!(f, "{sign}{integer_part}.{fractional_part:0<precision$}")?;
+        for _ in left_pad..pad_width {
+            write!(f, "{}", f.fill())?;
+        }
+        Ok(())
+    }
+}
+
+impl<T: Token> FromStr for TokenAmount<T> {
+    type Err = ParseAmountError;
+
+    fn from_str(src: &str) -> Result<Self, Self::Err> {
+        let mut result: u128 = 0;
+        let mut decimals: Option<u8> = None;
+        let mut chars = src.trim().chars().peekable();
+        if chars.peek() == Some(&'+') {
+            chars.next();
+        }
+        for char in chars {
+            match char {
+                '_' => {}
+                '.' if decimals.is_some() => return Err(ParseAmountError::Parse),
+                '.' => decimals = Some(T::decimals()),
+                char => {
+                    let digit = u128::from(char.to_digit(10).ok_or(ParseAmountError::Parse)?);
+                    if let Some(d) = &mut decimals {
+                        *d = d.checked_sub(1).ok_or(ParseAmountError::TooManyDigits)?;
+                    }
+                    result = result
+                        .checked_mul(10)
+                        .and_then(|r| r.checked_add(digit))
+                        .ok_or(ParseAmountError::TooHigh)?;
+                }
+            }
+        }
+        result = result
+            .checked_mul(10u128.pow(decimals.unwrap_or_else(T::decimals) as u32))
+            .ok_or(ParseAmountError::TooHigh)?;
+        Ok(Self::new(result))
+    }
+}
+
+impl<T: Token> Serialize for TokenAmount<T> {
+    fn serialize<S: serde::ser::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Override the container names below.
+        let serializer = SerializeNameAdapter::new(serializer, T::NAME);
+        if serializer.is_human_readable() {
+            AmountString(self.to_string()).serialize(serializer)
+        } else {
+            AmountU128(self.inner).serialize(serializer)
+        }
+    }
+}
+
+impl<'de, T: Token> Deserialize<'de> for TokenAmount<T> {
+    fn deserialize<D: serde::de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        // Override the container names below.
+        let deserializer = DeserializeNameAdapter::new(deserializer, T::NAME);
+        if deserializer.is_human_readable() {
+            let AmountString(s) = AmountString::deserialize(deserializer)?;
+            s.parse().map_err(serde::de::Error::custom)
+        } else {
+            Ok(Self::new(AmountU128::deserialize(deserializer)?.0))
+        }
+    }
+}
+
+impl<'a, T: Token> iter::Sum<&'a TokenAmount<T>> for TokenAmount<T> {
+    fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
+        iter.fold(Self::ZERO, |a, b| a.saturating_add(*b))
+    }
+}
+
+impl<T> TokenAmount<T> {
+    const fn new(inner: u128) -> Self {
+        Self {
+            inner,
+            tag: std::marker::PhantomData,
+        }
+    }
+
+    /// Zero tokens.
+    pub const ZERO: Self = Self::new(0);
+
+    /// Returns the inner value.
+    pub const fn to_inner(self) -> u128 {
+        self.inner
+    }
+
+    /// Returns whether this amount is 0.
+    pub fn is_zero(&self) -> bool {
+        self.inner == 0
+    }
+
+    /// Divides this by the other amount. If the other is 0, it returns `u128::MAX`.
+    pub fn saturating_ratio(self, other: Self) -> u128 {
+        self.inner.checked_div(other.inner).unwrap_or(u128::MAX)
+    }
+}
+
+impl<T: Token> TokenAmount<T> {
+    /// The precision in decimals.
+    pub fn decimals() -> u8 {
+        T::decimals()
+    }
+
+    /// One token.
+    pub fn one() -> Self {
+        TokenAmount::new(10u128.pow(T::decimals() as u32))
+    }
+
+    /// Checked addition.
+    pub fn try_add(self, other: Self) -> Result<Self, ArithmeticError> {
+        let val = self
+            .inner
+            .checked_add(other.inner)
+            .ok_or(ArithmeticError::Overflow)?;
+        Ok(Self::new(val))
+    }
+
+    /// Saturating addition.
+    pub const fn saturating_add(self, other: Self) -> Self {
+        let val = self.inner.saturating_add(other.inner);
+        Self::new(val)
+    }
+
+    /// Checked subtraction.
+    pub fn try_sub(self, other: Self) -> Result<Self, ArithmeticError> {
+        let val = self
+            .inner
+            .checked_sub(other.inner)
+            .ok_or(ArithmeticError::Underflow)?;
+        Ok(Self::new(val))
+    }
+
+    /// Saturating subtraction.
+    pub const fn saturating_sub(self, other: Self) -> Self {
+        let val = self.inner.saturating_sub(other.inner);
+        Self::new(val)
+    }
+
+    /// Returns the absolute difference between `self` and `other`.
+    pub fn abs_diff(self, other: Self) -> Self {
+        Self::new(self.inner.abs_diff(other.inner))
+    }
+
+    /// Returns the midpoint of `self` and `other`, rounded down.
+    pub const fn midpoint(self, other: Self) -> Self {
+        Self::new(self.inner.midpoint(other.inner))
+    }
+
+    /// Checked in-place addition.
+    pub fn try_add_assign(&mut self, other: Self) -> Result<(), ArithmeticError> {
+        self.inner = self
+            .inner
+            .checked_add(other.inner)
+            .ok_or(ArithmeticError::Overflow)?;
+        Ok(())
+    }
+
+    /// Saturating in-place addition.
+    pub const fn saturating_add_assign(&mut self, other: Self) {
+        self.inner = self.inner.saturating_add(other.inner);
+    }
+
+    /// Checked in-place subtraction.
+    pub fn try_sub_assign(&mut self, other: Self) -> Result<(), ArithmeticError> {
+        self.inner = self
+            .inner
+            .checked_sub(other.inner)
+            .ok_or(ArithmeticError::Underflow)?;
+        Ok(())
+    }
+
+    /// Saturating division.
+    pub fn saturating_div(&self, other: u128) -> Self {
+        Self::new(self.inner.checked_div(other).unwrap_or(u128::MAX))
+    }
+
+    /// Saturating multiplication.
+    pub const fn saturating_mul(&self, other: u128) -> Self {
+        Self::new(self.inner.saturating_mul(other))
+    }
+
+    /// Checked multiplication.
+    pub fn try_mul(self, other: u128) -> Result<Self, ArithmeticError> {
+        let val = self
+            .inner
+            .checked_mul(other)
+            .ok_or(ArithmeticError::Overflow)?;
+        Ok(Self::new(val))
+    }
+
+    /// Checked in-place multiplication.
+    pub fn try_mul_assign(&mut self, other: u128) -> Result<(), ArithmeticError> {
+        self.inner = self
+            .inner
+            .checked_mul(other)
+            .ok_or(ArithmeticError::Overflow)?;
+        Ok(())
+    }
+
+    /// Returns a `TokenAmount` corresponding to that many tokens, or `Amount::MAX` if saturated.
+    pub fn from_tokens(tokens: u128) -> Self {
+        Self::one().saturating_mul(tokens)
+    }
+
+    /// Returns a `TokenAmount` corresponding to that many millitokens, or `Amount::MAX` if saturated.
+    pub fn from_millis(millitokens: u128) -> Self {
+        assert!(T::decimals() >= 3);
+        Self::new(10u128.pow(T::decimals() as u32 - 3)).saturating_mul(millitokens)
+    }
+
+    /// Returns a `TokenAmount` corresponding to that many microtokens, or `Amount::MAX` if saturated.
+    pub fn from_micros(microtokens: u128) -> Self {
+        assert!(T::decimals() >= 6);
+        Self::new(10u128.pow(T::decimals() as u32 - 6)).saturating_mul(microtokens)
+    }
+
+    /// Returns a `TokenAmount` corresponding to that many nanotokens, or `Amount::MAX` if saturated.
+    pub fn from_nanos(nanotokens: u128) -> Self {
+        assert!(T::decimals() >= 9);
+        Self::new(10u128.pow(T::decimals() as u32 - 9)).saturating_mul(nanotokens)
+    }
+
+    /// Returns a `TokenAmount` corresponding to that many attotokens.
+    pub fn from_attos(attotokens: u128) -> Self {
+        assert!(T::decimals() >= 18);
+        Self::new(10u128.pow(T::decimals() as u32 - 18)).saturating_mul(attotokens)
     }
 }
 
