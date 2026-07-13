@@ -677,9 +677,8 @@ impl<T: Token> TokenAmount<T> {
         Ok(())
     }
 
-    /// Returns a `TokenAmount` for `amount` expressed in units of `10.pow(-unit_decimals)`
-    /// tokens, saturating at [`TokenAmount::MAX`]. If the token is coarser than the requested
-    /// unit, the sub-unit remainder is truncated towards zero.
+    /// Returns a `TokenAmount` for `amount` in units of `10.pow(-unit_decimals)` tokens,
+    /// saturating on overflow and truncating any sub-unit remainder towards zero.
     fn from_subunits(amount: u128, unit_decimals: u8) -> Self {
         let decimals = T::decimals();
         if decimals >= unit_decimals {
