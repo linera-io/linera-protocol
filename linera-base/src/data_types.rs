@@ -444,10 +444,14 @@ impl<T: Token> Display for TokenAmount<T> {
         } else {
             ""
         };
+        // A token with fractional places always shows the point (e.g. `1.`), matching the
+        // convention that its output round-trips through `FromStr`. A zero-decimal token is an
+        // integer, so the point only appears when a precision was explicitly requested.
+        let point = if places > 0 || precision > 0 { "." } else { "" };
         // The amount of padding: desired width minus sign, point and number of digits.
         let pad_width = f.width().map_or(0, |w| {
             w.saturating_sub(precision)
-                .saturating_sub(sign.len() + integer_part.len() + 1)
+                .saturating_sub(sign.len() + integer_part.len() + point.len())
         });
         let left_pad = match f.align() {
             None | Some(fmt::Alignment::Right) => pad_width,
@@ -458,7 +462,10 @@ impl<T: Token> Display for TokenAmount<T> {
         for _ in 0..left_pad {
             write!(f, "{}", f.fill())?;
         }
-        write!(f, "{sign}{integer_part}.{fractional_part:0<precision$}")?;
+        write!(
+            f,
+            "{sign}{integer_part}{point}{fractional_part:0<precision$}"
+        )?;
         for _ in left_pad..pad_width {
             write!(f, "{}", f.fill())?;
         }
@@ -541,6 +548,9 @@ impl<T> TokenAmount<T> {
 
     /// Zero tokens.
     pub const ZERO: Self = Self::new(0);
+
+    /// The maximum representable amount.
+    pub const MAX: Self = Self::new(u128::MAX);
 
     /// Returns the inner value.
     pub const fn to_inner(self) -> u128 {
@@ -660,24 +670,24 @@ impl<T: Token> TokenAmount<T> {
         Ok(())
     }
 
-    /// Returns a `TokenAmount` corresponding to that many tokens, or `Amount::MAX` if saturated.
+    /// Returns a `TokenAmount` corresponding to that many tokens, or [`TokenAmount::MAX`] if saturated.
     pub fn from_tokens(tokens: u128) -> Self {
         Self::one().saturating_mul(tokens)
     }
 
-    /// Returns a `TokenAmount` corresponding to that many millitokens, or `Amount::MAX` if saturated.
+    /// Returns a `TokenAmount` corresponding to that many millitokens, or [`TokenAmount::MAX`] if saturated.
     pub fn from_millis(millitokens: u128) -> Self {
         assert!(T::decimals() >= 3);
         Self::new(10u128.pow(T::decimals() as u32 - 3)).saturating_mul(millitokens)
     }
 
-    /// Returns a `TokenAmount` corresponding to that many microtokens, or `Amount::MAX` if saturated.
+    /// Returns a `TokenAmount` corresponding to that many microtokens, or [`TokenAmount::MAX`] if saturated.
     pub fn from_micros(microtokens: u128) -> Self {
         assert!(T::decimals() >= 6);
         Self::new(10u128.pow(T::decimals() as u32 - 6)).saturating_mul(microtokens)
     }
 
-    /// Returns a `TokenAmount` corresponding to that many nanotokens, or `Amount::MAX` if saturated.
+    /// Returns a `TokenAmount` corresponding to that many nanotokens, or [`TokenAmount::MAX`] if saturated.
     pub fn from_nanos(nanotokens: u128) -> Self {
         assert!(T::decimals() >= 9);
         Self::new(10u128.pow(T::decimals() as u32 - 9)).saturating_mul(nanotokens)
@@ -2559,6 +2569,85 @@ mod tests {
             "~+12.34~~",
             format!("{:~^+9.1}", Amount::from_str("12.34").unwrap())
         );
+    }
+
+    #[test]
+    fn display_token_amount() {
+        use linera_witty::{WitLoad, WitStore, WitType};
+
+        use super::{Token, TokenAmount};
+
+        // A token with two decimal places.
+        #[derive(
+            Eq,
+            PartialEq,
+            Ord,
+            PartialOrd,
+            Copy,
+            Clone,
+            Hash,
+            Default,
+            Debug,
+            WitType,
+            WitLoad,
+            WitStore,
+        )]
+        struct Cents;
+        impl Token for Cents {
+            const NAME: &'static str = "Cents";
+
+            fn decimals() -> u8 {
+                2
+            }
+        }
+
+        // A zero-decimal (integer) token.
+        #[derive(
+            Eq,
+            PartialEq,
+            Ord,
+            PartialOrd,
+            Copy,
+            Clone,
+            Hash,
+            Default,
+            Debug,
+            WitType,
+            WitLoad,
+            WitStore,
+        )]
+        struct Units;
+        impl Token for Units {
+            const NAME: &'static str = "Units";
+
+            fn decimals() -> u8 {
+                0
+            }
+        }
+
+        // A fractional token keeps the trailing point on whole numbers, like `Amount`.
+        assert_eq!("1.", TokenAmount::<Cents>::one().to_string());
+        assert_eq!(
+            "1.23",
+            TokenAmount::<Cents>::from_str("1.23").unwrap().to_string()
+        );
+        assert_eq!("1.00", format!("{:.2}", TokenAmount::<Cents>::one()));
+
+        // A zero-decimal token prints as a bare integer, with no dangling point.
+        assert_eq!(
+            "5",
+            TokenAmount::<Units>::from_str("5").unwrap().to_string()
+        );
+        assert_eq!("0", TokenAmount::<Units>::ZERO.to_string());
+        // ... unless a precision is explicitly requested.
+        assert_eq!(
+            "5.00",
+            format!("{:.2}", TokenAmount::<Units>::from_str("5").unwrap())
+        );
+
+        // `MAX` is the largest inner value, independent of the precision.
+        assert_eq!(u128::MAX, TokenAmount::<Cents>::MAX.to_inner());
+        assert_eq!(u128::MAX, TokenAmount::<Units>::MAX.to_inner());
     }
 
     #[test]
