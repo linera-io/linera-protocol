@@ -670,33 +670,41 @@ impl<T: Token> TokenAmount<T> {
         Ok(())
     }
 
+    /// Returns a `TokenAmount` for `amount` expressed in units of `10.pow(-unit_decimals)`
+    /// tokens, saturating at [`TokenAmount::MAX`]. If the token is coarser than the requested
+    /// unit, the sub-unit remainder is truncated towards zero.
+    fn from_subunits(amount: u128, unit_decimals: u8) -> Self {
+        let decimals = T::decimals();
+        if decimals >= unit_decimals {
+            Self::new(10u128.pow((decimals - unit_decimals) as u32)).saturating_mul(amount)
+        } else {
+            Self::new(amount / 10u128.pow((unit_decimals - decimals) as u32))
+        }
+    }
+
     /// Returns a `TokenAmount` corresponding to that many tokens, or [`TokenAmount::MAX`] if saturated.
     pub fn from_tokens(tokens: u128) -> Self {
-        Self::one().saturating_mul(tokens)
+        Self::from_subunits(tokens, 0)
     }
 
     /// Returns a `TokenAmount` corresponding to that many millitokens, or [`TokenAmount::MAX`] if saturated.
     pub fn from_millis(millitokens: u128) -> Self {
-        assert!(T::decimals() >= 3);
-        Self::new(10u128.pow(T::decimals() as u32 - 3)).saturating_mul(millitokens)
+        Self::from_subunits(millitokens, 3)
     }
 
     /// Returns a `TokenAmount` corresponding to that many microtokens, or [`TokenAmount::MAX`] if saturated.
     pub fn from_micros(microtokens: u128) -> Self {
-        assert!(T::decimals() >= 6);
-        Self::new(10u128.pow(T::decimals() as u32 - 6)).saturating_mul(microtokens)
+        Self::from_subunits(microtokens, 6)
     }
 
     /// Returns a `TokenAmount` corresponding to that many nanotokens, or [`TokenAmount::MAX`] if saturated.
     pub fn from_nanos(nanotokens: u128) -> Self {
-        assert!(T::decimals() >= 9);
-        Self::new(10u128.pow(T::decimals() as u32 - 9)).saturating_mul(nanotokens)
+        Self::from_subunits(nanotokens, 9)
     }
 
-    /// Returns a `TokenAmount` corresponding to that many attotokens.
+    /// Returns a `TokenAmount` corresponding to that many attotokens, or [`TokenAmount::MAX`] if saturated.
     pub fn from_attos(attotokens: u128) -> Self {
-        assert!(T::decimals() >= 18);
-        Self::new(10u128.pow(T::decimals() as u32 - 18)).saturating_mul(attotokens)
+        Self::from_subunits(attotokens, 18)
     }
 }
 
@@ -2648,6 +2656,54 @@ mod tests {
         // `MAX` is the largest inner value, independent of the precision.
         assert_eq!(u128::MAX, TokenAmount::<Cents>::MAX.to_inner());
         assert_eq!(u128::MAX, TokenAmount::<Units>::MAX.to_inner());
+    }
+
+    #[test]
+    fn token_amount_from_subunits() {
+        use linera_witty::{WitLoad, WitStore, WitType};
+
+        use super::{Token, TokenAmount};
+
+        // A token with two decimal places, coarser than milli/micro/etc.
+        #[derive(
+            Eq,
+            PartialEq,
+            Ord,
+            PartialOrd,
+            Copy,
+            Clone,
+            Hash,
+            Default,
+            Debug,
+            WitType,
+            WitLoad,
+            WitStore,
+        )]
+        struct Cents;
+        impl Token for Cents {
+            const NAME: &'static str = "Cents";
+
+            fn decimals() -> u8 {
+                2
+            }
+        }
+
+        // Units at or coarser than the token's precision scale up exactly.
+        assert_eq!("1.", TokenAmount::<Cents>::from_tokens(1).to_string());
+        assert_eq!("2.5", TokenAmount::<Cents>::from_millis(2500).to_string());
+
+        // Finer units than the token can represent are truncated towards zero rather than
+        // panicking: 1500 millitokens = 1.5 tokens, but 1 millitoken (0.001) rounds down to 0.
+        assert_eq!("1.5", TokenAmount::<Cents>::from_millis(1500).to_string());
+        assert_eq!("0.", TokenAmount::<Cents>::from_millis(1).to_string());
+        assert_eq!("0.12", TokenAmount::<Cents>::from_micros(123_456).to_string());
+        assert_eq!("0.", TokenAmount::<Cents>::from_micros(9999).to_string());
+
+        // Scaling up saturates instead of overflowing.
+        assert_eq!(
+            TokenAmount::<Cents>::MAX,
+            TokenAmount::<Cents>::from_tokens(u128::MAX)
+        );
     }
 
     #[test]
