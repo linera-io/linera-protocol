@@ -413,6 +413,7 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
                 openMultiLeaderRounds
                 timeoutConfig {
                   fastRoundMs
+                  multiLeaderRoundMs
                   baseTimeoutMs
                   timeoutIncrementMs
                   fallbackDurationMs
@@ -592,6 +593,7 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
                 openMultiLeaderRounds
                 timeoutConfig {
                   fastRoundMs
+                  multiLeaderRoundMs
                   baseTimeoutMs
                   timeoutIncrementMs
                   fallbackDurationMs

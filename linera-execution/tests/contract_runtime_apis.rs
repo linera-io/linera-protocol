@@ -105,13 +105,14 @@ async fn test_transfer_system_api(
     assert!(matches!(outgoing_messages[0].message, Message::System(_)));
 
     let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
-    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_message(
+    Box::pin(
+        ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller).execute_message(
             create_dummy_message_context(chain_id, None),
             outgoing_messages[0].message.clone(),
             None,
-        )
-        .await?;
+        ),
+    )
+    .await?;
 
     recipient.verify_recipient(&view.system, amount).await?;
 
@@ -275,13 +276,14 @@ async fn test_claim_system_api(
     assert!(matches!(outgoing_messages[0].message, Message::System(_)));
 
     let mut tracker = TransactionTracker::new_replaying(Vec::new());
-    ExecutionStateActor::new(&mut source_view, &mut tracker, &mut controller)
-        .execute_message(
+    Box::pin(
+        ExecutionStateActor::new(&mut source_view, &mut tracker, &mut controller).execute_message(
             create_dummy_message_context(source_chain_id, None),
             outgoing_messages[0].message.clone(),
             None,
-        )
-        .await?;
+        ),
+    )
+    .await?;
 
     assert_eq!(*source_view.system.balance.get(), Amount::ZERO);
     source_view
@@ -309,9 +311,14 @@ async fn test_claim_system_api(
         chain_id: claimer_chain_id,
         ..create_dummy_message_context(claimer_chain_id, None)
     };
-    ExecutionStateActor::new(&mut claimer_view, &mut tracker, &mut controller)
-        .execute_message(context, outgoing_messages[0].message.clone(), None)
-        .await?;
+    Box::pin(
+        ExecutionStateActor::new(&mut claimer_view, &mut tracker, &mut controller).execute_message(
+            context,
+            outgoing_messages[0].message.clone(),
+            None,
+        ),
+    )
+    .await?;
 
     recipient
         .verify_recipient(&claimer_view.system, amount)

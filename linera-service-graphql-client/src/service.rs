@@ -270,6 +270,18 @@ mod from {
                         })
                         .transpose()?
                         .map(|ms| TimeDelta::from_micros(ms * 1000)),
+                    multi_leader_round_duration: TimeDelta::from_micros(
+                        change_ownership
+                            .timeout_config
+                            .multi_leader_round_ms
+                            .parse::<u64>()
+                            .map_err(|_| {
+                                ConversionError::UnexpectedCertificateType(
+                                    "Invalid multi_leader_round_ms value".to_string(),
+                                )
+                            })?
+                            * 1000,
+                    ),
                     base_timeout: TimeDelta::from_micros(
                         change_ownership
                             .timeout_config

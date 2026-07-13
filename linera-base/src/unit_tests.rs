@@ -116,6 +116,7 @@ fn module_id_test_case() -> ModuleId {
 fn timeout_config_test_case() -> TimeoutConfig {
     TimeoutConfig {
         fast_round_duration: Some(TimeDelta::from_micros(20)),
+        multi_leader_round_duration: TimeDelta::from_millis(500),
         base_timeout: TimeDelta::from_secs(4),
         timeout_increment: TimeDelta::from_millis(125),
         fallback_duration: TimeDelta::from_secs(1_000),
@@ -148,6 +149,7 @@ fn chain_ownership_test_case() -> ChainOwnership {
         open_multi_leader_rounds: false,
         timeout_config: TimeoutConfig {
             fast_round_duration: None,
+            multi_leader_round_duration: TimeDelta::from_secs(1),
             base_timeout: TimeDelta::ZERO,
             timeout_increment: TimeDelta::from_secs(3_600),
             fallback_duration: TimeDelta::from_secs(10_000),

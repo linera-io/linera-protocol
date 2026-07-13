@@ -86,9 +86,14 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
     };
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new_replaying(Vec::new());
-    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_message(context, Message::System(message), None)
-        .await?;
+    Box::pin(
+        ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller).execute_message(
+            context,
+            Message::System(message),
+            None,
+        ),
+    )
+    .await?;
     assert_eq!(view.system.balance.get(), &Amount::from_tokens(4));
     let txn_outcome = txn_tracker.into_outcome().unwrap();
     assert!(txn_outcome.outgoing_messages.is_empty());

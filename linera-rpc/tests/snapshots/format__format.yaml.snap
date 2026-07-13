@@ -379,9 +379,6 @@ ChainManagerInfo:
     - ownership:
         TYPENAME: ChainOwnership
     - seed: U64
-    - requested_signed_proposal:
-        OPTION:
-          TYPENAME: BlockProposal
     - requested_proposed:
         OPTION:
           TYPENAME: BlockProposal
@@ -1415,6 +1412,8 @@ TimeoutConfig:
     - fast_round_duration:
         OPTION:
           TYPENAME: TimeDelta
+    - multi_leader_round_duration:
+        TYPENAME: TimeDelta
     - base_timeout:
         TYPENAME: TimeDelta
     - timeout_increment:

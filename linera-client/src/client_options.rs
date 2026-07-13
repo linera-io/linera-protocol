@@ -444,8 +444,16 @@ pub struct ChainOwnershipConfig {
     #[arg(long = "fast-round-ms", value_parser = util::parse_json_optional_millis_delta)]
     pub fast_round_duration: Option<std::option::Option<TimeDelta>>,
 
-    /// The duration of the first single-leader and all multi-leader rounds. Absence of
-    /// the option leaves the current setting unchanged.
+    /// The duration of every multi-leader round, in milliseconds. Absence of the option
+    /// leaves the current setting unchanged.
+    #[arg(
+        long = "multi-leader-round-ms",
+        value_parser = util::parse_millis_delta
+    )]
+    pub multi_leader_round_duration: Option<TimeDelta>,
+
+    /// The duration of the first single-leader round, in milliseconds. Absence of the
+    /// option leaves the current setting unchanged.
     #[arg(
         long = "base-timeout-ms",
         value_parser = util::parse_millis_delta
@@ -480,6 +488,7 @@ impl ChainOwnershipConfig {
             multi_leader_rounds,
             fast_round_duration,
             open_multi_leader_rounds,
+            multi_leader_round_duration,
             base_timeout,
             timeout_increment,
             fallback_duration,
@@ -504,6 +513,10 @@ impl ChainOwnershipConfig {
 
         if let Some(fast_round_duration) = fast_round_duration {
             chain_ownership.timeout_config.fast_round_duration = fast_round_duration;
+        }
+        if let Some(multi_leader_round_duration) = multi_leader_round_duration {
+            chain_ownership.timeout_config.multi_leader_round_duration =
+                multi_leader_round_duration;
         }
         if let Some(base_timeout) = base_timeout {
             chain_ownership.timeout_config.base_timeout = base_timeout;

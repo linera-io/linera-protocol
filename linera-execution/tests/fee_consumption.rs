@@ -289,8 +289,8 @@ async fn test_fee_consumption(
     };
     let mut grant = initial_grant.unwrap_or_default();
     let mut txn_tracker = TransactionTracker::new_replaying(oracle_responses);
-    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_message(
+    Box::pin(
+        ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller).execute_message(
             context,
             Message::User {
                 application_id,
@@ -301,8 +301,9 @@ async fn test_fee_consumption(
             } else {
                 None
             },
-        )
-        .await?;
+        ),
+    )
+    .await?;
 
     let txn_outcome = txn_tracker.into_outcome()?;
     assert!(txn_outcome.outgoing_messages.is_empty());
@@ -489,16 +490,17 @@ async fn test_free_app_message_no_fees() -> anyhow::Result<()> {
         timestamp: Timestamp::default(),
     };
     let mut txn_tracker = TransactionTracker::new_replaying(oracle_responses);
-    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_message(
+    Box::pin(
+        ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller).execute_message(
             context,
             Message::User {
                 application_id,
                 bytes: vec![],
             },
             None,
-        )
-        .await?;
+        ),
+    )
+    .await?;
 
     // Verify no fees were deducted: balances should remain exactly as set.
     assert_eq!(*view.system.balance.get(), chain_balance);

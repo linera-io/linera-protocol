@@ -104,12 +104,14 @@ macro_rules! impl_from_wit {
             fn from(guest: $wit_base_api::TimeoutConfig) -> TimeoutConfig {
                 let $wit_base_api::TimeoutConfig {
                     fast_round_duration,
+                    multi_leader_round_duration,
                     base_timeout,
                     timeout_increment,
                     fallback_duration,
                 } = guest;
                 TimeoutConfig {
                     fast_round_duration: fast_round_duration.map(TimeDelta::from),
+                    multi_leader_round_duration: multi_leader_round_duration.into(),
                     base_timeout: base_timeout.into(),
                     timeout_increment: timeout_increment.into(),
                     fallback_duration: fallback_duration.into(),

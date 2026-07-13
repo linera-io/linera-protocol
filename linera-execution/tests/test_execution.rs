@@ -1392,16 +1392,17 @@ async fn test_message_receipt_spending_chain_balance(
     let mut controller = ResourceController::default();
     let mut txn_tracker = TransactionTracker::new_replaying_blobs(blobs);
 
-    let execution_result = ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_message(
+    let execution_result = Box::pin(
+        ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller).execute_message(
             context,
             Message::User {
                 application_id,
                 bytes: vec![],
             },
             None,
-        )
-        .await;
+        ),
+    )
+    .await;
 
     Ok(execution_result)
 }

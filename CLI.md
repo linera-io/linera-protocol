@@ -377,7 +377,8 @@ If the wallet holds the key pair for exactly one of the new chain's owners, that
 * `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks. "null" is equivalent to 2^32 - 1. Absence of the option leaves the current setting unchanged
 * `--open-multi-leader-rounds` — Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners. This should only be `true` on chains with restrictive application permissions and an application-based mechanism to select block proposers
 * `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds. "null" means the fast round will not time out. Absence of the option leaves the current setting unchanged
-* `--base-timeout-ms <BASE_TIMEOUT>` — The duration of the first single-leader and all multi-leader rounds. Absence of the option leaves the current setting unchanged
+* `--multi-leader-round-ms <MULTI_LEADER_ROUND_DURATION>` — The duration of every multi-leader round, in milliseconds. Absence of the option leaves the current setting unchanged
+* `--base-timeout-ms <BASE_TIMEOUT>` — The duration of the first single-leader round, in milliseconds. Absence of the option leaves the current setting unchanged
 * `--timeout-increment-ms <TIMEOUT_INCREMENT>` — The number of milliseconds by which the timeout increases after each single-leader round. Absence of the option leaves the current setting unchanged
 * `--fallback-duration-ms <FALLBACK_DURATION>` — The age of an incoming tracked or protected message after which the validators start transitioning the chain to fallback mode, in milliseconds. Absence of the option leaves the current setting unchanged
 * `--execute-operations <EXECUTE_OPERATIONS>` — A JSON list of applications allowed to execute operations on this chain. If set to null, all operations will be allowed. Otherwise, only operations from the specified applications are allowed, and no system operations. Absence of the option leaves current permissions unchanged
@@ -422,7 +423,8 @@ If the chain's current preferred owner is no longer one of the chain's owners an
 * `--multi-leader-rounds <MULTI_LEADER_ROUNDS>` — The number of rounds in which every owner can propose blocks, i.e. the first round number in which only a single designated leader is allowed to propose blocks. "null" is equivalent to 2^32 - 1. Absence of the option leaves the current setting unchanged
 * `--open-multi-leader-rounds` — Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners. This should only be `true` on chains with restrictive application permissions and an application-based mechanism to select block proposers
 * `--fast-round-ms <FAST_ROUND_DURATION>` — The duration of the fast round, in milliseconds. "null" means the fast round will not time out. Absence of the option leaves the current setting unchanged
-* `--base-timeout-ms <BASE_TIMEOUT>` — The duration of the first single-leader and all multi-leader rounds. Absence of the option leaves the current setting unchanged
+* `--multi-leader-round-ms <MULTI_LEADER_ROUND_DURATION>` — The duration of every multi-leader round, in milliseconds. Absence of the option leaves the current setting unchanged
+* `--base-timeout-ms <BASE_TIMEOUT>` — The duration of the first single-leader round, in milliseconds. Absence of the option leaves the current setting unchanged
 * `--timeout-increment-ms <TIMEOUT_INCREMENT>` — The number of milliseconds by which the timeout increases after each single-leader round. Absence of the option leaves the current setting unchanged
 * `--fallback-duration-ms <FALLBACK_DURATION>` — The age of an incoming tracked or protected message after which the validators start transitioning the chain to fallback mode, in milliseconds. Absence of the option leaves the current setting unchanged
 

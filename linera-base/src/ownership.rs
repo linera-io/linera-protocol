@@ -39,7 +39,11 @@ pub struct TimeoutConfig {
     /// The duration of the fast round.
     #[debug(skip_if = Option::is_none)]
     pub fast_round_duration: Option<TimeDelta>,
-    /// The duration of the first single-leader and all multi-leader rounds.
+    /// The duration of every multi-leader round. Multi-leader rounds use a fixed (typically
+    /// short) duration: a quorum of timeout votes is required to leave a multi-leader round,
+    /// so this controls the retry latency under multi-leader contention.
+    pub multi_leader_round_duration: TimeDelta,
+    /// The duration of the first single-leader round.
     pub base_timeout: TimeDelta,
     /// The duration by which the timeout increases after each single-leader round.
     pub timeout_increment: TimeDelta,
@@ -52,6 +56,9 @@ impl Default for TimeoutConfig {
     fn default() -> Self {
         Self {
             fast_round_duration: None,
+            // Multi-leader rounds are meant to be cooperative, so contention should be rare;
+            // when it does happen, a short round keeps the retry latency low.
+            multi_leader_round_duration: TimeDelta::from_secs(1),
             base_timeout: TimeDelta::from_secs(10),
             timeout_increment: TimeDelta::from_secs(1),
             // This is `MAX` because the validators are not currently expected to start clients for
@@ -168,15 +175,9 @@ impl ChainOwnership {
     /// Returns the duration of the given round.
     pub fn round_timeout(&self, round: Round) -> Option<TimeDelta> {
         let tc = &self.timeout_config;
-        if round.is_fast() && self.owners.is_empty() {
-            return None; // Fast round only times out if there are regular owners.
-        }
         match round {
             Round::Fast => tc.fast_round_duration,
-            Round::MultiLeader(r) if r.saturating_add(1) == self.multi_leader_rounds => {
-                Some(tc.base_timeout)
-            }
-            Round::MultiLeader(_) => None,
+            Round::MultiLeader(_) => Some(tc.multi_leader_round_duration),
             Round::SingleLeader(r) | Round::Validator(r) => {
                 let increment = tc.timeout_increment.saturating_mul(u64::from(r));
                 Some(tc.base_timeout.saturating_add(increment))
@@ -269,6 +270,7 @@ mod tests {
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig {
                 fast_round_duration: Some(TimeDelta::from_secs(5)),
+                multi_leader_round_duration: TimeDelta::from_secs(2),
                 base_timeout: TimeDelta::from_secs(10),
                 timeout_increment: TimeDelta::from_secs(1),
                 fallback_duration: TimeDelta::from_secs(60 * 60),
@@ -279,10 +281,13 @@ mod tests {
             ownership.round_timeout(Round::Fast),
             Some(TimeDelta::from_secs(5))
         );
-        assert_eq!(ownership.round_timeout(Round::MultiLeader(8)), None);
         assert_eq!(
-            ownership.round_timeout(Round::MultiLeader(9)),
-            Some(TimeDelta::from_secs(10))
+            ownership.round_timeout(Round::MultiLeader(0)),
+            Some(TimeDelta::from_secs(2))
+        );
+        assert_eq!(
+            ownership.round_timeout(Round::MultiLeader(8)),
+            Some(TimeDelta::from_secs(2))
         );
         assert_eq!(
             ownership.round_timeout(Round::SingleLeader(0)),

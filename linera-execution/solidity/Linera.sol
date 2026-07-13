@@ -120,6 +120,7 @@ library Linera {
 
     struct TimeoutConfig {
         opt_TimeDelta fast_round_duration;
+        TimeDelta multi_leader_round_duration;
         TimeDelta base_timeout;
         TimeDelta timeout_increment;
         TimeDelta fallback_duration;
@@ -131,6 +132,7 @@ library Linera {
         returns (TimeoutConfig memory)
     {
         return TimeoutConfig(opt_timedelta_from(entry.fast_round_duration),
+                             timedelta_from(entry.multi_leader_round_duration),
                              timedelta_from(entry.base_timeout),
                              timedelta_from(entry.timeout_increment),
                              timedelta_from(entry.fallback_duration));

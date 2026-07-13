@@ -1005,7 +1005,7 @@ impl Runnable for Job {
                                     let mut chain_ids = Vec::new();
                                     for _ in 0..chains_per_wallet {
                                         let (chain_id, _owner) = client
-                                            .open_chain_super_owner(
+                                            .open_chain(
                                                 default_chain_id,
                                                 None,
                                                 benchmark_options.tokens_per_chain,

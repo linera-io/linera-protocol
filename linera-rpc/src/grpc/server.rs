@@ -743,14 +743,10 @@ where
         let traffic_type = Self::get_traffic_type(&request);
         let proposal = request.into_inner().try_into()?;
         trace!(?proposal, "Handling block proposal");
-        let (result, actions) = self.state.clone().handle_block_proposal(proposal).await;
-        // Dispatch actions whether or not the proposal was accepted: a rejected
-        // proposal can still advance the manager's `current_round` (via
-        // `update_signed_proposal` on the `HasIncompatibleConfirmedVote` recovery
-        // path), and subscribers need the resulting `NewRound` notification.
-        self.handle_network_actions(actions);
+        let result = self.state.clone().handle_block_proposal(proposal).await;
         Ok(Response::new(match result {
-            Ok(info) => {
+            Ok((info, actions)) => {
+                self.handle_network_actions(actions);
                 Self::log_request_success("handle_block_proposal", traffic_type);
                 info.try_into()?
             }

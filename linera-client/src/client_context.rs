@@ -1191,10 +1191,10 @@ impl<Env: Environment> ClientContext<Env> {
                 }
                 let chain_client = self.make_chain_client(chain_id).await?;
                 let ownership = chain_client.chain_info().await?.manager.ownership;
-                if !ownership.owners.is_empty() || ownership.super_owners.len() != 1 {
+                if !ownership.super_owners.is_empty() || ownership.owners.len() != 1 {
                     continue;
                 }
-                let owner = *ownership.super_owners.first().unwrap();
+                let owner = *ownership.owners.first_key_value().unwrap().0;
                 chain_client.process_inbox().await?;
                 benchmark_chains.push((chain_id, owner));
                 chain_clients.push(chain_client);
@@ -1305,7 +1305,10 @@ impl<Env: Environment> ClientContext<Env> {
             .iter()
             .map(|owner| {
                 let config = OpenChainConfig {
-                    ownership: ChainOwnership::single_super(*owner),
+                    // A regular owner, so the chain starts in `MultiLeader(0)`: benchmark
+                    // blocks may contain oracle responses (e.g. Wasm bytecode blob reads),
+                    // which are not allowed in the fast round.
+                    ownership: ChainOwnership::single(*owner),
                     balance,
                     application_permissions: Default::default(),
                 };

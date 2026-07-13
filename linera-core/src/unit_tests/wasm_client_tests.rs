@@ -1897,80 +1897,70 @@ where
     // Set two validators offline so we can't reach a quorum.
     builder.set_fault_type([2, 3], FaultType::Offline);
 
-    // Try to commit ExpireAfter(5 seconds) - should fail (no quorum).
+    // Stage three pending proposals at successive rounds, each with a different
+    // expiry. Under timeout-only round advancement, rounds can only advance via
+    // a timeout certificate (which requires a quorum), so we explicitly construct
+    // and forward one each time the prior attempt fails.
     let op1 = time_expiry::TimeExpiryOperation::ExpireAfter(TimeDelta::from_secs(5));
     let result = creator
         .execute_operation(Operation::user(app_id, &op1)?)
         .await;
     assert_matches!(result, Err(chain_client::Error::CommunicationError(_)));
-
-    // The proposal should be in round MultiLeader(0).
     let chain_info = creator.chain_info_with_manager_values().await?;
     assert_eq!(
         chain_info.manager.requested_proposed.unwrap().content.round,
         Round::MultiLeader(0)
     );
 
-    // Clear the pending proposal and try again with ExpireAfter(6 seconds).
+    // Subsequent attempts conflict with op1's proposal that the responsive validators
+    // already validated, so the client surfaces `WaitForTimeout` rather than retrying.
     creator.clear_pending_proposal().await;
     let op2 = time_expiry::TimeExpiryOperation::ExpireAfter(TimeDelta::from_secs(6));
     let result = creator
         .execute_operation(Operation::user(app_id, &op2)?)
         .await;
-    assert_matches!(result, Err(chain_client::Error::CommunicationError(_)));
+    assert_matches!(result, Ok(ClientOutcome::WaitForTimeout(_)));
 
-    // The proposal should now be in round MultiLeader(1).
-    let chain_info = creator.chain_info_with_manager_values().await?;
-    assert_eq!(
-        chain_info.manager.requested_proposed.unwrap().content.round,
-        Round::MultiLeader(1)
-    );
-
-    // Clear the pending proposal and try once more with ExpireAfter(7 seconds).
     creator.clear_pending_proposal().await;
     let op3 = time_expiry::TimeExpiryOperation::ExpireAfter(TimeDelta::from_secs(7));
     let result = creator
         .execute_operation(Operation::user(app_id, &op3)?)
         .await;
-    assert_matches!(result, Err(chain_client::Error::CommunicationError(_)));
-
-    // The proposal should now be in round SingleLeader(0).
-    let chain_info = creator.chain_info_with_manager_values().await?;
-    assert_eq!(
-        chain_info.manager.requested_proposed.unwrap().content.round,
-        Round::SingleLeader(0)
-    );
+    assert_matches!(result, Ok(ClientOutcome::WaitForTimeout(_)));
 
     // Make all validators honest again.
     builder.set_fault_type([0, 1, 2, 3], FaultType::Honest);
 
-    // Advance the clock by 10 seconds.
+    // Advance the clock by 10 seconds — past the multi-leader round timeout, so
+    // a fresh proposal can advance the round via a timeout certificate.
     clock.add(TimeDelta::from_secs(10));
 
-    // Clear pending and try to commit ExpireAfter(10 minutes) - should timeout.
+    // Clear pending and try to commit ExpireAfter(10 minutes). Under the new
+    // timeout-only round advancement, the first attempt may commit immediately,
+    // or may return `WaitForTimeout` (e.g. if a stale pending proposal still
+    // locks the round); in the latter case we retry by advancing the clock.
     creator.clear_pending_proposal().await;
     let op4 = time_expiry::TimeExpiryOperation::ExpireAfter(TimeDelta::from_secs(600));
-    let result = creator
+    let mut outcome = creator
         .execute_operation(Operation::user(app_id, &op4)?)
         .await?;
-    // The operation should return WaitForTimeout because the block expired.
-    assert_matches!(result, ClientOutcome::WaitForTimeout(_));
 
-    // Retry to process the pending block a few times. It is not guaranteed in each attempt
-    // that the client successfully updates enough validators before `communicate_with_quorum`
-    // cancels the tasks, but eventually it will succeed and all validators will agree that the
-    // round has timed out.
     let certificate = loop {
-        clock.add(TimeDelta::from_secs(20));
-        match creator.process_pending_block().await? {
-            ClientOutcome::Committed(Some(cert)) => break cert,
+        match outcome {
+            ClientOutcome::Committed(cert) => break cert,
             ClientOutcome::WaitForTimeout(_)
                 if clock.current_time()
                     < Timestamp::from(0).saturating_add(TimeDelta::from_secs(200)) =>
             {
-                continue
+                clock.add(TimeDelta::from_secs(20));
+                outcome = match creator.process_pending_block().await? {
+                    ClientOutcome::Committed(Some(cert)) => ClientOutcome::Committed(cert),
+                    ClientOutcome::Committed(None) => continue,
+                    ClientOutcome::WaitForTimeout(t) => ClientOutcome::WaitForTimeout(t),
+                    ClientOutcome::Conflict(c) => ClientOutcome::Conflict(c),
+                };
             }
-            outcome => panic!("Failed to commit the block: {outcome:?}"),
+            other => panic!("Failed to commit the block: {other:?}"),
         }
     };
 
