@@ -372,9 +372,11 @@ impl TryFrom<U256> for Amount {
 /// A non-negative amount of tokens with fixed (yet configurable) precision.
 ///
 /// The type is "branded" by a type `T` implementing [`Token`]
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, WitType, WitLoad, WitStore,
-)]
+///
+/// The standard traits are implemented by hand rather than derived: the wrapper's behaviour
+/// never depends on `T` (its only fields are a `u128` and a `PhantomData<T>`), so deriving them
+/// would add spurious `T: Trait` bounds and force every `Token` marker to implement them too.
+#[derive(WitType, WitLoad, WitStore)]
 #[cfg_attr(
     all(with_testing, not(target_arch = "wasm32")),
     derive(test_strategy::Arbitrary)
@@ -384,21 +386,54 @@ pub struct TokenAmount<T> {
     tag: std::marker::PhantomData<T>,
 }
 
+impl<T> Clone for TokenAmount<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Copy for TokenAmount<T> {}
+
+impl<T> PartialEq for TokenAmount<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
+}
+
+impl<T> Eq for TokenAmount<T> {}
+
+impl<T> PartialOrd for TokenAmount<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<T> Ord for TokenAmount<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.inner.cmp(&other.inner)
+    }
+}
+
+impl<T> Hash for TokenAmount<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.inner.hash(state);
+    }
+}
+
+impl<T> Default for TokenAmount<T> {
+    fn default() -> Self {
+        Self::ZERO
+    }
+}
+
+impl<T> fmt::Debug for TokenAmount<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("TokenAmount").field(&self.inner).finish()
+    }
+}
+
 /// The specification of a token for [`TokenAmount`].
-pub trait Token:
-    Eq
-    + PartialEq
-    + Ord
-    + PartialOrd
-    + Copy
-    + Clone
-    + Hash
-    + Default
-    + std::fmt::Debug
-    + WitType
-    + WitLoad
-    + WitStore
-{
+pub trait Token {
     /// The name of the token.
     const NAME: &'static str;
 
@@ -414,10 +449,6 @@ pub trait Token:
 }
 
 /// The native token.
-// TODO: remove this
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, WitType, WitLoad, WitStore,
-)]
 pub struct NativeToken;
 
 impl Token for NativeToken {
@@ -2587,25 +2618,9 @@ mod tests {
 
     #[test]
     fn display_token_amount() {
-        use linera_witty::{WitLoad, WitStore, WitType};
-
         use super::{Token, TokenAmount};
 
         // A token with two decimal places.
-        #[derive(
-            Eq,
-            PartialEq,
-            Ord,
-            PartialOrd,
-            Copy,
-            Clone,
-            Hash,
-            Default,
-            Debug,
-            WitType,
-            WitLoad,
-            WitStore,
-        )]
         struct Cents;
         impl Token for Cents {
             const NAME: &'static str = "Cents";
@@ -2616,20 +2631,6 @@ mod tests {
         }
 
         // A zero-decimal (integer) token.
-        #[derive(
-            Eq,
-            PartialEq,
-            Ord,
-            PartialOrd,
-            Copy,
-            Clone,
-            Hash,
-            Default,
-            Debug,
-            WitType,
-            WitLoad,
-            WitStore,
-        )]
         struct Units;
         impl Token for Units {
             const NAME: &'static str = "Units";
@@ -2666,25 +2667,9 @@ mod tests {
 
     #[test]
     fn token_amount_from_subunits() {
-        use linera_witty::{WitLoad, WitStore, WitType};
-
         use super::{Token, TokenAmount};
 
         // A token with two decimal places, coarser than milli/micro/etc.
-        #[derive(
-            Eq,
-            PartialEq,
-            Ord,
-            PartialOrd,
-            Copy,
-            Clone,
-            Hash,
-            Default,
-            Debug,
-            WitType,
-            WitLoad,
-            WitStore,
-        )]
         struct Cents;
         impl Token for Cents {
             const NAME: &'static str = "Cents";
@@ -2718,25 +2703,9 @@ mod tests {
     #[test]
     #[should_panic(expected = "token precision is too high")]
     fn token_amount_precision_too_high_panics() {
-        use linera_witty::{WitLoad, WitStore, WitType};
-
         use super::{Token, TokenAmount};
 
         // 39 decimals cannot be represented: `10.pow(39)` overflows a `u128`.
-        #[derive(
-            Eq,
-            PartialEq,
-            Ord,
-            PartialOrd,
-            Copy,
-            Clone,
-            Hash,
-            Default,
-            Debug,
-            WitType,
-            WitLoad,
-            WitStore,
-        )]
         struct TooPrecise;
         impl Token for TooPrecise {
             const NAME: &'static str = "TooPrecise";
@@ -2747,7 +2716,7 @@ mod tests {
         }
 
         // Panics loudly rather than silently wrapping in release builds.
-        let _ = TokenAmount::<TooPrecise>::one();
+        TokenAmount::<TooPrecise>::one();
     }
 
     #[test]
