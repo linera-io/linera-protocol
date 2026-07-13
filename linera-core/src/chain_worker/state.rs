@@ -34,7 +34,7 @@ use linera_chain::{
         ValidatedBlockCertificate,
     },
     BlockExecutionPhase, ChainError, ChainExecutionContext, ChainIdSet, ChainStateView,
-    ChainTipState, ExecutionResultExt as _, StreamCounts,
+    ChainTipState, ConflictingCertifiedBlocks, ExecutionResultExt as _, StreamCounts,
 };
 use linera_execution::{
     system::{EpochEventData, EventSubscriptions, EPOCH_STREAM_NAME},
@@ -332,11 +332,9 @@ where
     /// its block.
     ///
     /// A certificate from a revoked epoch no longer proves anything by itself: the
-    /// committee that signed it is not trusted any more. Such a block is only
-    /// accepted if it was already accepted while its epoch was still trusted, i.e.
-    /// it is in `block_hashes`. (Blocks vouched for by an accepted block's
-    /// `previous_block_hash` or `previous_message_blocks` links, or by a checkpoint
-    /// cert, carry a `vouched_blocks` trust mark and bypass this check.)
+    /// committee that signed it is not trusted any more. The caller must in that
+    /// case additionally have a trust mark for the block, or a prior acceptance of
+    /// it, to accept it.
     async fn ensure_epoch_trusted(
         &self,
         certificate: &ConfirmedBlockCertificate,
@@ -352,17 +350,14 @@ where
                     ChainExecutionContext::Block,
                 )))
             })?;
-        if !is_revoked {
-            return Ok(());
+        if is_revoked {
+            return Err(WorkerError::EpochRevoked {
+                chain_id: header.chain_id,
+                epoch: header.epoch,
+                height: header.height,
+            });
         }
-        if self.chain.block_hashes.get(&header.height).await? == Some(certificate.hash()) {
-            return Ok(());
-        }
-        Err(WorkerError::EpochRevoked {
-            chain_id: header.chain_id,
-            epoch: header.epoch,
-            height: header.height,
-        })
+        Ok(())
     }
 
     /// Ensures that this worker may still create signatures for blocks in the given
@@ -1040,13 +1035,40 @@ where
         // We haven't processed the block - verify the certificate first.
         let committee = self.committee_for_epoch(block.header.epoch).await?;
         certificate.check(&committee)?;
+
+        // A chain has one certified block per height. Read the accepted hash at
+        // this height once: a *different* hash is proof that a committee
+        // equivocated — reject it before the certificate is written anywhere, so
+        // the conflicting certificate is never persisted; the *same* hash means we
+        // already accepted this block, which also satisfies the revoked-epoch
+        // trust requirement below.
+        let accepted_at_height = self.chain.block_hashes.get(&height).await?;
+        if let Some(existing_hash) = accepted_at_height {
+            if existing_hash != block_hash {
+                tracing::error!(
+                    %chain_id, %height, %existing_hash, conflicting_block = %block_hash,
+                    "conflicting certified blocks at the same height: a committee equivocated",
+                );
+                return Err(ChainError::ConflictingCertifiedBlocks(Box::new(
+                    ConflictingCertifiedBlocks {
+                        chain_id,
+                        height,
+                        existing_block: existing_hash,
+                        conflicting_block: block_hash,
+                        witness_block: block_hash,
+                    },
+                ))
+                .into());
+            }
+        }
+
         // If the epoch has been revoked, the quorum signature alone is no longer a
         // sufficient basis for trust: the block must also be vouched for by data
         // this worker already trusts — a `vouched_blocks` trust mark (written by a
         // checkpoint cert or by an accepted block that commits to this one via
         // `previous_block_hash` or `previous_message_blocks`) or an earlier
         // acceptance of the same block.
-        if !in_trust_set {
+        if !in_trust_set && accepted_at_height != Some(block_hash) {
             self.ensure_epoch_trusted(&certificate).await?;
         }
 

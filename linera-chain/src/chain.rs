@@ -47,7 +47,8 @@ use crate::{
     manager::ChainManager,
     outbox::OutboxStateView,
     pending_blobs::PendingBlobsView,
-    ChainError, ChainExecutionContext, ExecutionError, ExecutionResultExt,
+    ChainError, ChainExecutionContext, ConflictingCertifiedBlocks, ExecutionError,
+    ExecutionResultExt,
 };
 
 #[cfg(test)]
@@ -1507,7 +1508,7 @@ where
         }
         let updated_streams = self.process_emitted_events(block).await?;
         self.process_outgoing_messages(block, tracked).await?;
-        self.vouch_for_block_references(block).await?;
+        self.vouch_for_block_references(block, hash).await?;
 
         // Last, reset the consensus state based on the current ownership.
         self.reset_chain_manager(block.header.height.try_add_one()?, local_time)
@@ -1530,7 +1531,18 @@ where
     /// is already in `block_hashes`. The accepted block is trusted, so these hash
     /// commitments remain a sufficient basis for accepting the referenced blocks
     /// even after the epochs that certified them are revoked.
-    async fn vouch_for_block_references(&mut self, block: &Block) -> Result<(), ChainError> {
+    ///
+    /// A chain has one certified block per height, so a block committing to a
+    /// different hash than the one already accepted at that height is evidence of
+    /// equivocation — two conflicting certificates signed by that height's
+    /// committee. In that case the block is rejected with
+    /// [`ChainError::ConflictingCertifiedBlocks`], which names the certificate
+    /// pair that proves the fault.
+    async fn vouch_for_block_references(
+        &mut self,
+        block: &Block,
+        block_hash: CryptoHash,
+    ) -> Result<(), ChainError> {
         let mut references = Vec::new();
         if let Some(parent_hash) = block.header.previous_block_hash {
             references.push((block.header.height.try_sub_one()?, parent_hash));
@@ -1547,25 +1559,38 @@ where
                 Some(known_hash) if known_hash == hash => {}
                 None => self.vouched_blocks.insert(&hash)?,
                 Some(known_hash) => {
-                    // A chain has one certified block per height, so a trusted
-                    // block committing to a different hash than the one already
-                    // accepted is evidence of equivocation — two conflicting
-                    // certificates signed by that height's committee. Follow the
-                    // newly accepted block's commitment (it is the one backed by
-                    // a currently trusted certificate), but flag the conflict.
-                    warn!(
-                        chain_id = %self.chain_id(),
-                        %height,
-                        %known_hash,
-                        vouched_hash = %hash,
-                        "conflicting certified blocks at the same height: \
-                         the committee for this height equivocated",
-                    );
-                    self.vouched_blocks.insert(&hash)?;
+                    return Err(self.conflicting_blocks_error(height, known_hash, hash, block_hash));
                 }
             }
         }
         Ok(())
+    }
+
+    /// Builds a [`ChainError::ConflictingCertifiedBlocks`] error and logs the
+    /// conflict: a certified block asserting a different block at `height` than
+    /// the one already accepted is proof that a committee equivocated.
+    fn conflicting_blocks_error(
+        &self,
+        height: BlockHeight,
+        existing_block: CryptoHash,
+        conflicting_block: CryptoHash,
+        witness_block: CryptoHash,
+    ) -> ChainError {
+        tracing::error!(
+            chain_id = %self.chain_id(),
+            %height,
+            %existing_block,
+            %conflicting_block,
+            %witness_block,
+            "conflicting certified blocks at the same height: a committee equivocated",
+        );
+        ChainError::ConflictingCertifiedBlocks(Box::new(ConflictingCertifiedBlocks {
+            chain_id: self.chain_id(),
+            height,
+            existing_block,
+            conflicting_block,
+            witness_block,
+        }))
     }
 
     /// Adds a block to `block_hashes` as preprocessed, and updates the outboxes where possible.
@@ -1587,7 +1612,7 @@ where
         }
         self.process_outgoing_messages(block, tracked).await?;
         let updated_streams = self.process_emitted_events(block).await?;
-        self.vouch_for_block_references(block).await?;
+        self.vouch_for_block_references(block, hash).await?;
         self.insert_block_hash(height, hash)?;
         Ok(updated_streams)
     }

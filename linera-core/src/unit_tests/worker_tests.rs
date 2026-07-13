@@ -3546,6 +3546,146 @@ where
     Ok(())
 }
 
+/// Tests that a block committing to a different hash than the one already accepted
+/// at that height is rejected: two certified blocks at the same height prove that
+/// the height's committee equivocated, and neither the conflicting block nor the
+/// block vouching for it must be accepted.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_conflicting_certified_blocks_are_rejected<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let owner_pubkey = signer.generate_new();
+    let owner = AccountOwner::from(owner_pubkey);
+    let balance = Amount::from_tokens(5);
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    let chain_1_desc = env.add_root_chain(1, owner, balance).await;
+    let chain_2_desc = env.add_root_chain(2, owner, Amount::ZERO).await;
+    let user_id = chain_1_desc.id();
+    let target = Account::chain(chain_2_desc.id());
+
+    // Two conflicting certified blocks at height 0, and a child of the second one.
+    let cert_a = env
+        .make_transfer_certificate_for_epoch_unprocessable(
+            chain_1_desc.clone(),
+            owner_pubkey,
+            owner,
+            AccountOwner::CHAIN,
+            target,
+            Amount::ONE,
+            vec![],
+            Epoch::ZERO,
+            balance,
+            BTreeMap::new(),
+            vec![],
+        )
+        .await;
+    let cert_b = env
+        .make_transfer_certificate_for_epoch_unprocessable(
+            chain_1_desc.clone(),
+            owner_pubkey,
+            owner,
+            AccountOwner::CHAIN,
+            target,
+            Amount::from_tokens(2),
+            vec![],
+            Epoch::ZERO,
+            balance,
+            BTreeMap::new(),
+            vec![],
+        )
+        .await;
+    assert_ne!(cert_a.hash(), cert_b.hash());
+    let cert_child = env
+        .make_transfer_certificate_for_epoch_unprocessable(
+            chain_1_desc.clone(),
+            owner_pubkey,
+            owner,
+            AccountOwner::CHAIN,
+            target,
+            Amount::ONE,
+            vec![],
+            Epoch::ZERO,
+            balance,
+            BTreeMap::new(),
+            vec![&cert_b],
+        )
+        .await;
+
+    // Preprocess the first block at height 0, then a child of the *conflicting*
+    // block: the child's `previous_block_hash` commitment exposes the equivocation
+    // and the child is rejected instead of vouching for the conflicting block.
+    env.worker()
+        .handle_confirmed_certificate(cert_a.clone(), ProcessConfirmedBlockMode::Preprocess, None)
+        .await?;
+    let error = env
+        .worker()
+        .handle_confirmed_certificate(
+            cert_child.clone(),
+            ProcessConfirmedBlockMode::Preprocess,
+            None,
+        )
+        .await
+        .unwrap_err();
+    let conflict = match &error {
+        WorkerError::ChainError(chain_error) => match &**chain_error {
+            ChainError::ConflictingCertifiedBlocks(conflict) => conflict,
+            other => panic!("expected a conflicting-blocks error, got {other}"),
+        },
+        other => panic!("expected a conflicting-blocks error, got {other}"),
+    };
+    // The child commits to the conflicting height-0 block via its parent link, so
+    // it is the witness; the existing block is the one accepted at that height.
+    assert_eq!(conflict.existing_block, cert_a.hash());
+    assert_eq!(conflict.conflicting_block, cert_b.hash());
+    assert_eq!(conflict.witness_block, cert_child.hash());
+    assert_eq!(conflict.height, BlockHeight::ZERO);
+
+    // Nothing was vouched for, and the child was not accepted. (The view holds a
+    // read lock on the chain worker, so drop it before the next request.)
+    {
+        let user_chain = env.worker().chain_state_view(user_id).await?;
+        assert!(user_chain.vouched_blocks.indices().await?.is_empty());
+        assert_eq!(
+            user_chain.block_hashes.get(&BlockHeight::from(1)).await?,
+            None
+        );
+    }
+
+    // Pushing the conflicting height-0 block itself is rejected the same way, with
+    // the block as its own witness — and rejected before it is written anywhere.
+    let error = env
+        .worker()
+        .handle_confirmed_certificate(cert_b.clone(), ProcessConfirmedBlockMode::Preprocess, None)
+        .await
+        .unwrap_err();
+    let conflict = match &error {
+        WorkerError::ChainError(chain_error) => match &**chain_error {
+            ChainError::ConflictingCertifiedBlocks(conflict) => conflict,
+            other => panic!("expected a conflicting-blocks error, got {other}"),
+        },
+        other => panic!("expected a conflicting-blocks error, got {other}"),
+    };
+    assert_eq!(conflict.existing_block, cert_a.hash());
+    assert_eq!(conflict.conflicting_block, cert_b.hash());
+    assert_eq!(conflict.witness_block, cert_b.hash());
+    assert!(
+        !env.worker()
+            .storage
+            .contains_certificate(cert_b.hash())
+            .await?,
+        "the rejected conflicting certificate must not be persisted",
+    );
+
+    Ok(())
+}
+
 #[test(tokio::test)]
 async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let mut storage_builder = MemoryStorageBuilder::default();
