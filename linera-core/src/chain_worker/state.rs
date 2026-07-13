@@ -447,36 +447,29 @@ where
     /// matter are re-certified via `previous_block_hash` /
     /// `previous_message_blocks` links instead.
     async fn prune_revoked_received_logs(&mut self, up_to: Epoch) -> Result<(), WorkerError> {
-        // `indices` returns the stored epochs in ascending order. Walk the ones
-        // below `up_to` from newest to oldest: revocation is monotone, so the
-        // first revoked epoch found — and everything below it — can be pruned
-        // without further checks.
-        let mut stored = self.chain.received_log.indices().await?;
-        stored.retain(|epoch| *epoch < up_to);
-        let mut prunable = None;
-        for (position, epoch) in stored.iter().enumerate().rev() {
-            let is_revoked = self
-                .storage
-                .is_epoch_revoked(*epoch)
-                .await
-                .map_err(|error| {
-                    WorkerError::ChainError(Box::new(ChainError::ExecutionError(
-                        Box::new(error),
-                        ChainExecutionContext::Block,
-                    )))
-                })?;
-            if is_revoked {
-                prunable = Some(position);
+        // Find the highest revoked epoch below `up_to`. Since revocation is
+        // monotone, every stored epoch at or below it is revoked and prunable.
+        // Walk the stored epochs below `up_to` from highest to lowest and stop at
+        // the first revoked one.
+        let stored = self.chain.received_log.indices().await?;
+        let mut highest_revoked = None;
+        for epoch in stored.iter().rev().filter(|epoch| **epoch < up_to) {
+            if self.is_epoch_revoked(*epoch).await? {
+                highest_revoked = Some(*epoch);
                 break;
             }
         }
-        let Some(position) = prunable else {
+        let Some(highest_revoked) = highest_revoked else {
             return Ok(());
         };
-        for epoch in &stored[..=position] {
+        let mut pruned = false;
+        for epoch in stored.iter().filter(|epoch| **epoch <= highest_revoked) {
             self.chain.received_log.remove_entry(epoch)?;
+            pruned = true;
         }
-        self.save().await?;
+        if pruned {
+            self.save().await?;
+        }
         Ok(())
     }
 
@@ -2004,16 +1997,7 @@ where
             .collect::<BTreeSet<_>>();
         let mut revoked_epochs = BTreeSet::new();
         for epoch in epochs {
-            let is_revoked = self
-                .storage
-                .is_epoch_revoked(epoch)
-                .await
-                .map_err(|error| {
-                    WorkerError::ChainError(Box::new(ChainError::ExecutionError(
-                        Box::new(error),
-                        ChainExecutionContext::Block,
-                    )))
-                })?;
+            let is_revoked = self.is_epoch_revoked(epoch).await?;
             if !is_revoked {
                 break;
             }

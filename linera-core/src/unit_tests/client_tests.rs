@@ -1840,7 +1840,7 @@ where
         .node(0)
         .handle_chain_info_query(
             crate::data_types::ChainInfoQuery::new(receiver_id)
-                .with_received_log(Epoch::from(1), 0),
+                .with_received_logs([(Epoch::from(1), 0)]),
         )
         .await?;
     assert_eq!(

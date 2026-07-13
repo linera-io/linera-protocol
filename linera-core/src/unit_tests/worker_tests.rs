@@ -2507,7 +2507,7 @@ where
             .expect("no received log for epoch 0");
         assert_eq!(received_log.count(), 1);
     }
-    let query = ChainInfoQuery::new(chain_2).with_received_log(Epoch::ZERO, 0);
+    let query = ChainInfoQuery::new(chain_2).with_received_logs([(Epoch::ZERO, 0)]);
     let response = env
         .executing_worker()
         .handle_chain_info_query(query)
