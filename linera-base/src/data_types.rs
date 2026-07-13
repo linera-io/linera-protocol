@@ -437,6 +437,10 @@ pub trait Token {
     /// The name of the token.
     const NAME: &'static str;
 
+    /// Whether [`Display`] and [`FromStr`] use the decimal fixed-point form. When `false`, the
+    /// inner `u128` value is used directly.
+    const DECIMAL_DISPLAY: bool = true;
+
     /// The precision given as a number of decimals.
     fn decimals() -> u8;
 
@@ -468,6 +472,9 @@ impl<T: Token> Allocative for TokenAmount<T> {
 
 impl<T: Token> Display for TokenAmount<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if !T::DECIMAL_DISPLAY {
+            return Display::fmt(&self.inner, f);
+        }
         // Print the wrapped integer, padded with zeros to cover a digit before the decimal point.
         let places = T::decimals() as usize;
         let min_digits = places + 1;
@@ -515,6 +522,13 @@ impl<T: Token> FromStr for TokenAmount<T> {
     type Err = ParseAmountError;
 
     fn from_str(src: &str) -> Result<Self, Self::Err> {
+        if !T::DECIMAL_DISPLAY {
+            let inner = src
+                .trim()
+                .parse::<u128>()
+                .map_err(|_| ParseAmountError::Parse)?;
+            return Ok(Self::new(inner));
+        }
         let mut result: u128 = 0;
         let mut decimals: Option<u8> = None;
         let mut chars = src.trim().chars().peekable();
@@ -2717,6 +2731,35 @@ mod tests {
 
         // Panics loudly rather than silently wrapping in release builds.
         TokenAmount::<TooPrecise>::one();
+    }
+
+    #[test]
+    fn token_amount_raw_u128_display() {
+        use super::{Token, TokenAmount};
+
+        // A token that displays and parses as its raw inner `u128`.
+        struct Raw;
+        impl Token for Raw {
+            const NAME: &'static str = "Raw";
+            const DECIMAL_DISPLAY: bool = false;
+
+            fn decimals() -> u8 {
+                18
+            }
+        }
+
+        // Display writes the inner value verbatim, ignoring `decimals()`; no decimal point.
+        assert_eq!(
+            "12345",
+            TokenAmount::<Raw>::from_str("12345").unwrap().to_string()
+        );
+        assert_eq!("0", TokenAmount::<Raw>::ZERO.to_string());
+
+        // FromStr parses a plain integer straight into the inner value, round-tripping.
+        let parsed = TokenAmount::<Raw>::from_str("999").unwrap();
+        assert_eq!(999, parsed.to_inner());
+        assert_eq!("999", parsed.to_string());
+        assert!(TokenAmount::<Raw>::from_str("1.5").is_err());
     }
 
     #[test]
