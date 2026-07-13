@@ -1774,6 +1774,7 @@ impl<Env: Environment> Client<Env> {
     #[instrument(level = "debug", skip_all, fields(chain_id = %sender_chain_id))]
     async fn download_and_process_sender_chain(
         &self,
+        receiver_chain_id: ChainId,
         sender_chain_id: ChainId,
         nodes: &[RemoteNode<Env::ValidatorNode>],
         received_log: &ReceivedLogs,
@@ -1781,6 +1782,55 @@ impl<Env: Environment> Client<Env> {
         sender: mpsc::UnboundedSender<ChainAndHeight>,
     ) {
         let mut nodes = nodes.to_vec();
+        // Process the lowest block together with its earlier message blocks first:
+        // its `previous_message_blocks` chain may reach into revoked epochs, whose
+        // received-log entries are pruned by validators and therefore missing from
+        // `remote_heights`. The ancestor walk downloads exactly the message-bearing
+        // predecessors (re-certifying revoked-epoch ones via the blocks that
+        // commit to them), so that the newer blocks' messages can actually be
+        // scheduled in the outbox. The downloaded certificates land in storage,
+        // where the loop below picks them up.
+        if let Some(lowest_height) = remote_heights.first().copied() {
+            let received_log = &received_log;
+            let result = communicate_concurrently(
+                &nodes,
+                async move |remote_node| {
+                    if !received_log.validator_has_block(
+                        &remote_node.public_key,
+                        sender_chain_id,
+                        lowest_height,
+                    ) {
+                        // The validator's log didn't contain the block; let the
+                        // others handle it.
+                        return Err(chain_client::Error::RemoteNodeError(
+                            NodeError::MissingCertificateValue,
+                        ));
+                    }
+                    self.download_sender_block_with_sending_ancestors(
+                        receiver_chain_id,
+                        sender_chain_id,
+                        lowest_height,
+                        &remote_node,
+                    )
+                    .await
+                },
+                self.options.certificate_batch_download_hedge_delay,
+                self.storage_client().clock(),
+            )
+            .await;
+            if let Err(errors) = result {
+                for (validator, error) in errors {
+                    warn!(
+                        %validator,
+                        %sender_chain_id,
+                        %lowest_height,
+                        %error,
+                        "failed to process the lowest sender block with its \
+                         sending ancestors",
+                    );
+                }
+            }
+        }
         while !remote_heights.is_empty() {
             // Check local storage first — certificates may already be available from
             // a prior sync cycle, another receiver chain, or a concurrent notification.

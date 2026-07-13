@@ -1190,6 +1190,7 @@ impl<Env: Environment> ChainClient<Env> {
                 Some(async move {
                     client
                         .download_and_process_sender_chain(
+                            self.chain_id,
                             sender_chain_id,
                             &nodes,
                             received_logs,
