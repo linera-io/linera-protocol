@@ -383,7 +383,9 @@ impl TryFrom<U256> for Amount {
 )]
 pub struct TokenAmount<T> {
     inner: u128,
-    tag: std::marker::PhantomData<T>,
+    // `fn() -> T` rather than `T` so the wrapper is `Send + Sync` regardless of `T` (it never
+    // actually holds a `T`), as required by the GraphQL `InputType`/`OutputType` impls.
+    tag: std::marker::PhantomData<fn() -> T>,
 }
 
 impl<T> Clone for TokenAmount<T> {
@@ -581,6 +583,81 @@ impl<'de, T: Token> Deserialize<'de> for TokenAmount<T> {
         } else {
             Ok(Self::new(AmountU128::deserialize(deserializer)?.0))
         }
+    }
+}
+
+// A GraphQL scalar named after the token, using the same string representation as the serde
+// human-readable format (i.e. `Display`/`FromStr`). Implemented by hand rather than via
+// `doc_scalar!` because the type is generic and the scalar name is `T::NAME`.
+fn token_amount_scalar_meta<T: Token>() -> async_graphql::registry::MetaType {
+    async_graphql::registry::MetaType::Scalar {
+        name: T::NAME.to_owned(),
+        description: Some("A non-negative amount of tokens.".to_string()),
+        is_valid: Some(std::sync::Arc::new(|value| {
+            <TokenAmount<T> as async_graphql::ScalarType>::is_valid(value)
+        })),
+        visible: None,
+        inaccessible: false,
+        tags: Default::default(),
+        specified_by_url: None,
+        directive_invocations: Default::default(),
+        requires_scopes: Default::default(),
+    }
+}
+
+impl<T: Token> async_graphql::ScalarType for TokenAmount<T> {
+    fn parse(value: async_graphql::Value) -> async_graphql::InputValueResult<Self> {
+        Ok(async_graphql::from_value(value)?)
+    }
+
+    fn to_value(&self) -> async_graphql::Value {
+        async_graphql::to_value(self).unwrap_or(async_graphql::Value::Null)
+    }
+}
+
+impl<T: Token> async_graphql::InputType for TokenAmount<T> {
+    type RawValueType = Self;
+
+    fn type_name() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Borrowed(T::NAME)
+    }
+
+    fn create_type_info(registry: &mut async_graphql::registry::Registry) -> String {
+        registry.create_input_type::<Self, _>(async_graphql::registry::MetaTypeId::Scalar, |_| {
+            token_amount_scalar_meta::<T>()
+        })
+    }
+
+    fn parse(value: Option<async_graphql::Value>) -> async_graphql::InputValueResult<Self> {
+        <Self as async_graphql::ScalarType>::parse(value.unwrap_or_default())
+    }
+
+    fn to_value(&self) -> async_graphql::Value {
+        <Self as async_graphql::ScalarType>::to_value(self)
+    }
+
+    fn as_raw_value(&self) -> Option<&Self::RawValueType> {
+        Some(self)
+    }
+}
+
+impl<T: Token> async_graphql::OutputType for TokenAmount<T> {
+    fn type_name() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Borrowed(T::NAME)
+    }
+
+    fn create_type_info(registry: &mut async_graphql::registry::Registry) -> String {
+        registry.create_output_type::<Self, _>(async_graphql::registry::MetaTypeId::Scalar, |_| {
+            token_amount_scalar_meta::<T>()
+        })
+    }
+
+    async fn resolve(
+        &self,
+        _: &async_graphql::ContextSelectionSet<'_>,
+        _field: &async_graphql::Positioned<async_graphql::parser::types::Field>,
+    ) -> async_graphql::ServerResult<async_graphql::Value> {
+        Ok(async_graphql::ScalarType::to_value(self))
     }
 }
 
@@ -2760,6 +2837,56 @@ mod tests {
         assert_eq!(999, parsed.to_inner());
         assert_eq!("999", parsed.to_string());
         assert!(TokenAmount::<Raw>::from_str("1.5").is_err());
+    }
+
+    #[test]
+    fn token_amount_json_and_graphql_match_display() {
+        use async_graphql::ScalarType;
+
+        use super::{Token, TokenAmount};
+
+        // A decimal token and a raw-u128 token.
+        struct Cents;
+        impl Token for Cents {
+            const NAME: &'static str = "Cents";
+
+            fn decimals() -> u8 {
+                2
+            }
+        }
+        struct Raw;
+        impl Token for Raw {
+            const NAME: &'static str = "Raw";
+            const DECIMAL_DISPLAY: bool = false;
+
+            fn decimals() -> u8 {
+                2
+            }
+        }
+
+        let cents = TokenAmount::<Cents>::from_str("1.5").unwrap();
+        let raw = TokenAmount::<Raw>::from_str("12345").unwrap();
+
+        // JSON serializes as the `Display` string and round-trips through `FromStr`.
+        assert_eq!("\"1.5\"", serde_json::to_string(&cents).unwrap());
+        assert_eq!("\"12345\"", serde_json::to_string(&raw).unwrap());
+        assert_eq!(cents, serde_json::from_str("\"1.5\"").unwrap());
+        assert_eq!(raw, serde_json::from_str("\"12345\"").unwrap());
+
+        // The GraphQL scalar uses the same string form for both output and input.
+        assert_eq!(
+            async_graphql::Value::String(cents.to_string()),
+            cents.to_value()
+        );
+        assert_eq!(
+            async_graphql::Value::String(raw.to_string()),
+            raw.to_value()
+        );
+        assert_eq!(
+            cents,
+            TokenAmount::<Cents>::parse(cents.to_value()).unwrap()
+        );
+        assert_eq!(raw, TokenAmount::<Raw>::parse(raw.to_value()).unwrap());
     }
 
     #[test]
