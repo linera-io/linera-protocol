@@ -4251,6 +4251,22 @@ where
     // Producer.1: checkpoint #1. unfinalized_message_blocks[recipient] = {(0, 0)}.
     producer.checkpoint().await.unwrap().unwrap();
 
+    // The transfer is unacknowledged, so checkpoint #1 vouches for its block and must keep
+    // it in `block_hashes` — that is the block a node bootstrapping from the checkpoint is
+    // handed, and the one the recipient's `previous_message_blocks` anchor points at.
+    {
+        let producer_state = producer
+            .client
+            .local_node
+            .chain_state_view(producer_id)
+            .await?;
+        assert!(producer_state
+            .block_hashes
+            .get(&BlockHeight::ZERO)
+            .await?
+            .is_some());
+    }
+
     // Recipient.0: consume the transfer. Now the inbox's `next_cursor_to_remove[producer]`
     // is past the transfer's cursor and `pending_checkpoint_ack_targets` contains the
     // producer.
@@ -4337,6 +4353,32 @@ where
             .any(|msg| msg.destination == recipient_id),
         "cycle should terminate: producer's next checkpoint must not notify the recipient",
     );
+
+    // Checkpoint #2 vouches for nothing, so it prunes the blocks below it from
+    // `block_hashes` — checkpoint #1 at height 1 and the ack-consuming block at height 2.
+    //
+    // The transfer at height 0 stays, because this client's outbox still queues it: the
+    // recipient's acknowledgement came back as a message, whereas an outbox is only drained
+    // by a delivery confirmation from the recipient's validators, which this client has not
+    // seen. Pruning height 0 would leave the outbox unable to build its cross-chain request,
+    // and hence unable to ever drain.
+    {
+        let producer_state = producer
+            .client
+            .local_node
+            .chain_state_view(producer_id)
+            .await?;
+        let outbox = producer_state
+            .outboxes
+            .try_load_entry(&recipient_id)
+            .await?
+            .expect("the producer has an outbox for the recipient");
+        assert_eq!(outbox.queue.elements().await?, vec![BlockHeight::ZERO]);
+        assert_eq!(
+            producer_state.block_hashes.indices().await?,
+            vec![BlockHeight::ZERO, checkpoint_2.block().header.height],
+        );
+    }
 
     Ok(())
 }

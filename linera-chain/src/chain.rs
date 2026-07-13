@@ -556,8 +556,10 @@ where
     }
 
     /// Inserts `(height, hash)` into `block_hashes` and updates the
-    /// `next_height_to_preprocess` register accordingly. Every write to
+    /// `next_height_to_preprocess` register accordingly. Every insertion into
     /// `block_hashes` must go through this helper so the register stays in sync.
+    /// Removals are confined to `prune_block_hashes`, which only drops heights below the
+    /// highest one and so leaves the register untouched.
     fn insert_block_hash(
         &mut self,
         height: BlockHeight,
@@ -1518,8 +1520,66 @@ where
         self.insert_block_hash(block.header.height, hash)?;
         if block.body.starts_with_checkpoint() {
             self.latest_checkpoint_height.set(Some(block.header.height));
+            self.prune_block_hashes(block).await?;
         }
         Ok(updated_streams)
+    }
+
+    /// Drops the entries of `block_hashes` below the checkpoint block that the chain no
+    /// longer needs, so that the map does not grow without bound as the chain advances.
+    ///
+    /// Two kinds of pre-checkpoint block survive:
+    ///
+    /// * The blocks the checkpoint vouches for in its `outbox_block_hashes`, i.e. the ones
+    ///   that still carry unacknowledged messages. These are the blocks a node bootstrapping
+    ///   from the checkpoint is given, and the only ones a surviving `previous_message_blocks`
+    ///   anchor can point at, since the checkpoint drops the anchor of every fully
+    ///   acknowledged recipient.
+    /// * The blocks still queued in an outbox. Delivery is confirmed by the recipient's
+    ///   validators, which is a separate path from the acknowledgement that empties
+    ///   `unfinalized_message_blocks`, so a queue can outlive the checkpoint's guarantee.
+    ///   Dropping such a block would leave the outbox unable to build a cross-chain request
+    ///   for it, and hence unable to ever drain. Outbox queues are local state, so unlike the
+    ///   vouched-for set this one differs between nodes: what remains is bounded, not
+    ///   identical everywhere.
+    ///
+    /// Only heights below the checkpoint are removed, so `next_height_to_preprocess` — which
+    /// tracks the highest known height — stays accurate.
+    async fn prune_block_hashes(&mut self, block: &Block) -> Result<(), ChainError> {
+        let Some(OracleResponse::Checkpoint {
+            outbox_block_hashes,
+            ..
+        }) = block.body.oracle_responses.first().and_then(|r| r.first())
+        else {
+            return Err(ChainError::InternalError(
+                "checkpoint block is missing its OracleResponse::Checkpoint".into(),
+            ));
+        };
+        let vouched_for = outbox_block_hashes.iter().collect::<HashSet<_>>();
+        // Every outbox, not just the ones in `nonempty_outboxes`: on a client that index only
+        // covers tracked targets, but an untracked target's queue is resurrected by
+        // `reconcile_outbox_index` if the chain is tracked later on. An outbox is removed once
+        // its queue drains, so this loads no more entries than there are pending recipients.
+        let mut queued = BTreeSet::new();
+        for (_, outbox) in self.outboxes.try_load_all_entries().await? {
+            queued.extend(outbox.queue.elements().await?);
+        }
+        let obsolete = self
+            .block_hashes
+            .index_values()
+            .await?
+            .into_iter()
+            .filter(|(height, hash)| {
+                *height < block.header.height
+                    && !vouched_for.contains(hash)
+                    && !queued.contains(height)
+            })
+            .map(|(height, _)| height)
+            .collect::<Vec<_>>();
+        for height in obsolete {
+            self.block_hashes.remove(&height)?;
+        }
+        Ok(())
     }
 
     /// Adds a block to `block_hashes` as preprocessed, and updates the outboxes where possible.
@@ -1695,13 +1755,14 @@ where
                 if *outbox.next_height_to_schedule.get() > block_height {
                     continue; // We already added this recipient's messages to the outbox.
                 }
+                // A missing entry means a checkpoint pruned the block: the recipient had
+                // acknowledged everything we sent it below the checkpoint, so there is no
+                // predecessor left to chain to. That is the same state a node that
+                // bootstrapped from the checkpoint is in, where the outbox is rebuilt from
+                // scratch and starts out at height zero.
                 let maybe_prev_hash = match outbox.next_height_to_schedule.get().try_sub_one().ok()
                 {
-                    Some(height) => {
-                        Some(self.block_hashes.get(&height).await?.ok_or_else(|| {
-                            ChainError::CorruptedChainState("missing entry in block_hashes".into())
-                        })?)
-                    }
+                    Some(height) => self.block_hashes.get(&height).await?,
                     None => None, // No message to that sender was added yet.
                 };
                 // Only schedule if this block contains the next message for that recipient.
@@ -1715,12 +1776,14 @@ where
                     }
                     (Some(_), None) => {
                         // The outbox already has a previous height for this recipient,
-                        // but this block's body recorded no predecessor — that means
-                        // this is the first non-`CheckpointAck` send to this recipient,
-                        // even though earlier `CheckpointAck`-only blocks have already
-                        // been added to the off-chain outbox. We can still schedule:
-                        // the bundle will carry `previous_height = None`, which the
-                        // receiver accepts as "first ever".
+                        // but this block's body recorded no predecessor. Either earlier
+                        // `CheckpointAck`-only blocks were added to the off-chain outbox
+                        // while being skipped from `body.previous_message_blocks`, or a
+                        // checkpoint dropped the recipient's anchor because it had
+                        // acknowledged everything we sent it. Both mean the recipient has
+                        // no unreceived message from us below this block, so we can
+                        // schedule: the bundle carries `previous_height = None`, which
+                        // only tells the receiver to skip its gap check.
                     }
                     (None, Some((_, prev_msg_block_height))) => {
                         // We have no previously processed block in the outbox, but we are
@@ -1733,8 +1796,8 @@ where
                     }
                     (Some(ref prev_hash), Some((prev_msg_block_hash, _))) => {
                         // Only process the outbox if the hashes match. A mismatch can
-                        // arise legitimately when intermediate `CheckpointAck`-only
-                        // blocks sit in the off-chain outbox but are skipped from
+                        // arise legitimately when intermediate blocks sit in the
+                        // off-chain outbox but are skipped from
                         // `body.previous_message_blocks`; same fallback as the
                         // `(Some, None)` arm above.
                         if prev_hash != prev_msg_block_hash {
