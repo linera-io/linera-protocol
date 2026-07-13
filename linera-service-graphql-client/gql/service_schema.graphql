@@ -432,8 +432,9 @@ type ChainStateExtendedView {
 	Hashes of blocks that are vouched for by data this chain already trusts, but
 	have not been processed here yet. A hash is inserted when a trusted source
 	commits to it: a checkpoint cert's `outbox_block_hashes`, or an accepted
-	block's `previous_block_hash` or `previous_message_blocks` links (unless the
-	referenced block is already in `block_hashes`). The worker accepts a cert
+	block's `previous_block_hash`, `previous_message_blocks` or
+	`previous_event_blocks` links (unless the referenced block is already in
+	`block_hashes`). The worker accepts a cert
 	whose hash is in this set regardless of its epoch — the epoch may be revoked,
 	but the hash commitment makes the block trustworthy — and removes the entry
 	upon acceptance.
