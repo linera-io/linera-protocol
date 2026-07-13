@@ -406,11 +406,6 @@ pub trait Token:
     fn decimals() -> u8;
 
     /// Returns `10.pow(exponent)`, panicking if the result does not fit in a `u128`.
-    ///
-    /// A `Token` whose precision requires a larger scaling factor cannot be represented as a
-    /// fixed-point `u128`, so this is a configuration error rather than a runtime condition to
-    /// recover from. Panicking here also avoids the silent wraparound of `u128::pow` in release
-    /// builds.
     fn pow10(exponent: u8) -> u128 {
         10u128
             .checked_pow(exponent as u32)
