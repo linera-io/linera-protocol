@@ -34,7 +34,9 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
 };
-use linera_chain::{data_types::MessageAction, ChainError, ChainExecutionContext};
+use linera_chain::{
+    data_types::MessageAction, types::ConfirmedBlockCertificate, ChainError, ChainExecutionContext,
+};
 use linera_execution::{
     wasm_test, ExecutionError, Message, MessageKind, Operation, QueryOutcome,
     ResourceControlPolicy, SystemMessage, SystemOperation, WasmRuntime,
@@ -57,7 +59,7 @@ use crate::{
     },
     local_node::LocalNodeError,
     test_utils::{ClientOutcomeResultExt as _, FaultType},
-    worker::WorkerError,
+    worker::{Notification, Reason, WorkerError},
     Environment,
 };
 
@@ -2128,6 +2130,13 @@ async fn test_memory_read_event_downloads_publisher_chain(
 /// Tests that when a block execution needs events from a publisher chain that isn't
 /// locally available, the client automatically downloads the publisher chain certificates
 /// using the event block height index and retries.
+///
+/// The publisher chain is stored sparsely: only the blocks that emitted events are
+/// downloaded, not the ones in between. The first post's epoch is revoked before the
+/// receiver reads it, so the walk must also re-certify it: the epoch-1 post block is
+/// preprocessed first and vouches for the epoch-0 one via `previous_event_blocks`.
+/// Sparseness proves the recovery did not fall back to downloading contiguous
+/// descendants.
 async fn run_test_read_event_downloads_publisher_chain<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
@@ -2137,8 +2146,14 @@ where
         .await?
         .with_policy(ResourceControlPolicy::all_categories());
 
-    let sender = builder.add_root_chain(0, Amount::ONE).await?;
-    let receiver = builder.add_root_chain(1, Amount::ONE).await?;
+    let admin = builder.add_root_chain(0, Amount::ONE).await?;
+    let sender = builder.add_root_chain(1, Amount::ONE).await?;
+    let receiver = builder.add_root_chain(2, Amount::ONE).await?;
+    let validator = builder
+        .initial_committee
+        .validator_addresses()
+        .next()
+        .unwrap();
 
     // Deploy the social app on the receiver chain.
     let module_id = receiver.publish_wasm_example("social").await?;
@@ -2162,20 +2177,79 @@ where
         text: "Hello from sender!".to_string(),
         image_url: None,
     };
-    sender
+    let post_cert0 = sender
         .execute_operation(Operation::user(application_id, &post)?)
         .await
         .unwrap_ok_committed();
 
-    // Do NOT call receiver.synchronize_from_validators().
-    // Instead, directly execute an UpdateStreams operation that references the
-    // sender's event. The receiver doesn't have the sender's chain locally, so
-    // this will fail with EventsNotFound. The retry logic should use the event
-    // block height index to download only the needed certificates and succeed.
+    // Create epoch 1 and migrate the sender to it. The migration block emits no event,
+    // so the sender's second post commits to the first post's block directly, via
+    // `previous_event_blocks`.
+    let create_cert = admin
+        .stage_new_committee(builder.initial_committee.clone())
+        .await
+        .unwrap_ok_committed();
+    sender.synchronize_from_validators().await?;
+    let (migration_certs, _) = sender.process_inbox().await?;
+    let migration_cert = migration_certs.last().expect("migration block").clone();
+    assert_eq!(sender.chain_info().await?.epoch, Epoch::from(1));
+
+    let post = social::Operation::Post {
+        text: "Hello again!".to_string(),
+        image_url: None,
+    };
+    let post_cert1 = sender
+        .execute_operation(Operation::user(application_id, &post)?)
+        .await
+        .unwrap_ok_committed();
     let stream_id = StreamId {
         application_id: application_id.forget_abi().into(),
         stream_name: b"posts".into(),
     };
+    assert_eq!(
+        post_cert1.block().body.previous_event_blocks,
+        BTreeMap::from([(
+            stream_id.clone(),
+            (post_cert0.hash(), post_cert0.block().header.height)
+        )]),
+    );
+
+    // Migrate the receiver to epoch 1 as well, and revoke epoch 0. The receiver learns
+    // about both from admin-chain notifications, not from
+    // `synchronize_from_validators`: that would download the sender's event blocks
+    // eagerly, while epoch 0 is still live.
+    let notify_receiver = async |cert: &ConfirmedBlockCertificate| {
+        receiver
+            .process_notification_from(
+                Notification {
+                    chain_id: admin.chain_id(),
+                    reason: Reason::NewBlock {
+                        height: cert.block().header.height,
+                        hash: cert.hash(),
+                    },
+                },
+                validator,
+            )
+            .await
+    };
+    notify_receiver(&create_cert).await;
+    receiver.process_inbox().await?;
+    assert_eq!(receiver.chain_info().await?.epoch, Epoch::from(1));
+
+    let revoke_cert = admin.revoke_epochs(Epoch::ZERO).await.unwrap_ok_committed();
+    notify_receiver(&revoke_cert).await;
+    assert!(
+        receiver
+            .storage_client()
+            .is_epoch_revoked(Epoch::ZERO)
+            .await?,
+        "the receiver's local node should know that epoch 0 is revoked",
+    );
+
+    // Execute an UpdateStreams operation that references both of the sender's events.
+    // The receiver doesn't have the sender's chain locally, so this will fail with
+    // EventsNotFound. The retry logic should use the event block height index to
+    // download only the needed certificates and succeed.
     receiver
         .execute_operations(
             vec![SystemOperation::UpdateStream {
@@ -2183,7 +2257,7 @@ where
                 chain_id: sender.chain_id(),
                 stream_id,
                 first_index: 0,
-                next_index: 1,
+                next_index: 2,
             }
             .into()],
             vec![],
@@ -2191,7 +2265,7 @@ where
         .await
         .unwrap_ok_committed();
 
-    // Verify that the event was processed: query the received posts.
+    // Verify that the events were processed: query the received posts.
     let query = Request::new("{ receivedPosts { keys { author, index } } }");
     let outcome = receiver
         .query_user_application(application_id, &query)
@@ -2201,6 +2275,7 @@ where
             async_graphql::Value::from_json(json!({
                 "receivedPosts": {
                     "keys": [
+                        { "author": sender.chain_id(), "index": 1 },
                         { "author": sender.chain_id(), "index": 0 }
                     ]
                 }
@@ -2210,6 +2285,15 @@ where
         operations: vec![],
     };
     assert_eq!(outcome, expected);
+
+    // Only the sender's event-bearing blocks should be in the receiver's storage. In
+    // particular, the revoked-epoch post at height 0 was accepted through the
+    // `previous_event_blocks` vouching, not by walking contiguous descendants — which
+    // would have downloaded the migration block in between.
+    let storage = receiver.storage_client();
+    assert!(storage.contains_certificate(post_cert0.hash()).await?);
+    assert!(storage.contains_certificate(post_cert1.hash()).await?);
+    assert!(!storage.contains_certificate(migration_cert.hash()).await?);
 
     Ok(())
 }

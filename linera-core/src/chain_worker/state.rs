@@ -1083,8 +1083,8 @@ where
         // sufficient basis for trust: the block must also be vouched for by data
         // this worker already trusts — a `vouched_blocks` trust mark (written by a
         // checkpoint cert or by an accepted block that commits to this one via
-        // `previous_block_hash` or `previous_message_blocks`) or an earlier
-        // acceptance of the same block.
+        // `previous_block_hash`, `previous_message_blocks` or
+        // `previous_event_blocks`) or an earlier acceptance of the same block.
         if !in_trust_set && accepted_at_height != Some(block_hash) {
             self.ensure_epoch_trusted(&certificate).await?;
         }

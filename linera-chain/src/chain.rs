@@ -352,8 +352,9 @@ where
     /// Hashes of blocks that are vouched for by data this chain already trusts, but
     /// have not been processed here yet. A hash is inserted when a trusted source
     /// commits to it: a checkpoint cert's `outbox_block_hashes`, or an accepted
-    /// block's `previous_block_hash` or `previous_message_blocks` links (unless the
-    /// referenced block is already in `block_hashes`). The worker accepts a cert
+    /// block's `previous_block_hash`, `previous_message_blocks` or
+    /// `previous_event_blocks` links (unless the referenced block is already in
+    /// `block_hashes`). The worker accepts a cert
     /// whose hash is in this set regardless of its epoch — the epoch may be revoked,
     /// but the hash commitment makes the block trustworthy — and removes the entry
     /// upon acceptance.
@@ -1538,8 +1539,9 @@ where
     }
 
     /// Records the block references an accepted block commits to — its parent via
-    /// `previous_block_hash` and the latest message block per recipient via
-    /// `previous_message_blocks` — in `vouched_blocks`, unless the referenced block
+    /// `previous_block_hash`, the latest message block per recipient via
+    /// `previous_message_blocks` and the latest event block per stream via
+    /// `previous_event_blocks` — in `vouched_blocks`, unless the referenced block
     /// is already in `block_hashes`. The accepted block is trusted, so these hash
     /// commitments remain a sufficient basis for accepting the referenced blocks
     /// even after the epochs that certified them are revoked.
@@ -1556,7 +1558,12 @@ where
         if let Some(parent_hash) = block.header.previous_block_hash {
             references.push((block.header.height.try_sub_one()?, parent_hash));
         }
-        for (hash, height) in block.body.previous_message_blocks.values() {
+        for (hash, height) in block
+            .body
+            .previous_message_blocks
+            .values()
+            .chain(block.body.previous_event_blocks.values())
+        {
             references.push((*height, *hash));
         }
         let known_hashes = self
