@@ -289,16 +289,7 @@ where
             if bundle.height < next_height_to_receive {
                 skipped_len = i + 1;
             }
-            let is_revoked = self
-                .storage
-                .is_epoch_revoked(*epoch)
-                .await
-                .map_err(|error| {
-                    WorkerError::ChainError(Box::new(ChainError::ExecutionError(
-                        Box::new(error),
-                        ChainExecutionContext::Block,
-                    )))
-                })?;
+            let is_revoked = self.is_epoch_revoked(*epoch).await?;
             if !is_revoked || Some(bundle.height) <= last_anticipated_block_height {
                 trusted_len = i + 1;
             }
@@ -328,6 +319,17 @@ where
         })
     }
 
+    /// Returns whether the given epoch has been revoked on the admin chain,
+    /// mapping any storage error to a [`WorkerError`].
+    async fn is_epoch_revoked(&self, epoch: Epoch) -> Result<bool, WorkerError> {
+        self.storage.is_epoch_revoked(epoch).await.map_err(|error| {
+            WorkerError::ChainError(Box::new(ChainError::ExecutionError(
+                Box::new(error),
+                ChainExecutionContext::Block,
+            )))
+        })
+    }
+
     /// Ensures that the certificate's epoch is still a sufficient basis for trusting
     /// its block.
     ///
@@ -340,16 +342,7 @@ where
         certificate: &ConfirmedBlockCertificate,
     ) -> Result<(), WorkerError> {
         let header = &certificate.block().header;
-        let is_revoked = self
-            .storage
-            .is_epoch_revoked(header.epoch)
-            .await
-            .map_err(|error| {
-                WorkerError::ChainError(Box::new(ChainError::ExecutionError(
-                    Box::new(error),
-                    ChainExecutionContext::Block,
-                )))
-            })?;
+        let is_revoked = self.is_epoch_revoked(header.epoch).await?;
         if is_revoked {
             return Err(WorkerError::EpochRevoked {
                 chain_id: header.chain_id,
@@ -369,16 +362,7 @@ where
         epoch: Epoch,
         height: BlockHeight,
     ) -> Result<(), WorkerError> {
-        let is_revoked = self
-            .storage
-            .is_epoch_revoked(epoch)
-            .await
-            .map_err(|error| {
-                WorkerError::ChainError(Box::new(ChainError::ExecutionError(
-                    Box::new(error),
-                    ChainExecutionContext::Block,
-                )))
-            })?;
+        let is_revoked = self.is_epoch_revoked(epoch).await?;
         ensure!(
             !is_revoked,
             WorkerError::VoteInRevokedEpoch {

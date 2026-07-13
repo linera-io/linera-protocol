@@ -1509,7 +1509,7 @@ where
         }
         let updated_streams = self.process_emitted_events(block).await?;
         self.process_outgoing_messages(block, tracked).await?;
-        self.vouch_for_block_references(block, hash).await?;
+        self.vouch_for_block_references(block).await?;
 
         // Last, reset the consensus state based on the current ownership.
         self.reset_chain_manager(block.header.height.try_add_one()?, local_time)
@@ -1540,11 +1540,8 @@ where
     /// committee. In that case the block is rejected with
     /// [`ChainError::ConflictingCertifiedBlocks`], which names the certificate
     /// pair that proves the fault.
-    async fn vouch_for_block_references(
-        &mut self,
-        block: &Block,
-        block_hash: CryptoHash,
-    ) -> Result<(), ChainError> {
+    async fn vouch_for_block_references(&mut self, block: &Block) -> Result<(), ChainError> {
+        let block_hash = block.hash();
         let mut references = Vec::new();
         if let Some(parent_hash) = block.header.previous_block_hash {
             references.push((block.header.height.try_sub_one()?, parent_hash));
@@ -1619,7 +1616,7 @@ where
         }
         self.process_outgoing_messages(block, tracked).await?;
         let updated_streams = self.process_emitted_events(block).await?;
-        self.vouch_for_block_references(block, hash).await?;
+        self.vouch_for_block_references(block).await?;
         self.insert_block_hash(height, hash)?;
         Ok(updated_streams)
     }
