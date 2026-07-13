@@ -404,6 +404,18 @@ pub trait Token:
 
     /// The precision given as a number of decimals.
     fn decimals() -> u8;
+
+    /// Returns `10.pow(exponent)`, panicking if the result does not fit in a `u128`.
+    ///
+    /// A `Token` whose precision requires a larger scaling factor cannot be represented as a
+    /// fixed-point `u128`, so this is a configuration error rather than a runtime condition to
+    /// recover from. Panicking here also avoids the silent wraparound of `u128::pow` in release
+    /// builds.
+    fn pow10(exponent: u8) -> u128 {
+        10u128
+            .checked_pow(exponent as u32)
+            .expect("token precision is too high to represent as a fixed-point u128")
+    }
 }
 
 /// The native token.
@@ -473,18 +485,6 @@ impl<T: Token> Display for TokenAmount<T> {
     }
 }
 
-/// Returns `10.pow(exponent)`, panicking if the result does not fit in a `u128`.
-///
-/// A `Token` whose precision requires a larger scaling factor cannot be represented as a
-/// fixed-point `u128`, so this is a configuration error rather than a runtime condition to
-/// recover from. Panicking here also avoids the silent wraparound of `u128::pow` in release
-/// builds.
-fn pow10(exponent: u8) -> u128 {
-    10u128
-        .checked_pow(exponent as u32)
-        .expect("token precision is too high to represent as a fixed-point u128")
-}
-
 impl<T: Token> FromStr for TokenAmount<T> {
     type Err = ParseAmountError;
 
@@ -513,7 +513,7 @@ impl<T: Token> FromStr for TokenAmount<T> {
             }
         }
         result = result
-            .checked_mul(pow10(decimals.unwrap_or_else(T::decimals)))
+            .checked_mul(T::pow10(decimals.unwrap_or_else(T::decimals)))
             .ok_or(ParseAmountError::TooHigh)?;
         Ok(Self::new(result))
     }
@@ -588,7 +588,7 @@ impl<T: Token> TokenAmount<T> {
 
     /// One token.
     pub fn one() -> Self {
-        TokenAmount::new(pow10(T::decimals()))
+        TokenAmount::new(T::pow10(T::decimals()))
     }
 
     /// Checked addition.
@@ -688,9 +688,9 @@ impl<T: Token> TokenAmount<T> {
     fn from_subunits(amount: u128, unit_decimals: u8) -> Self {
         let decimals = T::decimals();
         if decimals >= unit_decimals {
-            Self::new(pow10(decimals - unit_decimals)).saturating_mul(amount)
+            Self::new(T::pow10(decimals - unit_decimals)).saturating_mul(amount)
         } else {
-            Self::new(amount / pow10(unit_decimals - decimals))
+            Self::new(amount / T::pow10(unit_decimals - decimals))
         }
     }
 
