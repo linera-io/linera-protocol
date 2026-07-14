@@ -5,9 +5,10 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use fungible::{FungibleTokenAbi, InitialState, InitialStateBuilder, Parameters};
 use linera_sdk::{
-    abis::fungible::FungibleOperation,
+    abis::fungible::{
+        FungibleOperation, FungibleTokenAbi, InitialState, InitialStateBuilder, Parameters,
+    },
     linera_base_types::{Account, AccountOwner, Amount},
     test::{MessageAction, TestValidator},
 };
@@ -23,9 +24,7 @@ async fn test_cross_chain_transfer() {
     let transfer_amount = Amount::from_tokens(15);
 
     let (validator, module_id) =
-        TestValidator::with_current_module::<fungible::FungibleTokenAbi, Parameters, InitialState>(
-        )
-        .await;
+        TestValidator::with_current_module::<FungibleTokenAbi, Parameters, InitialState>().await;
     let mut sender_chain = validator.new_chain().await;
     let sender_account = AccountOwner::from(sender_chain.public_key());
 
@@ -44,7 +43,7 @@ async fn test_cross_chain_transfer() {
                 application_id,
                 FungibleOperation::Transfer {
                     owner: sender_account,
-                    amount: transfer_amount.into(),
+                    amount: transfer_amount,
                     target_account: Account {
                         chain_id: receiver_chain.id(),
                         owner: receiver_account,
@@ -103,7 +102,7 @@ async fn test_bouncing_tokens() {
                 application_id,
                 FungibleOperation::Transfer {
                     owner: sender_account,
-                    amount: transfer_amount.into(),
+                    amount: transfer_amount,
                     target_account: Account {
                         chain_id: receiver_chain.id(),
                         owner: receiver_account,

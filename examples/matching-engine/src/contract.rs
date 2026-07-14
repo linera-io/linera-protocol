@@ -6,6 +6,7 @@
 mod state;
 
 use linera_sdk::{
+    abis::fungible::FungibleOperation,
     linera_base_types::{Account, AccountOwner, Amount, ChainId, WithContractAbi},
     views::{linera_views, RootView, View},
     Contract, ContractRuntime,
@@ -153,9 +154,9 @@ impl MatchingEngineContract {
         target_account: Account,
         token_idx: u32,
     ) {
-        let transfer = fungible::FungibleOperation::Transfer {
+        let transfer = FungibleOperation::Transfer {
             owner,
-            amount: amount.into(),
+            amount,
             target_account,
         };
         let token = self.runtime.application_parameters().fungible_id(token_idx);

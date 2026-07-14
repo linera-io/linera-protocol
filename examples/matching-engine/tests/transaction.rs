@@ -7,6 +7,9 @@
 
 use async_graphql::InputType;
 use linera_sdk::{
+    abis::fungible::{
+        FungibleTokenAbi, InitialState, InitialStateBuilder, Parameters as FungibleParameters,
+    },
     linera_base_types::{AccountOwner, Amount, ApplicationId, ApplicationPermissions},
     test::{ActiveChain, QueryOutcome, TestValidator},
 };
@@ -77,12 +80,14 @@ async fn single_transaction() {
     let admin_account = AccountOwner::from(matching_chain.public_key());
 
     let fungible_module_id = user_chain_a
-        .publish_bytecode_files_in::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>("../fungible")
+        .publish_bytecode_files_in::<FungibleTokenAbi, FungibleParameters, InitialState>(
+            "../fungible",
+        )
         .await;
 
     let initial_state_a =
-        fungible::InitialStateBuilder::default().with_account(owner_a, Amount::from_tokens(10));
-    let params_a = fungible::Parameters::new("A");
+        InitialStateBuilder::default().with_account(owner_a, Amount::from_tokens(10));
+    let params_a = FungibleParameters::new("A");
     let token_id_a = user_chain_a
         .create_application(
             fungible_module_id,
@@ -92,8 +97,8 @@ async fn single_transaction() {
         )
         .await;
     let initial_state_b =
-        fungible::InitialStateBuilder::default().with_account(owner_b, Amount::from_tokens(9));
-    let params_b = fungible::Parameters::new("B");
+        InitialStateBuilder::default().with_account(owner_b, Amount::from_tokens(9));
+    let params_b = FungibleParameters::new("B");
     let token_id_b = user_chain_b
         .create_application(
             fungible_module_id,

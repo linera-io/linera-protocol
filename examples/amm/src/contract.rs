@@ -674,7 +674,7 @@ impl AmmContract {
         let token = self.fungible_id(token_idx);
         let operation = FungibleOperation::Transfer {
             owner: source_owner,
-            amount: amount.into(),
+            amount,
             target_account,
         };
 
@@ -685,7 +685,7 @@ impl AmmContract {
         let balance = FungibleOperation::Balance { owner: *owner };
         let token = self.fungible_id(token_idx);
         match self.runtime.call_application(true, token, &balance) {
-            FungibleResponse::Balance(balance) => balance.into(),
+            FungibleResponse::Balance(balance) => balance,
             response => panic!("Unexpected response from fungible token application: {response:?}"),
         }
     }

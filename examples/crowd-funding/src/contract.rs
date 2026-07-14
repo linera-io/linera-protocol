@@ -6,9 +6,8 @@
 mod state;
 
 use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Message, Operation};
-use fungible::FungibleTokenAbi;
 use linera_sdk::{
-    abis::fungible::FungibleOperation,
+    abis::fungible::{FungibleOperation, FungibleResponse, FungibleTokenAbi},
     linera_base_types::{Account, AccountOwner, Amount, ApplicationId, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
@@ -29,7 +28,7 @@ impl WithContractAbi for CrowdFundingContract {
 impl Contract for CrowdFundingContract {
     type Message = Message;
     type InstantiationArgument = InstantiationArgument;
-    type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
+    type Parameters = ApplicationId<FungibleTokenAbi>;
     type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
@@ -106,7 +105,7 @@ impl CrowdFundingContract {
         let target_account = Account { chain_id, owner };
         let call = FungibleOperation::Transfer {
             owner,
-            amount: amount.into(),
+            amount,
             target_account,
         };
         let fungible_id = self.fungible_id();
@@ -203,7 +202,7 @@ impl CrowdFundingContract {
             self.runtime
                 .call_application(true, fungible_id, &FungibleOperation::Balance { owner });
         match response {
-            fungible::FungibleResponse::Balance(balance) => balance.into(),
+            FungibleResponse::Balance(balance) => balance,
             response => panic!("Unexpected response from fungible token application: {response:?}"),
         }
     }
@@ -216,7 +215,7 @@ impl CrowdFundingContract {
         };
         let transfer = FungibleOperation::Transfer {
             owner: self.runtime.application_id().into(),
-            amount: amount.into(),
+            amount,
             target_account,
         };
         let fungible_id = self.fungible_id();
@@ -231,7 +230,7 @@ impl CrowdFundingContract {
         };
         let transfer = FungibleOperation::Transfer {
             owner,
-            amount: amount.into(),
+            amount,
             target_account,
         };
         let fungible_id = self.fungible_id();

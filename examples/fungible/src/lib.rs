@@ -5,17 +5,21 @@
 
 pub mod state;
 
-pub use linera_sdk::abis::fungible::*;
-use linera_sdk::linera_base_types::{Account, AccountOwner, TokenAmount, U128};
+use linera_sdk::linera_base_types::{Account, AccountOwner};
 use serde::{Deserialize, Serialize};
 
 // The brand for this application's token amounts. Its precision is set at runtime from the
 // `decimals` application parameter, in `Contract::load` and `Service::new`.
 linera_sdk::branded_token!(pub struct Fungible = "FungibleAmount");
 
-/// A branded, decimal-aware token amount used internally by the application (state and logic).
-/// It crosses the ABI boundary as a raw [`U128`].
-pub type FungibleAmount = TokenAmount<Fungible>;
+/// A branded, decimal-aware token amount used throughout the application and its ABI.
+pub type FungibleAmount = linera_sdk::linera_base_types::TokenAmount<Fungible>;
+pub type FungibleOperation = linera_sdk::abis::fungible::FungibleOperation<Fungible>;
+pub type FungibleResponse = linera_sdk::abis::fungible::FungibleResponse<Fungible>;
+pub type FungibleTokenAbi = linera_sdk::abis::fungible::FungibleTokenAbi<Fungible>;
+pub type InitialState = linera_sdk::abis::fungible::InitialState<Fungible>;
+pub type InitialStateBuilder = linera_sdk::abis::fungible::InitialStateBuilder<Fungible>;
+pub use linera_sdk::abis::fungible::Parameters;
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
 use {
     futures::{stream, StreamExt},
@@ -35,7 +39,7 @@ pub enum Message {
         /// Target account to credit amount to
         target: AccountOwner,
         /// Amount to be credited
-        amount: U128,
+        amount: FungibleAmount,
         /// Source account to remove amount from
         source: AccountOwner,
     },
@@ -45,7 +49,7 @@ pub enum Message {
         /// Account to withdraw from
         owner: AccountOwner,
         /// Amount to be withdrawn
-        amount: U128,
+        amount: FungibleAmount,
         /// Target account to transfer amount to
         target_account: Account,
     },
@@ -128,7 +132,10 @@ pub async fn create_with_accounts(
         .await;
 
     for (_chain, account, initial_amount) in &accounts {
-        initial_state = initial_state.with_account(*account, *initial_amount);
+        initial_state = initial_state.with_account(
+            *account,
+            FungibleAmount::from_inner(initial_amount.to_inner()),
+        );
     }
 
     let params = Parameters::new("FUN");
@@ -146,7 +153,7 @@ pub async fn create_with_accounts(
                             chain_id: token_chain.id(),
                             owner: *account,
                         },
-                        amount: (*initial_amount).into(),
+                        amount: FungibleAmount::from_inner(initial_amount.to_inner()),
                         target_account: Account {
                             chain_id: chain.id(),
                             owner: *account,

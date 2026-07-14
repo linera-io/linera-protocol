@@ -7,9 +7,8 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use fungible::{self, FungibleTokenAbi};
 use linera_sdk::{
-    abis::fungible::FungibleOperation,
+    abis::fungible::{FungibleOperation, FungibleTokenAbi},
     linera_base_types::{Account, AccountOwner, Amount, CryptoHash},
     test::{ActiveChain, TestValidator},
 };
@@ -225,7 +224,7 @@ async fn allowance_overwrite_and_clear() {
                 FungibleOperation::Approve {
                     owner,
                     spender,
-                    allowance: Amount::from_tokens(9).into(),
+                    allowance: Amount::from_tokens(9),
                 },
             );
             block.with_operation(
@@ -233,7 +232,7 @@ async fn allowance_overwrite_and_clear() {
                 FungibleOperation::Approve {
                     owner,
                     spender,
-                    allowance: Amount::from_tokens(4).into(),
+                    allowance: Amount::from_tokens(4),
                 },
             );
         })
@@ -253,7 +252,7 @@ async fn allowance_overwrite_and_clear() {
                 FungibleOperation::Approve {
                     owner,
                     spender,
-                    allowance: Amount::ZERO.into(),
+                    allowance: Amount::ZERO,
                 },
             );
         })
@@ -310,7 +309,7 @@ async fn allowances_are_independent() {
                 FungibleOperation::Approve {
                     owner,
                     spender: spender1,
-                    allowance: Amount::from_tokens(6).into(),
+                    allowance: Amount::from_tokens(6),
                 },
             );
             block.with_operation(
@@ -318,7 +317,7 @@ async fn allowances_are_independent() {
                 FungibleOperation::Approve {
                     owner,
                     spender: spender2,
-                    allowance: Amount::from_tokens(2).into(),
+                    allowance: Amount::from_tokens(2),
                 },
             );
         })

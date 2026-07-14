@@ -6,9 +6,10 @@
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use fungible::{state::FungibleTokenState, Fungible, FungibleAmount, Parameters};
+use fungible::{
+    state::FungibleTokenState, Fungible, FungibleAmount, FungibleOperation, Parameters,
+};
 use linera_sdk::{
-    abis::fungible::FungibleOperation,
     graphql::GraphQLMutationRoot as _,
     linera_base_types::{AccountOwner, OwnerSpender, WithServiceAbi},
     views::{MapView, View},
