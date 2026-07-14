@@ -292,24 +292,11 @@ where
     }
 }
 
-/// A non-negative amount of tokens with default precision.
+/// A non-negative amount of native tokens.
 ///
 /// This is a fixed-point fraction, with [`Amount::DECIMAL_PLACES`] digits after the point.
 /// [`Amount::ONE`] is one whole token, divisible into `10.pow(Amount::DECIMAL_PLACES)` parts.
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, WitType, WitLoad, WitStore,
-)]
-#[cfg_attr(
-    all(with_testing, not(target_arch = "wasm32")),
-    derive(test_strategy::Arbitrary)
-)]
-pub struct Amount(u128);
-
-impl Allocative for Amount {
-    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
-        visitor.visit_simple_sized::<Self>();
-    }
-}
+pub type Amount = TokenAmount<NativeToken>;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "Amount")]
@@ -319,30 +306,9 @@ struct AmountString(String);
 #[serde(rename = "Amount")]
 struct AmountU128(u128);
 
-impl Serialize for Amount {
-    fn serialize<S: serde::ser::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        if serializer.is_human_readable() {
-            AmountString(self.to_string()).serialize(serializer)
-        } else {
-            AmountU128(self.0).serialize(serializer)
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for Amount {
-    fn deserialize<D: serde::de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        if deserializer.is_human_readable() {
-            let AmountString(s) = AmountString::deserialize(deserializer)?;
-            s.parse().map_err(serde::de::Error::custom)
-        } else {
-            Ok(Amount(AmountU128::deserialize(deserializer)?.0))
-        }
-    }
-}
-
 impl From<Amount> for U256 {
     fn from(amount: Amount) -> U256 {
-        U256::from(amount.0)
+        U256::from(amount.to_inner())
     }
 }
 
@@ -351,7 +317,7 @@ impl From<Amount> for f64 {
     /// lossy for large or high-precision amounts; intended for telemetry, not
     /// for arithmetic.
     fn from(amount: Amount) -> f64 {
-        amount.0 as f64 / Amount::ONE.0 as f64
+        amount.to_inner() as f64 / Amount::ONE.to_inner() as f64
     }
 }
 
@@ -365,7 +331,7 @@ impl TryFrom<U256> for Amount {
     type Error = AmountConversionError;
     fn try_from(value: U256) -> Result<Amount, Self::Error> {
         let value = u128::try_from(&value).map_err(|_| AmountConversionError(value))?;
-        Ok(Amount(value))
+        Ok(Amount::new(value))
     }
 }
 
@@ -461,8 +427,34 @@ impl Token for NativeToken {
     const NAME: &str = "Amount";
 
     fn decimals() -> u8 {
-        // For compatibility until we remove `Amount` entirely
         Amount::DECIMAL_PLACES
+    }
+}
+
+impl Amount {
+    /// The base-10 exponent representing how much a token can be divided.
+    pub const DECIMAL_PLACES: u8 = 18;
+
+    /// One token.
+    pub const ONE: Self = Self::new(10u128.pow(Self::DECIMAL_PLACES as u32));
+
+    /// Returns the number of attotokens.
+    pub const fn to_attos(self) -> u128 {
+        self.to_inner()
+    }
+
+    /// Helper function to obtain the 64 most significant bits of the balance.
+    pub const fn upper_half(self) -> u64 {
+        (self.to_inner() >> 64) as u64
+    }
+
+    /// Helper function to obtain the 64 least significant bits of the balance.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "intentional: returns the low 64 bits"
+    )]
+    pub const fn lower_half(self) -> u64 {
+        self.to_inner() as u64
     }
 }
 
@@ -667,6 +659,47 @@ impl<'a, T: Token> iter::Sum<&'a TokenAmount<T>> for TokenAmount<T> {
     }
 }
 
+impl<T> From<TokenAmount<T>> for u128 {
+    fn from(value: TokenAmount<T>) -> Self {
+        value.inner
+    }
+}
+
+// Cannot directly create values for a wrapped type, except for testing.
+#[cfg(with_testing)]
+impl<T> From<u128> for TokenAmount<T> {
+    fn from(value: u128) -> Self {
+        Self::new(value)
+    }
+}
+
+#[cfg(with_testing)]
+impl<T> ops::Add for TokenAmount<T> {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        Self::new(self.inner + other.inner)
+    }
+}
+
+#[cfg(with_testing)]
+impl<T> ops::Sub for TokenAmount<T> {
+    type Output = Self;
+
+    fn sub(self, other: Self) -> Self {
+        Self::new(self.inner - other.inner)
+    }
+}
+
+#[cfg(with_testing)]
+impl<T> ops::Mul<u128> for TokenAmount<T> {
+    type Output = Self;
+
+    fn mul(self, other: u128) -> Self {
+        Self::new(self.inner * other)
+    }
+}
+
 impl<T> TokenAmount<T> {
     const fn new(inner: u128) -> Self {
         Self {
@@ -717,6 +750,12 @@ impl<T: Token> TokenAmount<T> {
         Ok(Self::new(val))
     }
 
+    /// Checked increment.
+    pub fn try_add_one(self) -> Result<Self, ArithmeticError> {
+        let val = self.inner.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+        Ok(Self::new(val))
+    }
+
     /// Saturating addition.
     pub const fn saturating_add(self, other: Self) -> Self {
         let val = self.inner.saturating_add(other.inner);
@@ -728,6 +767,15 @@ impl<T: Token> TokenAmount<T> {
         let val = self
             .inner
             .checked_sub(other.inner)
+            .ok_or(ArithmeticError::Underflow)?;
+        Ok(Self::new(val))
+    }
+
+    /// Checked decrement.
+    pub fn try_sub_one(self) -> Result<Self, ArithmeticError> {
+        let val = self
+            .inner
+            .checked_sub(1)
             .ok_or(ArithmeticError::Underflow)?;
         Ok(Self::new(val))
     }
@@ -754,6 +802,12 @@ impl<T: Token> TokenAmount<T> {
             .inner
             .checked_add(other.inner)
             .ok_or(ArithmeticError::Overflow)?;
+        Ok(())
+    }
+
+    /// Checked in-place increment.
+    pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {
+        self.inner = self.inner.checked_add(1).ok_or(ArithmeticError::Overflow)?;
         Ok(())
     }
 
@@ -1318,43 +1372,8 @@ impl TryFrom<BlockHeight> for usize {
     }
 }
 
-impl_wrapped_number!(Amount, u128);
 impl_wrapped_number!(BlockHeight, u64);
 impl_wrapped_number!(TimeDelta, u64);
-
-impl Display for Amount {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Print the wrapped integer, padded with zeros to cover a digit before the decimal point.
-        let places = Amount::DECIMAL_PLACES as usize;
-        let min_digits = places + 1;
-        let decimals = format!("{:0min_digits$}", self.0);
-        let integer_part = &decimals[..(decimals.len() - places)];
-        let fractional_part = decimals[(decimals.len() - places)..].trim_end_matches('0');
-
-        // For now, we never trim non-zero digits so we don't lose any precision.
-        let precision = f.precision().unwrap_or(0).max(fractional_part.len());
-        let sign = if f.sign_plus() && self.0 > 0 { "+" } else { "" };
-        // The amount of padding: desired width minus sign, point and number of digits.
-        let pad_width = f.width().map_or(0, |w| {
-            w.saturating_sub(precision)
-                .saturating_sub(sign.len() + integer_part.len() + 1)
-        });
-        let left_pad = match f.align() {
-            None | Some(fmt::Alignment::Right) => pad_width,
-            Some(fmt::Alignment::Center) => pad_width / 2,
-            Some(fmt::Alignment::Left) => 0,
-        };
-
-        for _ in 0..left_pad {
-            write!(f, "{}", f.fill())?;
-        }
-        write!(f, "{sign}{integer_part}.{fractional_part:0<precision$}")?;
-        for _ in left_pad..pad_width {
-            write!(f, "{}", f.fill())?;
-        }
-        Ok(())
-    }
-}
 
 #[derive(Error, Debug)]
 #[allow(missing_docs)]
@@ -1365,40 +1384,6 @@ pub enum ParseAmountError {
     TooHigh,
     #[error("cannot represent amount: too many decimal places after the point")]
     TooManyDigits,
-}
-
-impl FromStr for Amount {
-    type Err = ParseAmountError;
-
-    fn from_str(src: &str) -> Result<Self, Self::Err> {
-        let mut result: u128 = 0;
-        let mut decimals: Option<u8> = None;
-        let mut chars = src.trim().chars().peekable();
-        if chars.peek() == Some(&'+') {
-            chars.next();
-        }
-        for char in chars {
-            match char {
-                '_' => {}
-                '.' if decimals.is_some() => return Err(ParseAmountError::Parse),
-                '.' => decimals = Some(Amount::DECIMAL_PLACES),
-                char => {
-                    let digit = u128::from(char.to_digit(10).ok_or(ParseAmountError::Parse)?);
-                    if let Some(d) = &mut decimals {
-                        *d = d.checked_sub(1).ok_or(ParseAmountError::TooManyDigits)?;
-                    }
-                    result = result
-                        .checked_mul(10)
-                        .and_then(|r| r.checked_add(digit))
-                        .ok_or(ParseAmountError::TooHigh)?;
-                }
-            }
-        }
-        result = result
-            .checked_mul(10u128.pow(decimals.unwrap_or(Amount::DECIMAL_PLACES) as u32))
-            .ok_or(ParseAmountError::TooHigh)?;
-        Ok(Amount(result))
-    }
 }
 
 impl Display for BlockHeight {
@@ -1503,74 +1488,6 @@ impl Round {
             Round::SingleLeader(_) => "single",
             Round::Validator(_) => "validator",
         }
-    }
-}
-
-impl<'a> iter::Sum<&'a Amount> for Amount {
-    fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
-        iter.fold(Self::ZERO, |a, b| a.saturating_add(*b))
-    }
-}
-
-impl Amount {
-    /// The base-10 exponent representing how much a token can be divided.
-    pub const DECIMAL_PLACES: u8 = 18;
-
-    /// One token.
-    pub const ONE: Amount = Amount(10u128.pow(Amount::DECIMAL_PLACES as u32));
-
-    /// Returns an `Amount` corresponding to that many tokens, or `Amount::MAX` if saturated.
-    pub const fn from_tokens(tokens: u128) -> Amount {
-        Self::ONE.saturating_mul(tokens)
-    }
-
-    /// Returns an `Amount` corresponding to that many millitokens, or `Amount::MAX` if saturated.
-    pub const fn from_millis(millitokens: u128) -> Amount {
-        Amount(10u128.pow(Amount::DECIMAL_PLACES as u32 - 3)).saturating_mul(millitokens)
-    }
-
-    /// Returns an `Amount` corresponding to that many microtokens, or `Amount::MAX` if saturated.
-    pub const fn from_micros(microtokens: u128) -> Amount {
-        Amount(10u128.pow(Amount::DECIMAL_PLACES as u32 - 6)).saturating_mul(microtokens)
-    }
-
-    /// Returns an `Amount` corresponding to that many nanotokens, or `Amount::MAX` if saturated.
-    pub const fn from_nanos(nanotokens: u128) -> Amount {
-        Amount(10u128.pow(Amount::DECIMAL_PLACES as u32 - 9)).saturating_mul(nanotokens)
-    }
-
-    /// Returns an `Amount` corresponding to that many attotokens.
-    pub const fn from_attos(attotokens: u128) -> Amount {
-        Amount(attotokens)
-    }
-
-    /// Returns the number of attotokens.
-    pub const fn to_attos(self) -> u128 {
-        self.0
-    }
-
-    /// Helper function to obtain the 64 most significant bits of the balance.
-    pub const fn upper_half(self) -> u64 {
-        (self.0 >> 64) as u64
-    }
-
-    /// Helper function to obtain the 64 least significant bits of the balance.
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "intentional: returns the low 64 bits"
-    )]
-    pub const fn lower_half(self) -> u64 {
-        self.0 as u64
-    }
-
-    /// Divides this by the other amount. If the other is 0, it returns `u128::MAX`.
-    pub fn saturating_ratio(self, other: Amount) -> u128 {
-        self.0.checked_div(other.0).unwrap_or(u128::MAX)
-    }
-
-    /// Returns whether this amount is 0.
-    pub fn is_zero(&self) -> bool {
-        *self == Amount::ZERO
     }
 }
 
@@ -2534,7 +2451,6 @@ impl MessagePolicy {
 }
 
 doc_scalar!(Bytecode, "A module bytecode (WebAssembly or EVM)");
-doc_scalar!(Amount, "A non-negative amount of tokens.");
 doc_scalar!(U128, "A 128-bit unsigned integer.");
 doc_scalar!(
     Epoch,
@@ -2686,10 +2602,10 @@ mod tests {
         assert_eq!("1.", Amount::ONE.to_string());
         assert_eq!("1.", Amount::from_str("1.").unwrap().to_string());
         assert_eq!(
-            Amount(10_000_000_000_000_000_000),
+            Amount::from(10_000_000_000_000_000_000),
             Amount::from_str("10").unwrap()
         );
-        assert_eq!("10.", Amount(10_000_000_000_000_000_000).to_string());
+        assert_eq!("10.", Amount::from(10_000_000_000_000_000_000).to_string());
         assert_eq!(
             "1001.3",
             (Amount::from_str("1.1")

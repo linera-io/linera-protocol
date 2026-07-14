@@ -24,7 +24,9 @@ use crate::{
     cli::validator, query_subscription::parse_subscription_ttl, task_processor::parse_operator,
 };
 
-const DEFAULT_TOKENS_PER_CHAIN: Amount = Amount::from_millis(100);
+fn default_tokens_per_chain() -> Amount {
+    Amount::from_millis(100)
+}
 const DEFAULT_TRANSACTIONS_PER_BLOCK: usize = 1;
 const DEFAULT_WRAP_UP_MAX_IN_FLIGHT: usize = 5;
 const DEFAULT_NUM_CHAINS: usize = 10;
@@ -72,7 +74,7 @@ pub struct BenchmarkOptions {
 
     /// How many tokens to assign to each newly created chain.
     /// These need to cover the transaction fees per chain for the benchmark.
-    #[arg(long, default_value_t = DEFAULT_TOKENS_PER_CHAIN)]
+    #[arg(long, default_value_t = default_tokens_per_chain())]
     pub tokens_per_chain: Amount,
 
     /// How many transactions to put in each block.
@@ -140,7 +142,7 @@ impl Default for BenchmarkOptions {
     fn default() -> Self {
         Self {
             num_chains: DEFAULT_NUM_CHAINS,
-            tokens_per_chain: DEFAULT_TOKENS_PER_CHAIN,
+            tokens_per_chain: default_tokens_per_chain(),
             transactions_per_block: DEFAULT_TRANSACTIONS_PER_BLOCK,
             wrap_up_max_in_flight: DEFAULT_WRAP_UP_MAX_IN_FLIGHT,
             fungible_application_id: None,
