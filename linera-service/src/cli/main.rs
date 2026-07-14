@@ -397,6 +397,30 @@ impl Runnable for Job {
                 debug!("{:?}", certificate);
             }
 
+            Checkpoint { chain_id } => {
+                let mut context = options
+                    .create_client_context(storage, wallet, keystore)
+                    .await?;
+                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                let chain_client = context.make_chain_client(chain_id).await?;
+                info!("Checkpointing chain {}", chain_id);
+                let time_start = Instant::now();
+                let certificate = context
+                    .apply_client_command(&chain_client, |chain_client| {
+                        let chain_client = chain_client.clone();
+                        async move { chain_client.checkpoint().await }
+                    })
+                    .await
+                    .context("Failed to checkpoint chain")?;
+                let time_total = time_start.elapsed();
+                info!(
+                    "Checkpoint confirmed after {} ms at height {}",
+                    time_total.as_millis(),
+                    certificate.value().block().header.height,
+                );
+                debug!("{:?}", certificate);
+            }
+
             ShowNetworkDescription => {
                 let network_description = storage.read_network_description().await?;
                 let json = serde_json::to_string_pretty(&network_description)?;

@@ -466,6 +466,16 @@ pub enum ClientCommand {
         chain_id: ChainId,
     },
 
+    /// Publish a checkpoint of the chain's execution state.
+    ///
+    /// The resulting block contains a single checkpoint operation. Future nodes can
+    /// bootstrap from the published state snapshot instead of replaying the chain's
+    /// earlier history.
+    Checkpoint {
+        /// The chain to checkpoint. If not specified, the wallet's default chain is used.
+        chain_id: Option<ChainId>,
+    },
+
     /// Print out the network description.
     ShowNetworkDescription,
 
@@ -1127,6 +1137,7 @@ impl ClientCommand {
             | ClientCommand::SetPreferredOwner { .. }
             | ClientCommand::ChangeApplicationPermissions { .. }
             | ClientCommand::CloseChain { .. }
+            | ClientCommand::Checkpoint { .. }
             | ClientCommand::ShowNetworkDescription
             | ClientCommand::LocalBalance { .. }
             | ClientCommand::QueryBalance { .. }
