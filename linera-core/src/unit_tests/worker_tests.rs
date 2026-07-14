@@ -1984,12 +1984,12 @@ where
             && timestamp == Timestamp::from(0)
             && matches!(messages[..], [PostedMessage {
                 authenticated_signer: None,
-                grant: Amount::ZERO,
+                grant,
                 refund_grant_to: None,
                 kind: MessageKind::Tracked,
                 index: 0,
                 message: Message::System(SystemMessage::Credit { amount, .. }),
-            }] if amount == Amount::from_tokens(995)),
+            }] if grant == Amount::ZERO && amount == Amount::from_tokens(995)),
         "Unexpected bundle",
     );
     assert_eq!(chain.confirmed_log.count(), 1);
@@ -2169,12 +2169,12 @@ where
         && timestamp == Timestamp::from(0)
         && matches!(messages[..], [PostedMessage {
             authenticated_signer: None,
-            grant: Amount::ZERO,
+            grant,
             refund_grant_to: None,
             kind: MessageKind::Tracked,
             index: 0,
             message: Message::System(SystemMessage::Credit { amount, .. })
-        }] if amount == Amount::ONE),
+        }] if grant == Amount::ZERO && amount == Amount::ONE),
         "Unexpected bundle",
     );
 
@@ -2247,12 +2247,12 @@ where
         && timestamp == Timestamp::from(0)
         && matches!(messages[..], [PostedMessage {
             authenticated_signer: None,
-            grant: Amount::ZERO,
+            grant,
             refund_grant_to: None,
             kind: MessageKind::Tracked,
             index: 0,
             message: Message::System(SystemMessage::Credit { amount, .. })
-        }] if amount == Amount::from_tokens(10)),
+        }] if grant == Amount::ZERO && amount == Amount::from_tokens(10)),
         "Unexpected bundle",
     );
     assert_eq!(chain.confirmed_log.count(), 0);

@@ -28,15 +28,13 @@ REGISTRY:
                 TYPENAME: AccountOwner
             - spender:
                 TYPENAME: AccountOwner
-            - allowance:
-                TYPENAME: Amount
+            - allowance: U128
       3:
         Transfer:
           STRUCT:
             - owner:
                 TYPENAME: AccountOwner
-            - amount:
-                TYPENAME: Amount
+            - amount: U128
             - target_account:
                 TYPENAME: Account
       4:
@@ -46,8 +44,7 @@ REGISTRY:
                 TYPENAME: AccountOwner
             - spender:
                 TYPENAME: AccountOwner
-            - amount:
-                TYPENAME: Amount
+            - amount: U128
             - target_account:
                 TYPENAME: Account
       5:
@@ -55,8 +52,7 @@ REGISTRY:
           STRUCT:
             - source_account:
                 TYPENAME: Account
-            - amount:
-                TYPENAME: Amount
+            - amount: U128
             - target_account:
                 TYPENAME: Account
   FungibleResponse:
@@ -65,8 +61,7 @@ REGISTRY:
         Ok: UNIT
       1:
         Balance:
-          NEWTYPE:
-            TYPENAME: Amount
+          NEWTYPE: U128
       2:
         TickerSymbol:
           NEWTYPE: STR
@@ -76,8 +71,7 @@ REGISTRY:
           MAP:
             KEY:
               TYPENAME: AccountOwner
-            VALUE:
-              TYPENAME: Amount
+            VALUE: U128
   Message:
     ENUM:
       0:
@@ -85,8 +79,7 @@ REGISTRY:
           STRUCT:
             - target:
                 TYPENAME: AccountOwner
-            - amount:
-                TYPENAME: Amount
+            - amount: U128
             - source:
                 TYPENAME: AccountOwner
       1:
@@ -94,13 +87,13 @@ REGISTRY:
           STRUCT:
             - owner:
                 TYPENAME: AccountOwner
-            - amount:
-                TYPENAME: Amount
+            - amount: U128
             - target_account:
                 TYPENAME: Account
   Parameters:
     STRUCT:
       - ticker_symbol: STR
+      - decimals: U8
 OPERATION:
   TYPENAME: FungibleOperation
 RESPONSE:

@@ -632,7 +632,7 @@ type Cursor {
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_AccountOwner_Amount_aaf96548 {
+type Entry_AccountOwner_Amount_c18a0712 {
 	key: AccountOwner!
 	value: Amount
 }
@@ -867,11 +867,11 @@ input MapInput_StreamIdInput_b7c3909d {
 	filters: MapFilters_StreamIdInput_b7c3909d
 }
 
-type MapView_AccountOwner_Amount_11ef1379 {
+type MapView_AccountOwner_Amount_495dd16a {
 	keys(count: Int): [AccountOwner!]!
 	count: Int!
-	entry(key: AccountOwner!): Entry_AccountOwner_Amount_aaf96548!
-	entries(input: MapInput_AccountOwner_d6668c53): [Entry_AccountOwner_Amount_aaf96548!]!
+	entry(key: AccountOwner!): Entry_AccountOwner_Amount_c18a0712!
+	entries(input: MapInput_AccountOwner_d6668c53): [Entry_AccountOwner_Amount_c18a0712!]!
 }
 
 type MapView_BlobId_Blob_3711e760 {
@@ -1425,7 +1425,7 @@ type SystemExecutionStateView {
 	committees: JSONObject!
 	ownership: ChainOwnership!
 	balance: Amount!
-	balances: MapView_AccountOwner_Amount_11ef1379!
+	balances: MapView_AccountOwner_Amount_495dd16a!
 	timestamp: Timestamp!
 }
 

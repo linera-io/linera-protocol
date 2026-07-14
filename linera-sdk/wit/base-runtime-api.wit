@@ -10,9 +10,9 @@ interface base-runtime-api {
     get-chain-ownership: func() -> chain-ownership;
     get-application-permissions: func() -> application-permissions;
     read-system-timestamp: func() -> timestamp;
-    read-chain-balance: func() -> amount;
-    read-owner-balance: func(owner: account-owner) -> amount;
-    read-owner-balances: func() -> list<tuple<account-owner, amount>>;
+    read-chain-balance: func() -> token-amount;
+    read-owner-balance: func(owner: account-owner) -> token-amount;
+    read-owner-balances: func() -> list<tuple<account-owner, token-amount>>;
     read-balance-owners: func() -> list<account-owner>;
     perform-http-request: func(request: http-request) -> http-response;
     assert-before: func(timestamp: timestamp);
@@ -36,10 +36,6 @@ interface base-runtime-api {
         reserved(u8),
         address32(crypto-hash),
         address20(array20),
-    }
-
-    record amount {
-        inner0: u128,
     }
 
     record application-description {
@@ -154,6 +150,10 @@ interface base-runtime-api {
 
     record timestamp {
         inner0: u64,
+    }
+
+    record token-amount {
+        inner: u128,
     }
 
     type u128 = tuple<u64, u64>;

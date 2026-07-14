@@ -43,7 +43,8 @@ impl Contract for NativeFungibleTokenContract {
                 chain_id: self.runtime.chain_id(),
                 owner,
             };
-            self.runtime.transfer(AccountOwner::CHAIN, account, amount);
+            self.runtime
+                .transfer(AccountOwner::CHAIN, account, amount.into());
         }
     }
 
@@ -53,7 +54,7 @@ impl Contract for NativeFungibleTokenContract {
                 log::info!("balance check for owner={}", owner);
 
                 let balance = self.runtime.owner_balance(owner);
-                FungibleResponse::Balance(balance)
+                FungibleResponse::Balance(balance.into())
             }
 
             NativeFungibleOperation::TickerSymbol => {

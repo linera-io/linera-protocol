@@ -2,18 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount},
+    linera_base_types::AccountOwner,
     views::{linera_views, MapView, RootView, ViewStorageContext},
 };
 
-use crate::{InitialState, OwnerSpender};
+use crate::{FungibleAmount, InitialState, OwnerSpender};
 
 /// The application state.
 #[derive(RootView)]
 #[view(context = ViewStorageContext)]
 pub struct FungibleTokenState {
-    pub accounts: MapView<AccountOwner, Amount>,
-    pub allowances: MapView<OwnerSpender, Amount>,
+    pub accounts: MapView<AccountOwner, FungibleAmount>,
+    pub allowances: MapView<OwnerSpender, FungibleAmount>,
 }
 
 #[allow(dead_code)]
@@ -21,7 +21,8 @@ impl FungibleTokenState {
     /// Initializes the application state with some accounts with initial balances.
     pub async fn initialize_accounts(&mut self, state: InitialState) {
         for (k, v) in state.accounts {
-            if v != Amount::ZERO {
+            let v: FungibleAmount = v.into();
+            if v != FungibleAmount::ZERO {
                 self.accounts
                     .insert(&k, v)
                     .expect("Error in insert statement");
@@ -30,7 +31,7 @@ impl FungibleTokenState {
     }
 
     /// Obtains the balance for an `account`, returning `None` if there's no entry for the account.
-    pub async fn balance(&self, account: &AccountOwner) -> Option<Amount> {
+    pub async fn balance(&self, account: &AccountOwner) -> Option<FungibleAmount> {
         self.accounts
             .get(account)
             .await
@@ -38,15 +39,20 @@ impl FungibleTokenState {
     }
 
     /// Obtains the balance for an `account`.
-    pub async fn balance_or_default(&self, account: &AccountOwner) -> Amount {
+    pub async fn balance_or_default(&self, account: &AccountOwner) -> FungibleAmount {
         self.balance(account).await.unwrap_or_default()
     }
 
     /// Sets the `spender`'s allowance over the `owner`'s tokens to `allowance`,
-    /// overwriting any previous value. Passing `Amount::ZERO` revokes the allowance.
-    pub async fn approve(&mut self, owner: AccountOwner, spender: AccountOwner, allowance: Amount) {
+    /// overwriting any previous value. Passing `FungibleAmount::ZERO` revokes the allowance.
+    pub async fn approve(
+        &mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        allowance: FungibleAmount,
+    ) {
         let owner_spender = OwnerSpender::new(owner, spender);
-        if allowance == Amount::ZERO {
+        if allowance == FungibleAmount::ZERO {
             self.allowances
                 .remove(&owner_spender)
                 .expect("Failed to remove allowance");
@@ -64,9 +70,9 @@ impl FungibleTokenState {
         &mut self,
         owner: AccountOwner,
         spender: AccountOwner,
-        amount: Amount,
+        amount: FungibleAmount,
     ) {
-        if amount == Amount::ZERO {
+        if amount == FungibleAmount::ZERO {
             return;
         }
         let mut balance = self
@@ -78,7 +84,7 @@ impl FungibleTokenState {
         balance.try_sub_assign(amount).unwrap_or_else(|_| {
             panic!("Source owner {owner} does not have sufficient balance for transfer_from")
         });
-        if balance == Amount::ZERO {
+        if balance == FungibleAmount::ZERO {
             self.accounts
                 .remove(&owner)
                 .expect("Failed to remove an empty account");
@@ -97,7 +103,7 @@ impl FungibleTokenState {
         allowance.try_sub_assign(amount).unwrap_or_else(|_| {
             panic!("Spender {spender} does not have a sufficient from owner {owner} for transfer_from; allowance={allowance} amount={amount}")
         });
-        if allowance == Amount::ZERO {
+        if allowance == FungibleAmount::ZERO {
             self.allowances
                 .remove(&owner_spender)
                 .expect("Failed to remove an empty account");
@@ -109,8 +115,8 @@ impl FungibleTokenState {
     }
 
     /// Credits an `account` with the provided `amount`.
-    pub async fn credit(&mut self, account: AccountOwner, amount: Amount) {
-        if amount == Amount::ZERO {
+    pub async fn credit(&mut self, account: AccountOwner, amount: FungibleAmount) {
+        if amount == FungibleAmount::ZERO {
             return;
         }
         let mut balance = self.balance_or_default(&account).await;
@@ -121,15 +127,15 @@ impl FungibleTokenState {
     }
 
     /// Tries to debit the requested `amount` from an `account`.
-    pub async fn debit(&mut self, account: AccountOwner, amount: Amount) {
-        if amount == Amount::ZERO {
+    pub async fn debit(&mut self, account: AccountOwner, amount: FungibleAmount) {
+        if amount == FungibleAmount::ZERO {
             return;
         }
         let mut balance = self.balance_or_default(&account).await;
         balance.try_sub_assign(amount).unwrap_or_else(|_| {
             panic!("Source account {account} does not have sufficient balance for transfer")
         });
-        if balance == Amount::ZERO {
+        if balance == FungibleAmount::ZERO {
             self.accounts
                 .remove(&account)
                 .expect("Failed to remove an empty account");

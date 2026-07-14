@@ -4,11 +4,11 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 use fungible::{
-    state::FungibleTokenState, Account, FungibleOperation, FungibleResponse, FungibleTokenAbi,
-    InitialState, Message, Parameters,
+    state::FungibleTokenState, Account, Fungible, FungibleAmount, FungibleOperation,
+    FungibleResponse, FungibleTokenAbi, InitialState, Message, Parameters,
 };
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount, WithContractAbi},
+    linera_base_types::{AccountOwner, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -30,7 +30,8 @@ impl Contract for FungibleTokenContract {
     type InstantiationArgument = InitialState;
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    async fn load(mut runtime: ContractRuntime<Self>) -> Self {
+        Fungible::configure_decimals(runtime.application_parameters().decimals);
         let state = FungibleTokenState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
@@ -41,11 +42,11 @@ impl Contract for FungibleTokenContract {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
 
-        let mut total_supply = Amount::ZERO;
+        let mut total_supply = FungibleAmount::ZERO;
         for value in state.accounts.values() {
-            total_supply.saturating_add_assign(*value);
+            total_supply.saturating_add_assign((*value).into());
         }
-        if total_supply == Amount::ZERO {
+        if total_supply == FungibleAmount::ZERO {
             panic!("The total supply is zero, therefore we cannot instantiate the contract");
         }
         self.state.initialize_accounts(state).await;
@@ -55,7 +56,7 @@ impl Contract for FungibleTokenContract {
         match operation {
             FungibleOperation::Balance { owner } => {
                 let balance = self.state.balance_or_default(&owner).await;
-                FungibleResponse::Balance(balance)
+                FungibleResponse::Balance(balance.into())
             }
 
             FungibleOperation::TickerSymbol => {
@@ -71,7 +72,7 @@ impl Contract for FungibleTokenContract {
                 self.runtime
                     .check_account_permission(owner)
                     .expect("Permission for Transfer operation");
-                self.state.approve(owner, spender, allowance).await;
+                self.state.approve(owner, spender, allowance.into()).await;
                 FungibleResponse::Ok
             }
 
@@ -84,6 +85,7 @@ impl Contract for FungibleTokenContract {
                 self.runtime
                     .check_account_permission(owner)
                     .expect("Permission for Transfer operation");
+                let amount: FungibleAmount = amount.into();
                 self.state.debit(owner, amount).await;
                 self.finish_transfer_to_account(amount, target_account, owner)
                     .await;
@@ -99,6 +101,7 @@ impl Contract for FungibleTokenContract {
                 self.runtime
                     .check_account_permission(spender)
                     .expect("Permission for Transfer operation");
+                let amount: FungibleAmount = amount.into();
                 self.state
                     .debit_for_transfer_from(owner, spender, amount)
                     .await;
@@ -115,6 +118,7 @@ impl Contract for FungibleTokenContract {
                 self.runtime
                     .check_account_permission(source_account.owner)
                     .expect("Permission for Claim operation");
+                let amount: FungibleAmount = amount.into();
                 self.claim(source_account, amount, target_account).await;
                 FungibleResponse::Ok
             }
@@ -134,7 +138,7 @@ impl Contract for FungibleTokenContract {
                     .message_is_bouncing()
                     .expect("Delivery status is available when executing a message");
                 let receiver = if is_bouncing { source } else { target };
-                self.state.credit(receiver, amount).await;
+                self.state.credit(receiver, amount.into()).await;
             }
             // ANCHOR_END: execute_message_credit
             Message::Withdraw {
@@ -145,6 +149,7 @@ impl Contract for FungibleTokenContract {
                 self.runtime
                     .check_account_permission(owner)
                     .expect("Permission for Withdraw message");
+                let amount: FungibleAmount = amount.into();
                 self.state.debit(owner, amount).await;
                 self.finish_transfer_to_account(amount, target_account, owner)
                     .await;
@@ -161,7 +166,12 @@ impl Contract for FungibleTokenContract {
 }
 
 impl FungibleTokenContract {
-    async fn claim(&mut self, source_account: Account, amount: Amount, target_account: Account) {
+    async fn claim(
+        &mut self,
+        source_account: Account,
+        amount: FungibleAmount,
+        target_account: Account,
+    ) {
         if source_account.chain_id == self.runtime.chain_id() {
             self.state.debit(source_account.owner, amount).await;
             self.finish_transfer_to_account(amount, target_account, source_account.owner)
@@ -169,7 +179,7 @@ impl FungibleTokenContract {
         } else {
             let message = Message::Withdraw {
                 owner: source_account.owner,
-                amount,
+                amount: amount.into(),
                 target_account,
             };
             self.runtime
@@ -183,7 +193,7 @@ impl FungibleTokenContract {
     /// Executes the final step of a transfer where the tokens are sent to the destination.
     async fn finish_transfer_to_account(
         &mut self,
-        amount: Amount,
+        amount: FungibleAmount,
         target_account: Account,
         source: AccountOwner,
     ) {
@@ -192,7 +202,7 @@ impl FungibleTokenContract {
         } else {
             let message = Message::Credit {
                 target: target_account.owner,
-                amount,
+                amount: amount.into(),
                 source,
             };
             self.runtime

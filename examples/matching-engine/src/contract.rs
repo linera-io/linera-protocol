@@ -195,7 +195,7 @@ impl MatchingEngineContract {
     ) {
         let transfer = fungible::FungibleOperation::Transfer {
             owner,
-            amount,
+            amount: amount.into(),
             target_account,
         };
         let token = self.fungible_id(token_idx);

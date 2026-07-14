@@ -2383,7 +2383,12 @@ async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) 
         (owner1, Amount::from_tokens(9)),
         (owner2, Amount::from_tokens(19)),
     ]);
-    let state = InitialState { accounts };
+    let state = InitialState {
+        accounts: accounts
+            .into_iter()
+            .map(|(owner, amount)| (owner, amount.into()))
+            .collect(),
+    };
     // Setting up the application and verifying
     let (contract, service) = client1.build_example("fungible").await?;
     let params = Parameters::new("DEL");
@@ -2569,7 +2574,12 @@ async fn test_wasm_end_to_end_fungible(
         (account_owner1, Amount::from_tokens(5)),
         (account_owner2, Amount::from_tokens(2)),
     ]);
-    let state = InitialState { accounts };
+    let state = InitialState {
+        accounts: accounts
+            .into_iter()
+            .map(|(owner, amount)| (owner, amount.into()))
+            .collect(),
+    };
     // Setting up the application and verifying
     let params = if example_name == "native-fungible" {
         // Native Fungible has a fixed NAT ticker symbol, anything else will be rejected
@@ -2718,7 +2728,12 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
         (account_owner1, Amount::from_tokens(5)),
         (account_owner2, Amount::from_tokens(2)),
     ]);
-    let state = InitialState { accounts };
+    let state = InitialState {
+        accounts: accounts
+            .into_iter()
+            .map(|(owner, amount)| (owner, amount.into()))
+            .collect(),
+    };
     // Setting up the application and verifying
     let params = if example_name == "native-fungible" {
         // Native Fungible has a fixed NAT ticker symbol, anything else will be rejected
@@ -2735,7 +2750,11 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 
     let app1 = NativeFungibleApp(node_service.make_application(&chain1, &application_id)?);
 
-    let expected_balances: Vec<(AccountOwner, Amount)> = state.accounts.into_iter().collect();
+    let expected_balances: Vec<(AccountOwner, Amount)> = state
+        .accounts
+        .into_iter()
+        .map(|(owner, amount)| (owner, amount.into()))
+        .collect();
 
     app1.assert_balances(expected_balances.clone()).await;
     app1.assert_entries(expected_balances).await;
@@ -3092,7 +3111,12 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
 
     // The initial accounts on chain1
     let accounts = BTreeMap::from([(account_owner1, Amount::from_tokens(6))]);
-    let state_fungible = InitialState { accounts };
+    let state_fungible = InitialState {
+        accounts: accounts
+            .into_iter()
+            .map(|(owner, amount)| (owner, amount.into()))
+            .collect(),
+    };
 
     // Setting up the application fungible
     let (contract_fungible, service_fungible) = client1.build_example("fungible").await?;
@@ -3226,11 +3250,11 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     // The initial accounts on chain_a and chain_b
     let accounts0 = BTreeMap::from([(owner_a, Amount::from_tokens(10))]);
     let state_fungible0 = fungible::InitialState {
-        accounts: accounts0,
+        accounts: accounts0.into_iter().map(|(o, a)| (o, a.into())).collect(),
     };
     let accounts1 = BTreeMap::from([(owner_b, Amount::from_tokens(9))]);
     let state_fungible1 = fungible::InitialState {
-        accounts: accounts1,
+        accounts: accounts1.into_iter().map(|(o, a)| (o, a.into())).collect(),
     };
 
     // Setting up the application fungible on chain_a and chain_b
@@ -3488,12 +3512,12 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
 
     // Amounts of token0 that will be owned by each user
     let state_fungible0 = fungible::InitialState {
-        accounts: BTreeMap::from([(owner_amm_chain, Amount::from_tokens(270))]),
+        accounts: BTreeMap::from([(owner_amm_chain, Amount::from_tokens(270).into())]),
     };
 
     // Amounts of token1 that will be owned by each user
     let state_fungible1 = fungible::InitialState {
-        accounts: BTreeMap::from([(owner_amm_chain, Amount::from_tokens(250))]),
+        accounts: BTreeMap::from([(owner_amm_chain, Amount::from_tokens(250).into())]),
     };
 
     // Create fungible applications on the AMM chain, which will hold
@@ -4189,7 +4213,12 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     // Create a fungible token application with 10 tokens for owner 1.
     let owner = get_account_owner(&client);
     let accounts = BTreeMap::from([(owner, Amount::from_tokens(10))]);
-    let state = fungible::InitialState { accounts };
+    let state = fungible::InitialState {
+        accounts: accounts
+            .into_iter()
+            .map(|(owner, amount)| (owner, amount.into()))
+            .collect(),
+    };
     let (contract, service) = client.build_example("fungible").await?;
     let params = fungible::Parameters::new("FUN");
     let application_id = client

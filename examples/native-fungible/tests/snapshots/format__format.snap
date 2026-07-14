@@ -24,8 +24,7 @@ REGISTRY:
         Ok: UNIT
       1:
         Balance:
-          NEWTYPE:
-            TYPENAME: Amount
+          NEWTYPE: U128
       2:
         TickerSymbol:
           NEWTYPE: STR

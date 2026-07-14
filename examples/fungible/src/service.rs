@@ -6,11 +6,11 @@
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use fungible::{state::FungibleTokenState, OwnerSpender, Parameters};
+use fungible::{state::FungibleTokenState, Fungible, FungibleAmount, OwnerSpender, Parameters};
 use linera_sdk::{
     abis::fungible::FungibleOperation,
     graphql::GraphQLMutationRoot,
-    linera_base_types::{AccountOwner, Amount, WithServiceAbi},
+    linera_base_types::{AccountOwner, WithServiceAbi},
     views::{MapView, View},
     Service, ServiceRuntime,
 };
@@ -31,6 +31,7 @@ impl Service for FungibleTokenService {
     type Parameters = Parameters;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
+        Fungible::configure_decimals(runtime.application_parameters().decimals);
         let state = FungibleTokenState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
@@ -53,11 +54,11 @@ impl Service for FungibleTokenService {
 
 #[Object]
 impl FungibleTokenService {
-    async fn accounts(&self) -> &MapView<AccountOwner, Amount> {
+    async fn accounts(&self) -> &MapView<AccountOwner, FungibleAmount> {
         &self.state.accounts
     }
 
-    async fn allowances(&self) -> &MapView<OwnerSpender, Amount> {
+    async fn allowances(&self) -> &MapView<OwnerSpender, FungibleAmount> {
         &self.state.allowances
     }
 

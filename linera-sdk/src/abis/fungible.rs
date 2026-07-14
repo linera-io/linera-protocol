@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use async_graphql::{InputObject, Request, Response, SimpleObject};
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
-    data_types::Amount,
+    data_types::{Amount, U128},
     identifiers::{AccountOwner, ChainId},
 };
 use linera_sdk_derive::GraphQLMutationRootInCrate;
@@ -76,14 +76,14 @@ pub enum FungibleOperation {
         /// The spender account
         spender: AccountOwner,
         /// Maximum amount to be transferred
-        allowance: Amount,
+        allowance: U128,
     },
     /// Transfers tokens from a (locally owned) account to a (possibly remote) account.
     Transfer {
         /// Owner to transfer from
         owner: AccountOwner,
         /// Amount to be transferred
-        amount: Amount,
+        amount: U128,
         /// Target account to transfer the amount to
         target_account: Account,
     },
@@ -94,7 +94,7 @@ pub enum FungibleOperation {
         /// The spender of the amount.
         spender: AccountOwner,
         /// Amount to be transferred
-        amount: Amount,
+        amount: U128,
         /// Target account to transfer the amount to
         target_account: Account,
     },
@@ -105,7 +105,7 @@ pub enum FungibleOperation {
         /// Source account to claim amount from
         source_account: Account,
         /// Amount to be claimed
-        amount: Amount,
+        amount: U128,
         /// Target account to claim the amount into
         target_account: Account,
     },
@@ -131,7 +131,7 @@ pub enum FungibleResponse {
     #[default]
     Ok,
     /// Balance response
-    Balance(Amount),
+    Balance(U128),
     /// Ticker symbol response
     TickerSymbol(String),
 }
@@ -140,7 +140,12 @@ pub enum FungibleResponse {
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct InitialState {
     /// Accounts and their respective initial balances
-    pub accounts: BTreeMap<AccountOwner, Amount>,
+    pub accounts: BTreeMap<AccountOwner, U128>,
+}
+
+/// The default number of decimal places used to display token amounts.
+fn default_decimals() -> u8 {
+    18
 }
 
 /// The parameters to instantiate fungible with
@@ -148,13 +153,25 @@ pub struct InitialState {
 pub struct Parameters {
     /// Ticker symbol for the fungible
     pub ticker_symbol: String,
+    /// Number of decimal places used to display token amounts
+    #[serde(default = "default_decimals")]
+    pub decimals: u8,
 }
 
 impl Parameters {
-    /// Instantiate parameters
+    /// Instantiate parameters with the default precision of 18 decimals.
     pub fn new(ticker_symbol: &str) -> Self {
         let ticker_symbol = ticker_symbol.to_string();
-        Self { ticker_symbol }
+        Self {
+            ticker_symbol,
+            decimals: default_decimals(),
+        }
+    }
+
+    /// Sets the number of decimal places used to display token amounts.
+    pub fn with_decimals(mut self, decimals: u8) -> Self {
+        self.decimals = decimals;
+        self
     }
 }
 
@@ -184,12 +201,12 @@ pub struct Account {
 #[derive(Debug, Default)]
 pub struct InitialStateBuilder {
     /// Accounts and their respective initial balances
-    account_balances: BTreeMap<AccountOwner, Amount>,
+    account_balances: BTreeMap<AccountOwner, U128>,
 }
 
 impl InitialStateBuilder {
     /// Adds an account to the initial state of the application.
-    pub fn with_account(mut self, account: AccountOwner, balance: impl Into<Amount>) -> Self {
+    pub fn with_account(mut self, account: AccountOwner, balance: impl Into<U128>) -> Self {
         self.account_balances.insert(account, balance.into());
         self
     }

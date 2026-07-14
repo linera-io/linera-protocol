@@ -7,7 +7,7 @@
 
 use async_graphql::InputType;
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount, ApplicationId, ApplicationPermissions},
+    linera_base_types::{AccountOwner, Amount, ApplicationId, ApplicationPermissions, U128},
     test::{ActiveChain, QueryOutcome, TestValidator},
 };
 use matching_engine::{
@@ -83,8 +83,8 @@ async fn single_transaction() {
         .publish_bytecode_files_in::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>("../fungible")
         .await;
 
-    let initial_state_a =
-        fungible::InitialStateBuilder::default().with_account(owner_a, Amount::from_tokens(10));
+    let initial_state_a = fungible::InitialStateBuilder::default()
+        .with_account(owner_a, U128(Amount::from_tokens(10).to_inner()));
     let params_a = fungible::Parameters::new("A");
     let token_id_a = user_chain_a
         .create_application(
@@ -94,8 +94,8 @@ async fn single_transaction() {
             vec![],
         )
         .await;
-    let initial_state_b =
-        fungible::InitialStateBuilder::default().with_account(owner_b, Amount::from_tokens(9));
+    let initial_state_b = fungible::InitialStateBuilder::default()
+        .with_account(owner_b, U128(Amount::from_tokens(9).to_inner()));
     let params_b = fungible::Parameters::new("B");
     let token_id_b = user_chain_b
         .create_application(

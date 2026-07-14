@@ -62,9 +62,9 @@ macro_rules! impl_from_wit {
             }
         }
 
-        impl From<$wit_base_api::Amount> for Amount {
-            fn from(balance: $wit_base_api::Amount) -> Self {
-                let (lower_half, upper_half) = balance.inner0;
+        impl From<$wit_base_api::TokenAmount> for Amount {
+            fn from(balance: $wit_base_api::TokenAmount) -> Self {
+                let (lower_half, upper_half) = balance.inner;
                 let value = ((upper_half as u128) << 64) | (lower_half as u128);
                 Amount::from_attos(value)
             }

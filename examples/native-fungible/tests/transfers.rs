@@ -18,6 +18,7 @@ use linera_sdk::{
 async fn chain_balance_transfers() {
     let parameters = fungible::Parameters {
         ticker_symbol: "NAT".to_owned(),
+        decimals: 18,
     };
     let initial_state = fungible::InitialStateBuilder::default().build();
     let (validator, _application_id, recipient_chain) = TestValidator::with_current_application::<
@@ -55,6 +56,7 @@ async fn chain_balance_transfers() {
 async fn transfer_to_owner() {
     let parameters = fungible::Parameters {
         ticker_symbol: "NAT".to_owned(),
+        decimals: 18,
     };
     let initial_state = fungible::InitialStateBuilder::default().build();
     let (validator, _application_id, recipient_chain) = TestValidator::with_current_application::<
@@ -89,6 +91,7 @@ async fn transfer_to_owner() {
 async fn transfer_to_multiple_owners() {
     let parameters = fungible::Parameters {
         ticker_symbol: "NAT".to_owned(),
+        decimals: 18,
     };
     let initial_state = fungible::InitialStateBuilder::default().build();
     let (validator, _application_id, recipient_chain) = TestValidator::with_current_application::<
@@ -137,6 +140,7 @@ async fn transfer_to_multiple_owners() {
 async fn emptied_account_disappears_from_queries() {
     let parameters = fungible::Parameters {
         ticker_symbol: "NAT".to_owned(),
+        decimals: 18,
     };
     let initial_state = fungible::InitialStateBuilder::default().build();
     let (validator, _application_id, recipient_chain) = TestValidator::with_current_application::<

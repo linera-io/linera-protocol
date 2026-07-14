@@ -23,6 +23,7 @@ use async_graphql::{InputObject, SimpleObject};
 use custom_debug_derive::Debug;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_name::{DeserializeNameAdapter, SerializeNameAdapter};
 use serde_with::{serde_as, Bytes};
 use thiserror::Error;
 use tracing::instrument;
@@ -292,24 +293,11 @@ where
     }
 }
 
-/// A non-negative amount of tokens.
+/// A non-negative amount of native tokens.
 ///
 /// This is a fixed-point fraction, with [`Amount::DECIMAL_PLACES`] digits after the point.
 /// [`Amount::ONE`] is one whole token, divisible into `10.pow(Amount::DECIMAL_PLACES)` parts.
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, WitType, WitLoad, WitStore,
-)]
-#[cfg_attr(
-    all(with_testing, not(target_arch = "wasm32")),
-    derive(test_strategy::Arbitrary)
-)]
-pub struct Amount(u128);
-
-impl Allocative for Amount {
-    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
-        visitor.visit_simple_sized::<Self>();
-    }
-}
+pub type Amount = TokenAmount<NativeToken>;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename = "Amount")]
@@ -319,48 +307,618 @@ struct AmountString(String);
 #[serde(rename = "Amount")]
 struct AmountU128(u128);
 
-impl Serialize for Amount {
+impl<T> From<TokenAmount<T>> for U256 {
+    fn from(amount: TokenAmount<T>) -> U256 {
+        U256::from(amount.to_inner())
+    }
+}
+
+impl<T: Token> From<TokenAmount<T>> for f64 {
+    /// Returns the amount as a floating-point number of whole tokens. This is
+    /// lossy for large or high-precision amounts; intended for telemetry, not
+    /// for arithmetic.
+    fn from(amount: TokenAmount<T>) -> f64 {
+        amount.to_inner() as f64 / TokenAmount::<T>::one().to_inner() as f64
+    }
+}
+
+impl<T> TryFrom<U256> for TokenAmount<T> {
+    type Error = ArithmeticError;
+    fn try_from(value: U256) -> Result<Self, Self::Error> {
+        let value: u128 = value.try_into().map_err(|_| ArithmeticError::Overflow)?;
+        Ok(Self::new(value))
+    }
+}
+
+/// A non-negative amount of tokens with fixed (yet configurable) precision.
+///
+/// The type is "branded" by a type `T` implementing [`Token`]
+///
+/// The standard traits are implemented by hand rather than derived: the wrapper's behaviour
+/// never depends on `T` (its only fields are a `u128` and a `PhantomData<T>`), so deriving them
+/// would add spurious `T: Trait` bounds and force every `Token` marker to implement them too.
+#[derive(WitType, WitLoad, WitStore)]
+pub struct TokenAmount<T> {
+    inner: u128,
+    // `fn() -> T` rather than `T` so the wrapper is `Send + Sync` regardless of `T` (it never
+    // actually holds a `T`), as required by the GraphQL `InputType`/`OutputType` impls.
+    // `#[witty(skip)]` keeps the zero-sized marker out of the WIT interface (a `unit` record
+    // field is not valid WIT); it is reconstructed via `Default` on load.
+    #[witty(skip)]
+    tag: std::marker::PhantomData<fn() -> T>,
+}
+
+// Hand-written (with a `T: Token` bound) rather than derived, because `proptest::Arbitrary`
+// requires `Debug`, which is only implemented when `T: Token`.
+#[cfg(all(with_testing, not(target_arch = "wasm32")))]
+impl<T: Token + 'static> proptest::arbitrary::Arbitrary for TokenAmount<T> {
+    type Parameters = ();
+    type Strategy = proptest::strategy::BoxedStrategy<Self>;
+
+    fn arbitrary_with((): Self::Parameters) -> Self::Strategy {
+        use proptest::strategy::Strategy as _;
+
+        proptest::arbitrary::any::<u128>()
+            .prop_map(Self::new)
+            .boxed()
+    }
+}
+
+impl<T> Clone for TokenAmount<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Copy for TokenAmount<T> {}
+
+impl<T> PartialEq for TokenAmount<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
+}
+
+impl<T> Eq for TokenAmount<T> {}
+
+impl<T> PartialOrd for TokenAmount<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<T> Ord for TokenAmount<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.inner.cmp(&other.inner)
+    }
+}
+
+impl<T> Hash for TokenAmount<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.inner.hash(state);
+    }
+}
+
+impl<T> Default for TokenAmount<T> {
+    fn default() -> Self {
+        Self::ZERO
+    }
+}
+
+impl<T: Token> fmt::Debug for TokenAmount<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple(T::NAME).field(&self.inner).finish()
+    }
+}
+
+/// The specification of a token for [`TokenAmount`].
+pub trait Token {
+    /// The name of the token.
+    const NAME: &'static str;
+
+    /// Whether [`Display`] and [`FromStr`] use the decimal fixed-point form. When `false`, the
+    /// inner `u128` value is used directly.
+    const DECIMAL_DISPLAY: bool = true;
+
+    /// The precision given as a number of decimals.
+    fn decimals() -> u8;
+
+    /// Returns `10.pow(exponent)`, panicking if the result does not fit in a `u128`.
+    fn pow10(exponent: u8) -> u128 {
+        10u128
+            .checked_pow(exponent as u32)
+            .expect("token precision is too high to represent as a fixed-point u128")
+    }
+}
+
+/// The native token.
+pub struct NativeToken;
+
+impl Token for NativeToken {
+    const NAME: &str = "Amount";
+
+    fn decimals() -> u8 {
+        Amount::DECIMAL_PLACES
+    }
+}
+
+impl Amount {
+    /// The base-10 exponent representing how much a token can be divided.
+    pub const DECIMAL_PLACES: u8 = 18;
+
+    /// One token.
+    pub const ONE: Self = Self::new(10u128.pow(Self::DECIMAL_PLACES as u32));
+
+    /// Returns the number of attotokens.
+    pub const fn to_attos(self) -> u128 {
+        self.to_inner()
+    }
+}
+
+impl<T: Token> Allocative for TokenAmount<T> {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        visitor.visit_simple_sized::<Self>();
+    }
+}
+
+impl<T: Token> Display for TokenAmount<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if !T::DECIMAL_DISPLAY {
+            return Display::fmt(&self.inner, f);
+        }
+        // Print the wrapped integer, padded with zeros to cover a digit before the decimal point.
+        let places = T::decimals() as usize;
+        let min_digits = places + 1;
+        let decimals = format!("{:0min_digits$}", self.inner);
+        let integer_part = &decimals[..(decimals.len() - places)];
+        let fractional_part = decimals[(decimals.len() - places)..].trim_end_matches('0');
+
+        // For now, we never trim non-zero digits so we don't lose any precision.
+        let precision = f.precision().unwrap_or(0).max(fractional_part.len());
+        let sign = if f.sign_plus() && self.inner > 0 {
+            "+"
+        } else {
+            ""
+        };
+        // A token with fractional places always shows the point (e.g. `1.`), matching the
+        // convention that its output round-trips through `FromStr`. A zero-decimal token is an
+        // integer, so the point only appears when a precision was explicitly requested.
+        let point = if places > 0 || precision > 0 { "." } else { "" };
+        // The amount of padding: desired width minus sign, point and number of digits.
+        let pad_width = f.width().map_or(0, |w| {
+            w.saturating_sub(precision)
+                .saturating_sub(sign.len() + integer_part.len() + point.len())
+        });
+        let left_pad = match f.align() {
+            None | Some(fmt::Alignment::Right) => pad_width,
+            Some(fmt::Alignment::Center) => pad_width / 2,
+            Some(fmt::Alignment::Left) => 0,
+        };
+
+        for _ in 0..left_pad {
+            write!(f, "{}", f.fill())?;
+        }
+        write!(
+            f,
+            "{sign}{integer_part}{point}{fractional_part:0<precision$}"
+        )?;
+        for _ in left_pad..pad_width {
+            write!(f, "{}", f.fill())?;
+        }
+        Ok(())
+    }
+}
+
+impl<T: Token> FromStr for TokenAmount<T> {
+    type Err = ParseAmountError;
+
+    fn from_str(src: &str) -> Result<Self, Self::Err> {
+        if !T::DECIMAL_DISPLAY {
+            let inner = src
+                .trim()
+                .parse::<u128>()
+                .map_err(|_| ParseAmountError::Parse)?;
+            return Ok(Self::new(inner));
+        }
+        let mut result: u128 = 0;
+        let mut decimals: Option<u8> = None;
+        let mut chars = src.trim().chars().peekable();
+        if chars.peek() == Some(&'+') {
+            chars.next();
+        }
+        for char in chars {
+            match char {
+                '_' => {}
+                '.' if decimals.is_some() => return Err(ParseAmountError::Parse),
+                '.' => decimals = Some(T::decimals()),
+                char => {
+                    let digit = u128::from(char.to_digit(10).ok_or(ParseAmountError::Parse)?);
+                    if let Some(d) = &mut decimals {
+                        *d = d.checked_sub(1).ok_or(ParseAmountError::TooManyDigits)?;
+                    }
+                    result = result
+                        .checked_mul(10)
+                        .and_then(|r| r.checked_add(digit))
+                        .ok_or(ParseAmountError::TooHigh)?;
+                }
+            }
+        }
+        result = result
+            .checked_mul(T::pow10(decimals.unwrap_or_else(T::decimals)))
+            .ok_or(ParseAmountError::TooHigh)?;
+        Ok(Self::new(result))
+    }
+}
+
+impl<T: Token> Serialize for TokenAmount<T> {
     fn serialize<S: serde::ser::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Override the container names below.
+        let serializer = SerializeNameAdapter::new(serializer, T::NAME);
         if serializer.is_human_readable() {
             AmountString(self.to_string()).serialize(serializer)
         } else {
-            AmountU128(self.0).serialize(serializer)
+            AmountU128(self.inner).serialize(serializer)
         }
     }
 }
 
-impl<'de> Deserialize<'de> for Amount {
+impl<'de, T: Token> Deserialize<'de> for TokenAmount<T> {
     fn deserialize<D: serde::de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        // Override the container names below.
+        let deserializer = DeserializeNameAdapter::new(deserializer, T::NAME);
         if deserializer.is_human_readable() {
             let AmountString(s) = AmountString::deserialize(deserializer)?;
             s.parse().map_err(serde::de::Error::custom)
         } else {
-            Ok(Amount(AmountU128::deserialize(deserializer)?.0))
+            Ok(Self::new(AmountU128::deserialize(deserializer)?.0))
         }
     }
 }
 
-impl From<Amount> for U256 {
-    fn from(amount: Amount) -> U256 {
-        U256::from(amount.0)
+// A GraphQL scalar named after the token, using the same string representation as the serde
+// human-readable format (i.e. `Display`/`FromStr`). Implemented by hand rather than via
+// `doc_scalar!` because the type is generic and the scalar name is `T::NAME`.
+fn token_amount_scalar_meta<T: Token>() -> async_graphql::registry::MetaType {
+    async_graphql::registry::MetaType::Scalar {
+        name: T::NAME.to_owned(),
+        description: Some("A non-negative amount of tokens.".to_string()),
+        is_valid: Some(std::sync::Arc::new(|value| {
+            <TokenAmount<T> as async_graphql::ScalarType>::is_valid(value)
+        })),
+        visible: None,
+        inaccessible: false,
+        tags: Default::default(),
+        specified_by_url: None,
+        directive_invocations: Default::default(),
+        requires_scopes: Default::default(),
     }
 }
 
-impl From<Amount> for f64 {
-    /// Returns the amount as a floating-point number of whole tokens. This is
-    /// lossy for large or high-precision amounts; intended for telemetry, not
-    /// for arithmetic.
-    fn from(amount: Amount) -> f64 {
-        amount.0 as f64 / Amount::ONE.0 as f64
+impl<T: Token> async_graphql::ScalarType for TokenAmount<T> {
+    fn parse(value: async_graphql::Value) -> async_graphql::InputValueResult<Self> {
+        Ok(async_graphql::from_value(value)?)
+    }
+
+    fn to_value(&self) -> async_graphql::Value {
+        async_graphql::to_value(self).unwrap_or(async_graphql::Value::Null)
     }
 }
 
-impl TryFrom<U256> for Amount {
-    type Error = ArithmeticError;
+impl<T: Token> async_graphql::InputType for TokenAmount<T> {
+    type RawValueType = Self;
 
-    fn try_from(value: U256) -> Result<Amount, ArithmeticError> {
-        let value: u128 = value.try_into().map_err(|_| ArithmeticError::Overflow)?;
-        Ok(Amount::from_attos(value))
+    fn type_name() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Borrowed(T::NAME)
+    }
+
+    fn create_type_info(registry: &mut async_graphql::registry::Registry) -> String {
+        registry.create_input_type::<Self, _>(async_graphql::registry::MetaTypeId::Scalar, |_| {
+            token_amount_scalar_meta::<T>()
+        })
+    }
+
+    fn parse(value: Option<async_graphql::Value>) -> async_graphql::InputValueResult<Self> {
+        <Self as async_graphql::ScalarType>::parse(value.unwrap_or_default())
+    }
+
+    fn to_value(&self) -> async_graphql::Value {
+        <Self as async_graphql::ScalarType>::to_value(self)
+    }
+
+    fn as_raw_value(&self) -> Option<&Self::RawValueType> {
+        Some(self)
+    }
+}
+
+impl<T: Token> async_graphql::OutputType for TokenAmount<T> {
+    fn type_name() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Borrowed(T::NAME)
+    }
+
+    fn create_type_info(registry: &mut async_graphql::registry::Registry) -> String {
+        registry.create_output_type::<Self, _>(async_graphql::registry::MetaTypeId::Scalar, |_| {
+            token_amount_scalar_meta::<T>()
+        })
+    }
+
+    async fn resolve(
+        &self,
+        _: &async_graphql::ContextSelectionSet<'_>,
+        _field: &async_graphql::Positioned<async_graphql::parser::types::Field>,
+    ) -> async_graphql::ServerResult<async_graphql::Value> {
+        Ok(async_graphql::ScalarType::to_value(self))
+    }
+}
+
+impl<'a, T: Token> iter::Sum<&'a TokenAmount<T>> for TokenAmount<T> {
+    fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
+        iter.fold(Self::ZERO, |a, b| a.saturating_add(*b))
+    }
+}
+
+impl<T> From<TokenAmount<T>> for u128 {
+    fn from(value: TokenAmount<T>) -> Self {
+        value.inner
+    }
+}
+
+// A `U128` is an explicit raw value, so converting to and from a `TokenAmount` is a deliberate
+// crossing of the wire/typed boundary and available outside of tests (unlike the bare `u128`
+// conversions below).
+impl<T> From<TokenAmount<T>> for U128 {
+    fn from(value: TokenAmount<T>) -> Self {
+        U128(value.inner)
+    }
+}
+
+impl<T> From<U128> for TokenAmount<T> {
+    fn from(value: U128) -> Self {
+        Self::new(value.0)
+    }
+}
+
+// Cannot directly create values for a wrapped type, except for testing.
+#[cfg(with_testing)]
+impl<T> From<u128> for TokenAmount<T> {
+    fn from(value: u128) -> Self {
+        Self::new(value)
+    }
+}
+
+#[cfg(with_testing)]
+impl<T> ops::Add for TokenAmount<T> {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        Self::new(self.inner + other.inner)
+    }
+}
+
+#[cfg(with_testing)]
+impl<T> ops::Sub for TokenAmount<T> {
+    type Output = Self;
+
+    fn sub(self, other: Self) -> Self {
+        Self::new(self.inner - other.inner)
+    }
+}
+
+#[cfg(with_testing)]
+impl<T> ops::Mul<u128> for TokenAmount<T> {
+    type Output = Self;
+
+    fn mul(self, other: u128) -> Self {
+        Self::new(self.inner * other)
+    }
+}
+
+impl<T> TokenAmount<T> {
+    const fn new(inner: u128) -> Self {
+        Self {
+            inner,
+            tag: std::marker::PhantomData,
+        }
+    }
+
+    /// Zero tokens.
+    pub const ZERO: Self = Self::new(0);
+
+    /// The maximum representable amount.
+    pub const MAX: Self = Self::new(u128::MAX);
+
+    /// Returns the inner value.
+    pub const fn to_inner(self) -> u128 {
+        self.inner
+    }
+
+    /// Wraps a raw inner value, given in the token's smallest unit. Inverse of [`to_inner`].
+    ///
+    /// [`to_inner`]: Self::to_inner
+    pub const fn from_inner(inner: u128) -> Self {
+        Self::new(inner)
+    }
+
+    /// Returns whether this amount is 0.
+    pub fn is_zero(&self) -> bool {
+        self.inner == 0
+    }
+
+    /// Divides this by the other amount. If the other is 0, it returns `u128::MAX`.
+    pub fn saturating_ratio(self, other: Self) -> u128 {
+        self.inner.checked_div(other.inner).unwrap_or(u128::MAX)
+    }
+
+    /// Helper function to obtain the 64 most significant bits of the inner value.
+    pub const fn upper_half(self) -> u64 {
+        (self.inner >> 64) as u64
+    }
+
+    /// Helper function to obtain the 64 least significant bits of the inner value.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "intentional: returns the low 64 bits"
+    )]
+    pub const fn lower_half(self) -> u64 {
+        self.inner as u64
+    }
+}
+
+impl<T: Token> TokenAmount<T> {
+    /// The precision in decimals.
+    pub fn decimals() -> u8 {
+        T::decimals()
+    }
+
+    /// One token.
+    pub fn one() -> Self {
+        TokenAmount::new(T::pow10(T::decimals()))
+    }
+
+    /// Checked addition.
+    pub fn try_add(self, other: Self) -> Result<Self, ArithmeticError> {
+        let val = self
+            .inner
+            .checked_add(other.inner)
+            .ok_or(ArithmeticError::Overflow)?;
+        Ok(Self::new(val))
+    }
+
+    /// Checked increment.
+    pub fn try_add_one(self) -> Result<Self, ArithmeticError> {
+        let val = self.inner.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+        Ok(Self::new(val))
+    }
+
+    /// Saturating addition.
+    pub const fn saturating_add(self, other: Self) -> Self {
+        let val = self.inner.saturating_add(other.inner);
+        Self::new(val)
+    }
+
+    /// Checked subtraction.
+    pub fn try_sub(self, other: Self) -> Result<Self, ArithmeticError> {
+        let val = self
+            .inner
+            .checked_sub(other.inner)
+            .ok_or(ArithmeticError::Underflow)?;
+        Ok(Self::new(val))
+    }
+
+    /// Checked decrement.
+    pub fn try_sub_one(self) -> Result<Self, ArithmeticError> {
+        let val = self
+            .inner
+            .checked_sub(1)
+            .ok_or(ArithmeticError::Underflow)?;
+        Ok(Self::new(val))
+    }
+
+    /// Saturating subtraction.
+    pub const fn saturating_sub(self, other: Self) -> Self {
+        let val = self.inner.saturating_sub(other.inner);
+        Self::new(val)
+    }
+
+    /// Returns the absolute difference between `self` and `other`.
+    pub fn abs_diff(self, other: Self) -> Self {
+        Self::new(self.inner.abs_diff(other.inner))
+    }
+
+    /// Returns the midpoint of `self` and `other`, rounded down.
+    pub const fn midpoint(self, other: Self) -> Self {
+        Self::new(self.inner.midpoint(other.inner))
+    }
+
+    /// Checked in-place addition.
+    pub fn try_add_assign(&mut self, other: Self) -> Result<(), ArithmeticError> {
+        self.inner = self
+            .inner
+            .checked_add(other.inner)
+            .ok_or(ArithmeticError::Overflow)?;
+        Ok(())
+    }
+
+    /// Checked in-place increment.
+    pub fn try_add_assign_one(&mut self) -> Result<(), ArithmeticError> {
+        self.inner = self.inner.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+        Ok(())
+    }
+
+    /// Saturating in-place addition.
+    pub const fn saturating_add_assign(&mut self, other: Self) {
+        self.inner = self.inner.saturating_add(other.inner);
+    }
+
+    /// Checked in-place subtraction.
+    pub fn try_sub_assign(&mut self, other: Self) -> Result<(), ArithmeticError> {
+        self.inner = self
+            .inner
+            .checked_sub(other.inner)
+            .ok_or(ArithmeticError::Underflow)?;
+        Ok(())
+    }
+
+    /// Saturating division.
+    pub fn saturating_div(&self, other: u128) -> Self {
+        Self::new(self.inner.checked_div(other).unwrap_or(u128::MAX))
+    }
+
+    /// Saturating multiplication.
+    pub const fn saturating_mul(&self, other: u128) -> Self {
+        Self::new(self.inner.saturating_mul(other))
+    }
+
+    /// Checked multiplication.
+    pub fn try_mul(self, other: u128) -> Result<Self, ArithmeticError> {
+        let val = self
+            .inner
+            .checked_mul(other)
+            .ok_or(ArithmeticError::Overflow)?;
+        Ok(Self::new(val))
+    }
+
+    /// Checked in-place multiplication.
+    pub fn try_mul_assign(&mut self, other: u128) -> Result<(), ArithmeticError> {
+        self.inner = self
+            .inner
+            .checked_mul(other)
+            .ok_or(ArithmeticError::Overflow)?;
+        Ok(())
+    }
+
+    /// Returns a `TokenAmount` for `amount` in units of `10.pow(-unit_decimals)` tokens,
+    /// saturating on overflow and truncating any sub-unit remainder towards zero.
+    fn from_subunits(amount: u128, unit_decimals: u8) -> Self {
+        let decimals = T::decimals();
+        if decimals >= unit_decimals {
+            Self::new(T::pow10(decimals - unit_decimals)).saturating_mul(amount)
+        } else {
+            Self::new(amount / T::pow10(unit_decimals - decimals))
+        }
+    }
+
+    /// Returns a `TokenAmount` corresponding to that many tokens, or [`TokenAmount::MAX`] if saturated.
+    pub fn from_tokens(tokens: u128) -> Self {
+        Self::from_subunits(tokens, 0)
+    }
+
+    /// Returns a `TokenAmount` corresponding to that many millitokens, or [`TokenAmount::MAX`] if saturated.
+    pub fn from_millis(millitokens: u128) -> Self {
+        Self::from_subunits(millitokens, 3)
+    }
+
+    /// Returns a `TokenAmount` corresponding to that many microtokens, or [`TokenAmount::MAX`] if saturated.
+    pub fn from_micros(microtokens: u128) -> Self {
+        Self::from_subunits(microtokens, 6)
+    }
+
+    /// Returns a `TokenAmount` corresponding to that many nanotokens, or [`TokenAmount::MAX`] if saturated.
+    pub fn from_nanos(nanotokens: u128) -> Self {
+        Self::from_subunits(nanotokens, 9)
+    }
+
+    /// Returns a `TokenAmount` corresponding to that many attotokens, or [`TokenAmount::MAX`] if saturated.
+    pub fn from_attos(attotokens: u128) -> Self {
+        Self::from_subunits(attotokens, 18)
     }
 }
 
@@ -840,44 +1398,9 @@ impl TryFrom<BlockHeight> for usize {
     }
 }
 
-impl_wrapped_number!(Amount, u128);
 impl_wrapped_number!(U128, u128);
 impl_wrapped_number!(BlockHeight, u64);
 impl_wrapped_number!(TimeDelta, u64);
-
-impl Display for Amount {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Print the wrapped integer, padded with zeros to cover a digit before the decimal point.
-        let places = Amount::DECIMAL_PLACES as usize;
-        let min_digits = places + 1;
-        let decimals = format!("{:0min_digits$}", self.0);
-        let integer_part = &decimals[..(decimals.len() - places)];
-        let fractional_part = decimals[(decimals.len() - places)..].trim_end_matches('0');
-
-        // For now, we never trim non-zero digits so we don't lose any precision.
-        let precision = f.precision().unwrap_or(0).max(fractional_part.len());
-        let sign = if f.sign_plus() && self.0 > 0 { "+" } else { "" };
-        // The amount of padding: desired width minus sign, point and number of digits.
-        let pad_width = f.width().map_or(0, |w| {
-            w.saturating_sub(precision)
-                .saturating_sub(sign.len() + integer_part.len() + 1)
-        });
-        let left_pad = match f.align() {
-            None | Some(fmt::Alignment::Right) => pad_width,
-            Some(fmt::Alignment::Center) => pad_width / 2,
-            Some(fmt::Alignment::Left) => 0,
-        };
-
-        for _ in 0..left_pad {
-            write!(f, "{}", f.fill())?;
-        }
-        write!(f, "{sign}{integer_part}.{fractional_part:0<precision$}")?;
-        for _ in left_pad..pad_width {
-            write!(f, "{}", f.fill())?;
-        }
-        Ok(())
-    }
-}
 
 #[derive(Error, Debug)]
 #[allow(missing_docs)]
@@ -888,40 +1411,6 @@ pub enum ParseAmountError {
     TooHigh,
     #[error("cannot represent amount: too many decimal places after the point")]
     TooManyDigits,
-}
-
-impl FromStr for Amount {
-    type Err = ParseAmountError;
-
-    fn from_str(src: &str) -> Result<Self, Self::Err> {
-        let mut result: u128 = 0;
-        let mut decimals: Option<u8> = None;
-        let mut chars = src.trim().chars().peekable();
-        if chars.peek() == Some(&'+') {
-            chars.next();
-        }
-        for char in chars {
-            match char {
-                '_' => {}
-                '.' if decimals.is_some() => return Err(ParseAmountError::Parse),
-                '.' => decimals = Some(Amount::DECIMAL_PLACES),
-                char => {
-                    let digit = u128::from(char.to_digit(10).ok_or(ParseAmountError::Parse)?);
-                    if let Some(d) = &mut decimals {
-                        *d = d.checked_sub(1).ok_or(ParseAmountError::TooManyDigits)?;
-                    }
-                    result = result
-                        .checked_mul(10)
-                        .and_then(|r| r.checked_add(digit))
-                        .ok_or(ParseAmountError::TooHigh)?;
-                }
-            }
-        }
-        result = result
-            .checked_mul(10u128.pow(decimals.unwrap_or(Amount::DECIMAL_PLACES) as u32))
-            .ok_or(ParseAmountError::TooHigh)?;
-        Ok(Amount(result))
-    }
 }
 
 impl Display for BlockHeight {
@@ -984,70 +1473,6 @@ impl Round {
             Round::SingleLeader(_) => "single",
             Round::Validator(_) => "validator",
         }
-    }
-}
-
-impl<'a> iter::Sum<&'a Amount> for Amount {
-    fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
-        iter.fold(Self::ZERO, |a, b| a.saturating_add(*b))
-    }
-}
-
-impl Amount {
-    /// The base-10 exponent representing how much a token can be divided.
-    pub const DECIMAL_PLACES: u8 = 18;
-
-    /// One token.
-    pub const ONE: Amount = Amount(10u128.pow(Amount::DECIMAL_PLACES as u32));
-
-    /// Returns an `Amount` corresponding to that many tokens, or `Amount::MAX` if saturated.
-    pub const fn from_tokens(tokens: u128) -> Amount {
-        Self::ONE.saturating_mul(tokens)
-    }
-
-    /// Returns an `Amount` corresponding to that many millitokens, or `Amount::MAX` if saturated.
-    pub const fn from_millis(millitokens: u128) -> Amount {
-        Amount(10u128.pow(Amount::DECIMAL_PLACES as u32 - 3)).saturating_mul(millitokens)
-    }
-
-    /// Returns an `Amount` corresponding to that many microtokens, or `Amount::MAX` if saturated.
-    pub const fn from_micros(microtokens: u128) -> Amount {
-        Amount(10u128.pow(Amount::DECIMAL_PLACES as u32 - 6)).saturating_mul(microtokens)
-    }
-
-    /// Returns an `Amount` corresponding to that many nanotokens, or `Amount::MAX` if saturated.
-    pub const fn from_nanos(nanotokens: u128) -> Amount {
-        Amount(10u128.pow(Amount::DECIMAL_PLACES as u32 - 9)).saturating_mul(nanotokens)
-    }
-
-    /// Returns an `Amount` corresponding to that many attotokens.
-    pub const fn from_attos(attotokens: u128) -> Amount {
-        Amount(attotokens)
-    }
-
-    /// Returns the number of attotokens.
-    pub const fn to_attos(self) -> u128 {
-        self.0
-    }
-
-    /// Helper function to obtain the 64 most significant bits of the balance.
-    pub const fn upper_half(self) -> u64 {
-        (self.0 >> 64) as u64
-    }
-
-    /// Helper function to obtain the 64 least significant bits of the balance.
-    pub const fn lower_half(self) -> u64 {
-        self.0 as u64
-    }
-
-    /// Divides this by the other amount. If the other is 0, it returns `u128::MAX`.
-    pub fn saturating_ratio(self, other: Amount) -> u128 {
-        self.0.checked_div(other.0).unwrap_or(u128::MAX)
-    }
-
-    /// Returns whether this amount is 0.
-    pub fn is_zero(&self) -> bool {
-        *self == Amount::ZERO
     }
 }
 
@@ -1970,7 +2395,6 @@ impl MessagePolicy {
 }
 
 doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
-doc_scalar!(Amount, "A non-negative amount of tokens.");
 doc_scalar!(U128, "A 128-bit unsigned integer.");
 doc_scalar!(
     Epoch,
@@ -2041,6 +2465,8 @@ mod metrics {
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+
+    use alloy_primitives::U256;
 
     use super::{Amount, ApplicationDescription, BlobContent};
     use crate::{
@@ -2120,10 +2546,10 @@ mod tests {
         assert_eq!("1.", Amount::ONE.to_string());
         assert_eq!("1.", Amount::from_str("1.").unwrap().to_string());
         assert_eq!(
-            Amount(10_000_000_000_000_000_000),
+            Amount::from(10_000_000_000_000_000_000),
             Amount::from_str("10").unwrap()
         );
-        assert_eq!("10.", Amount(10_000_000_000_000_000_000).to_string());
+        assert_eq!("10.", Amount::from(10_000_000_000_000_000_000).to_string());
         assert_eq!(
             "1001.3",
             (Amount::from_str("1.1")
@@ -2139,6 +2565,193 @@ mod tests {
             "~+12.34~~",
             format!("{:~^+9.1}", Amount::from_str("12.34").unwrap())
         );
+        // `Debug` uses the token name (`NativeToken::NAME`), matching the old derived output.
+        assert_eq!("Amount(1000000000000000000)", format!("{:?}", Amount::ONE));
+    }
+
+    #[test]
+    fn display_token_amount() {
+        use super::{Token, TokenAmount};
+
+        // A token with two decimal places.
+        struct Cents;
+        impl Token for Cents {
+            const NAME: &'static str = "Cents";
+
+            fn decimals() -> u8 {
+                2
+            }
+        }
+
+        // A zero-decimal (integer) token.
+        struct Units;
+        impl Token for Units {
+            const NAME: &'static str = "Units";
+
+            fn decimals() -> u8 {
+                0
+            }
+        }
+
+        // `Debug` is tagged with the token's name.
+        assert_eq!("Cents(100)", format!("{:?}", TokenAmount::<Cents>::one()));
+
+        // A fractional token keeps the trailing point on whole numbers, like `Amount`.
+        assert_eq!("1.", TokenAmount::<Cents>::one().to_string());
+        assert_eq!(
+            "1.23",
+            TokenAmount::<Cents>::from_str("1.23").unwrap().to_string()
+        );
+        assert_eq!("1.00", format!("{:.2}", TokenAmount::<Cents>::one()));
+
+        // A zero-decimal token prints as a bare integer, with no dangling point.
+        assert_eq!(
+            "5",
+            TokenAmount::<Units>::from_str("5").unwrap().to_string()
+        );
+        assert_eq!("0", TokenAmount::<Units>::ZERO.to_string());
+        // ... unless a precision is explicitly requested.
+        assert_eq!(
+            "5.00",
+            format!("{:.2}", TokenAmount::<Units>::from_str("5").unwrap())
+        );
+
+        // `MAX` is the largest inner value, independent of the precision.
+        assert_eq!(u128::MAX, TokenAmount::<Cents>::MAX.to_inner());
+        assert_eq!(u128::MAX, TokenAmount::<Units>::MAX.to_inner());
+    }
+
+    #[test]
+    fn token_amount_from_subunits() {
+        use super::{Token, TokenAmount};
+
+        // A token with two decimal places, coarser than milli/micro/etc.
+        struct Cents;
+        impl Token for Cents {
+            const NAME: &'static str = "Cents";
+
+            fn decimals() -> u8 {
+                2
+            }
+        }
+
+        // Units at or coarser than the token's precision scale up exactly.
+        assert_eq!("1.", TokenAmount::<Cents>::from_tokens(1).to_string());
+        assert_eq!("2.5", TokenAmount::<Cents>::from_millis(2500).to_string());
+
+        // Finer units than the token can represent are truncated towards zero rather than
+        // panicking: 1500 millitokens = 1.5 tokens, but 1 millitoken (0.001) rounds down to 0.
+        assert_eq!("1.5", TokenAmount::<Cents>::from_millis(1500).to_string());
+        assert_eq!("0.", TokenAmount::<Cents>::from_millis(1).to_string());
+        assert_eq!(
+            "0.12",
+            TokenAmount::<Cents>::from_micros(123_456).to_string()
+        );
+        assert_eq!("0.", TokenAmount::<Cents>::from_micros(9999).to_string());
+
+        // Scaling up saturates instead of overflowing.
+        assert_eq!(
+            TokenAmount::<Cents>::MAX,
+            TokenAmount::<Cents>::from_tokens(u128::MAX)
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "token precision is too high")]
+    fn token_amount_precision_too_high_panics() {
+        use super::{Token, TokenAmount};
+
+        // 39 decimals cannot be represented: `10.pow(39)` overflows a `u128`.
+        struct TooPrecise;
+        impl Token for TooPrecise {
+            const NAME: &'static str = "TooPrecise";
+
+            fn decimals() -> u8 {
+                39
+            }
+        }
+
+        // Panics loudly rather than silently wrapping in release builds.
+        TokenAmount::<TooPrecise>::one();
+    }
+
+    #[test]
+    fn token_amount_raw_u128_display() {
+        use super::{Token, TokenAmount};
+
+        // A token that displays and parses as its raw inner `u128`.
+        struct Raw;
+        impl Token for Raw {
+            const NAME: &'static str = "Raw";
+            const DECIMAL_DISPLAY: bool = false;
+
+            fn decimals() -> u8 {
+                18
+            }
+        }
+
+        // Display writes the inner value verbatim, ignoring `decimals()`; no decimal point.
+        assert_eq!(
+            "12345",
+            TokenAmount::<Raw>::from_str("12345").unwrap().to_string()
+        );
+        assert_eq!("0", TokenAmount::<Raw>::ZERO.to_string());
+
+        // FromStr parses a plain integer straight into the inner value, round-tripping.
+        let parsed = TokenAmount::<Raw>::from_str("999").unwrap();
+        assert_eq!(999, parsed.to_inner());
+        assert_eq!("999", parsed.to_string());
+        assert!(TokenAmount::<Raw>::from_str("1.5").is_err());
+    }
+
+    #[test]
+    fn token_amount_json_and_graphql_match_display() {
+        use async_graphql::ScalarType;
+
+        use super::{Token, TokenAmount};
+
+        // A decimal token and a raw-u128 token.
+        struct Cents;
+        impl Token for Cents {
+            const NAME: &'static str = "Cents";
+
+            fn decimals() -> u8 {
+                2
+            }
+        }
+        struct Raw;
+        impl Token for Raw {
+            const NAME: &'static str = "Raw";
+            const DECIMAL_DISPLAY: bool = false;
+
+            fn decimals() -> u8 {
+                2
+            }
+        }
+
+        let cents = TokenAmount::<Cents>::from_str("1.5").unwrap();
+        let raw = TokenAmount::<Raw>::from_str("12345").unwrap();
+
+        // JSON serializes as the `Display` string and round-trips through `FromStr`.
+        assert_eq!("\"1.5\"", serde_json::to_string(&cents).unwrap());
+        assert_eq!("\"12345\"", serde_json::to_string(&raw).unwrap());
+        assert_eq!(cents, serde_json::from_str("\"1.5\"").unwrap());
+        assert_eq!(raw, serde_json::from_str("\"12345\"").unwrap());
+
+        // The GraphQL scalar uses the same string form for both output and input.
+        assert_eq!(
+            async_graphql::Value::String(cents.to_string()),
+            cents.to_value()
+        );
+        assert_eq!(
+            async_graphql::Value::String(raw.to_string()),
+            raw.to_value()
+        );
+        assert_eq!(
+            cents,
+            TokenAmount::<Cents>::parse(cents.to_value()).unwrap()
+        );
+        assert_eq!(raw, TokenAmount::<Raw>::parse(raw.to_value()).unwrap());
     }
 
     #[test]
@@ -2170,6 +2783,42 @@ mod tests {
 
         assert_eq!(hash1, hash2, "Hashes should be equal for same content");
         assert_eq!(blob1.bytes(), blob2.bytes(), "Byte content should be equal");
+    }
+
+    #[test]
+    fn test_conversion_amount_u256() {
+        let value_amount = Amount::from_tokens(15656565652209004332);
+        let value_u256: U256 = value_amount.into();
+        let value_amount_rev = Amount::try_from(value_u256).expect("Failed conversion");
+        assert_eq!(value_amount, value_amount_rev);
+    }
+
+    #[test]
+    fn token_amount_generic_conversions() {
+        use super::{Token, TokenAmount};
+
+        // A branded (non-native) token exercises the generalized conversions.
+        struct Cents;
+        impl Token for Cents {
+            const NAME: &'static str = "Cents";
+
+            fn decimals() -> u8 {
+                2
+            }
+        }
+
+        // `upper_half`/`lower_half` operate on the raw inner value.
+        let amount = TokenAmount::<Cents>::from_str("1.50").unwrap();
+        assert_eq!(150, amount.to_inner());
+        assert_eq!(0, amount.upper_half());
+        assert_eq!(150, amount.lower_half());
+
+        // `U256` conversions round-trip for any token.
+        let value_u256: U256 = amount.into();
+        assert_eq!(amount, TokenAmount::<Cents>::try_from(value_u256).unwrap());
+
+        // `f64` uses the token's own precision: 150 base units = 1.5 whole tokens.
+        assert_eq!(1.5, f64::from(amount));
     }
 
     /// `linera-explorer` running on `wasm32` does not have access to the
