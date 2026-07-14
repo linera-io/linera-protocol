@@ -1990,10 +1990,14 @@ where
         // Drop tracker entries for revoked epochs: those epochs' received logs are
         // pruned by validators and never queried again. Revocation is monotone, so
         // the walk over the ascending epoch set can stop at the first live one.
-        let keys = self.chain.received_certificate_trackers.indices().await?;
-        let epochs = keys
+        let all_trackers = self
+            .chain
+            .received_certificate_trackers
+            .index_values()
+            .await?;
+        let epochs = all_trackers
             .iter()
-            .map(|(_, epoch)| *epoch)
+            .flat_map(|(_, trackers)| trackers.keys().copied())
             .collect::<BTreeSet<_>>();
         let mut revoked_epochs = BTreeSet::new();
         for epoch in epochs {
@@ -2003,9 +2007,19 @@ where
             }
             revoked_epochs.insert(epoch);
         }
-        for key in keys {
-            if revoked_epochs.contains(&key.1) {
-                self.chain.received_certificate_trackers.remove(&key)?;
+        for (validator, mut trackers) in all_trackers {
+            if !trackers.keys().any(|epoch| revoked_epochs.contains(epoch)) {
+                continue;
+            }
+            trackers.retain(|epoch, _| !revoked_epochs.contains(epoch));
+            if trackers.is_empty() {
+                self.chain
+                    .received_certificate_trackers
+                    .remove(&validator)?;
+            } else {
+                self.chain
+                    .received_certificate_trackers
+                    .insert(&validator, trackers)?;
             }
         }
         self.save().await?;
@@ -2153,19 +2167,14 @@ where
     pub(crate) async fn get_received_certificate_trackers(
         &self,
     ) -> Result<HashMap<ValidatorPublicKey, BTreeMap<Epoch, u64>>, WorkerError> {
-        let mut trackers = HashMap::<_, BTreeMap<Epoch, u64>>::new();
-        for ((validator, epoch), tracker) in self
+        Ok(self
             .chain
             .received_certificate_trackers
             .index_values()
             .await?
-        {
-            trackers
-                .entry(validator)
-                .or_default()
-                .insert(epoch, tracker);
-        }
-        Ok(trackers)
+            .into_iter()
+            .map(|(validator, trackers)| (validator, trackers.into()))
+            .collect())
     }
 
     /// Gets tip state and outbox info for next_outbox_heights calculation.

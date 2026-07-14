@@ -315,10 +315,12 @@ where
     /// `previous_message_blocks` links instead.
     pub received_log: CustomCollectionView<C, Epoch, LogView<C, ChainAndHeight>>,
     /// The number of `received_log` entries we have synchronized, per validator and
-    /// per sender epoch. Node-local synchronization bookkeeping, not exposed via
-    /// GraphQL.
+    /// per sender epoch. There are only few epochs at a time, so we keep them all in a
+    /// single entry per validator. Node-local synchronization bookkeeping, not exposed
+    /// via GraphQL.
     #[cfg_attr(with_graphql, graphql(skip))]
-    pub received_certificate_trackers: MapView<C, (ValidatorPublicKey, Epoch), u64>,
+    pub received_certificate_trackers:
+        MapView<C, ValidatorPublicKey, NonCanonicalBTreeMap<Epoch, u64>>,
 
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: ReentrantCollectionView<C, ChainId, InboxStateView<C>>,
@@ -667,14 +669,22 @@ where
         new_trackers: BTreeMap<ValidatorPublicKey, BTreeMap<Epoch, u64>>,
     ) -> Result<(), ChainError> {
         for (name, epoch_trackers) in new_trackers {
+            let mut trackers = self
+                .received_certificate_trackers
+                .get(&name)
+                .await?
+                .unwrap_or_default();
+            let mut changed = false;
             for (epoch, tracker) in epoch_trackers {
-                let key = (name, epoch);
                 // Because several synchronizations could happen in parallel, we need to
                 // make sure to never go backward.
-                let current = self.received_certificate_trackers.get(&key).await?;
-                if current.is_none_or(|current| tracker > current) {
-                    self.received_certificate_trackers.insert(&key, tracker)?;
+                if tracker > trackers.get(&epoch).copied().unwrap_or(0) {
+                    trackers.insert(epoch, tracker);
+                    changed = true;
                 }
+            }
+            if changed {
+                self.received_certificate_trackers.insert(&name, trackers)?;
             }
         }
         Ok(())
