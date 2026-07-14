@@ -343,15 +343,27 @@ impl TryFrom<U256> for Amount {
 /// never depends on `T` (its only fields are a `u128` and a `PhantomData<T>`), so deriving them
 /// would add spurious `T: Trait` bounds and force every `Token` marker to implement them too.
 #[derive(WitType, WitLoad, WitStore)]
-#[cfg_attr(
-    all(with_testing, not(target_arch = "wasm32")),
-    derive(test_strategy::Arbitrary)
-)]
 pub struct TokenAmount<T> {
     inner: u128,
     // `fn() -> T` rather than `T` so the wrapper is `Send + Sync` regardless of `T` (it never
     // actually holds a `T`), as required by the GraphQL `InputType`/`OutputType` impls.
     tag: std::marker::PhantomData<fn() -> T>,
+}
+
+// Hand-written (with a `T: Token` bound) rather than derived, because `proptest::Arbitrary`
+// requires `Debug`, which is only implemented when `T: Token`.
+#[cfg(all(with_testing, not(target_arch = "wasm32")))]
+impl<T: Token + 'static> proptest::arbitrary::Arbitrary for TokenAmount<T> {
+    type Parameters = ();
+    type Strategy = proptest::strategy::BoxedStrategy<Self>;
+
+    fn arbitrary_with((): Self::Parameters) -> Self::Strategy {
+        use proptest::strategy::Strategy as _;
+
+        proptest::arbitrary::any::<u128>()
+            .prop_map(Self::new)
+            .boxed()
+    }
 }
 
 impl<T> Clone for TokenAmount<T> {
@@ -394,9 +406,9 @@ impl<T> Default for TokenAmount<T> {
     }
 }
 
-impl<T> fmt::Debug for TokenAmount<T> {
+impl<T: Token> fmt::Debug for TokenAmount<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("TokenAmount").field(&self.inner).finish()
+        f.debug_tuple(T::NAME).field(&self.inner).finish()
     }
 }
 
@@ -2621,6 +2633,8 @@ mod tests {
             "~+12.34~~",
             format!("{:~^+9.1}", Amount::from_str("12.34").unwrap())
         );
+        // `Debug` uses the token name (`NativeToken::NAME`), matching the old derived output.
+        assert_eq!("Amount(1000000000000000000)", format!("{:?}", Amount::ONE));
     }
 
     #[test]
@@ -2646,6 +2660,9 @@ mod tests {
                 0
             }
         }
+
+        // `Debug` is tagged with the token's name.
+        assert_eq!("Cents(100)", format!("{:?}", TokenAmount::<Cents>::one()));
 
         // A fractional token keeps the trailing point on whole numbers, like `Amount`.
         assert_eq!("1.", TokenAmount::<Cents>::one().to_string());
