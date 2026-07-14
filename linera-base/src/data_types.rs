@@ -717,6 +717,13 @@ impl<T> TokenAmount<T> {
         self.inner
     }
 
+    /// Wraps a raw inner value, given in the token's smallest unit. Inverse of [`to_inner`].
+    ///
+    /// [`to_inner`]: Self::to_inner
+    pub const fn from_inner(inner: u128) -> Self {
+        Self::new(inner)
+    }
+
     /// Returns whether this amount is 0.
     pub fn is_zero(&self) -> bool {
         self.inner == 0

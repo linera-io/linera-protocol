@@ -9,7 +9,7 @@ use fungible::{FungibleOperation, FungibleTokenAbi};
 use linera_sdk::{
     linera_base_types::{
         Account, AccountOwner, Amount, ApplicationPermissions, ChainId, ChainOwnership,
-        TimeoutConfig, WithContractAbi,
+        TimeoutConfig, WithContractAbi, U128,
     },
     views::{RootView, View},
     Contract, ContractRuntime,
@@ -140,7 +140,7 @@ impl Contract for RfqContract {
                 let token_pair = awaiting_tokens.token_pair;
                 let transfer = FungibleOperation::Transfer {
                     owner,
-                    amount: awaiting_tokens.amount_offered,
+                    amount: U128((awaiting_tokens.amount_offered).to_inner()),
                     target_account: Account {
                         chain_id: temp_chain_id,
                         owner: self.runtime.application_id().into(),
@@ -269,7 +269,7 @@ impl Contract for RfqContract {
                             tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
                             &FungibleOperation::Transfer {
                                 owner,
-                                amount: tokens.amount,
+                                amount: U128((tokens.amount).to_inner()),
                                 target_account: tokens.owner,
                             },
                         );
@@ -283,7 +283,7 @@ impl Contract for RfqContract {
                             tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
                             &FungibleOperation::Transfer {
                                 owner,
-                                amount: tokens.amount,
+                                amount: U128((tokens.amount).to_inner()),
                                 target_account: held_tokens.owner,
                             },
                         );
@@ -294,7 +294,7 @@ impl Contract for RfqContract {
                                 .with_abi::<fungible::FungibleTokenAbi>(),
                             &FungibleOperation::Transfer {
                                 owner,
-                                amount: held_tokens.amount,
+                                amount: U128((held_tokens.amount).to_inner()),
                                 target_account: tokens.owner,
                             },
                         );
@@ -338,7 +338,7 @@ impl RfqContract {
         // transfer tokens to the new chain
         let transfer = FungibleOperation::Transfer {
             owner,
-            amount: quote_provided.get_amount(),
+            amount: U128((quote_provided.get_amount()).to_inner()),
             target_account: Account {
                 chain_id: temp_chain_id,
                 owner: self.runtime.application_id().into(),
@@ -381,7 +381,7 @@ impl RfqContract {
                 tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
                 &FungibleOperation::Transfer {
                     owner,
-                    amount: tokens.amount,
+                    amount: U128((tokens.amount).to_inner()),
                     target_account: tokens.owner,
                 },
             );

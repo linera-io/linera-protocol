@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, HashMap};
 use fungible::{self, FungibleTokenAbi};
 use linera_sdk::{
     abis::fungible::FungibleOperation,
-    linera_base_types::{Account, AccountOwner, Amount, CryptoHash},
+    linera_base_types::{Account, AccountOwner, Amount, CryptoHash, U128},
     test::{ActiveChain, TestValidator},
 };
 
@@ -19,6 +19,7 @@ use linera_sdk::{
 async fn chain_balance_transfers() {
     let parameters = fungible::Parameters {
         ticker_symbol: "NAT".to_owned(),
+        decimals: 18,
     };
     let initial_state = fungible::InitialStateBuilder::default().build();
     let (validator, _application_id, recipient_chain) = TestValidator::with_current_application::<
@@ -56,6 +57,7 @@ async fn chain_balance_transfers() {
 async fn transfer_to_owner() {
     let parameters = fungible::Parameters {
         ticker_symbol: "NAT".to_owned(),
+        decimals: 18,
     };
     let initial_state = fungible::InitialStateBuilder::default().build();
     let (validator, _application_id, recipient_chain) = TestValidator::with_current_application::<
@@ -90,6 +92,7 @@ async fn transfer_to_owner() {
 async fn transfer_to_multiple_owners() {
     let parameters = fungible::Parameters {
         ticker_symbol: "NAT".to_owned(),
+        decimals: 18,
     };
     let initial_state = fungible::InitialStateBuilder::default().build();
     let (validator, _application_id, recipient_chain) = TestValidator::with_current_application::<
@@ -138,6 +141,7 @@ async fn transfer_to_multiple_owners() {
 async fn emptied_account_disappears_from_queries() {
     let parameters = fungible::Parameters {
         ticker_symbol: "NAT".to_owned(),
+        decimals: 18,
     };
     let initial_state = fungible::InitialStateBuilder::default().build();
     let (validator, _application_id, recipient_chain) = TestValidator::with_current_application::<
@@ -184,6 +188,7 @@ async fn emptied_account_disappears_from_queries() {
 async fn allowance_overwrite_and_clear() {
     let parameters = fungible::Parameters {
         ticker_symbol: "NAT".to_owned(),
+        decimals: 18,
     };
     let initial_state = fungible::InitialStateBuilder::default().build();
     let (validator, application_id, owner_chain) = TestValidator::with_current_application::<
@@ -220,7 +225,7 @@ async fn allowance_overwrite_and_clear() {
                 FungibleOperation::Approve {
                     owner,
                     spender,
-                    allowance: Amount::from_tokens(9),
+                    allowance: U128((Amount::from_tokens(9)).to_inner()),
                 },
             );
             block.with_operation(
@@ -228,7 +233,7 @@ async fn allowance_overwrite_and_clear() {
                 FungibleOperation::Approve {
                     owner,
                     spender,
-                    allowance: Amount::from_tokens(4),
+                    allowance: U128((Amount::from_tokens(4)).to_inner()),
                 },
             );
         })
@@ -248,7 +253,7 @@ async fn allowance_overwrite_and_clear() {
                 FungibleOperation::Approve {
                     owner,
                     spender,
-                    allowance: Amount::ZERO,
+                    allowance: U128((Amount::ZERO).to_inner()),
                 },
             );
         })
@@ -267,6 +272,7 @@ async fn allowance_overwrite_and_clear() {
 async fn allowances_are_independent() {
     let parameters = fungible::Parameters {
         ticker_symbol: "NAT".to_owned(),
+        decimals: 18,
     };
     let initial_state = fungible::InitialStateBuilder::default().build();
     let (validator, application_id, owner_chain) = TestValidator::with_current_application::<
@@ -304,7 +310,7 @@ async fn allowances_are_independent() {
                 FungibleOperation::Approve {
                     owner,
                     spender: spender1,
-                    allowance: Amount::from_tokens(6),
+                    allowance: U128((Amount::from_tokens(6)).to_inner()),
                 },
             );
             block.with_operation(
@@ -312,7 +318,7 @@ async fn allowances_are_independent() {
                 FungibleOperation::Approve {
                     owner,
                     spender: spender2,
-                    allowance: Amount::from_tokens(2),
+                    allowance: U128((Amount::from_tokens(2)).to_inner()),
                 },
             );
         })

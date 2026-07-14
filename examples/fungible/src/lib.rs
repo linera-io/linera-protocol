@@ -6,13 +6,21 @@
 pub mod state;
 
 pub use linera_sdk::abis::fungible::*;
-use linera_sdk::linera_base_types::{Account, AccountOwner, Amount};
+use linera_sdk::linera_base_types::{Account, AccountOwner, TokenAmount, U128};
 use serde::{Deserialize, Serialize};
+
+// The brand for this application's token amounts. Its precision is set at runtime from the
+// `decimals` application parameter, in `Contract::load` and `Service::new`.
+linera_sdk::branded_token!(pub struct Fungible = "FungibleAmount");
+
+/// A branded, decimal-aware token amount used internally by the application (state and logic).
+/// It crosses the ABI boundary as a raw [`U128`].
+pub type FungibleAmount = TokenAmount<Fungible>;
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
 use {
     futures::{stream, StreamExt},
     linera_sdk::{
-        linera_base_types::{ApplicationId, ModuleId},
+        linera_base_types::{Amount, ApplicationId, ModuleId},
         test::{ActiveChain, TestValidator},
     },
 };
@@ -27,7 +35,7 @@ pub enum Message {
         /// Target account to credit amount to
         target: AccountOwner,
         /// Amount to be credited
-        amount: Amount,
+        amount: U128,
         /// Source account to remove amount from
         source: AccountOwner,
     },
@@ -37,7 +45,7 @@ pub enum Message {
         /// Account to withdraw from
         owner: AccountOwner,
         /// Amount to be withdrawn
-        amount: Amount,
+        amount: U128,
         /// Target account to transfer amount to
         target_account: Account,
     },
@@ -120,7 +128,7 @@ pub async fn create_with_accounts(
         .await;
 
     for (_chain, account, initial_amount) in &accounts {
-        initial_state = initial_state.with_account(*account, *initial_amount);
+        initial_state = initial_state.with_account(*account, U128(initial_amount.to_inner()));
     }
 
     let params = Parameters::new("FUN");
@@ -138,7 +146,7 @@ pub async fn create_with_accounts(
                             chain_id: token_chain.id(),
                             owner: *account,
                         },
-                        amount: *initial_amount,
+                        amount: U128(initial_amount.to_inner()),
                         target_account: Account {
                             chain_id: chain.id(),
                             owner: *account,

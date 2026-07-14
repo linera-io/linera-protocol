@@ -7,7 +7,7 @@ use linera_sdk::{
     abis::fungible::{
         FungibleOperation, FungibleResponse, FungibleTokenAbi, InitialState, Parameters,
     },
-    linera_base_types::{Account, AccountOwner, ChainId, WithContractAbi},
+    linera_base_types::{Account, AccountOwner, Amount, ChainId, WithContractAbi, U128},
     Contract, ContractRuntime,
 };
 use native_fungible::{Message, TICKER_SYMBOL};
@@ -43,7 +43,8 @@ impl Contract for NativeFungibleTokenContract {
                 chain_id: self.runtime.chain_id(),
                 owner,
             };
-            self.runtime.transfer(AccountOwner::CHAIN, account, amount);
+            self.runtime
+                .transfer(AccountOwner::CHAIN, account, Amount::from_inner(amount.0));
         }
     }
 
@@ -53,7 +54,7 @@ impl Contract for NativeFungibleTokenContract {
                 log::info!("balance check for owner={}", owner);
 
                 let balance = self.runtime.owner_balance(owner);
-                FungibleResponse::Balance(balance)
+                FungibleResponse::Balance(U128(balance.to_inner()))
             }
 
             FungibleOperation::TickerSymbol => {
@@ -68,7 +69,8 @@ impl Contract for NativeFungibleTokenContract {
                 self.runtime
                     .check_account_permission(owner)
                     .expect("Permission for Approve operation");
-                self.runtime.approve(owner, spender, allowance);
+                self.runtime
+                    .approve(owner, spender, Amount::from_inner(allowance.0));
                 FungibleResponse::Ok
             }
 
@@ -81,6 +83,7 @@ impl Contract for NativeFungibleTokenContract {
                     .check_account_permission(owner)
                     .expect("Permission for Transfer operation");
 
+                let amount = Amount::from_inner(amount.0);
                 let fungible_target_account = target_account;
 
                 log::info!(
@@ -106,8 +109,12 @@ impl Contract for NativeFungibleTokenContract {
                     .check_account_permission(spender)
                     .expect("Permission for TransferFrom operation");
 
-                self.runtime
-                    .transfer_from(owner, spender, target_account, amount);
+                self.runtime.transfer_from(
+                    owner,
+                    spender,
+                    target_account,
+                    Amount::from_inner(amount.0),
+                );
 
                 self.transfer(target_account.chain_id);
                 FungibleResponse::Ok
@@ -125,7 +132,8 @@ impl Contract for NativeFungibleTokenContract {
                 let fungible_source_account = source_account;
                 let fungible_target_account = target_account;
 
-                self.runtime.claim(source_account, target_account, amount);
+                self.runtime
+                    .claim(source_account, target_account, Amount::from_inner(amount.0));
                 self.claim(
                     fungible_source_account.chain_id,
                     fungible_target_account.chain_id,
