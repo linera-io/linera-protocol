@@ -98,12 +98,18 @@ pub struct InitialState {
     pub accounts: BTreeMap<AccountOwner, U128>,
 }
 
+/// The default number of decimal places used to display token amounts.
+fn default_decimals() -> u8 {
+    18
+}
+
 /// The parameters to instantiate fungible with
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct Parameters {
     /// Ticker symbol for the fungible
     pub ticker_symbol: String,
     /// Number of decimal places used to display token amounts
+    #[serde(default = "default_decimals")]
     pub decimals: u8,
 }
 
@@ -113,7 +119,7 @@ impl Parameters {
         let ticker_symbol = ticker_symbol.to_string();
         Self {
             ticker_symbol,
-            decimals: 18,
+            decimals: default_decimals(),
         }
     }
 

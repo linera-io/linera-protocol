@@ -347,6 +347,9 @@ pub struct TokenAmount<T> {
     inner: u128,
     // `fn() -> T` rather than `T` so the wrapper is `Send + Sync` regardless of `T` (it never
     // actually holds a `T`), as required by the GraphQL `InputType`/`OutputType` impls.
+    // `#[witty(skip)]` keeps the zero-sized marker out of the WIT interface (a `unit` record
+    // field is not valid WIT); it is reconstructed via `Default` on load.
+    #[witty(skip)]
     tag: std::marker::PhantomData<fn() -> T>,
 }
 
@@ -660,6 +663,21 @@ impl<'a, T: Token> iter::Sum<&'a TokenAmount<T>> for TokenAmount<T> {
 impl<T> From<TokenAmount<T>> for u128 {
     fn from(value: TokenAmount<T>) -> Self {
         value.inner
+    }
+}
+
+// A `U128` is an explicit raw value, so converting to and from a `TokenAmount` is a deliberate
+// crossing of the wire/typed boundary and available outside of tests (unlike the bare `u128`
+// conversions below).
+impl<T> From<TokenAmount<T>> for U128 {
+    fn from(value: TokenAmount<T>) -> Self {
+        U128(value.inner)
+    }
+}
+
+impl<T> From<U128> for TokenAmount<T> {
+    fn from(value: U128) -> Self {
+        Self::new(value.0)
     }
 }
 

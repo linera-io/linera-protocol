@@ -516,7 +516,12 @@ where
     let receiver2_owner = receiver2.preferred_owner().unwrap();
 
     let accounts = BTreeMap::from_iter([(sender_owner, Amount::from_tokens(1_000_000))]);
-    let state = InitialState { accounts };
+    let state = InitialState {
+        accounts: accounts
+            .into_iter()
+            .map(|(owner, amount)| (owner, amount.into()))
+            .collect(),
+    };
     let params = Parameters::new("FUN");
     let (application_id, _cert) = sender
         .create_application(module_id, &params, &state, vec![])
@@ -1401,7 +1406,12 @@ where
     let fungible_module =
         fungible_module.with_abi::<fungible::FungibleTokenAbi, Parameters, InitialState>();
     let accounts = BTreeMap::from_iter([(pledger_owner, Amount::from_tokens(1_000))]);
-    let state = InitialState { accounts };
+    let state = InitialState {
+        accounts: accounts
+            .into_iter()
+            .map(|(owner, amount)| (owner, amount.into()))
+            .collect(),
+    };
     let params = Parameters::new("FUN");
     let (fungible_id, _cert) = pledger_chain
         .create_application(fungible_module, &params, &state, vec![])

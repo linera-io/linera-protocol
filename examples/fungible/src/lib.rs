@@ -128,7 +128,7 @@ pub async fn create_with_accounts(
         .await;
 
     for (_chain, account, initial_amount) in &accounts {
-        initial_state = initial_state.with_account(*account, U128(initial_amount.to_inner()));
+        initial_state = initial_state.with_account(*account, *initial_amount);
     }
 
     let params = Parameters::new("FUN");
@@ -146,7 +146,7 @@ pub async fn create_with_accounts(
                             chain_id: token_chain.id(),
                             owner: *account,
                         },
-                        amount: U128(initial_amount.to_inner()),
+                        amount: (*initial_amount).into(),
                         target_account: Account {
                             chain_id: chain.id(),
                             owner: *account,

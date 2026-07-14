@@ -155,7 +155,10 @@ async fn benchmark_with_fungible(
             let owner = client.get_owner().context("missing owner")?;
             let default_chain = client.default_chain().context("missing default chain")?;
             let initial_state = InitialState {
-                accounts: BTreeMap::from([(owner, Amount::from_tokens(num_transactions as u128))]),
+                accounts: BTreeMap::from([(
+                    owner,
+                    Amount::from_tokens(num_transactions as u128).into(),
+                )]),
             };
             let parameters = Parameters::new(format!("FUN{i}").leak());
             let application_id = node_service
@@ -281,7 +284,7 @@ impl FungibleApp {
         let mutation = format!(
             "transfer(owner: {}, amount: \"{}\", targetAccount: {})",
             account_owner.to_value(),
-            amount_transfer,
+            amount_transfer.to_inner(),
             destination.to_value(),
         );
         self.0.mutate(mutation).await

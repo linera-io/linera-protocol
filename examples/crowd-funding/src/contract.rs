@@ -9,7 +9,7 @@ use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Message, Operation};
 use fungible::FungibleTokenAbi;
 use linera_sdk::{
     abis::fungible::FungibleOperation,
-    linera_base_types::{Account, AccountOwner, Amount, ApplicationId, WithContractAbi, U128},
+    linera_base_types::{Account, AccountOwner, Amount, ApplicationId, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -106,7 +106,7 @@ impl CrowdFundingContract {
         let target_account = Account { chain_id, owner };
         let call = FungibleOperation::Transfer {
             owner,
-            amount: U128(amount.to_inner()),
+            amount: amount.into(),
             target_account,
         };
         let fungible_id = self.fungible_id();
@@ -203,7 +203,7 @@ impl CrowdFundingContract {
             self.runtime
                 .call_application(true, fungible_id, &FungibleOperation::Balance { owner });
         match response {
-            fungible::FungibleResponse::Balance(balance) => Amount::from_inner(balance.0),
+            fungible::FungibleResponse::Balance(balance) => balance.into(),
             response => panic!("Unexpected response from fungible token application: {response:?}"),
         }
     }
@@ -216,7 +216,7 @@ impl CrowdFundingContract {
         };
         let transfer = FungibleOperation::Transfer {
             owner: self.runtime.application_id().into(),
-            amount: U128(amount.to_inner()),
+            amount: amount.into(),
             target_account,
         };
         let fungible_id = self.fungible_id();
@@ -231,7 +231,7 @@ impl CrowdFundingContract {
         };
         let transfer = FungibleOperation::Transfer {
             owner,
-            amount: U128(amount.to_inner()),
+            amount: amount.into(),
             target_account,
         };
         let fungible_id = self.fungible_id();

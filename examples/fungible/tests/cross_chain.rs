@@ -8,7 +8,7 @@
 use fungible::{FungibleTokenAbi, InitialState, InitialStateBuilder, Parameters};
 use linera_sdk::{
     abis::fungible::FungibleOperation,
-    linera_base_types::{Account, AccountOwner, Amount, U128},
+    linera_base_types::{Account, AccountOwner, Amount},
     test::{MessageAction, TestValidator},
 };
 
@@ -29,8 +29,7 @@ async fn test_cross_chain_transfer() {
     let mut sender_chain = validator.new_chain().await;
     let sender_account = AccountOwner::from(sender_chain.public_key());
 
-    let initial_state = InitialStateBuilder::default()
-        .with_account(sender_account, U128(initial_amount.to_inner()));
+    let initial_state = InitialStateBuilder::default().with_account(sender_account, initial_amount);
     let params = Parameters::new("FUN");
     let application_id = sender_chain
         .create_application(module_id, params, initial_state.build(), vec![])
@@ -45,7 +44,7 @@ async fn test_cross_chain_transfer() {
                 application_id,
                 FungibleOperation::Transfer {
                     owner: sender_account,
-                    amount: U128(transfer_amount.to_inner()),
+                    amount: transfer_amount.into(),
                     target_account: Account {
                         chain_id: receiver_chain.id(),
                         owner: receiver_account,
@@ -89,8 +88,7 @@ async fn test_bouncing_tokens() {
     let mut sender_chain = validator.new_chain().await;
     let sender_account = AccountOwner::from(sender_chain.public_key());
 
-    let initial_state = InitialStateBuilder::default()
-        .with_account(sender_account, U128(initial_amount.to_inner()));
+    let initial_state = InitialStateBuilder::default().with_account(sender_account, initial_amount);
     let params = Parameters::new("RET");
     let application_id = sender_chain
         .create_application(module_id, params, initial_state.build(), vec![])
@@ -105,7 +103,7 @@ async fn test_bouncing_tokens() {
                 application_id,
                 FungibleOperation::Transfer {
                     owner: sender_account,
-                    amount: U128(transfer_amount.to_inner()),
+                    amount: transfer_amount.into(),
                     target_account: Account {
                         chain_id: receiver_chain.id(),
                         owner: receiver_account,

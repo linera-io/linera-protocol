@@ -8,7 +8,7 @@ use fungible::{
     FungibleTokenAbi, InitialState, Message, Parameters,
 };
 use linera_sdk::{
-    linera_base_types::{Account, AccountOwner, WithContractAbi, U128},
+    linera_base_types::{Account, AccountOwner, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -44,7 +44,7 @@ impl Contract for FungibleTokenContract {
 
         let mut total_supply = FungibleAmount::ZERO;
         for value in state.accounts.values() {
-            total_supply.saturating_add_assign(FungibleAmount::from_inner(value.0));
+            total_supply.saturating_add_assign((*value).into());
         }
         if total_supply == FungibleAmount::ZERO {
             panic!("The total supply is zero, therefore we cannot instantiate the contract");
@@ -56,7 +56,7 @@ impl Contract for FungibleTokenContract {
         match operation {
             FungibleOperation::Balance { owner } => {
                 let balance = self.state.balance_or_default(&owner).await;
-                FungibleResponse::Balance(U128(balance.to_inner()))
+                FungibleResponse::Balance(balance.into())
             }
 
             FungibleOperation::TickerSymbol => {
@@ -72,9 +72,7 @@ impl Contract for FungibleTokenContract {
                 self.runtime
                     .check_account_permission(owner)
                     .expect("Permission for Transfer operation");
-                self.state
-                    .approve(owner, spender, FungibleAmount::from_inner(allowance.0))
-                    .await;
+                self.state.approve(owner, spender, allowance.into()).await;
                 FungibleResponse::Ok
             }
 
@@ -86,7 +84,7 @@ impl Contract for FungibleTokenContract {
                 self.runtime
                     .check_account_permission(owner)
                     .expect("Permission for Transfer operation");
-                let amount = FungibleAmount::from_inner(amount.0);
+                let amount: FungibleAmount = amount.into();
                 self.state.debit(owner, amount).await;
                 self.finish_transfer_to_account(amount, target_account, owner)
                     .await;
@@ -102,7 +100,7 @@ impl Contract for FungibleTokenContract {
                 self.runtime
                     .check_account_permission(spender)
                     .expect("Permission for Transfer operation");
-                let amount = FungibleAmount::from_inner(amount.0);
+                let amount: FungibleAmount = amount.into();
                 self.state
                     .debit_for_transfer_from(owner, spender, amount)
                     .await;
@@ -119,7 +117,7 @@ impl Contract for FungibleTokenContract {
                 self.runtime
                     .check_account_permission(source_account.owner)
                     .expect("Permission for Claim operation");
-                let amount = FungibleAmount::from_inner(amount.0);
+                let amount: FungibleAmount = amount.into();
                 self.claim(source_account, amount, target_account).await;
                 FungibleResponse::Ok
             }
@@ -138,9 +136,7 @@ impl Contract for FungibleTokenContract {
                     .message_is_bouncing()
                     .expect("Message delivery status has to be available when executing a message");
                 let receiver = if is_bouncing { source } else { target };
-                self.state
-                    .credit(receiver, FungibleAmount::from_inner(amount.0))
-                    .await;
+                self.state.credit(receiver, amount.into()).await;
             }
             Message::Withdraw {
                 owner,
@@ -150,7 +146,7 @@ impl Contract for FungibleTokenContract {
                 self.runtime
                     .check_account_permission(owner)
                     .expect("Permission for Withdraw message");
-                let amount = FungibleAmount::from_inner(amount.0);
+                let amount: FungibleAmount = amount.into();
                 self.state.debit(owner, amount).await;
                 self.finish_transfer_to_account(amount, target_account, owner)
                     .await;
@@ -180,7 +176,7 @@ impl FungibleTokenContract {
         } else {
             let message = Message::Withdraw {
                 owner: source_account.owner,
-                amount: U128(amount.to_inner()),
+                amount: amount.into(),
                 target_account,
             };
             self.runtime
@@ -202,7 +198,7 @@ impl FungibleTokenContract {
         } else {
             let message = Message::Credit {
                 target: target_account.owner,
-                amount: U128(amount.to_inner()),
+                amount: amount.into(),
                 source,
             };
             self.runtime

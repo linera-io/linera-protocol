@@ -21,7 +21,7 @@ impl FungibleTokenState {
     /// Initializes the application state with some accounts with initial balances.
     pub async fn initialize_accounts(&mut self, state: InitialState) {
         for (k, v) in state.accounts {
-            let v = FungibleAmount::from_inner(v.0);
+            let v: FungibleAmount = v.into();
             if v != FungibleAmount::ZERO {
                 self.accounts
                     .insert(&k, v)

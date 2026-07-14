@@ -865,7 +865,7 @@ pub fn fungible_transfer(
     };
     let bytes = bcs::to_bytes(&FungibleOperation::Transfer {
         owner: sender,
-        amount,
+        amount: amount.into(),
         target_account,
     })
     .expect("should serialize fungible token operation");
