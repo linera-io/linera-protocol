@@ -13,11 +13,13 @@ use linera_base::{
 use linera_execution::committee::Committee;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::{generic::GenericCertificate, Certificate, Certified, LiteCertificate};
+use super::{
+    generic::GenericCertificate, Certificate, Certified, LiteCertificate, ValidatedBlockCertificate,
+};
 use crate::{
-    block::{Block, ConfirmedBlock, ConversionError},
+    block::{Block, ConfirmedBlock, ConversionError, ValidatedBlock},
     data_types::MessageBundle,
-    justification::JustificationChain,
+    justification::{CommittedQuorum, JustificationChain},
     ChainError,
 };
 
@@ -89,6 +91,49 @@ impl ConfirmedBlockCertificate {
     /// Consumes this certificate, returning the signed quorum and the justification chain.
     pub fn into_parts(self) -> (GenericCertificate<ConfirmedBlock>, JustificationChain) {
         (self.quorum, self.justification)
+    }
+
+    /// Reconstructs the validated-block certificate with the given justification
+    /// commitment from this certificate's justification chain, or `None` if no link
+    /// of the chain has that commitment. This recovers the quorum that a
+    /// confirmation vote for this block cited, from stored data alone: the cited
+    /// quorum is a link of the chain whenever the vote's round is at most the round
+    /// this certificate was formed in.
+    pub fn cited_validated_certificate(
+        &self,
+        justification_commitment: CryptoHash,
+    ) -> Option<ValidatedBlockCertificate> {
+        let value_hash = self.hash();
+        let links = self.justification.links();
+        let mut previous = None;
+        let mut unlocking_round = None;
+        for (index, link) in links.iter().enumerate() {
+            let commitment = CommittedQuorum {
+                value_hash,
+                round: link.round,
+                unlocking_round,
+                previous,
+                signatures: link.signatures.clone(),
+            }
+            .commitment();
+            if commitment == justification_commitment {
+                let quorum = GenericCertificate::new_with_payload(
+                    ValidatedBlock::new(self.block().clone()),
+                    link.round,
+                    unlocking_round,
+                    false,
+                    previous,
+                    link.signatures.clone(),
+                );
+                return Some(ValidatedBlockCertificate::from_parts(
+                    quorum,
+                    JustificationChain::new(links[..index].to_vec()),
+                ));
+            }
+            previous = Some(commitment);
+            unlocking_round = Some(link.round);
+        }
+        None
     }
 
     /// Returns the round in which the value was certified.

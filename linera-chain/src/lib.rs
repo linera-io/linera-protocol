@@ -25,6 +25,7 @@ mod outbox;
 mod pending_blobs;
 #[cfg(with_testing)]
 pub mod test;
+pub mod vote_ledger;
 
 pub use chain::{BlockExecutionPhase, ChainIdSet, ChainStateView, ChainTipState, StreamCounts};
 use data_types::{MessageBundle, PostedMessage};
