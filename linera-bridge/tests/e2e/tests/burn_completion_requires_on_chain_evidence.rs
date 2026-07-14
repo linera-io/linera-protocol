@@ -63,7 +63,6 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
     let relay_genesis_config = genesis_config.clone();
 
     let store_config = MemoryStoreConfig {
-        max_stream_queries: 10,
         kill_on_drop: true,
     };
     let mut storage = DbStorage::<MemoryDatabase, _>::maybe_create_and_connect(

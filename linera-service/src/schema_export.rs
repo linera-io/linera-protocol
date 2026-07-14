@@ -12,8 +12,8 @@ use linera_base::{
 use linera_chain::{
     data_types::BlockProposal,
     types::{
-        ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate, Timeout,
-        ValidatedBlock,
+        ConfirmedBlockCertificate, GenericCertificate, LiteCertificate, Timeout,
+        ValidatedBlockCertificate,
     },
 };
 use linera_client::{
@@ -69,7 +69,7 @@ impl ValidatorNode for DummyValidatorNode {
 
     async fn handle_confirmed_certificate(
         &self,
-        _: CacheArc<GenericCertificate<ConfirmedBlock>>,
+        _: CacheArc<ConfirmedBlockCertificate>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)
@@ -77,7 +77,7 @@ impl ValidatorNode for DummyValidatorNode {
 
     async fn handle_validated_certificate(
         &self,
-        _: GenericCertificate<ValidatedBlock>,
+        _: ValidatedBlockCertificate,
     ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }

@@ -26,10 +26,6 @@ pub struct ScyllaDbConfig {
     #[arg(long)]
     max_concurrent_queries: Option<usize>,
 
-    /// The maximal number of simultaneous stream queries to the database
-    #[arg(long, default_value = "10")]
-    pub max_stream_queries: usize,
-
     /// The maximal memory used in the storage cache in bytes.
     #[arg(long, default_value = "10000000")]
     pub max_cache_size: usize,
@@ -104,7 +100,6 @@ impl ScyllaDbRunner {
         };
         let inner_config = ScyllaDbStoreInternalConfig {
             uri: config.client.uri.clone(),
-            max_stream_queries: config.client.max_stream_queries,
             max_concurrent_queries: config.client.max_concurrent_queries,
             replication_factor: config.client.replication_factor,
         };

@@ -88,8 +88,6 @@ pub struct StorageServiceStoreInternalConfig {
     pub endpoint: String,
     /// Maximum number of concurrent database queries allowed for this client.
     pub max_concurrent_queries: Option<usize>,
-    /// Preferred buffer size for async streams.
-    pub max_stream_queries: usize,
 }
 
 /// The config type

@@ -27,17 +27,31 @@ pub struct BlockProof {
     pub header: BlockHeader,
     /// The round in which the block was confirmed.
     pub round: Round,
+    /// Whether the block was confirmed in the chain's first round — the first-round attestation
+    /// the `ConfirmedBlock` voters signed. It is part of the signed `VoteValue`, so the light
+    /// client must reconstruct that value with this flag for the signatures to verify.
+    pub first_round: bool,
+    /// The justification commitment the `ConfirmedBlock` voters signed: the hash of the quorum
+    /// that validated the block in the confirmation round, transitively committing to the whole
+    /// justification chain, or `None` for a first-round confirmation. It is part of the signed
+    /// `VoteValue`, so the light client must reconstruct that value with it — and by verifying
+    /// the confirmation signatures over it, the light client inherits the whole chain's validity
+    /// without ever seeing the chain.
+    pub justification_commitment: Option<CryptoHash>,
     /// The validator signatures over the block hash.
     pub signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
 }
 
 impl BlockProof {
-    /// Builds a proof from a confirmed-block certificate: just the header, round, and signatures.
+    /// Builds a proof from a confirmed-block certificate: just the header, round, first-round
+    /// attestation, and signatures.
     pub fn from_certificate(certificate: &ConfirmedBlockCertificate) -> Self {
         let block = certificate.block();
         BlockProof {
             header: block.header.clone(),
             round: certificate.round,
+            first_round: certificate.first_round(),
+            justification_commitment: certificate.quorum().justification_commitment(),
             signatures: certificate.signatures().clone(),
         }
     }
@@ -220,8 +234,10 @@ mod tests {
     };
     use linera_chain::{
         block::ConfirmedBlock,
-        data_types::{LiteValue, LiteVote, SignatureAggregator},
-        test::BlockBuilder,
+        data_types::Vote,
+        justification::JustificationChain,
+        test::{BlockBuilder, VoteTestExt},
+        types::ConfirmedBlockCertificate,
     };
     use linera_execution::committee::Committee;
 
@@ -239,16 +255,13 @@ mod tests {
             BlockBuilder::new(ChainId(CryptoHash::test_hash("chain")), BlockHeight(1)).build();
         let confirmed = ConfirmedBlock::new(block);
 
-        let vote = LiteVote::new(
-            LiteValue::new(&confirmed),
-            Round::Fast,
-            &validator.secret_key,
-        );
-        let mut aggregator = SignatureAggregator::new(confirmed, Round::Fast, &committee);
-        let certificate = aggregator
-            .append(validator.public_key, vote.signature)
-            .unwrap()
-            .unwrap();
+        // Confirmed in the fast round, which is the chain's first round, so the votes attest it
+        // and the certificate carries no justification chain.
+        let quorum =
+            Vote::new_with_first_round(confirmed, Round::Fast, true, None, &validator.secret_key)
+                .into_certificate(validator.public_key);
+        let certificate =
+            ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default());
 
         let proof = BlockProof::from_certificate(&certificate);
 

@@ -88,13 +88,6 @@ where
         S2::MAX_KEY_SIZE
     };
 
-    fn max_stream_queries(&self) -> usize {
-        match self {
-            Self::First(store) => store.max_stream_queries(),
-            Self::Second(store) => store.max_stream_queries(),
-        }
-    }
-
     fn root_key(&self) -> Result<Vec<u8>, Self::Error> {
         Ok(match self {
             Self::First(store) => store.root_key().map_err(DualStoreError::First)?,

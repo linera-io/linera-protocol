@@ -14,9 +14,7 @@ pub async fn get_storage(
     namespace: &str,
 ) -> Result<Storage, linera_views::indexed_db::IndexedDbStoreError> {
     Ok(linera_storage::DbStorage::maybe_create_and_connect(
-        &linera_views::indexed_db::IndexedDbStoreConfig {
-            max_stream_queries: 1,
-        },
+        &linera_views::indexed_db::IndexedDbStoreConfig,
         namespace,
         Some(linera_execution::WasmRuntime::Wasmer),
         linera_storage::StorageCacheConfig {
