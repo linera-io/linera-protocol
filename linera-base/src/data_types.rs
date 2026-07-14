@@ -306,32 +306,32 @@ struct AmountString(String);
 #[serde(rename = "Amount")]
 struct AmountU128(u128);
 
-impl From<Amount> for U256 {
-    fn from(amount: Amount) -> U256 {
+impl<T> From<TokenAmount<T>> for U256 {
+    fn from(amount: TokenAmount<T>) -> U256 {
         U256::from(amount.to_inner())
     }
 }
 
-impl From<Amount> for f64 {
+impl<T: Token> From<TokenAmount<T>> for f64 {
     /// Returns the amount as a floating-point number of whole tokens. This is
     /// lossy for large or high-precision amounts; intended for telemetry, not
     /// for arithmetic.
-    fn from(amount: Amount) -> f64 {
-        amount.to_inner() as f64 / Amount::ONE.to_inner() as f64
+    fn from(amount: TokenAmount<T>) -> f64 {
+        amount.to_inner() as f64 / TokenAmount::<T>::one().to_inner() as f64
     }
 }
 
-/// Error converting from `U256` to `Amount`.
-/// This can fail since `Amount` is a `u128`.
+/// Error converting from `U256` to a [`TokenAmount`].
+/// This can fail since the amount is backed by a `u128`.
 #[derive(Error, Debug)]
-#[error("Failed to convert U256 to Amount. {0} has more than 128 bits")]
+#[error("Failed to convert U256 to a token amount. {0} has more than 128 bits")]
 pub struct AmountConversionError(U256);
 
-impl TryFrom<U256> for Amount {
+impl<T> TryFrom<U256> for TokenAmount<T> {
     type Error = AmountConversionError;
-    fn try_from(value: U256) -> Result<Amount, Self::Error> {
+    fn try_from(value: U256) -> Result<Self, Self::Error> {
         let value = u128::try_from(&value).map_err(|_| AmountConversionError(value))?;
-        Ok(Amount::new(value))
+        Ok(Self::new(value))
     }
 }
 
@@ -453,20 +453,6 @@ impl Amount {
     /// Returns the number of attotokens.
     pub const fn to_attos(self) -> u128 {
         self.to_inner()
-    }
-
-    /// Helper function to obtain the 64 most significant bits of the balance.
-    pub const fn upper_half(self) -> u64 {
-        (self.to_inner() >> 64) as u64
-    }
-
-    /// Helper function to obtain the 64 least significant bits of the balance.
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "intentional: returns the low 64 bits"
-    )]
-    pub const fn lower_half(self) -> u64 {
-        self.to_inner() as u64
     }
 }
 
@@ -739,6 +725,20 @@ impl<T> TokenAmount<T> {
     /// Divides this by the other amount. If the other is 0, it returns `u128::MAX`.
     pub fn saturating_ratio(self, other: Self) -> u128 {
         self.inner.checked_div(other.inner).unwrap_or(u128::MAX)
+    }
+
+    /// Helper function to obtain the 64 most significant bits of the inner value.
+    pub const fn upper_half(self) -> u64 {
+        (self.inner >> 64) as u64
+    }
+
+    /// Helper function to obtain the 64 least significant bits of the inner value.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "intentional: returns the low 64 bits"
+    )]
+    pub const fn lower_half(self) -> u64 {
+        self.inner as u64
     }
 }
 
@@ -2858,6 +2858,34 @@ mod tests {
         let value_u256: U256 = value_amount.into();
         let value_amount_rev = Amount::try_from(value_u256).expect("Failed conversion");
         assert_eq!(value_amount, value_amount_rev);
+    }
+
+    #[test]
+    fn token_amount_generic_conversions() {
+        use super::{Token, TokenAmount};
+
+        // A branded (non-native) token exercises the generalized conversions.
+        struct Cents;
+        impl Token for Cents {
+            const NAME: &'static str = "Cents";
+
+            fn decimals() -> u8 {
+                2
+            }
+        }
+
+        // `upper_half`/`lower_half` operate on the raw inner value.
+        let amount = TokenAmount::<Cents>::from_str("1.50").unwrap();
+        assert_eq!(150, amount.to_inner());
+        assert_eq!(0, amount.upper_half());
+        assert_eq!(150, amount.lower_half());
+
+        // `U256` conversions round-trip for any token.
+        let value_u256: U256 = amount.into();
+        assert_eq!(amount, TokenAmount::<Cents>::try_from(value_u256).unwrap());
+
+        // `f64` uses the token's own precision: 150 base units = 1.5 whole tokens.
+        assert_eq!(1.5, f64::from(amount));
     }
 
     /// `linera-explorer` running on `wasm32` does not have access to the
