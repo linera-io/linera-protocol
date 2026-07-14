@@ -27,8 +27,7 @@ REGISTRY:
           STRUCT:
             - owner:
                 TYPENAME: AccountOwner
-            - amount:
-                TYPENAME: Amount
+            - amount: U128
             - target_account:
                 TYPENAME: Account
       158617459:
@@ -38,15 +37,13 @@ REGISTRY:
                 TYPENAME: AccountOwner
             - spender:
                 TYPENAME: AccountOwner
-            - allowance:
-                TYPENAME: Amount
+            - allowance: U128
       204322437:
         Claim:
           STRUCT:
             - source_account:
                 TYPENAME: Account
-            - amount:
-                TYPENAME: Amount
+            - amount: U128
             - target_account:
                 TYPENAME: Account
       206964944:
@@ -61,8 +58,7 @@ REGISTRY:
                 TYPENAME: AccountOwner
             - spender:
                 TYPENAME: AccountOwner
-            - amount:
-                TYPENAME: Amount
+            - amount: U128
             - target_account:
                 TYPENAME: Account
   FungibleResponse:
@@ -72,8 +68,7 @@ REGISTRY:
           NEWTYPE: STR
       206964944:
         Balance:
-          NEWTYPE:
-            TYPENAME: Amount
+          NEWTYPE: U128
       211312752:
         Ok: UNIT
   Message:
