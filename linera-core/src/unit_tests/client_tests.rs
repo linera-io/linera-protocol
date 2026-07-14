@@ -4380,6 +4380,34 @@ where
         );
     }
 
+    // The producer→recipient lane must stay usable after the completed cycle, even for a
+    // node that bootstrapped from checkpoint #2 and therefore holds no pre-checkpoint
+    // blocks. Simulate one by resetting the producer to its latest checkpoint. Checkpoint
+    // #2 dropped the recipient's `previous_message_blocks` anchor (everything sent to it
+    // was acknowledged), so the new block carries no predecessor: the reset producer can
+    // execute it without the height-0 entry of `block_hashes`, and the checkpointed
+    // recipient accepts the bundle.
+    producer
+        .client
+        .local_node
+        .reset_and_reexecute_chain(producer_id)
+        .await?;
+    producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+    recipient.synchronize_from_validators().await?;
+    recipient.process_inbox().await?;
+    assert_eq!(
+        recipient.local_balance().await?,
+        Amount::from_tokens(2),
+        "the post-cycle transfer must reach the checkpointed recipient",
+    );
+
     Ok(())
 }
 
