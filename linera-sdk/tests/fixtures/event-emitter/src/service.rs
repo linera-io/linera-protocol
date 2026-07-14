@@ -31,7 +31,6 @@ impl Service for EventEmitterService {
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
         let state = EventEmitterState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         EventEmitterService {
             state: Arc::new(state),

@@ -35,7 +35,6 @@ impl Service for WrappedFungibleTokenService {
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
         let state = WrappedFungibleTokenState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         WrappedFungibleTokenService {
             state: Arc::new(state),

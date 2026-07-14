@@ -31,16 +31,15 @@ impl Contract for EventSubscriberContract {
     type Parameters = ();
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = EventSubscriberState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         EventSubscriberContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _argument: ()) {}
+    fn instantiate(&mut self, _argument: ()) {}
 
-    async fn execute_operation(&mut self, operation: Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Operation) -> Self::Response {
         match operation {
             Operation::Subscribe {
                 chain_id,
@@ -67,9 +66,9 @@ impl Contract for EventSubscriberContract {
         }
     }
 
-    async fn execute_message(&mut self, _message: ()) {}
+    fn execute_message(&mut self, _message: ()) {}
 
-    async fn process_streams(&mut self, updates: Vec<StreamUpdate>) {
+    fn process_streams(&mut self, updates: Vec<StreamUpdate>) {
         for update in updates {
             let GenericApplicationId::User(app_id) = update.stream_id.application_id else {
                 continue;
@@ -94,10 +93,7 @@ impl Contract for EventSubscriberContract {
         }
     }
 
-    async fn store(self) {
-        self.state
-            .save_and_drop()
-            .await
-            .expect("Failed to save state");
+    fn store(self) {
+        self.state.save_and_drop().expect("Failed to save state");
     }
 }

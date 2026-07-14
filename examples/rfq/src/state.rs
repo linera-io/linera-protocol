@@ -4,7 +4,8 @@
 use async_graphql::{InputObject, SimpleObject, Union};
 use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, ChainId},
-    views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
+    views::{linera_views, MapView, RegisterView, ViewStorageContext},
+    RootView,
 };
 use rfq::{RequestId, TokenPair, Tokens};
 use serde::{Deserialize, Serialize};
@@ -188,11 +189,10 @@ impl RfqState {
             .expect("Couldn't insert a new request state");
     }
 
-    pub async fn cancel_request(&mut self, request_id: &RequestId) -> Option<ChainId> {
+    pub fn cancel_request(&mut self, request_id: &RequestId) -> Option<ChainId> {
         let req_data = self
             .requests
             .get(request_id)
-            .await
             .expect("ViewError")
             .expect("Request not found");
         match req_data.state {
@@ -208,12 +208,12 @@ impl RfqState {
         }
     }
 
-    pub async fn close_request(&mut self, request_id: &RequestId) {
+    pub fn close_request(&mut self, request_id: &RequestId) {
         self.requests.remove(request_id).expect("Request not found");
     }
 
-    pub async fn request_data(&mut self, request_id: &RequestId) -> Option<&mut RequestData> {
-        self.requests.get_mut(request_id).await.expect("ViewError")
+    pub fn request_data(&mut self, request_id: &RequestId) -> Option<&mut RequestData> {
+        self.requests.get_mut(request_id).expect("ViewError")
     }
 
     pub fn init_temp_chain_state(
