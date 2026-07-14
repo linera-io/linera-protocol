@@ -9,7 +9,7 @@ use amm::{AmmAbi, Operation, Parameters};
 use fungible::{InitialStateBuilder, Parameters as FungibleParameters};
 use linera_sdk::{
     abis::fungible::FungibleOperation,
-    linera_base_types::{Account, AccountOwner, Amount, ApplicationId, U128},
+    linera_base_types::{Account, AccountOwner, Amount, ApplicationId},
     test::{ActiveChain, TestValidator},
 };
 
@@ -51,7 +51,7 @@ impl Setup {
                 fungible_module_id,
                 FungibleParameters::new("TK0"),
                 InitialStateBuilder::default()
-                    .with_account(amm_chain_owner, U128(Amount::from_tokens(100).to_inner()))
+                    .with_account(amm_chain_owner, Amount::from_tokens(100))
                     .build(),
                 vec![],
             )
@@ -61,7 +61,7 @@ impl Setup {
                 fungible_module_id,
                 FungibleParameters::new("TK1"),
                 InitialStateBuilder::default()
-                    .with_account(amm_chain_owner, U128(Amount::from_tokens(100).to_inner()))
+                    .with_account(amm_chain_owner, Amount::from_tokens(100))
                     .build(),
                 vec![],
             )
@@ -85,7 +85,7 @@ impl Setup {
                     token0_id,
                     FungibleOperation::Transfer {
                         owner: amm_chain_owner,
-                        amount: U128((Amount::from_tokens(50)).to_inner()),
+                        amount: Amount::from_tokens(50).into(),
                         target_account: Account {
                             chain_id: liquidity_chain.id(),
                             owner: liquidity_owner,
@@ -96,7 +96,7 @@ impl Setup {
                     token0_id,
                     FungibleOperation::Transfer {
                         owner: amm_chain_owner,
-                        amount: U128((Amount::from_tokens(30)).to_inner()),
+                        amount: Amount::from_tokens(30).into(),
                         target_account: Account {
                             chain_id: swapper_chain.id(),
                             owner: swapper_owner,
@@ -107,7 +107,7 @@ impl Setup {
                     token1_id,
                     FungibleOperation::Transfer {
                         owner: amm_chain_owner,
-                        amount: U128((Amount::from_tokens(50)).to_inner()),
+                        amount: Amount::from_tokens(50).into(),
                         target_account: Account {
                             chain_id: liquidity_chain.id(),
                             owner: liquidity_owner,
@@ -118,7 +118,7 @@ impl Setup {
                     token1_id,
                     FungibleOperation::Transfer {
                         owner: amm_chain_owner,
-                        amount: U128((Amount::from_tokens(30)).to_inner()),
+                        amount: Amount::from_tokens(30).into(),
                         target_account: Account {
                             chain_id: swapper_chain.id(),
                             owner: swapper_owner,
