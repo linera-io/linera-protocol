@@ -1047,12 +1047,7 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
     // native token.
     let account_owner = get_fungible_account_owner(&client);
     let accounts = BTreeMap::from([(account_owner, Amount::from_tokens(1_000_000))]);
-    let state = InitialState {
-        accounts: accounts
-            .into_iter()
-            .map(|(owner, amount)| (owner, amount.into()))
-            .collect(),
-    };
+    let state = InitialState { accounts };
     let (contract, service) = client.build_example("fungible").await?;
     let params = Parameters::new("FUN");
     let application_id = client

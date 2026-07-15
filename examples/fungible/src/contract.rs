@@ -21,13 +21,13 @@ pub struct FungibleTokenContract {
 linera_sdk::contract!(FungibleTokenContract);
 
 impl WithContractAbi for FungibleTokenContract {
-    type Abi = FungibleTokenAbi;
+    type Abi = FungibleTokenAbi<Fungible>;
 }
 
 impl Contract for FungibleTokenContract {
     type Message = Message;
     type Parameters = Parameters;
-    type InstantiationArgument = InitialState;
+    type InstantiationArgument = InitialState<Fungible>;
     type EventValue = ();
 
     async fn load(mut runtime: ContractRuntime<Self>) -> Self {

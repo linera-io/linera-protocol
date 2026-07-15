@@ -10,7 +10,6 @@ use std::sync::Arc;
 use async_graphql::{EmptySubscription, Request, Response, Schema};
 use crowd_funding::Operation;
 use linera_sdk::{
-    abis::fungible::FungibleTokenAbi,
     graphql::GraphQLMutationRoot as _,
     linera_base_types::{ApplicationId, WithServiceAbi},
     views::View,
@@ -30,7 +29,7 @@ impl WithServiceAbi for CrowdFundingService {
 }
 
 impl Service for CrowdFundingService {
-    type Parameters = ApplicationId<FungibleTokenAbi>;
+    type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
         let state = CrowdFundingState::load(runtime.root_view_storage_context())

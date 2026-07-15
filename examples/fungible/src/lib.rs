@@ -12,14 +12,17 @@ use serde::{Deserialize, Serialize};
 // `decimals` application parameter, in `Contract::load` and `Service::new`.
 linera_sdk::branded_token!(pub struct Fungible = "FungibleAmount");
 
-/// A branded, decimal-aware token amount used throughout the application and its ABI.
+/// A branded, decimal-aware token amount used internally by the application (state, messages, and
+/// contract logic).
 pub type FungibleAmount = linera_sdk::linera_base_types::TokenAmount<Fungible>;
-pub type FungibleOperation = linera_sdk::abis::fungible::FungibleOperation<Fungible>;
-pub type FungibleResponse = linera_sdk::abis::fungible::FungibleResponse<Fungible>;
-pub type FungibleTokenAbi = linera_sdk::abis::fungible::FungibleTokenAbi<Fungible>;
-pub type InitialState = linera_sdk::abis::fungible::InitialState<Fungible>;
-pub type InitialStateBuilder = linera_sdk::abis::fungible::InitialStateBuilder<Fungible>;
-pub use linera_sdk::abis::fungible::Parameters;
+
+/// The shared fungible ABI, generic over the token's brand. External users instantiate it with
+/// their own brand — typically a fixed-precision one, so they need not configure decimals — while
+/// this application instantiates it internally with [`Fungible`] (see `contract` and `service`).
+pub use linera_sdk::abis::fungible::{
+    FungibleOperation, FungibleResponse, FungibleTokenAbi, InitialState, InitialStateBuilder,
+    Parameters,
+};
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
 use {
     futures::{stream, StreamExt},
@@ -64,15 +67,15 @@ pub mod formats {
     use serde_reflection::{Samples, Tracer, TracerConfig};
 
     use super::{
-        Account, FungibleOperation, FungibleResponse, FungibleTokenAbi, InitialState, Message,
-        Parameters,
+        Account, Fungible, FungibleOperation, FungibleResponse, FungibleTokenAbi, InitialState,
+        Message, Parameters,
     };
 
     /// The Fungible Token application.
     pub struct FungibleApplication;
 
     impl BcsApplication for FungibleApplication {
-        type Abi = FungibleTokenAbi;
+        type Abi = FungibleTokenAbi<Fungible>;
 
         fn formats() -> serde_reflection::Result<Formats> {
             let mut tracer = Tracer::new(
@@ -83,14 +86,15 @@ pub mod formats {
             let samples = Samples::new();
 
             // Trace the ABI types
-            let operation = tracer.trace_stable_enum_type::<FungibleOperation>(&samples)?;
-            let response = tracer.trace_stable_enum_type::<FungibleResponse>(&samples)?;
+            let operation =
+                tracer.trace_stable_enum_type::<FungibleOperation<Fungible>>(&samples)?;
+            let response = tracer.trace_stable_enum_type::<FungibleResponse<Fungible>>(&samples)?;
             let (message, _) = tracer.trace_type::<Message>(&samples)?;
             let (event_value, _) = tracer.trace_type::<()>(&samples)?;
 
             // Trace additional supporting types (notably all enums) to populate the registry
             tracer.trace_type::<Parameters>(&samples)?;
-            tracer.trace_type::<InitialState>(&samples)?;
+            tracer.trace_type::<InitialState<Fungible>>(&samples)?;
             tracer.trace_type::<Account>(&samples)?;
             tracer.trace_type::<AccountOwner>(&samples)?;
 
@@ -132,10 +136,7 @@ pub async fn create_with_accounts(
         .await;
 
     for (_chain, account, initial_amount) in &accounts {
-        initial_state = initial_state.with_account(
-            *account,
-            FungibleAmount::from_inner(initial_amount.to_inner()),
-        );
+        initial_state = initial_state.with_account(*account, *initial_amount);
     }
 
     let params = Parameters::new("FUN");
@@ -153,7 +154,7 @@ pub async fn create_with_accounts(
                             chain_id: token_chain.id(),
                             owner: *account,
                         },
-                        amount: FungibleAmount::from_inner(initial_amount.to_inner()),
+                        amount: *initial_amount,
                         target_account: Account {
                             chain_id: chain.id(),
                             owner: *account,

@@ -6,7 +6,7 @@ use linera_sdk::{
     views::{linera_views, MapView, RootView, ViewStorageContext},
 };
 
-use crate::{FungibleAmount, InitialState};
+use crate::{Fungible, FungibleAmount, InitialState};
 
 /// The application state.
 #[derive(RootView)]
@@ -19,7 +19,7 @@ pub struct FungibleTokenState {
 #[allow(dead_code)]
 impl FungibleTokenState {
     /// Initializes the application state with some accounts with initial balances.
-    pub async fn initialize_accounts(&mut self, state: InitialState) {
+    pub async fn initialize_accounts(&mut self, state: InitialState<Fungible>) {
         for (k, v) in state.accounts {
             if v != FungibleAmount::ZERO {
                 self.accounts

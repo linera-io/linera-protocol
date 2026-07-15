@@ -8,8 +8,8 @@
 use std::iter;
 
 use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Operation};
+use fungible::FungibleTokenAbi;
 use linera_sdk::{
-    abis::fungible::FungibleTokenAbi,
     linera_base_types::{
         AccountOwner, AccountSecretKey, Amount, ApplicationId, Ed25519SecretKey,
         Secp256k1SecretKey, Timestamp,
@@ -51,10 +51,6 @@ async fn collect_pledges() {
         iter::repeat_n(initial_amount, 3),
     )
     .await;
-    // `create_with_accounts` yields the fungible example's own branded ABI; the crowd-funding
-    // application refers to the token by the default `FungibleTokenAbi`. The two are wire-identical
-    // (BCS ignores the brand), so re-tag the application id to the ABI this test expects.
-    let token_id = token_id.forget_abi().with_abi::<FungibleTokenAbi>();
 
     let campaign_state = InstantiationArgument {
         owner: campaign_account,
@@ -161,10 +157,6 @@ async fn cancel_successful_campaign() {
         iter::repeat_n(initial_amount, 3),
     )
     .await;
-    // `create_with_accounts` yields the fungible example's own branded ABI; the crowd-funding
-    // application refers to the token by the default `FungibleTokenAbi`. The two are wire-identical
-    // (BCS ignores the brand), so re-tag the application id to the ABI this test expects.
-    let token_id = token_id.forget_abi().with_abi::<FungibleTokenAbi>();
 
     let campaign_state = InstantiationArgument {
         owner: campaign_account,

@@ -25,7 +25,7 @@ pub struct FungibleTokenService {
 linera_sdk::service!(FungibleTokenService);
 
 impl WithServiceAbi for FungibleTokenService {
-    type Abi = fungible::FungibleTokenAbi;
+    type Abi = fungible::FungibleTokenAbi<Fungible>;
 }
 
 impl Service for FungibleTokenService {
@@ -45,7 +45,7 @@ impl Service for FungibleTokenService {
     async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
             self.clone(),
-            FungibleOperation::mutation_root(self.runtime.clone()),
+            FungibleOperation::<Fungible>::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
         .finish();

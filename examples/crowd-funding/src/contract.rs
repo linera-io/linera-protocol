@@ -6,8 +6,9 @@
 mod state;
 
 use crowd_funding::{CrowdFundingAbi, InstantiationArgument, Message, Operation};
+use fungible::FungibleTokenAbi;
 use linera_sdk::{
-    abis::fungible::{FungibleOperation, FungibleResponse, FungibleTokenAbi},
+    abis::fungible::FungibleOperation,
     linera_base_types::{Account, AccountOwner, Amount, ApplicationId, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
@@ -28,7 +29,7 @@ impl WithContractAbi for CrowdFundingContract {
 impl Contract for CrowdFundingContract {
     type Message = Message;
     type InstantiationArgument = InstantiationArgument;
-    type Parameters = ApplicationId<FungibleTokenAbi>;
+    type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
     type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
@@ -202,7 +203,7 @@ impl CrowdFundingContract {
             self.runtime
                 .call_application(true, fungible_id, &FungibleOperation::Balance { owner });
         match response {
-            FungibleResponse::Balance(balance) => balance,
+            fungible::FungibleResponse::Balance(balance) => balance,
             response => panic!("Unexpected response from fungible token application: {response:?}"),
         }
     }

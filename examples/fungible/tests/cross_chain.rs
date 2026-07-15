@@ -5,10 +5,9 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
+use fungible::{FungibleTokenAbi, InitialState, InitialStateBuilder, Parameters};
 use linera_sdk::{
-    abis::fungible::{
-        FungibleOperation, FungibleTokenAbi, InitialState, InitialStateBuilder, Parameters,
-    },
+    abis::fungible::FungibleOperation,
     linera_base_types::{Account, AccountOwner, Amount},
     test::{MessageAction, TestValidator},
 };
@@ -24,7 +23,9 @@ async fn test_cross_chain_transfer() {
     let transfer_amount = Amount::from_tokens(15);
 
     let (validator, module_id) =
-        TestValidator::with_current_module::<FungibleTokenAbi, Parameters, InitialState>().await;
+        TestValidator::with_current_module::<fungible::FungibleTokenAbi, Parameters, InitialState>(
+        )
+        .await;
     let mut sender_chain = validator.new_chain().await;
     let sender_account = AccountOwner::from(sender_chain.public_key());
 

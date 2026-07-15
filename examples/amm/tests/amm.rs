@@ -6,11 +6,9 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use amm::{AmmAbi, Operation, Parameters};
+use fungible::{InitialStateBuilder, Parameters as FungibleParameters};
 use linera_sdk::{
-    abis::fungible::{
-        FungibleOperation, FungibleTokenAbi, InitialState, InitialStateBuilder,
-        Parameters as FungibleParameters,
-    },
+    abis::fungible::FungibleOperation,
     linera_base_types::{Account, AccountOwner, Amount, ApplicationId},
     test::{ActiveChain, TestValidator},
 };
@@ -22,8 +20,8 @@ struct Setup {
     swapper_chain: ActiveChain,
     liquidity_owner: AccountOwner,
     swapper_owner: AccountOwner,
-    token0_id: ApplicationId<FungibleTokenAbi>,
-    token1_id: ApplicationId<FungibleTokenAbi>,
+    token0_id: ApplicationId<fungible::FungibleTokenAbi>,
+    token1_id: ApplicationId<fungible::FungibleTokenAbi>,
     amm_id: ApplicationId<AmmAbi>,
     amm_pool_owner: AccountOwner,
 }
@@ -41,9 +39,11 @@ impl Setup {
         let swapper_owner = AccountOwner::from(swapper_chain.public_key());
 
         let fungible_module_id = amm_chain
-            .publish_bytecode_files_in::<FungibleTokenAbi, FungibleParameters, InitialState>(
-                "../fungible",
-            )
+            .publish_bytecode_files_in::<
+                fungible::FungibleTokenAbi,
+                fungible::Parameters,
+                fungible::InitialState,
+            >("../fungible")
             .await;
 
         let token0_id = amm_chain

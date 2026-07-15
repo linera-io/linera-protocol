@@ -7,6 +7,7 @@ edition = "2021"
 [dependencies]
 async-graphql.workspace = true
 bcs.workspace = true
+fungible.workspace = true
 linera-sdk.workspace = true
 serde.workspace = true
 
@@ -14,6 +15,7 @@ serde.workspace = true
 serde-reflection.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+fungible = { workspace = true, features = ["test"] }
 insta.workspace = true
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
 serde-reflection.workspace = true

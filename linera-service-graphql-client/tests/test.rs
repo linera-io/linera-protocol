@@ -66,12 +66,7 @@ async fn test_end_to_end_queries(config: impl LineraNetConfig) -> anyhow::Result
     let (contract, service) = client.build_example("fungible").await?;
     let vm_runtime = VmRuntime::Wasm;
     let accounts = BTreeMap::from([(owner, Amount::from_tokens(9))]);
-    let state = InitialState {
-        accounts: accounts
-            .into_iter()
-            .map(|(owner, amount)| (owner, amount.into()))
-            .collect(),
-    };
+    let state = InitialState { accounts };
     let params = fungible::Parameters::new("FUN");
     let _application_id = client
         .publish_and_create::<FungibleTokenAbi, fungible::Parameters, InitialState>(

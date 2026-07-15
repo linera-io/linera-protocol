@@ -66,14 +66,6 @@ trait ChainClientExt {
     async fn publish_wasm_example(&self, name: &str) -> anyhow::Result<ModuleId>;
 }
 
-/// Builds a fungible amount at the tests' deploy-time precision (18 decimals, the `Parameters`
-/// default). The `Fungible` brand reads its precision from a process-global that nothing sets
-/// outside a contract, so we configure it on first use; the first configuration wins.
-fn fungible_amount(tokens: u128) -> fungible::FungibleAmount {
-    fungible::Fungible::configure_decimals(18);
-    fungible::FungibleAmount::from_tokens(tokens)
-}
-
 impl<Env: Environment> ChainClientExt for ChainClient<Env> {
     async fn publish_wasm_example(&self, name: &str) -> anyhow::Result<ModuleId> {
         let (contract_path, service_path) = wasm_test::get_example_bytecode_paths(name)?;
@@ -523,7 +515,7 @@ where
     let receiver_owner = receiver.preferred_owner().unwrap();
     let receiver2_owner = receiver2.preferred_owner().unwrap();
 
-    let accounts = BTreeMap::from_iter([(sender_owner, fungible_amount(1_000_000))]);
+    let accounts = BTreeMap::from_iter([(sender_owner, Amount::from_tokens(1_000_000))]);
     let state = InitialState { accounts };
     let params = Parameters::new("FUN");
     let (application_id, _cert) = sender
@@ -1408,7 +1400,7 @@ where
     let fungible_module = pledger_chain.publish_wasm_example("fungible").await?;
     let fungible_module =
         fungible_module.with_abi::<fungible::FungibleTokenAbi, Parameters, InitialState>();
-    let accounts = BTreeMap::from_iter([(pledger_owner, fungible_amount(1_000))]);
+    let accounts = BTreeMap::from_iter([(pledger_owner, Amount::from_tokens(1_000))]);
     let state = InitialState { accounts };
     let params = Parameters::new("FUN");
     let (fungible_id, _cert) = pledger_chain

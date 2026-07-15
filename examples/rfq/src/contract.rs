@@ -5,8 +5,8 @@
 
 mod state;
 
+use fungible::{FungibleOperation, FungibleTokenAbi};
 use linera_sdk::{
-    abis::fungible::{FungibleOperation, FungibleTokenAbi},
     linera_base_types::{
         Account, AccountOwner, Amount, ApplicationPermissions, ChainId, ChainOwnership,
         TimeoutConfig, WithContractAbi,
@@ -266,7 +266,7 @@ impl Contract for RfqContract {
                         let owner = self.runtime.application_id().into();
                         self.runtime.call_application(
                             true,
-                            tokens.token_id.with_abi::<FungibleTokenAbi>(),
+                            tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
                             &FungibleOperation::Transfer {
                                 owner,
                                 amount: tokens.amount,
@@ -280,7 +280,7 @@ impl Contract for RfqContract {
                         let owner = self.runtime.application_id().into();
                         self.runtime.call_application(
                             true,
-                            tokens.token_id.with_abi::<FungibleTokenAbi>(),
+                            tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
                             &FungibleOperation::Transfer {
                                 owner,
                                 amount: tokens.amount,
@@ -289,7 +289,9 @@ impl Contract for RfqContract {
                         );
                         self.runtime.call_application(
                             true,
-                            held_tokens.token_id.with_abi::<FungibleTokenAbi>(),
+                            held_tokens
+                                .token_id
+                                .with_abi::<fungible::FungibleTokenAbi>(),
                             &FungibleOperation::Transfer {
                                 owner,
                                 amount: held_tokens.amount,
@@ -376,7 +378,7 @@ impl RfqContract {
             let owner = self.runtime.application_id().into();
             self.runtime.call_application(
                 true,
-                tokens.token_id.with_abi::<FungibleTokenAbi>(),
+                tokens.token_id.with_abi::<fungible::FungibleTokenAbi>(),
                 &FungibleOperation::Transfer {
                     owner,
                     amount: tokens.amount,

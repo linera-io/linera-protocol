@@ -12,6 +12,8 @@ REGISTRY:
   ChainId:
     NEWTYPESTRUCT:
       TYPENAME: CryptoHash
+  FungibleAmount:
+    NEWTYPESTRUCT: U128
   FungibleOperation:
     ENUM:
       142627141:
@@ -21,7 +23,8 @@ REGISTRY:
           STRUCT:
             - owner:
                 TYPENAME: AccountOwner
-            - amount: U128
+            - amount:
+                TYPENAME: FungibleAmount
             - target_account:
                 TYPENAME: Account
       158617459:
@@ -31,13 +34,15 @@ REGISTRY:
                 TYPENAME: AccountOwner
             - spender:
                 TYPENAME: AccountOwner
-            - allowance: U128
+            - allowance:
+                TYPENAME: FungibleAmount
       204322437:
         Claim:
           STRUCT:
             - source_account:
                 TYPENAME: Account
-            - amount: U128
+            - amount:
+                TYPENAME: FungibleAmount
             - target_account:
                 TYPENAME: Account
       206964944:
@@ -52,7 +57,8 @@ REGISTRY:
                 TYPENAME: AccountOwner
             - spender:
                 TYPENAME: AccountOwner
-            - amount: U128
+            - amount:
+                TYPENAME: FungibleAmount
             - target_account:
                 TYPENAME: Account
   FungibleResponse:
@@ -62,7 +68,8 @@ REGISTRY:
           NEWTYPE: STR
       206964944:
         Balance:
-          NEWTYPE: U128
+          NEWTYPE:
+            TYPENAME: FungibleAmount
       211312752:
         Ok: UNIT
   InitialState:
@@ -71,7 +78,8 @@ REGISTRY:
           MAP:
             KEY:
               TYPENAME: AccountOwner
-            VALUE: U128
+            VALUE:
+              TYPENAME: FungibleAmount
   Message:
     ENUM:
       0:
@@ -79,7 +87,8 @@ REGISTRY:
           STRUCT:
             - target:
                 TYPENAME: AccountOwner
-            - amount: U128
+            - amount:
+                TYPENAME: FungibleAmount
             - source:
                 TYPENAME: AccountOwner
       1:
@@ -87,7 +96,8 @@ REGISTRY:
           STRUCT:
             - owner:
                 TYPENAME: AccountOwner
-            - amount: U128
+            - amount:
+                TYPENAME: FungibleAmount
             - target_account:
                 TYPENAME: Account
   Parameters:
