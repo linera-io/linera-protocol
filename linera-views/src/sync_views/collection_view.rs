@@ -167,7 +167,7 @@ impl<W: SyncView> SyncView for SyncByteCollectionView<W::Context, W> {
 
     fn post_save(&mut self) {
         let updates = self.updates.get_mut();
-        for (_, update) in updates.iter_mut() {
+        for update in updates.values_mut() {
             if let Update::Set(view) = update {
                 view.post_save();
             }
