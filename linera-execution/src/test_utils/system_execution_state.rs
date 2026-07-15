@@ -104,7 +104,8 @@ impl SystemExecutionState {
             .as_ref()
             .expect("Chain description should be set")
             .into();
-        Box::pin(self.into_view_with(chain_id, ExecutionRuntimeConfig::default())).await
+        self.into_view_with(chain_id, ExecutionRuntimeConfig::default())
+            .await
     }
 
     /// Converts this state into an execution state view for the given chain ID and runtime
@@ -179,12 +180,9 @@ impl SystemExecutionState {
                 .insert(&account_owner, balance)
                 .expect("insertion of balances should not fail");
         }
-        for blob_id in used_blobs {
-            view.system
-                .record_used_blob(&blob_id)
-                .await
-                .expect("inserting blob IDs should not fail");
-        }
+        view.system
+            .record_used_blobs(used_blobs)
+            .expect("inserting blob IDs should not fail");
         view.system.closed.set(closed);
         view.system
             .application_permissions

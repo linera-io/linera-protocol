@@ -267,9 +267,8 @@ where
         let application_id = From::from(&application_description);
         let blob = Blob::new_application_description(&application_description);
 
-        self.system.record_used_blob(&blob.id()).await?;
-        self.system.record_used_blob(&contract_blob.id()).await?;
-        self.system.record_used_blob(&service_blob.id()).await?;
+        self.system
+            .record_used_blobs([blob.id(), contract_blob.id(), service_blob.id()])?;
 
         self.context()
             .extra()
