@@ -41,7 +41,8 @@ pub struct SystemExecutionState {
     pub balances: BTreeMap<AccountOwner, Amount>,
     /// The latest timestamp recorded for the chain.
     pub timestamp: Timestamp,
-    /// The set of blobs that have been used by the chain.
+    /// The set of blobs that have been used by the chain. Recorded in the view as
+    /// last used in the state's `epoch`.
     pub used_blobs: BTreeSet<BlobId>,
     /// Whether the chain has been closed.
     #[debug(skip_if = Not::not)]
@@ -103,8 +104,7 @@ impl SystemExecutionState {
             .as_ref()
             .expect("Chain description should be set")
             .into();
-        self.into_view_with(chain_id, ExecutionRuntimeConfig::default())
-            .await
+        Box::pin(self.into_view_with(chain_id, ExecutionRuntimeConfig::default())).await
     }
 
     /// Converts this state into an execution state view for the given chain ID and runtime
@@ -181,8 +181,8 @@ impl SystemExecutionState {
         }
         for blob_id in used_blobs {
             view.system
-                .used_blobs
-                .insert(&blob_id)
+                .record_used_blob(&blob_id)
+                .await
                 .expect("inserting blob IDs should not fail");
         }
         view.system.closed.set(closed);

@@ -116,8 +116,16 @@ pub struct SystemExecutionStateView<C> {
     pub closed: RegisterView<C, bool>,
     /// Permissions for applications on this chain.
     pub application_permissions: LazyRegisterView<C, ApplicationPermissions>,
-    /// Blobs that have been used or published on this chain.
-    pub used_blobs: SetView<C, BlobId>,
+    /// Blobs that have been used or published on this chain, with the epoch in which
+    /// their use was last recorded. Every use re-records the blob under the current
+    /// epoch, and a blob recorded in the current or the previous epoch can be read
+    /// without an oracle call. A blob that goes unrecorded for two consecutive epochs
+    /// is forgotten — reading it again becomes an oracle request — which keeps both
+    /// this map and the blob list embedded in each checkpoint bounded by recent
+    /// activity rather than by chain lifetime. Entries older than the previous epoch
+    /// are removed when the chain advances its epoch, so all remaining entries are
+    /// live.
+    pub used_blobs: MapView<C, BlobId, Epoch>,
     /// The event stream subscriptions of applications on this chain.
     pub event_subscriptions: MapView<C, (ChainId, StreamId), EventSubscriptions>,
     /// The number of events in the streams that this chain is writing to.
@@ -512,7 +520,8 @@ where
                         self.blob_published(
                             &BlobId::new(blob_hash, BlobType::Committee),
                             txn_tracker,
-                        )?;
+                        )
+                        .await?;
                     }
                     AdminOperation::CreateCommittee { epoch, blob_hash } => {
                         self.check_next_epoch(epoch)?;
@@ -524,7 +533,7 @@ where
                             .await?;
                         self.blob_used(txn_tracker, blob_id).await?;
                         self.committee_hash.set(Some(blob_hash));
-                        self.epoch.set(epoch);
+                        self.advance_epoch(epoch).await?;
                         let event_data = EpochEventData {
                             blob_hash,
                             timestamp: context.timestamp,
@@ -551,7 +560,7 @@ where
             }
             PublishModule { module_id } => {
                 for blob_id in module_id.bytecode_blob_ids() {
-                    self.blob_published(&blob_id, txn_tracker)?;
+                    self.blob_published(&blob_id, txn_tracker).await?;
                 }
             }
             CreateApplication {
@@ -573,7 +582,8 @@ where
                 new_application = Some((app_id, instantiation_argument));
             }
             PublishDataBlob { blob_hash } => {
-                self.blob_published(&BlobId::new(blob_hash, BlobType::Data), txn_tracker)?;
+                self.blob_published(&BlobId::new(blob_hash, BlobType::Data), txn_tracker)
+                    .await?;
             }
             VerifyBlob { blob_id } => {
                 self.assert_blob_exists(blob_id).await?;
@@ -614,7 +624,7 @@ where
                     .await?;
                 self.blob_used(txn_tracker, blob_id).await?;
                 self.committee_hash.set(Some(event_data.blob_hash));
-                self.epoch.set(epoch);
+                self.advance_epoch(epoch).await?;
             }
             UpdateStream {
                 application_id,
@@ -1056,8 +1066,8 @@ where
         let application_index = txn_tracker.next_application_index();
 
         let blob_ids = self.check_bytecode_blobs(&module_id, txn_tracker).await?;
-        // We only remember to register the blobs that aren't recorded in `used_blobs`
-        // already.
+        // We only remember to register the blobs that aren't recorded in a live
+        // `used_blobs` generation already.
         for blob_id in blob_ids {
             self.blob_used(txn_tracker, blob_id).await?;
         }
@@ -1074,7 +1084,7 @@ where
             .await?;
 
         let blob = Blob::new_application_description(&application_description);
-        self.used_blobs.insert(&blob.id())?;
+        self.record_used_blob(&blob.id()).await?;
         txn_tracker.add_created_blob(blob);
 
         Ok(CreateApplicationResult {
@@ -1111,8 +1121,8 @@ where
         let blob_ids = self
             .check_bytecode_blobs(&description.module_id, txn_tracker)
             .await?;
-        // We only remember to register the blobs that aren't recorded in `used_blobs`
-        // already.
+        // We only remember to register the blobs that aren't recorded in a live
+        // `used_blobs` generation already.
         for blob_id in blob_ids {
             self.blob_used(txn_tracker, blob_id).await?;
         }
@@ -1123,30 +1133,62 @@ where
         Ok(description)
     }
 
-    /// Records a blob that is used in this block. If this is the first use on this chain, creates
-    /// an oracle response for it.
+    /// Records a blob that is used in this block. If the blob's last recorded use is
+    /// not in the current or previous epoch, creates an oracle response for it.
     pub(crate) async fn blob_used(
         &mut self,
         txn_tracker: &mut TransactionTracker,
         blob_id: BlobId,
     ) -> Result<bool, ExecutionError> {
-        if self.used_blobs.contains(&blob_id).await? {
+        let current_epoch = *self.epoch.get();
+        let last_used = self.used_blobs.get(&blob_id).await?;
+        if last_used == Some(current_epoch) {
             return Ok(false); // Nothing to do.
         }
-        self.used_blobs.insert(&blob_id)?;
+        // Every use re-records the blob under the current epoch, so blobs in active
+        // use never expire.
+        self.used_blobs.insert(&blob_id, current_epoch)?;
+        let is_live =
+            last_used.is_some_and(|epoch| epoch.try_add_one().ok() == Some(current_epoch));
+        if is_live {
+            return Ok(false);
+        }
         txn_tracker.replay_oracle_response(OracleResponse::Blob(blob_id))?;
         Ok(true)
     }
 
     /// Records a blob that is published in this block. This does not create an oracle entry, and
-    /// the blob can be used without using an oracle in the future on this chain.
-    fn blob_published(
+    /// the blob can be used without using an oracle on this chain while its record is live.
+    async fn blob_published(
         &mut self,
         blob_id: &BlobId,
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(), ExecutionError> {
-        self.used_blobs.insert(blob_id)?;
+        self.record_used_blob(blob_id).await?;
         txn_tracker.add_published_blob(*blob_id);
+        Ok(())
+    }
+
+    /// Records `blob_id` as used in the current epoch.
+    pub async fn record_used_blob(&mut self, blob_id: &BlobId) -> Result<(), ViewError> {
+        let epoch = *self.epoch.get();
+        self.used_blobs.insert(blob_id, epoch)
+    }
+
+    /// Returns the IDs of all blobs whose recorded last use is live, in sorted order.
+    pub async fn used_blob_ids(&self) -> Result<Vec<BlobId>, ViewError> {
+        self.used_blobs.indices().await
+    }
+
+    /// Advances the chain to `epoch` and forgets the blobs whose last recorded use is
+    /// now older than the previous epoch.
+    async fn advance_epoch(&mut self, epoch: Epoch) -> Result<(), ViewError> {
+        self.epoch.set(epoch);
+        for (blob_id, last_used) in self.used_blobs.index_values().await? {
+            if last_used.0.saturating_add(1) < epoch.0 {
+                self.used_blobs.remove(&blob_id)?;
+            }
+        }
         Ok(())
     }
 

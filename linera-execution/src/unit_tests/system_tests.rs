@@ -443,3 +443,42 @@ async fn execute_checkpoint_rejects_chain_with_published_events() -> anyhow::Res
     ));
     Ok(())
 }
+
+#[tokio::test]
+async fn used_blobs_expire_after_two_unused_epochs() -> anyhow::Result<()> {
+    let mut view = SystemExecutionState {
+        description: Some(dummy_chain_description(0)),
+        epoch: Epoch(5),
+        ..SystemExecutionState::default()
+    }
+    .into_view()
+    .await;
+
+    let hot_blob = BlobId::new(CryptoHash::test_hash("hot"), BlobType::Data);
+    let cold_blob = BlobId::new(CryptoHash::test_hash("cold"), BlobType::Data);
+    let mut txn_tracker = TransactionTracker::default();
+
+    // The first use of each blob creates an oracle response; a repeated use in the
+    // same epoch does not.
+    assert!(view.system.blob_used(&mut txn_tracker, hot_blob).await?);
+    assert!(view.system.blob_used(&mut txn_tracker, cold_blob).await?);
+    assert!(!view.system.blob_used(&mut txn_tracker, hot_blob).await?);
+
+    // Epoch 6: both blobs are still known, having been used in the previous epoch.
+    // Using the hot blob re-records it under the current epoch.
+    view.system.advance_epoch(Epoch(6)).await?;
+    assert!(!view.system.blob_used(&mut txn_tracker, hot_blob).await?);
+    let mut expected = vec![hot_blob, cold_blob];
+    expected.sort();
+    assert_eq!(view.system.used_blob_ids().await?, expected);
+
+    // Epoch 7: the hot blob was refreshed in epoch 6 and survives, while the cold
+    // blob was last used in epoch 5 and is forgotten, so using it again requires a
+    // new oracle response.
+    view.system.advance_epoch(Epoch(7)).await?;
+    assert_eq!(view.system.used_blob_ids().await?, vec![hot_blob]);
+    assert!(!view.system.blob_used(&mut txn_tracker, hot_blob).await?);
+    assert!(view.system.blob_used(&mut txn_tracker, cold_blob).await?);
+
+    Ok(())
+}

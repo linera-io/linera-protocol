@@ -898,7 +898,7 @@ where
                 .policy()
                 .check_blob_size(blob.content())
                 .with_execution_context(ChainExecutionContext::Block)?;
-            chain.system.used_blobs.insert(&blob_id)?;
+            chain.system.record_used_blob(&blob_id).await?;
         }
 
         let mut block_execution_tracker = BlockExecutionTracker::new(
