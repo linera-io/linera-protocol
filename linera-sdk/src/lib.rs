@@ -81,6 +81,7 @@ pub use self::{
 ///
 /// Below we use the word "transaction" to refer to the current operation or message being
 /// executed.
+#[allow(async_fn_in_trait)]
 pub trait Contract: WithContractAbi + ContractAbi + Sized {
     /// The type of message executed by the application.
     ///
