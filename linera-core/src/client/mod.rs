@@ -2470,15 +2470,20 @@ fn filter_new<T: Clone + Eq + std::hash::Hash>(
         .collect()
 }
 
-/// How missing blobs are obtained when retrying an operation via a
-/// [`DependencyDownloader`].
+/// The strategy a [`DependencyDownloader`] uses to resolve missing blobs: where to
+/// download them from, and how they enter the local node.
 pub(crate) enum BlobSource<'a, Env: Environment> {
-    /// Download and process the certificates that registered the blobs, from the
-    /// current validators.
+    /// Download the certificates that registered the blobs from the current
+    /// validators, and process those certificates; the blobs are then stored
+    /// together with their provenance.
     Certificates,
-    /// Download the raw blobs from the given nodes and store them.
+    /// Download the raw blobs from the given nodes and write them directly to
+    /// storage. This is appropriate when a certificate justifying the blobs is
+    /// already being processed.
     Storage(&'a [RemoteNode<Env::ValidatorNode>]),
-    /// Download the blobs pending for the given chain from the given node.
+    /// Download the given chain's pending blobs — belonging to a block proposal or
+    /// locking block — from the given node, and hand them to the local chain worker
+    /// as pending blobs.
     Pending {
         node: &'a RemoteNode<Env::ValidatorNode>,
         chain_id: ChainId,
