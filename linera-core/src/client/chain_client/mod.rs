@@ -75,7 +75,7 @@ use crate::{
         ValidatorNodeProvider as _,
     },
     remote_node::RemoteNode,
-    updater::{communicate_with_quorum, CommunicateAction, CommunicationError},
+    updater::{communicate_with_quorum, CommunicateAction, CommunicationError, ValidatorUpdater},
     worker::{Notification, Reason, WorkerError},
 };
 
@@ -3462,67 +3462,31 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(validator_tasks.collect())
     }
 
-    /// Attempts to update a validator with the local information.
-    #[instrument(level = "trace", skip(remote_node))]
-    pub async fn sync_validator(&self, remote_node: Env::ValidatorNode) -> Result<(), Error> {
-        let validator_next_block_height = match remote_node
-            .handle_chain_info_query(ChainInfoQuery::new(self.chain_id))
-            .await
-        {
-            Ok(info) => info.info.next_block_height,
-            // The validator doesn't have this chain's description blob yet.
-            Err(NodeError::BlobsNotFound(_)) => BlockHeight::ZERO,
-            Err(err) => return Err(err.into()),
-        };
+    /// Attempts to update a validator with the local information: sends any confirmed
+    /// block certificates the validator is missing, along with the blobs and other
+    /// chains' blocks they depend on, and evidence for the current consensus round.
+    ///
+    /// The public key is used to verify the validator's responses.
+    #[instrument(level = "trace", skip(node))]
+    pub async fn sync_validator(
+        &self,
+        public_key: ValidatorPublicKey,
+        node: Env::ValidatorNode,
+    ) -> Result<(), Error> {
         let local_next_block_height = self.chain_info().await?.next_block_height;
-
-        if validator_next_block_height >= local_next_block_height {
-            debug!("Validator is up-to-date with local state");
-            return Ok(());
-        }
-
-        let heights = (validator_next_block_height.0..local_next_block_height.0)
-            .map(BlockHeight)
-            .collect::<Vec<_>>();
-
-        let certificates = self
-            .client
-            .storage_client()
-            .read_certificates_by_heights(self.chain_id, &heights)
-            .await?
-            .into_iter()
-            .flatten();
-
-        for certificate in certificates {
-            let missing_blob_ids = match remote_node
-                .handle_confirmed_certificate(
-                    certificate.clone(),
-                    CrossChainMessageDelivery::NonBlocking,
-                )
-                .await
-            {
-                Ok(_) => continue,
-                Err(NodeError::BlobsNotFound(missing_blob_ids)) => missing_blob_ids,
-                Err(err) => return Err(err.into()),
-            };
-            // The validator is missing blobs the certificate depends on
-            // (including possibly the chain description). Upload and retry.
-            let missing_blobs = self
-                .client
-                .storage_client()
-                .read_blobs(&missing_blob_ids)
-                .await?
-                .into_iter()
-                .flatten()
-                .map(|b| b.into_std())
-                .collect();
-            remote_node.upload_blobs(missing_blobs).await?;
-            remote_node
-                .handle_confirmed_certificate(certificate, CrossChainMessageDelivery::NonBlocking)
-                .await?;
-        }
-
-        Ok(())
+        let mut updater = ValidatorUpdater {
+            remote_node: RemoteNode { public_key, node },
+            client: self.client.clone(),
+            admin_chain_id: self.client.admin_chain_id,
+        };
+        updater
+            .send_chain_information(
+                self.chain_id,
+                local_next_block_height,
+                CrossChainMessageDelivery::NonBlocking,
+                None,
+            )
+            .await
     }
 }
 
