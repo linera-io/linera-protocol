@@ -11,7 +11,7 @@ mod system_execution_state;
 use std::{collections::BTreeMap, sync::Arc, thread, vec};
 
 use linera_base::{
-    crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
+    crypto::{AccountPublicKey, ValidatorPublicKey},
     data_types::{
         Amount, Blob, BlockHeight, ChainDescription, ChainOrigin, CompressedBytecode, Epoch,
         InitialChainConfig, OracleResponse, Timestamp,
@@ -129,7 +129,6 @@ pub fn create_dummy_message_context(
     MessageContext {
         chain_id,
         origin: chain_id,
-        origin_certificate_hash: CryptoHash::default(),
         origin_timestamp: Default::default(),
         is_bouncing: false,
         authenticated_owner,

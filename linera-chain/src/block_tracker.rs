@@ -255,7 +255,6 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         let context = MessageContext {
             chain_id: self.chain_id,
             origin: incoming_bundle.origin,
-            origin_certificate_hash: incoming_bundle.bundle.certificate_hash,
             origin_timestamp: incoming_bundle.bundle.timestamp,
             is_bouncing: posted_message.is_bouncing(),
             height: self.block_height,
