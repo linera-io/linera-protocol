@@ -1678,31 +1678,22 @@ impl<Env: Environment> ChainClient<Env> {
         query: Query,
         block_hash: Option<CryptoHash>,
     ) -> Result<(QueryOutcome, BlockHeight), Error> {
-        let mut downloaded_blobs = HashSet::<BlobId>::new();
-        let mut events = super::EventSetDownloader::new(&self.client);
+        let mut downloader =
+            super::DependencyDownloader::new(&self.client, super::BlobSource::Certificates);
         loop {
-            let result = self
+            match self
                 .client
                 .local_node
                 .query_application(self.chain_id, query.clone(), block_hash)
-                .await;
-            if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
-                let new_blobs = super::filter_new(blob_ids, &downloaded_blobs);
-                if !new_blobs.is_empty() {
-                    let validators = self.client.validator_nodes().await?;
-                    self.client
-                        .update_local_node_with_blobs_from(new_blobs.clone(), &validators)
-                        .await?;
-                    downloaded_blobs.extend(new_blobs);
-                    continue;
+                .await
+            {
+                Ok(outcome) => return Ok(outcome),
+                Err(error) => {
+                    if !downloader.download_new(&error).await? {
+                        return Err(error.into());
+                    }
                 }
             }
-            if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                if events.download_new(event_ids).await? {
-                    continue;
-                }
-            }
-            return Ok(result?);
         }
     }
 
