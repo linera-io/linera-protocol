@@ -416,7 +416,10 @@ impl<T: Token> fmt::Debug for TokenAmount<T> {
 }
 
 /// The specification of a token for [`TokenAmount`].
-pub trait Token {
+///
+/// The `Debug + Default` bounds let types generic over the brand (e.g. ABI operations and
+/// responses) derive `Debug`/`Default` without a spurious `T: Debug`/`T: Default` on the brand.
+pub trait Token: fmt::Debug + Default {
     /// The name of the token.
     const NAME: &'static str;
 
@@ -436,6 +439,7 @@ pub trait Token {
 }
 
 /// The native token.
+#[derive(Debug, Default)]
 pub struct NativeToken;
 
 impl Token for NativeToken {
@@ -2666,6 +2670,7 @@ mod tests {
         use super::{Token, TokenAmount};
 
         // A token with two decimal places.
+        #[derive(Debug, Default)]
         struct Cents;
         impl Token for Cents {
             const NAME: &'static str = "Cents";
@@ -2676,6 +2681,7 @@ mod tests {
         }
 
         // A zero-decimal (integer) token.
+        #[derive(Debug, Default)]
         struct Units;
         impl Token for Units {
             const NAME: &'static str = "Units";
@@ -2718,6 +2724,7 @@ mod tests {
         use super::{Token, TokenAmount};
 
         // A token with two decimal places, coarser than milli/micro/etc.
+        #[derive(Debug, Default)]
         struct Cents;
         impl Token for Cents {
             const NAME: &'static str = "Cents";
@@ -2754,6 +2761,7 @@ mod tests {
         use super::{Token, TokenAmount};
 
         // 39 decimals cannot be represented: `10.pow(39)` overflows a `u128`.
+        #[derive(Debug, Default)]
         struct TooPrecise;
         impl Token for TooPrecise {
             const NAME: &'static str = "TooPrecise";
@@ -2772,6 +2780,7 @@ mod tests {
         use super::{Token, TokenAmount};
 
         // A token that displays and parses as its raw inner `u128`.
+        #[derive(Debug, Default)]
         struct Raw;
         impl Token for Raw {
             const NAME: &'static str = "Raw";
@@ -2803,6 +2812,7 @@ mod tests {
         use super::{Token, TokenAmount};
 
         // A decimal token and a raw-u128 token.
+        #[derive(Debug, Default)]
         struct Cents;
         impl Token for Cents {
             const NAME: &'static str = "Cents";
@@ -2811,6 +2821,7 @@ mod tests {
                 2
             }
         }
+        #[derive(Debug, Default)]
         struct Raw;
         impl Token for Raw {
             const NAME: &'static str = "Raw";
@@ -2890,6 +2901,7 @@ mod tests {
         use super::{Token, TokenAmount};
 
         // A branded (non-native) token exercises the generalized conversions.
+        #[derive(Debug, Default)]
         struct Cents;
         impl Token for Cents {
             const NAME: &'static str = "Cents";

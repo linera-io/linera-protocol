@@ -99,6 +99,7 @@ pub use self::{
 macro_rules! branded_token {
     ($(#[$meta:meta])* $vis:vis struct $name:ident = $wire:literal $(,)?) => {
         $(#[$meta])*
+        #[derive(Debug, Default)]
         $vis struct $name;
 
         const _: () = {
@@ -127,6 +128,7 @@ macro_rules! branded_token {
 
     ($(#[$meta:meta])* $vis:vis struct $name:ident = $wire:literal, decimals = $decimals:expr $(,)?) => {
         $(#[$meta])*
+        #[derive(Debug, Default)]
         $vis struct $name;
 
         impl $crate::linera_base_types::Token for $name {
