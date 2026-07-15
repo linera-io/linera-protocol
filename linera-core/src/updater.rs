@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fmt,
     hash::Hash,
     mem,
@@ -13,7 +13,7 @@ use std::{
 use futures::{future, Future, StreamExt};
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{BlockHeight, Round, TimeDelta},
+    data_types::{ArithmeticError, BlockHeight, Epoch, Round, TimeDelta},
     ensure,
     identifiers::{BlobId, BlobType, ChainId, StreamId},
     time::{timer::timeout, Duration, Instant},
@@ -244,6 +244,63 @@ where
         fields(chain_id = %certificate.block().header.chain_id)
     )]
     async fn send_confirmed_certificate(
+        &mut self,
+        certificate: &CacheArc<ConfirmedBlockCertificate>,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
+        // Certificates still to be sent, in reverse sending order: when the validator
+        // rejects the top entry because its epoch is revoked, the descendants that
+        // re-certify it are stacked on top of it, so every rejected block is preceded
+        // by the child vouching for it via `previous_block_hash`.
+        let mut stack = vec![certificate.clone()];
+        let mut expanded = HashSet::new();
+        loop {
+            let certificate = stack.last().expect("stack is never empty").clone();
+            match self
+                .send_single_confirmed_certificate(&certificate, delivery)
+                .await
+            {
+                Err(chain_client::Error::RemoteNodeError(NodeError::EpochRevoked {
+                    chain_id,
+                    epoch,
+                    height,
+                })) if !expanded.contains(&certificate.hash()) => {
+                    // The validator no longer trusts the epoch that signed the
+                    // certificate. Send the block's descendants from local storage
+                    // first, in decreasing height order, up to the first one from a
+                    // later epoch. If the validator revoked the later epoch as well,
+                    // sending its first block fails in the same way and extends the
+                    // stack one epoch further.
+                    expanded.insert(certificate.hash());
+                    let Some(descendants) = self
+                        .read_descendants_up_to_next_epoch(chain_id, height, epoch)
+                        .await?
+                    else {
+                        // We hold no descendant from a later epoch, so we cannot
+                        // re-certify the block for the validator.
+                        return Err(NodeError::EpochRevoked {
+                            chain_id,
+                            epoch,
+                            height,
+                        }
+                        .into());
+                    };
+                    stack.extend(descendants);
+                }
+                Err(err) => return Err(err),
+                Ok(info) => {
+                    stack.pop();
+                    if stack.is_empty() {
+                        return Ok(info);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Sends one confirmed certificate to the validator, catching up the admin chain
+    /// and uploading any blobs or blocks the validator reports as missing.
+    async fn send_single_confirmed_certificate(
         &mut self,
         certificate: &CacheArc<ConfirmedBlockCertificate>,
         delivery: CrossChainMessageDelivery,
@@ -833,6 +890,49 @@ where
         }
 
         Ok(info)
+    }
+
+    /// Reads this chain's certificates from local storage, from `height + 1` up to
+    /// and including the first one from an epoch later than `epoch`. Returns `None`
+    /// if storage runs out of blocks before a later-epoch one is found — then the
+    /// vouching chain cannot be completed.
+    async fn read_descendants_up_to_next_epoch(
+        &self,
+        chain_id: ChainId,
+        height: BlockHeight,
+        epoch: Epoch,
+    ) -> Result<Option<Vec<CacheArc<ConfirmedBlockCertificate>>>, chain_client::Error> {
+        let storage = self.client.local_node.storage_client();
+        let batch_size = self.client.options().certificate_upload_batch_size as u64;
+        let mut certificates = Vec::new();
+        let mut next_height = height.try_add_one()?;
+        loop {
+            let heights = (0..batch_size)
+                .map(|offset| {
+                    u64::from(next_height)
+                        .checked_add(offset)
+                        .map(BlockHeight)
+                        .ok_or(ArithmeticError::Overflow)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let batch = storage
+                .read_certificates_by_heights(chain_id, &heights)
+                .await?
+                .into_iter()
+                .map_while(|maybe_certificate| maybe_certificate)
+                .collect::<Vec<_>>();
+            if batch.is_empty() {
+                return Ok(None);
+            }
+            for certificate in batch {
+                let is_later_epoch = certificate.block().header.epoch > epoch;
+                certificates.push(certificate);
+                if is_later_epoch {
+                    return Ok(Some(certificates));
+                }
+                next_height = next_height.try_add_one()?;
+            }
+        }
     }
 
     /// Reads certificates for the given heights from storage.

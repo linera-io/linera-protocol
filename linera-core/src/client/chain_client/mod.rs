@@ -284,12 +284,6 @@ pub enum Error {
     #[error("The state of the client is incompatible with the proposed block: {0}")]
     BlockProposalError(&'static str),
 
-    #[error(
-        "Cannot accept a certificate from a committee that was retired. \
-         Try a newer certificate from the same origin"
-    )]
-    CommitteeDeprecationError,
-
     #[error("Protocol error within chain client: {0}")]
     ProtocolError(&'static str),
 
@@ -3491,37 +3485,72 @@ impl<Env: Environment> ChainClient<Env> {
             .read_certificates_by_heights(self.chain_id, &heights)
             .await?
             .into_iter()
-            .flatten();
+            .flatten()
+            .collect::<Vec<_>>();
 
-        for certificate in certificates {
-            let missing_blob_ids = match remote_node
-                .handle_confirmed_certificate(
-                    certificate.clone(),
-                    CrossChainMessageDelivery::NonBlocking,
-                )
+        let mut index = 0;
+        while let Some(certificate) = certificates.get(index) {
+            match self
+                .push_certificate_to_validator(&remote_node, certificate)
                 .await
             {
-                Ok(_) => continue,
-                Err(NodeError::BlobsNotFound(missing_blob_ids)) => missing_blob_ids,
-                Err(err) => return Err(err.into()),
-            };
-            // The validator is missing blobs the certificate depends on
-            // (including possibly the chain description). Upload and retry.
-            let missing_blobs = self
-                .client
-                .storage_client()
-                .read_blobs(&missing_blob_ids)
-                .await?
-                .into_iter()
-                .flatten()
-                .map(|b| b.into_std())
-                .collect();
-            remote_node.upload_blobs(missing_blobs).await?;
-            remote_node
-                .handle_confirmed_certificate(certificate, CrossChainMessageDelivery::NonBlocking)
-                .await?;
+                Ok(()) => index += 1,
+                Err(Error::RemoteNodeError(NodeError::EpochRevoked { .. })) => {
+                    // The validator no longer trusts the epoch that signed this
+                    // certificate. Push this and the remaining blocks in decreasing
+                    // height order instead: the newest block's epoch is still
+                    // trusted (if it isn't, its push fails and there is no way to
+                    // re-certify the chain), and each accepted child re-certifies
+                    // its parent via `previous_block_hash`. Then resume the
+                    // ascending pass, which executes the now-preprocessed blocks
+                    // in order.
+                    for descendant in certificates[index..].iter().rev() {
+                        self.push_certificate_to_validator(&remote_node, descendant)
+                            .await?;
+                    }
+                    index += 1;
+                }
+                Err(err) => return Err(err),
+            }
         }
 
+        Ok(())
+    }
+
+    /// Sends a single confirmed certificate to the validator, uploading any blobs it
+    /// reports as missing (including possibly the chain description) and retrying.
+    async fn push_certificate_to_validator(
+        &self,
+        remote_node: &Env::ValidatorNode,
+        certificate: &CacheArc<ConfirmedBlockCertificate>,
+    ) -> Result<(), Error> {
+        let missing_blob_ids = match remote_node
+            .handle_confirmed_certificate(
+                certificate.clone(),
+                CrossChainMessageDelivery::NonBlocking,
+            )
+            .await
+        {
+            Ok(_) => return Ok(()),
+            Err(NodeError::BlobsNotFound(missing_blob_ids)) => missing_blob_ids,
+            Err(err) => return Err(err.into()),
+        };
+        let missing_blobs = self
+            .client
+            .storage_client()
+            .read_blobs(&missing_blob_ids)
+            .await?
+            .into_iter()
+            .flatten()
+            .map(|b| b.into_std())
+            .collect();
+        remote_node.upload_blobs(missing_blobs).await?;
+        remote_node
+            .handle_confirmed_certificate(
+                certificate.clone(),
+                CrossChainMessageDelivery::NonBlocking,
+            )
+            .await?;
         Ok(())
     }
 }

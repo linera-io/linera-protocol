@@ -42,7 +42,7 @@ use linera_chain::{
     },
     ChainError, ChainIdSet,
 };
-use linera_execution::{committee::Committee, ExecutionError};
+use linera_execution::committee::Committee;
 use linera_storage::{Arc as CacheArc, Clock as _, ResultReadCertificates, Storage as _};
 use rand::seq::SliceRandom;
 use received_log::ReceivedLogs;
@@ -916,23 +916,13 @@ impl<Env: Environment> Client<Env> {
                                 }
                             }
                             for cert in certificates {
-                                self.check_certificate(&cert)
-                                    .await
-                                    .map_err(|error| {
-                                        tracing::debug!(
-                                            %validator_address, %error,
-                                            "invalid certificate"
-                                        );
-                                        error
-                                    })?
-                                    .into_result()
-                                    .map_err(|error| {
-                                        tracing::debug!(
-                                            %validator_address, %error,
-                                            "could not check certificate"
-                                        );
-                                        error
-                                    })?;
+                                self.check_certificate(&cert).await.map_err(|error| {
+                                    tracing::debug!(
+                                        %validator_address, %error,
+                                        "invalid certificate"
+                                    );
+                                    error
+                                })?;
                                 checked_certificates.push(cert);
                             }
                         }
@@ -1081,8 +1071,10 @@ impl<Env: Environment> Client<Env> {
     }
 
     /// Calls `handle_confirmed_certificate`, retrying with any missing blobs (downloaded
-    /// from `nodes`) and any missing events (downloaded from the publisher
-    /// chains via the current validators).
+    /// from `nodes`), any missing events (downloaded from the publisher
+    /// chains via the current validators), and — if the certificate's epoch is
+    /// revoked — the block's descendants (processed in decreasing height order so
+    /// they transitively re-certify the block).
     async fn handle_certificate_with_retry(
         &self,
         certificate: &ConfirmedBlockCertificate,
@@ -1091,11 +1083,31 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<ChainInfoResponse, chain_client::Error> {
         let mut downloaded_blobs = HashSet::<BlobId>::new();
         let mut downloaded_blocks = HashSet::<CryptoHash>::new();
+        let mut walked_descendants = false;
         let mut events = EventSetDownloader::new(self);
         loop {
             let result = self
                 .handle_confirmed_certificate(certificate.clone(), mode)
                 .await;
+            if let Err(LocalNodeError::WorkerError(WorkerError::EpochRevoked {
+                chain_id,
+                height,
+                ..
+            })) = &result
+            {
+                // The local worker doesn't trust the certificate's revoked epoch on
+                // its own. Try to establish trust by processing the block's
+                // descendants first.
+                if !walked_descendants {
+                    walked_descendants = true;
+                    if self
+                        .preprocess_descendants(*chain_id, *height, nodes)
+                        .await?
+                    {
+                        continue;
+                    }
+                }
+            }
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let new_blobs = filter_new(blob_ids, &downloaded_blobs);
                 if !new_blobs.is_empty() {
@@ -1155,6 +1167,107 @@ impl<Env: Environment> Client<Env> {
             }
         }
         Ok(())
+    }
+
+    /// Recovers a revoked-epoch block rejected by the local worker by processing the
+    /// block's descendants first, in decreasing height order.
+    ///
+    /// Collects the chain's certificates from `height + 1` up to and including the
+    /// first one whose epoch is not revoked (the anchor) — from local storage where
+    /// possible, otherwise from `nodes` — and feeds them through the local worker
+    /// newest-first: the anchor is trusted based on its own epoch, and each accepted
+    /// child then vouches for its parent via `previous_block_hash`. Returns `false`
+    /// if no anchor was found, e.g. because the chain's tip is itself in a revoked
+    /// epoch.
+    async fn preprocess_descendants(
+        &self,
+        chain_id: ChainId,
+        height: BlockHeight,
+        nodes: &[RemoteNode<Env::ValidatorNode>],
+    ) -> Result<bool, chain_client::Error> {
+        let batch_size = self.options.certificate_download_batch_size;
+        let mut certificates = Vec::new();
+        let mut next_height = height.try_add_one()?;
+        'anchor: loop {
+            let heights = (0..batch_size)
+                .map(|offset| {
+                    u64::from(next_height)
+                        .checked_add(offset)
+                        .map(BlockHeight)
+                        .ok_or(ArithmeticError::Overflow)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut batch = self
+                .storage_client()
+                .read_certificates_by_heights(chain_id, &heights)
+                .await?
+                .into_iter()
+                .map_while(|maybe_certificate| maybe_certificate)
+                .collect::<Vec<_>>();
+            if batch.is_empty() {
+                // Race the validators instead of trying them one by one: a slow or
+                // faulty validator must not stall the walk. A validator that
+                // returns nothing counts as a failure so the others take over.
+                let heights = &heights;
+                let downloaded = communicate_concurrently(
+                    nodes,
+                    async move |remote_node| {
+                        let downloaded = self
+                            .requests_scheduler
+                            .download_certificates_by_heights(
+                                &remote_node,
+                                chain_id,
+                                heights.clone(),
+                            )
+                            .await?;
+                        if downloaded.is_empty() {
+                            return Err(NodeError::MissingCertificateValue);
+                        }
+                        Ok(downloaded)
+                    },
+                    self.options.certificate_batch_download_hedge_delay,
+                    self.storage_client().clock(),
+                )
+                .await;
+                if let Ok(downloaded) = downloaded {
+                    batch = downloaded
+                        .into_iter()
+                        .map(|certificate| self.storage_client().cache_certificate(certificate))
+                        .collect();
+                }
+            }
+            if batch.is_empty() {
+                return Ok(false);
+            }
+            for certificate in batch {
+                if certificate.block().header.height != next_height {
+                    // A gap in the returned heights breaks the vouching chain.
+                    return Ok(false);
+                }
+                let epoch = certificate.block().header.epoch;
+                let is_revoked = self
+                    .storage_client()
+                    .is_epoch_revoked(epoch)
+                    .await
+                    .map_err(LocalNodeError::from)?;
+                certificates.push(certificate);
+                if !is_revoked {
+                    break 'anchor;
+                }
+                next_height = next_height.try_add_one()?;
+            }
+        }
+        // Process the descendants newest-first, so that each block is vouched for
+        // by the one processed just before it.
+        for certificate in certificates.iter().rev() {
+            Box::pin(self.handle_certificate_with_retry(
+                certificate,
+                nodes,
+                ProcessConfirmedBlockMode::Preprocess,
+            ))
+            .await?;
+        }
+        Ok(true)
     }
 
     async fn handle_certificate<T: ProcessableCertificate>(
@@ -1571,8 +1684,11 @@ impl<Env: Environment> Client<Env> {
         Box::pin(async move {
             // Verify the certificate before doing any expensive networking.
             if let ReceiveCertificateMode::NeedsCheck = mode {
-                let mut check_result = self.check_certificate(&certificate).await?;
-                if matches!(check_result, CheckCertificateResult::FutureEpoch) {
+                let mut check_result = self.check_certificate(&certificate).await;
+                if matches!(
+                    check_result,
+                    Err(chain_client::Error::CommitteeSynchronizationError)
+                ) {
                     // The certificate is from an epoch our local view of the admin chain
                     // hasn't caught up to yet. Catch up and check again instead of failing.
                     // Prefer the nodes that gave us the certificate: they evidently know
@@ -1594,12 +1710,7 @@ impl<Env: Environment> Client<Env> {
                                 Box::pin(async move {
                                     self.synchronize_chain_state_from(&node, admin_chain_id)
                                         .await?;
-                                    match self.check_certificate(certificate).await? {
-                                        CheckCertificateResult::FutureEpoch => {
-                                            Err(chain_client::Error::CommitteeSynchronizationError)
-                                        }
-                                        _ => Ok(()),
-                                    }
+                                    self.check_certificate(certificate).await
                                 })
                             },
                             self.options.blob_download_hedge_delay,
@@ -1611,14 +1722,17 @@ impl<Env: Environment> Client<Env> {
                         false
                     };
                     if synced_from_serving_node {
-                        check_result = self.check_certificate(&certificate).await?;
+                        check_result = self.check_certificate(&certificate).await;
                     }
-                    if matches!(check_result, CheckCertificateResult::FutureEpoch) {
+                    if matches!(
+                        check_result,
+                        Err(chain_client::Error::CommitteeSynchronizationError)
+                    ) {
                         Box::pin(self.synchronize_chain_state(admin_chain_id)).await?;
-                        check_result = self.check_certificate(&certificate).await?;
+                        check_result = self.check_certificate(&certificate).await;
                     }
                 }
-                check_result.into_result()?;
+                check_result?;
             }
             // Recover history from the network.
             let nodes = if let Some(nodes) = nodes {
@@ -1681,7 +1795,7 @@ impl<Env: Environment> Client<Env> {
             }
 
             let remote_heights_ref = &remote_heights;
-            let certificates = match communicate_concurrently(
+            let (certificates, unknown_epoch_heights) = match communicate_concurrently(
                 &nodes,
                 async move |remote_node| {
                     let mut remote_heights = remote_heights_ref.clone();
@@ -1699,7 +1813,7 @@ impl<Env: Environment> Client<Env> {
                         // anything from the validator - let the function try the other validators
                         return Err(NodeError::MissingCertificateValue);
                     }
-                    let certificates = self
+                    let downloaded = self
                         .requests_scheduler
                         .download_certificates_by_heights(
                             &remote_node,
@@ -1707,20 +1821,34 @@ impl<Env: Environment> Client<Env> {
                             remote_heights,
                         )
                         .await?;
-                    let mut certificates_with_check_results = vec![];
-                    for cert in certificates {
-                        let check_result = self.check_certificate(&cert).await?;
-                        certificates_with_check_results
-                            .push((cert, check_result.into_result().is_ok()));
+                    // Set aside the certificates whose epochs we don't know yet:
+                    // they are not received - and not re-downloaded either, until a
+                    // future sync cycle after our view of the admin chain has
+                    // caught up.
+                    let mut certificates = Vec::new();
+                    let mut unknown_epoch_heights = Vec::new();
+                    for cert in downloaded {
+                        match self.check_certificate(&cert).await {
+                            Ok(()) => certificates.push(cert),
+                            Err(chain_client::Error::CommitteeSynchronizationError) => {
+                                unknown_epoch_heights.push(cert.block().header.height);
+                            }
+                            Err(chain_client::Error::RemoteNodeError(error)) => return Err(error),
+                            Err(error) => {
+                                return Err(NodeError::ResponseHandlingError {
+                                    error: error.to_string(),
+                                })
+                            }
+                        }
                     }
-                    Ok(certificates_with_check_results)
+                    Ok((certificates, unknown_epoch_heights))
                 },
                 self.options.certificate_batch_download_hedge_delay,
                 self.storage_client().clock(),
             )
             .await
             {
-                Ok(certificates_with_check_results) => certificates_with_check_results,
+                Ok(result) => result,
                 Err(errors) => {
                     let faulty_validators = errors
                         .into_iter()
@@ -1752,19 +1880,12 @@ impl<Env: Environment> Client<Env> {
                 "received certificates",
             );
 
-            let mut to_remove_from_queue = BTreeSet::new();
+            let mut to_remove_from_queue = BTreeSet::from_iter(unknown_epoch_heights);
 
-            for (certificate, check_result) in certificates {
+            for certificate in certificates {
                 let hash = certificate.hash();
                 let chain_id = certificate.block().header.chain_id;
                 let height = certificate.block().header.height;
-                if !check_result {
-                    // The certificate was correctly signed, but we were missing a committee to
-                    // validate it properly - do not receive it, but also do not attempt to
-                    // re-download it.
-                    to_remove_from_queue.insert(height);
-                    continue;
-                }
                 // We checked the certificates right after downloading them.
                 let mode = ReceiveCertificateMode::AlreadyChecked;
                 if let Err(error) = self
@@ -1776,6 +1897,17 @@ impl<Env: Environment> Client<Env> {
                     .await
                 {
                     warn!(%error, %hash, "Received invalid certificate");
+                    if matches!(
+                        &error,
+                        chain_client::Error::LocalNodeError(LocalNodeError::WorkerError(
+                            WorkerError::EpochRevoked { .. }
+                        ))
+                    ) {
+                        // The block's epoch is revoked and it could not be
+                        // re-certified via descendants; drop it from the queue
+                        // instead of re-downloading it indefinitely.
+                        to_remove_from_queue.insert(height);
+                    }
                 } else {
                     to_remove_from_queue.insert(height);
                     if let Err(error) = sender.send(ChainAndHeight { chain_id, height }) {
@@ -1889,7 +2021,7 @@ impl<Env: Environment> Client<Env> {
             };
 
             // Validate the certificate.
-            self.check_certificate(&certificate).await?.into_result()?;
+            self.check_certificate(&certificate).await?;
 
             // Check if there's a previous message block to our chain.
             let block = certificate.block();
@@ -1982,7 +2114,7 @@ impl<Env: Environment> Client<Env> {
                     continue;
                 };
 
-                self.check_certificate(&certificate).await?.into_result()?;
+                self.check_certificate(&certificate).await?;
 
                 self.storage_client().cache_certificate(certificate)
             };
@@ -2058,6 +2190,17 @@ impl<Env: Environment> Client<Env> {
         .await
     }
 
+    /// Verifies the certificate's signatures against the committee of its own epoch.
+    ///
+    /// The committee is resolved from the admin chain's epoch event stream, which
+    /// works even if the epoch has been revoked since. Whether a valid certificate
+    /// from a revoked epoch is still a sufficient basis for trusting its block is
+    /// not decided here: the worker only accepts such a block if an already-trusted
+    /// block vouches for it.
+    ///
+    /// Returns [`chain_client::Error::CommitteeSynchronizationError`] if the epoch
+    /// is not known locally yet, e.g. because our local view of the admin chain is
+    /// behind; synchronizing the admin chain and retrying may resolve this.
     #[instrument(
         level = "trace", skip_all,
         fields(certificate_hash = ?incoming_certificate.hash()),
@@ -2065,20 +2208,18 @@ impl<Env: Environment> Client<Env> {
     async fn check_certificate(
         &self,
         incoming_certificate: &ConfirmedBlockCertificate,
-    ) -> Result<CheckCertificateResult, NodeError> {
+    ) -> Result<(), chain_client::Error> {
         let epoch = incoming_certificate.block().header.epoch;
-        let storage = self.storage_client();
-        let view_err = |error: ExecutionError| NodeError::ViewError {
-            error: error.to_string(),
-        };
-        if storage.is_epoch_revoked(epoch).await.map_err(view_err)? {
-            return Ok(CheckCertificateResult::OldEpoch);
-        }
-        let Some(committee) = storage.committee_for_epoch(epoch).await.map_err(view_err)? else {
-            return Ok(CheckCertificateResult::FutureEpoch);
-        };
-        incoming_certificate.check(&committee)?;
-        Ok(CheckCertificateResult::New)
+        let committee = self
+            .storage_client()
+            .committee_for_epoch(epoch)
+            .await
+            .map_err(LocalNodeError::from)?
+            .ok_or(chain_client::Error::CommitteeSynchronizationError)?;
+        incoming_certificate
+            .check(&committee)
+            .map_err(NodeError::from)?;
+        Ok(())
     }
 
     /// Downloads and processes any certificates we are missing for the given chain.
@@ -2710,25 +2851,6 @@ pub struct PendingProposal {
 enum ReceiveCertificateMode {
     NeedsCheck,
     AlreadyChecked,
-}
-
-enum CheckCertificateResult {
-    /// The certificate's epoch has been revoked on the admin chain.
-    OldEpoch,
-    /// The committee for the certificate's epoch is unknown to us yet, e.g. because
-    /// our local view of the admin chain is behind.
-    FutureEpoch,
-    New,
-}
-
-impl CheckCertificateResult {
-    fn into_result(self) -> Result<(), chain_client::Error> {
-        match self {
-            Self::OldEpoch => Err(chain_client::Error::CommitteeDeprecationError),
-            Self::FutureEpoch => Err(chain_client::Error::CommitteeSynchronizationError),
-            Self::New => Ok(()),
-        }
-    }
 }
 
 /// Creates a compressed Contract, Service and bytecode, plus an optional
