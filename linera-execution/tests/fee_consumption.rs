@@ -6,7 +6,7 @@
 use std::{collections::BTreeSet, sync::Arc, vec};
 
 use linera_base::{
-    crypto::{AccountPublicKey, CryptoHash},
+    crypto::AccountPublicKey,
     data_types::{Amount, BlockHeight, OracleResponse, Timestamp},
     http,
     identifiers::{Account, AccountOwner, StreamName},
@@ -278,7 +278,6 @@ async fn test_fee_consumption(
     let context = MessageContext {
         chain_id,
         origin: chain_id,
-        origin_certificate_hash: CryptoHash::default(),
         origin_timestamp: Timestamp::default(),
         is_bouncing: false,
         authenticated_owner,
@@ -479,7 +478,6 @@ async fn test_free_app_message_no_fees() -> anyhow::Result<()> {
     let context = MessageContext {
         chain_id,
         origin: chain_id,
-        origin_certificate_hash: CryptoHash::default(),
         origin_timestamp: Timestamp::default(),
         is_bouncing: false,
         authenticated_owner: Some(signer),
