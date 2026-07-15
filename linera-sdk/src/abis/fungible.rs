@@ -150,6 +150,9 @@ pub enum FungibleResponse<T: Token = NativeToken> {
     TickerSymbol(String),
 }
 
+// Hand-written (like `Debug` below) so the bound stays `T: Token`; deriving `Default` would add a
+// spurious `T: Default`, which the token brands do not implement.
+#[allow(clippy::derivable_impls)]
 impl<T: Token> Default for FungibleResponse<T> {
     fn default() -> Self {
         FungibleResponse::Ok
