@@ -116,16 +116,21 @@ pub struct SystemExecutionStateView<C> {
     pub closed: RegisterView<C, bool>,
     /// Permissions for applications on this chain.
     pub application_permissions: LazyRegisterView<C, ApplicationPermissions>,
-    /// Blobs that have been used or published on this chain, with the epoch in which
-    /// their use was last recorded. Every use re-records the blob under the current
-    /// epoch, and a blob recorded in the current or the previous epoch can be read
-    /// without an oracle call. A blob that goes unrecorded for two consecutive epochs
-    /// is forgotten — reading it again becomes an oracle request — which keeps both
-    /// this map and the blob list embedded in each checkpoint bounded by recent
-    /// activity rather than by chain lifetime. Entries older than the previous epoch
-    /// are removed when the chain advances its epoch, so all remaining entries are
-    /// live.
-    pub used_blobs: MapView<C, BlobId, Epoch>,
+    /// The number of `SystemOperation::Checkpoint`s executed on this chain. Serves as
+    /// the current generation for `used_blobs` records: each checkpoint starts a new
+    /// generation.
+    pub num_checkpoints: RegisterView<C, u64>,
+    /// Blobs that have been used or published on this chain, with the checkpoint
+    /// generation (the value of `num_checkpoints` at the time) in which their use was
+    /// last recorded. Every use re-records the blob under the current generation, and
+    /// a blob recorded in the current or the previous generation — i.e. used since the
+    /// second-most-recent checkpoint — can be read without an oracle call. A blob that
+    /// goes unrecorded for two consecutive checkpoints is forgotten — reading it again
+    /// becomes an oracle request — which keeps both this map and the blob list
+    /// embedded in each checkpoint bounded by recent activity rather than by chain
+    /// lifetime. Entries older than the previous generation are removed when a
+    /// checkpoint executes, so all remaining entries are live.
+    pub used_blobs: MapView<C, BlobId, u64>,
     /// The event stream subscriptions of applications on this chain.
     pub event_subscriptions: MapView<C, (ChainId, StreamId), EventSubscriptions>,
     /// The number of events in the streams that this chain is writing to.
@@ -176,6 +181,7 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
             allowances: self.allowances.with_context(ctx.clone()).await,
             closed: self.closed.with_context(ctx.clone()).await,
             application_permissions: self.application_permissions.with_context(ctx.clone()).await,
+            num_checkpoints: self.num_checkpoints.with_context(ctx.clone()).await,
             used_blobs: self.used_blobs.with_context(ctx.clone()).await,
             event_subscriptions: self.event_subscriptions.with_context(ctx.clone()).await,
             stream_event_counts: self.stream_event_counts.with_context(ctx.clone()).await,
@@ -532,7 +538,7 @@ where
                             .await?;
                         self.blob_used(txn_tracker, blob_id).await?;
                         self.committee_hash.set(Some(blob_hash));
-                        self.advance_epoch(epoch).await?;
+                        self.epoch.set(epoch);
                         let event_data = EpochEventData {
                             blob_hash,
                             timestamp: context.timestamp,
@@ -622,7 +628,7 @@ where
                     .await?;
                 self.blob_used(txn_tracker, blob_id).await?;
                 self.committee_hash.set(Some(event_data.blob_hash));
-                self.advance_epoch(epoch).await?;
+                self.epoch.set(epoch);
             }
             UpdateStream {
                 application_id,
@@ -1128,33 +1134,35 @@ where
     }
 
     /// Records a blob that is used in this block. If the blob's last recorded use is
-    /// not in the current or previous epoch, creates an oracle response for it.
+    /// not in the current or previous checkpoint generation, creates an oracle
+    /// response for it.
     pub(crate) async fn blob_used(
         &mut self,
         txn_tracker: &mut TransactionTracker,
         blob_id: BlobId,
     ) -> Result<bool, ExecutionError> {
-        let current_epoch = *self.epoch.get();
+        let current_generation = *self.num_checkpoints.get();
         let last_used = self.used_blobs.get(&blob_id).await?;
-        self.blob_used_at(txn_tracker, blob_id, last_used, current_epoch)
+        self.blob_used_at(txn_tracker, blob_id, last_used, current_generation)
     }
 
     /// Records blobs that are used in this block, loading all their last-use records
     /// from storage in a single round trip. Creates an oracle response for each blob
-    /// whose last recorded use is not in the current or previous epoch.
+    /// whose last recorded use is not in the current or previous checkpoint
+    /// generation.
     pub(crate) async fn blobs_used(
         &mut self,
         txn_tracker: &mut TransactionTracker,
         blob_ids: Vec<BlobId>,
     ) -> Result<(), ExecutionError> {
-        let current_epoch = *self.epoch.get();
+        let current_generation = *self.num_checkpoints.get();
         let last_used = self.used_blobs.multi_get(&blob_ids).await?;
         // `multi_get` returns the pre-batch records, so a repeated ID would otherwise
         // look unused a second time and produce a duplicate oracle response.
         let mut seen = BTreeSet::new();
         for (blob_id, last_used) in blob_ids.into_iter().zip(last_used) {
             if seen.insert(blob_id) {
-                self.blob_used_at(txn_tracker, blob_id, last_used, current_epoch)?;
+                self.blob_used_at(txn_tracker, blob_id, last_used, current_generation)?;
             }
         }
         Ok(())
@@ -1165,17 +1173,17 @@ where
         &mut self,
         txn_tracker: &mut TransactionTracker,
         blob_id: BlobId,
-        last_used: Option<Epoch>,
-        current_epoch: Epoch,
+        last_used: Option<u64>,
+        current_generation: u64,
     ) -> Result<bool, ExecutionError> {
-        if last_used == Some(current_epoch) {
+        if last_used == Some(current_generation) {
             return Ok(false); // Nothing to do.
         }
-        // Every use re-records the blob under the current epoch, so blobs in active
-        // use never expire.
-        self.used_blobs.insert(&blob_id, current_epoch)?;
-        let is_live =
-            last_used.is_some_and(|epoch| epoch.try_add_one().ok() == Some(current_epoch));
+        // Every use re-records the blob under the current generation, so blobs in
+        // active use never expire.
+        self.used_blobs.insert(&blob_id, current_generation)?;
+        let is_live = last_used
+            .is_some_and(|generation| generation.checked_add(1) == Some(current_generation));
         if is_live {
             return Ok(false);
         }
@@ -1195,13 +1203,13 @@ where
         Ok(())
     }
 
-    /// Records `blob_id` as used in the current epoch.
+    /// Records `blob_id` as used in the current checkpoint generation.
     pub fn record_used_blob(&mut self, blob_id: &BlobId) -> Result<(), ViewError> {
-        let epoch = *self.epoch.get();
-        self.used_blobs.insert(blob_id, epoch)
+        let generation = *self.num_checkpoints.get();
+        self.used_blobs.insert(blob_id, generation)
     }
 
-    /// Records all the given blobs as used in the current epoch.
+    /// Records all the given blobs as used in the current checkpoint generation.
     pub fn record_used_blobs(
         &mut self,
         blob_ids: impl IntoIterator<Item = BlobId>,
@@ -1217,12 +1225,18 @@ where
         self.used_blobs.indices().await
     }
 
-    /// Advances the chain to `epoch` and forgets the blobs whose last recorded use is
-    /// now older than the previous epoch.
-    async fn advance_epoch(&mut self, epoch: Epoch) -> Result<(), ViewError> {
-        self.epoch.set(epoch);
+    /// Starts a new `used_blobs` generation for the checkpoint being executed:
+    /// increments `num_checkpoints` and forgets the blobs whose last recorded use
+    /// predates the previous checkpoint.
+    pub(crate) async fn start_checkpoint_generation(&mut self) -> Result<(), ExecutionError> {
+        let generation = self
+            .num_checkpoints
+            .get()
+            .checked_add(1)
+            .ok_or(ArithmeticError::Overflow)?;
+        self.num_checkpoints.set(generation);
         for (blob_id, last_used) in self.used_blobs.index_values().await? {
-            if last_used.0.saturating_add(1) < epoch.0 {
+            if last_used.saturating_add(1) < generation {
                 self.used_blobs.remove(&blob_id)?;
             }
         }

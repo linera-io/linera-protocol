@@ -163,9 +163,11 @@ where
 
     /// Registers the pre-block-computed checkpoint inputs (from
     /// [`Self::prepare_checkpoint`]) with the transaction tracker. This: publishes the
-    /// execution-state blobs, records the matching [`OracleResponse::Checkpoint`] (which
-    /// also lists every blob with a live `used_blobs` record so a
-    /// bootstrapping node can fetch them from shared storage), and emits a
+    /// execution-state blobs, starts a new `used_blobs` generation (forgetting blobs
+    /// last used before the previous checkpoint), records the matching
+    /// [`OracleResponse::Checkpoint`] (which lists the blobs still live after the
+    /// rotation — those used since the previous checkpoint — so a bootstrapping node
+    /// can fetch them from shared storage), and emits a
     /// [`SystemMessage::CheckpointAck`] to each origin chain so the origin can later trim
     /// its outbox dump of already-delivered messages.
     pub async fn apply_checkpoint(
@@ -180,6 +182,7 @@ where
             outbox_block_hashes,
         } = prepared;
         let execution_state_blobs = blobs.iter().map(|blob| blob.id().hash).collect();
+        self.system.start_checkpoint_generation().await?;
         let used_blobs = self.system.used_blob_ids().await?;
         for blob in blobs {
             txn_tracker.add_created_blob(blob);

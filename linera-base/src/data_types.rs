@@ -1421,11 +1421,12 @@ pub enum OracleResponse {
     Checkpoint {
         /// Content hashes of the execution-state-dump blobs, in restore order.
         execution_state_blobs: Vec<CryptoHash>,
-        /// All blobs whose recorded last use on the chain is live (current or previous
-        /// epoch) at the time of the checkpoint. A bootstrapping node must have each of
-        /// these in shared blob storage before applying the checkpoint, otherwise
-        /// subsequent operations on the chain could try to read blob content the node
-        /// doesn't actually have.
+        /// All blobs whose use on the chain was recorded since the previous checkpoint
+        /// — exactly the `used_blobs` records still live after this checkpoint rotates
+        /// out older entries. A bootstrapping node must have each of these in shared
+        /// blob storage before applying the checkpoint, otherwise subsequent
+        /// operations on the chain could try to read blob content the node doesn't
+        /// actually have.
         used_blobs: Vec<BlobId>,
         /// Hashes of every block on this chain that the chain's outboxes still reference
         /// at the time of the checkpoint — i.e. the heights with cross-chain messages

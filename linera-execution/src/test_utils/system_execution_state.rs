@@ -42,7 +42,7 @@ pub struct SystemExecutionState {
     /// The latest timestamp recorded for the chain.
     pub timestamp: Timestamp,
     /// The set of blobs that have been used by the chain. Recorded in the view as
-    /// last used in the state's `epoch`.
+    /// last used in the current checkpoint generation.
     pub used_blobs: BTreeSet<BlobId>,
     /// Whether the chain has been closed.
     #[debug(skip_if = Not::not)]
