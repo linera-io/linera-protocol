@@ -7,10 +7,9 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use fungible::{self, FungibleTokenAbi};
 use linera_sdk::{
-    abis::fungible::FungibleOperation,
-    linera_base_types::{Account, AccountOwner, Amount, CryptoHash},
+    abis::fungible::{FungibleOperation, FungibleTokenAbi},
+    linera_base_types::{Account, AccountOwner, Amount, CryptoHash, NativeToken},
     test::{ActiveChain, TestValidator},
 };
 
@@ -19,8 +18,9 @@ use linera_sdk::{
 async fn chain_balance_transfers() {
     let parameters = fungible::Parameters {
         ticker_symbol: "NAT".to_owned(),
+        decimals: 18,
     };
-    let initial_state = fungible::InitialStateBuilder::default().build();
+    let initial_state = fungible::InitialStateBuilder::<NativeToken>::default().build();
     let (validator, _application_id, recipient_chain) = TestValidator::with_current_application::<
         FungibleTokenAbi,
         _,
@@ -56,8 +56,9 @@ async fn chain_balance_transfers() {
 async fn transfer_to_owner() {
     let parameters = fungible::Parameters {
         ticker_symbol: "NAT".to_owned(),
+        decimals: 18,
     };
-    let initial_state = fungible::InitialStateBuilder::default().build();
+    let initial_state = fungible::InitialStateBuilder::<NativeToken>::default().build();
     let (validator, _application_id, recipient_chain) = TestValidator::with_current_application::<
         FungibleTokenAbi,
         _,
@@ -90,8 +91,9 @@ async fn transfer_to_owner() {
 async fn transfer_to_multiple_owners() {
     let parameters = fungible::Parameters {
         ticker_symbol: "NAT".to_owned(),
+        decimals: 18,
     };
-    let initial_state = fungible::InitialStateBuilder::default().build();
+    let initial_state = fungible::InitialStateBuilder::<NativeToken>::default().build();
     let (validator, _application_id, recipient_chain) = TestValidator::with_current_application::<
         FungibleTokenAbi,
         _,
@@ -138,8 +140,9 @@ async fn transfer_to_multiple_owners() {
 async fn emptied_account_disappears_from_queries() {
     let parameters = fungible::Parameters {
         ticker_symbol: "NAT".to_owned(),
+        decimals: 18,
     };
-    let initial_state = fungible::InitialStateBuilder::default().build();
+    let initial_state = fungible::InitialStateBuilder::<NativeToken>::default().build();
     let (validator, _application_id, recipient_chain) = TestValidator::with_current_application::<
         FungibleTokenAbi,
         _,
@@ -184,8 +187,9 @@ async fn emptied_account_disappears_from_queries() {
 async fn allowance_overwrite_and_clear() {
     let parameters = fungible::Parameters {
         ticker_symbol: "NAT".to_owned(),
+        decimals: 18,
     };
-    let initial_state = fungible::InitialStateBuilder::default().build();
+    let initial_state = fungible::InitialStateBuilder::<NativeToken>::default().build();
     let (validator, application_id, owner_chain) = TestValidator::with_current_application::<
         FungibleTokenAbi,
         _,
@@ -267,8 +271,9 @@ async fn allowance_overwrite_and_clear() {
 async fn allowances_are_independent() {
     let parameters = fungible::Parameters {
         ticker_symbol: "NAT".to_owned(),
+        decimals: 18,
     };
-    let initial_state = fungible::InitialStateBuilder::default().build();
+    let initial_state = fungible::InitialStateBuilder::<NativeToken>::default().build();
     let (validator, application_id, owner_chain) = TestValidator::with_current_application::<
         FungibleTokenAbi,
         _,

@@ -64,8 +64,67 @@ pub fn derive_stable_enum_in_crate(input: TokenStream) -> TokenStream {
 
 fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream2 {
     let crate_root = Ident::new(crate_root, Span::call_site());
-    let enum_name = input.ident;
+    let enum_name = input.ident.clone();
     let mutation_root_name = concat(&enum_name, "MutationRoot");
+
+    // Thread the operation enum's own generic parameters through the generated mutation root,
+    // alongside the `Application` type parameter. For a non-generic enum these lists are empty
+    // and the emitted code is identical to the original.
+    let (_, ty_generics_split, _) = input.generics.split_for_impl();
+    let ty_generics = quote! { #ty_generics_split };
+    // Strip any default (`= Foo`) from the parameters: defaults are legal on a type declaration
+    // but not in the `impl` blocks these are spliced into.
+    let enum_params: Vec<TokenStream2> = input
+        .generics
+        .params
+        .iter()
+        .map(|param| {
+            let mut param = param.clone();
+            if let syn::GenericParam::Type(type_param) = &mut param {
+                type_param.eq_token = None;
+                type_param.default = None;
+            }
+            quote! { #param }
+        })
+        .collect();
+    let arg_idents: Vec<TokenStream2> = input
+        .generics
+        .params
+        .iter()
+        .map(|p| match p {
+            syn::GenericParam::Type(t) => {
+                let ident = &t.ident;
+                quote! { #ident }
+            }
+            syn::GenericParam::Lifetime(l) => {
+                let lifetime = &l.lifetime;
+                quote! { #lifetime }
+            }
+            syn::GenericParam::Const(c) => {
+                let ident = &c.ident;
+                quote! { #ident }
+            }
+        })
+        .collect();
+    let where_preds = match &input.generics.where_clause {
+        Some(clause) => {
+            let predicates = &clause.predicates;
+            quote! { #predicates, }
+        }
+        None => quote! {},
+    };
+    let is_generic = !input.generics.params.is_empty();
+    let phantom_field = if is_generic {
+        quote! { __phantom: ::core::marker::PhantomData<fn() -> #enum_name #ty_generics>, }
+    } else {
+        quote! {}
+    };
+    let mutation_root_ctor = if is_generic {
+        quote! { #mutation_root_name { runtime, __phantom: ::core::marker::PhantomData } }
+    } else {
+        quote! { #mutation_root_name { runtime } }
+    };
+
     let mut methods = vec![];
 
     for variant in input.variants {
@@ -130,37 +189,41 @@ fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream
 
     quote! {
         /// Mutation root
-        pub struct #mutation_root_name<Application>
+        pub struct #mutation_root_name< #(#enum_params,)* Application >
         where
+            #where_preds
             Application: #crate_root::Service,
-            Application::Abi: #crate_root::abi::ContractAbi<Operation = #enum_name>,
+            Application::Abi: #crate_root::abi::ContractAbi<Operation = #enum_name #ty_generics>,
             #crate_root::ServiceRuntime<Application>: Send + Sync,
         {
             runtime: ::std::sync::Arc<#crate_root::ServiceRuntime<Application>>,
+            #phantom_field
         }
 
         #[async_graphql::Object]
-        impl<Application> #mutation_root_name<Application>
+        impl< #(#enum_params,)* Application > #mutation_root_name< #(#arg_idents,)* Application >
         where
+            #where_preds
             Application: #crate_root::Service,
-            Application::Abi: #crate_root::abi::ContractAbi<Operation = #enum_name>,
+            Application::Abi: #crate_root::abi::ContractAbi<Operation = #enum_name #ty_generics>,
             #crate_root::ServiceRuntime<Application>: Send + Sync,
         {
             #(#methods)*
         }
 
-        impl<Application> #crate_root::graphql::GraphQLMutationRoot<Application> for #enum_name
+        impl< #(#enum_params,)* Application > #crate_root::graphql::GraphQLMutationRoot<Application> for #enum_name #ty_generics
         where
+            #where_preds
             Application: #crate_root::Service,
-            Application::Abi: #crate_root::abi::ContractAbi<Operation = #enum_name>,
+            Application::Abi: #crate_root::abi::ContractAbi<Operation = #enum_name #ty_generics>,
             #crate_root::ServiceRuntime<Application>: Send + Sync,
         {
-            type MutationRoot = #mutation_root_name<Application>;
+            type MutationRoot = #mutation_root_name< #(#arg_idents,)* Application >;
 
             fn mutation_root(
                 runtime: ::std::sync::Arc<#crate_root::ServiceRuntime<Application>>,
             ) -> Self::MutationRoot {
-                #mutation_root_name { runtime }
+                #mutation_root_ctor
             }
         }
     }

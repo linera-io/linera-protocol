@@ -4,11 +4,11 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 use fungible::{
-    state::FungibleTokenState, FungibleOperation, FungibleResponse, FungibleTokenAbi, InitialState,
-    Message, Parameters,
+    state::FungibleTokenState, Fungible, FungibleAmount, FungibleOperation, FungibleResponse,
+    FungibleTokenAbi, InitialState, Message, Parameters,
 };
 use linera_sdk::{
-    linera_base_types::{Account, AccountOwner, Amount, WithContractAbi},
+    linera_base_types::{Account, AccountOwner, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -21,16 +21,17 @@ pub struct FungibleTokenContract {
 linera_sdk::contract!(FungibleTokenContract);
 
 impl WithContractAbi for FungibleTokenContract {
-    type Abi = FungibleTokenAbi;
+    type Abi = FungibleTokenAbi<Fungible>;
 }
 
 impl Contract for FungibleTokenContract {
     type Message = Message;
     type Parameters = Parameters;
-    type InstantiationArgument = InitialState;
+    type InstantiationArgument = InitialState<Fungible>;
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    async fn load(mut runtime: ContractRuntime<Self>) -> Self {
+        Fungible::configure_decimals(runtime.application_parameters().decimals);
         let state = FungibleTokenState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
@@ -41,11 +42,11 @@ impl Contract for FungibleTokenContract {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
 
-        let mut total_supply = Amount::ZERO;
+        let mut total_supply = FungibleAmount::ZERO;
         for value in state.accounts.values() {
             total_supply.saturating_add_assign(*value);
         }
-        if total_supply == Amount::ZERO {
+        if total_supply == FungibleAmount::ZERO {
             panic!("The total supply is zero, therefore we cannot instantiate the contract");
         }
         self.state.initialize_accounts(state).await;
@@ -158,7 +159,12 @@ impl Contract for FungibleTokenContract {
 }
 
 impl FungibleTokenContract {
-    async fn claim(&mut self, source_account: Account, amount: Amount, target_account: Account) {
+    async fn claim(
+        &mut self,
+        source_account: Account,
+        amount: FungibleAmount,
+        target_account: Account,
+    ) {
         if source_account.chain_id == self.runtime.chain_id() {
             self.state.debit(source_account.owner, amount).await;
             self.finish_transfer_to_account(amount, target_account, source_account.owner)
@@ -179,7 +185,7 @@ impl FungibleTokenContract {
     /// Executes the final step of a transfer where the tokens are sent to the destination.
     async fn finish_transfer_to_account(
         &mut self,
-        amount: Amount,
+        amount: FungibleAmount,
         target_account: Account,
         source: AccountOwner,
     ) {

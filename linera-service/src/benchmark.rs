@@ -281,7 +281,7 @@ impl FungibleApp {
         let mutation = format!(
             "transfer(owner: {}, amount: \"{}\", targetAccount: {})",
             account_owner.to_value(),
-            amount_transfer,
+            amount_transfer.to_inner(),
             destination.to_value(),
         );
         self.0.mutate(mutation).await
