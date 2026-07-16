@@ -2556,6 +2556,10 @@ where
             !round.is_fast() || !block.has_oracle_responses(),
             WorkerError::FastBlockUsingOracles
         );
+        ensure!(
+            !round.is_fast() || !block.consumes_checkpoint_ack(),
+            WorkerError::FastBlockConsumingCheckpointAck
+        );
         let chain = &mut self.chain;
         // Don't save the changes since the block is not confirmed yet.
         chain.rollback();

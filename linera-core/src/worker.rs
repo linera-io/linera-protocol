@@ -400,6 +400,8 @@ pub enum WorkerError {
     InvalidLiteCertificate,
     #[error("Fast blocks cannot query oracles")]
     FastBlockUsingOracles,
+    #[error("Fast blocks cannot receive checkpoint acknowledgements")]
+    FastBlockConsumingCheckpointAck,
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
     /// Variant raised when the chain references these block hashes via a
@@ -454,6 +456,7 @@ impl WorkerError {
             | WorkerError::MissingCertificateValue
             | WorkerError::InvalidLiteCertificate
             | WorkerError::FastBlockUsingOracles
+            | WorkerError::FastBlockConsumingCheckpointAck
             | WorkerError::BlobsNotFound(_)
             | WorkerError::BlocksNotFound(_)
             | WorkerError::InvalidBlockProposal(_)

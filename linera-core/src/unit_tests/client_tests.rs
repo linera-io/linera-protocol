@@ -4521,6 +4521,58 @@ where
     Ok(())
 }
 
+/// A block that consumes a `CheckpointAck` must not use the fast round: the ack's
+/// bundle has no availability guarantee — no anchor tracks it, no checkpoint vouches
+/// for its block — so validators can legitimately disagree on whether they hold it,
+/// and a fast proposal cannot be re-proposed without it once it has collected confirm
+/// votes. The client proposes such blocks in a slower round instead.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[test_log::test(tokio::test)]
+async fn test_checkpoint_ack_skips_fast_round<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let mut producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let recipient_id = recipient.chain_id();
+
+    // The producer is a super owner proposing in the fast round.
+    producer.options_mut().allow_fast_blocks = true;
+    let owner = producer.identity().await?;
+    producer
+        .change_ownership(ChainOwnership::single_super(owner))
+        .await
+        .unwrap();
+    let certificate = producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(certificate.round, Round::Fast);
+
+    // The recipient consumes the transfer and checkpoints, acknowledging it.
+    recipient.synchronize_from_validators().await?;
+    recipient.process_inbox().await?;
+    recipient.checkpoint().await.unwrap().unwrap();
+
+    // Consuming the ack lands in the first multi-leader round, not the fast round.
+    producer.synchronize_from_validators().await?;
+    let (certificates, _) = producer.process_inbox().await?;
+    let certificate = certificates
+        .first()
+        .expect("the ack-consuming block is committed");
+    assert!(certificate.block().consumes_checkpoint_ack());
+    assert_eq!(certificate.round, Round::MultiLeader(0));
+
+    Ok(())
+}
+
 /// Verifies the push side of the checkpoint flow: a validator that missed the whole
 /// chain is brought up to speed by the proposing client pushing only the latest
 /// checkpoint plus the pre-checkpoint sender blocks it certifies, not every

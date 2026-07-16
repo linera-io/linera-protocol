@@ -2227,10 +2227,10 @@ impl<Env: Environment> ChainClient<Env> {
             return Ok(ClientOutcome::Committed(None)); // Nothing to do.
         };
 
-        let has_oracle_responses = block.has_oracle_responses();
+        let needs_slow_round = block.has_oracle_responses() || block.consumes_checkpoint_ack();
         let (proposed_block, outcome) = block.into_proposal();
         let round = match self
-            .round_for_new_proposal(&info, &owner, has_oracle_responses)
+            .round_for_new_proposal(&info, &owner, needs_slow_round)
             .await?
         {
             Either::Left(round) => round,
@@ -2398,20 +2398,23 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Returns a round in which we can propose a new block or the given one, if possible.
+    /// `needs_slow_round` indicates that the block itself is barred from the fast round —
+    /// it uses oracles or consumes a checkpoint acknowledgement.
     async fn round_for_new_proposal(
         &self,
         info: &ChainInfo,
         identity: &AccountOwner,
-        has_oracle_responses: bool,
+        needs_slow_round: bool,
     ) -> Result<Either<Round, RoundTimeout>, Error> {
         let manager = &info.manager;
         let seed = manager.seed;
         // If there is a conflicting proposal in the current round, we can only propose if the
         // next round can be started without a timeout, i.e. if we are in a multi-leader round.
-        // Similarly, we cannot propose a block that uses oracles in the fast round, and also
-        // skip the fast round if fast blocks are not allowed.
+        // Similarly, we cannot propose a block that uses oracles or receives a checkpoint
+        // acknowledgement in the fast round, and also skip the fast round if fast blocks are
+        // not allowed.
         let skip_fast = manager.current_round.is_fast()
-            && (has_oracle_responses || !self.options.allow_fast_blocks);
+            && (needs_slow_round || !self.options.allow_fast_blocks);
         let conflict = manager
             .requested_signed_proposal
             .as_ref()
