@@ -262,25 +262,20 @@ where
         Ok((*committee).clone())
     }
 
-    /// Filters bundles destined for this chain to drop ones already received and to refuse
-    /// ones whose epoch has been revoked on the admin chain.
+    /// Filters bundles destined for this chain to drop ones already received.
     ///
-    /// A revoked-epoch bundle is still accepted if (a) it has already been executed by
-    /// anticipation (`bundle.height <= last_anticipated_block_height`), or (b) a later
-    /// bundle in the same batch is in a still-trusted epoch — that bundle's certificate
-    /// transitively re-certifies all preceding ones via prev-hash chaining.
-    pub(crate) async fn select_message_bundles(
+    /// The bundles' epochs are irrelevant here: bundles come from this node's own
+    /// worker for the sender chain, which only accepts blocks it trusts — a block
+    /// from a revoked epoch only if a trusted block vouches for it.
+    pub(crate) fn select_message_bundles(
         &self,
         origin: &ChainId,
         next_height_to_receive: BlockHeight,
-        last_anticipated_block_height: Option<BlockHeight>,
         mut bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Vec<MessageBundle>, WorkerError> {
-        let recipient = self.chain_id();
         let mut latest_height = None;
         let mut skipped_len = 0;
-        let mut trusted_len = 0;
-        for (i, (epoch, bundle)) in bundles.iter().enumerate() {
+        for (i, (_, bundle)) in bundles.iter().enumerate() {
             ensure!(
                 latest_height <= Some(bundle.height),
                 WorkerError::InvalidCrossChainRequest
@@ -289,34 +284,19 @@ where
             if bundle.height < next_height_to_receive {
                 skipped_len = i + 1;
             }
-            let is_revoked = self.is_epoch_revoked(*epoch).await?;
-            if !is_revoked || Some(bundle.height) <= last_anticipated_block_height {
-                trusted_len = i + 1;
-            }
         }
         if skipped_len > 0 {
             let (_, sample_bundle) = &bundles[skipped_len - 1];
             debug!(
-                "Ignoring repeated messages to {recipient:.8} from {origin:} at height {}",
+                "Ignoring repeated messages to {:.8} from {origin:} at height {}",
+                self.chain_id(),
                 sample_bundle.height,
             );
         }
-        if skipped_len < bundles.len() && trusted_len < bundles.len() {
-            let (sample_epoch, sample_bundle) = &bundles[trusted_len];
-            warn!(
-                "Refusing messages to {recipient:.8} from {origin:} at height {} \
-                 because the epoch {} is not trusted any more",
-                sample_bundle.height, sample_epoch,
-            );
-        }
-        Ok(if skipped_len < trusted_len {
-            bundles
-                .drain(skipped_len..trusted_len)
-                .map(|(_, bundle)| bundle)
-                .collect()
-        } else {
-            vec![]
-        })
+        Ok(bundles
+            .drain(skipped_len..)
+            .map(|(_, bundle)| bundle)
+            .collect())
     }
 
     /// Returns whether the given epoch has been revoked on the admin chain,
@@ -1497,14 +1477,9 @@ where
         bundles: Vec<(Epoch, MessageBundle)>,
         sender_previous_height: Option<BlockHeight>,
     ) -> Result<CrossChainUpdateResult, WorkerError> {
-        // Only process certificates with relevant heights and epochs.
+        // Only process certificates with relevant heights.
         let mut inbox = self.chain.inboxes.try_load_entry_mut(&origin).await?;
         let next_height_to_receive = inbox.next_block_height_to_receive()?;
-        let last_anticipated_block_height = inbox
-            .removed_bundles
-            .back()
-            .await?
-            .map(|bundle| bundle.height);
 
         // Proactive gap detection: if the sender declares a predecessor height that
         // we haven't received yet, the inbox has a gap.
@@ -1533,14 +1508,7 @@ where
             }
         }
 
-        let bundles = self
-            .select_message_bundles(
-                &origin,
-                next_height_to_receive,
-                last_anticipated_block_height,
-                bundles,
-            )
-            .await?;
+        let bundles = self.select_message_bundles(&origin, next_height_to_receive, bundles)?;
         let Some(last_updated_height) = bundles.last().map(|bundle| bundle.height) else {
             return Ok(CrossChainUpdateResult::NothingToDo);
         };

@@ -3502,19 +3502,27 @@ where
             BlockHeight::from(1),
             user_chain.tip_state.get().next_block_height
         );
-        // The height-0 message has not reached the admin chain yet:
-        // `select_message_bundles` refuses a revoked-epoch bundle that arrives on
-        // its own. It is only accepted once a later bundle from a trusted epoch is
-        // in the same batch.
+        // The height-0 message reached the admin chain: the sender worker accepted
+        // the block through the trust mark, so its bundle is delivered even though
+        // its epoch is revoked.
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
-        assert!(admin_chain.inboxes.indices().await?.is_empty());
+        let inbox = admin_chain
+            .inboxes
+            .try_load_entry(&user_id)
+            .await?
+            .expect("admin chain should have an inbox for the user chain");
+        let first_bundle = inbox.added_bundles.front().await?;
+        assert_eq!(
+            first_bundle.map(|bundle| bundle.height),
+            Some(BlockHeight::ZERO),
+            "the re-certified height-0 message should have been delivered",
+        );
     }
 
     // The migration block at height 1 is also vouched for (as the height-2 block's
     // parent), so it is accepted despite its revoked epoch. With the chain tip then
     // at height 2, re-sending the height-2 block executes it, which schedules its
-    // message: the outbox batch now pairs the revoked-epoch bundle with the epoch-1
-    // bundle behind it, and the admin chain accepts both.
+    // message behind the height-0 one; the admin chain accepts it as well.
     env.worker()
         .fully_handle_certificate_with_notifications(cert_mid.clone(), &())
         .await?;
@@ -3535,11 +3543,11 @@ where
             .try_load_entry(&user_id)
             .await?
             .expect("admin chain should have an inbox for the user chain");
-        let first_bundle = inbox.added_bundles.front().await?;
+        let last_bundle = inbox.added_bundles.back().await?;
         assert_eq!(
-            first_bundle.map(|bundle| bundle.height),
-            Some(BlockHeight::ZERO),
-            "the re-certified height-0 message should have been delivered",
+            last_bundle.map(|bundle| bundle.height),
+            Some(BlockHeight::from(2)),
+            "the height-2 message should have been delivered behind the height-0 one",
         );
     }
 
@@ -3693,8 +3701,9 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let chain_1 = env
         .add_root_chain(1, AccountOwner::CHAIN, Amount::ZERO)
         .await;
-    // Mark epoch 0 as revoked so the helper rejects bundles signed by it,
-    // unless they're re-certified by a later trusted-epoch bundle.
+    // Mark epoch 0 as revoked. The helper must deliver its bundles anyway: they
+    // come from the local worker for the sender chain, which only accepts blocks
+    // it trusts.
     env.worker()
         .storage_client()
         .write_events([(
@@ -3803,19 +3812,25 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     }
 
     let worker = env.worker();
-    // Bundles from a revoked epoch are rejected.
+    // Bundles are delivered regardless of their epoch's revocation.
     assert_eq!(
         worker
-            .select_message_bundles(id1, &id0, BlockHeight::ZERO, None, bundles01.clone())
+            .select_message_bundles(id1, &id0, BlockHeight::ZERO, bundles0123.clone())
             .await?,
-        vec![]
+        without_epochs(&bundles0123)
     );
     // Already-received bundles are skipped, regardless of epoch.
     assert_eq!(
         worker
-            .select_message_bundles(id1, &id0, BlockHeight::from(2), None, bundles01.clone())
+            .select_message_bundles(id1, &id0, BlockHeight::from(2), bundles01.clone())
             .await?,
         vec![]
+    );
+    assert_eq!(
+        worker
+            .select_message_bundles(id1, &id0, BlockHeight::from(1), bundles012.clone())
+            .await?,
+        without_epochs(bundles1.iter().chain(&bundles2))
     );
     // Order of certificates is checked.
     assert_matches!(
@@ -3824,7 +3839,6 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
                 id1,
                 &id0,
                 BlockHeight::ZERO,
-                None,
                 bundles1
                     .iter()
                     .cloned()
@@ -3833,49 +3847,6 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             )
             .await,
         Err(WorkerError::InvalidCrossChainRequest)
-    );
-
-    // A later bundle in a still-trusted epoch re-certifies preceding revoked-epoch
-    // bundles via prev-hash chaining, but a trailing revoked-epoch bundle (heights 3+)
-    // beyond the trusted one is dropped.
-    assert_eq!(
-        worker
-            .select_message_bundles(id1, &id0, BlockHeight::ZERO, None, bundles0123.clone())
-            .await?,
-        without_epochs(&bundles012)
-    );
-    // Skipping bundle 0 still works with re-certification across epochs.
-    assert_eq!(
-        worker
-            .select_message_bundles(id1, &id0, BlockHeight::from(1), None, bundles012.clone())
-            .await?,
-        without_epochs(bundles1.iter().chain(&bundles2))
-    );
-    // Anticipation: bundles up to `last_anticipated_block_height` are accepted even
-    // from a revoked epoch.
-    assert_eq!(
-        worker
-            .select_message_bundles(
-                id1,
-                &id0,
-                BlockHeight::from(1),
-                Some(BlockHeight::from(1)),
-                bundles01.clone()
-            )
-            .await?,
-        without_epochs(&bundles1)
-    );
-    assert_eq!(
-        worker
-            .select_message_bundles(
-                id1,
-                &id0,
-                BlockHeight::ZERO,
-                Some(BlockHeight::from(1)),
-                bundles01.clone()
-            )
-            .await?,
-        without_epochs(&bundles01)
     );
     Ok(())
 }

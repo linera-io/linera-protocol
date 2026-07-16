@@ -1588,19 +1588,11 @@ where
         recipient: ChainId,
         origin: &ChainId,
         next_height_to_receive: BlockHeight,
-        last_anticipated_block_height: Option<BlockHeight>,
         bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Vec<MessageBundle>, WorkerError> {
         let state = self.get_or_create_chain_worker(recipient).await?;
         let guard = handle::read_lock(&state).await?;
-        guard
-            .select_message_bundles(
-                origin,
-                next_height_to_receive,
-                last_anticipated_block_height,
-                bundles,
-            )
-            .await
+        guard.select_message_bundles(origin, next_height_to_receive, bundles)
     }
 
     /// Test helper that runs `ChainWorkerState::reset_and_reexecute_chain` for the given
