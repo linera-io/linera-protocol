@@ -1636,6 +1636,7 @@ Pushes the current chain state from local storage to a validator node, ensuring 
 
 * `--chains <CHAINS>` — Chain IDs to synchronize (defaults to all chains in wallet)
 * `--check-online` — Verify validator is online before syncing
+* `--public-key <PUBLIC_KEY>` — Public key of the validator, used to verify its responses. Defaults to the key registered for this network address in the current committee; required if the validator is not (yet) a committee member
 
 
 
