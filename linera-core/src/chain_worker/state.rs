@@ -34,7 +34,7 @@ use linera_chain::{
         ValidatedBlockCertificate,
     },
     BlockExecutionPhase, ChainError, ChainExecutionContext, ChainIdSet, ChainStateView,
-    ChainTipState, ExecutionResultExt as _, StreamCounts,
+    ChainTipState, ConflictingCertifiedBlocks, ExecutionResultExt as _, StreamCounts,
 };
 use linera_execution::{
     system::{EpochEventData, EventSubscriptions, EPOCH_STREAM_NAME},
@@ -262,25 +262,20 @@ where
         Ok((*committee).clone())
     }
 
-    /// Filters bundles destined for this chain to drop ones already received and to refuse
-    /// ones whose epoch has been revoked on the admin chain.
+    /// Filters bundles destined for this chain to drop ones already received.
     ///
-    /// A revoked-epoch bundle is still accepted if (a) it has already been executed by
-    /// anticipation (`bundle.height <= last_anticipated_block_height`), or (b) a later
-    /// bundle in the same batch is in a still-trusted epoch — that bundle's certificate
-    /// transitively re-certifies all preceding ones via prev-hash chaining.
-    pub(crate) async fn select_message_bundles(
+    /// The bundles' epochs are irrelevant here: bundles come from this node's own
+    /// worker for the sender chain, which only accepts blocks it trusts — a block
+    /// from a revoked epoch only if a trusted block vouches for it.
+    pub(crate) fn select_message_bundles(
         &self,
         origin: &ChainId,
         next_height_to_receive: BlockHeight,
-        last_anticipated_block_height: Option<BlockHeight>,
         mut bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Vec<MessageBundle>, WorkerError> {
-        let recipient = self.chain_id();
         let mut latest_height = None;
         let mut skipped_len = 0;
-        let mut trusted_len = 0;
-        for (i, (epoch, bundle)) in bundles.iter().enumerate() {
+        for (i, (_, bundle)) in bundles.iter().enumerate() {
             ensure!(
                 latest_height <= Some(bundle.height),
                 WorkerError::InvalidCrossChainRequest
@@ -289,42 +284,29 @@ where
             if bundle.height < next_height_to_receive {
                 skipped_len = i + 1;
             }
-            let is_revoked = self
-                .storage
-                .is_epoch_revoked(*epoch)
-                .await
-                .map_err(|error| {
-                    WorkerError::ChainError(Box::new(ChainError::ExecutionError(
-                        Box::new(error),
-                        ChainExecutionContext::Block,
-                    )))
-                })?;
-            if !is_revoked || Some(bundle.height) <= last_anticipated_block_height {
-                trusted_len = i + 1;
-            }
         }
         if skipped_len > 0 {
             let (_, sample_bundle) = &bundles[skipped_len - 1];
             debug!(
-                "Ignoring repeated messages to {recipient:.8} from {origin:} at height {}",
+                "Ignoring repeated messages to {:.8} from {origin:} at height {}",
+                self.chain_id(),
                 sample_bundle.height,
             );
         }
-        if skipped_len < bundles.len() && trusted_len < bundles.len() {
-            let (sample_epoch, sample_bundle) = &bundles[trusted_len];
-            warn!(
-                "Refusing messages to {recipient:.8} from {origin:} at height {} \
-                 because the epoch {} is not trusted any more",
-                sample_bundle.height, sample_epoch,
-            );
-        }
-        Ok(if skipped_len < trusted_len {
-            bundles
-                .drain(skipped_len..trusted_len)
-                .map(|(_, bundle)| bundle)
-                .collect()
-        } else {
-            vec![]
+        Ok(bundles
+            .drain(skipped_len..)
+            .map(|(_, bundle)| bundle)
+            .collect())
+    }
+
+    /// Returns whether the given epoch has been revoked on the admin chain,
+    /// mapping any storage error to a [`WorkerError`].
+    async fn is_epoch_revoked(&self, epoch: Epoch) -> Result<bool, WorkerError> {
+        self.storage.is_epoch_revoked(epoch).await.map_err(|error| {
+            WorkerError::ChainError(Box::new(ChainError::ExecutionError(
+                Box::new(error),
+                ChainExecutionContext::Block,
+            )))
         })
     }
 
@@ -332,47 +314,23 @@ where
     /// its block.
     ///
     /// A certificate from a revoked epoch no longer proves anything by itself: the
-    /// committee that signed it is not trusted any more. Such a block is only
-    /// accepted if it is transitively re-certified by a block we accepted while its
-    /// epoch was still trusted — either the block itself is already in
-    /// `block_hashes`, or an accepted child block commits to it via its
-    /// `previous_block_hash`.
+    /// committee that signed it is not trusted any more. The caller must in that
+    /// case additionally have a trust mark for the block, or a prior acceptance of
+    /// it, to accept it.
     async fn ensure_epoch_trusted(
         &self,
         certificate: &ConfirmedBlockCertificate,
     ) -> Result<(), WorkerError> {
         let header = &certificate.block().header;
-        let is_revoked = self
-            .storage
-            .is_epoch_revoked(header.epoch)
-            .await
-            .map_err(|error| {
-                WorkerError::ChainError(Box::new(ChainError::ExecutionError(
-                    Box::new(error),
-                    ChainExecutionContext::Block,
-                )))
-            })?;
-        if !is_revoked {
-            return Ok(());
+        let is_revoked = self.is_epoch_revoked(header.epoch).await?;
+        if is_revoked {
+            return Err(WorkerError::EpochRevoked {
+                chain_id: header.chain_id,
+                epoch: header.epoch,
+                height: header.height,
+            });
         }
-        let block_hash = certificate.hash();
-        if self.chain.block_hashes.get(&header.height).await? == Some(block_hash) {
-            return Ok(());
-        }
-        let child_height = header.height.try_add_one()?;
-        if let Some(child_hash) = self.chain.block_hashes.get(&child_height).await? {
-            let child = self.storage.read_confirmed_block(child_hash).await?;
-            if child
-                .is_some_and(|child| child.block().header.previous_block_hash == Some(block_hash))
-            {
-                return Ok(());
-            }
-        }
-        Err(WorkerError::EpochRevoked {
-            chain_id: header.chain_id,
-            epoch: header.epoch,
-            height: header.height,
-        })
+        Ok(())
     }
 
     /// Ensures that this worker may still create signatures for blocks in the given
@@ -384,16 +342,7 @@ where
         epoch: Epoch,
         height: BlockHeight,
     ) -> Result<(), WorkerError> {
-        let is_revoked = self
-            .storage
-            .is_epoch_revoked(epoch)
-            .await
-            .map_err(|error| {
-                WorkerError::ChainError(Box::new(ChainError::ExecutionError(
-                    Box::new(error),
-                    ChainExecutionContext::Block,
-                )))
-            })?;
+        let is_revoked = self.is_epoch_revoked(epoch).await?;
         ensure!(
             !is_revoked,
             WorkerError::VoteInRevokedEpoch {
@@ -1021,20 +970,17 @@ where
         let height = block.header.height;
         let chain_id = block.header.chain_id;
 
-        // Trust-mark accept path: an earlier checkpoint cert recorded this block's
-        // hash in `pre_checkpoint_block_trust`. Removing the trust mark here is
+        // Trust-mark accept path: a checkpoint cert or an accepted block's
+        // `previous_block_hash` / `previous_message_blocks` links recorded this
+        // block's hash in `vouched_blocks`. Removing the trust mark here is
         // only an in-memory change; if anything below fails before `save`, the
         // mark survives on the next reload. The dispatch's `gap` definition
         // (`!=` rather than `<`) routes both above-tip and below-tip trust
         // uploads to `preprocess_certified_block` so the chain can write the
         // cert without advancing the tip.
-        let in_trust_set = self
-            .chain
-            .pre_checkpoint_block_trust
-            .contains(&block_hash)
-            .await?;
+        let in_trust_set = self.chain.vouched_blocks.contains(&block_hash).await?;
         if in_trust_set {
-            self.chain.pre_checkpoint_block_trust.remove(&block_hash)?;
+            self.chain.vouched_blocks.remove(&block_hash)?;
         }
 
         // Check if we already processed this block.
@@ -1053,12 +999,35 @@ where
         // We haven't processed the block - verify the certificate first.
         let committee = self.committee_for_epoch(block.header.epoch).await?;
         certificate.check(&committee)?;
+
+        // A chain has one certified block per height. Read the accepted hash at
+        // this height once: a *different* hash is proof that a committee
+        // equivocated — reject it before the certificate is written anywhere, so
+        // the conflicting certificate is never persisted; the *same* hash means we
+        // already accepted this block, which also satisfies the revoked-epoch
+        // trust requirement below.
+        let accepted_at_height = self.chain.block_hashes.get(&height).await?;
+        if let Some(existing_hash) = accepted_at_height {
+            if existing_hash != block_hash {
+                return Err(ConflictingCertifiedBlocks {
+                    chain_id,
+                    height,
+                    existing_block: existing_hash,
+                    conflicting_block: block_hash,
+                    witness_block: block_hash,
+                }
+                .into_chain_error()
+                .into());
+            }
+        }
+
         // If the epoch has been revoked, the quorum signature alone is no longer a
-        // sufficient basis for trust: the block must also be vouched for by a block
-        // this worker already trusts — a checkpoint trust mark, an earlier
-        // acceptance of the same block, or an accepted child block that commits to
-        // it via `previous_block_hash`.
-        if !in_trust_set {
+        // sufficient basis for trust: the block must also be vouched for by data
+        // this worker already trusts — a `vouched_blocks` trust mark (written by a
+        // checkpoint cert or by an accepted block that commits to this one via
+        // `previous_block_hash`, `previous_message_blocks` or
+        // `previous_event_blocks`) or an earlier acceptance of the same block.
+        if !in_trust_set && accepted_at_height != Some(block_hash) {
             self.ensure_epoch_trusted(&certificate).await?;
         }
 
@@ -1229,7 +1198,7 @@ where
         }
         if !missing_blocks.is_empty() {
             for hash in &missing_blocks {
-                self.chain.pre_checkpoint_block_trust.insert(hash)?;
+                self.chain.vouched_blocks.insert(hash)?;
             }
             self.save().await?;
             return Err(WorkerError::BlocksNotFound(missing_blocks));
@@ -1503,14 +1472,9 @@ where
         bundles: Vec<(Epoch, MessageBundle)>,
         sender_previous_height: Option<BlockHeight>,
     ) -> Result<CrossChainUpdateResult, WorkerError> {
-        // Only process certificates with relevant heights and epochs.
+        // Only process certificates with relevant heights.
         let mut inbox = self.chain.inboxes.try_load_entry_mut(&origin).await?;
         let next_height_to_receive = inbox.next_block_height_to_receive()?;
-        let last_anticipated_block_height = inbox
-            .removed_bundles
-            .back()
-            .await?
-            .map(|bundle| bundle.height);
 
         // Proactive gap detection: if the sender declares a predecessor height that
         // we haven't received yet, the inbox has a gap.
@@ -1539,14 +1503,7 @@ where
             }
         }
 
-        let bundles = self
-            .select_message_bundles(
-                &origin,
-                next_height_to_receive,
-                last_anticipated_block_height,
-                bundles,
-            )
-            .await?;
+        let bundles = self.select_message_bundles(&origin, next_height_to_receive, bundles)?;
         let Some(last_updated_height) = bundles.last().map(|bundle| bundle.height) else {
             return Ok(CrossChainUpdateResult::NothingToDo);
         };

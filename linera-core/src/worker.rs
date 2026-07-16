@@ -378,9 +378,10 @@ pub enum WorkerError {
     },
     /// The certificate's epoch has been revoked on the admin chain, so its
     /// signatures alone no longer prove anything, and no block this worker already
-    /// trusts vouches for the block. The client can recover by uploading the
-    /// block's descendants in decreasing height order: each accepted descendant
-    /// re-certifies its parent via `previous_block_hash`.
+    /// trusts vouches for the block. The client can recover by uploading blocks
+    /// that transitively commit to this one in decreasing height order: each
+    /// accepted block vouches for the blocks it references via
+    /// `previous_block_hash` and `previous_message_blocks`.
     #[error(
         "Cannot trust the certificate for block at height {height} on chain {chain_id}: \
         epoch {epoch} has been revoked and no trusted block vouches for the block"
@@ -429,11 +430,11 @@ pub enum WorkerError {
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
     /// Variant raised when the chain references these block hashes via a
-    /// verified-checkpoint trust mark (`pre_checkpoint_block_trust`) but the
-    /// actual content isn't in storage yet. The caller is expected to upload
-    /// each missing block via `handle_confirmed_certificate`; the trust-mark
-    /// accept path verifies the cert against its own (possibly revoked)
-    /// epoch's committee and writes it through.
+    /// trust mark (`vouched_blocks`) but the actual content isn't in storage
+    /// yet. The caller is expected to upload each missing block via
+    /// `handle_confirmed_certificate`; the trust-mark accept path verifies the
+    /// cert against its own (possibly revoked) epoch's committee and writes it
+    /// through.
     #[error("Blocks not found: {0:?}")]
     BlocksNotFound(Vec<CryptoHash>),
     #[error("Block hash at height {height} for chain {chain_id} not found")]
@@ -1587,19 +1588,11 @@ where
         recipient: ChainId,
         origin: &ChainId,
         next_height_to_receive: BlockHeight,
-        last_anticipated_block_height: Option<BlockHeight>,
         bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Vec<MessageBundle>, WorkerError> {
         let state = self.get_or_create_chain_worker(recipient).await?;
         let guard = handle::read_lock(&state).await?;
-        guard
-            .select_message_bundles(
-                origin,
-                next_height_to_receive,
-                last_anticipated_block_height,
-                bundles,
-            )
-            .await
+        guard.select_message_bundles(origin, next_height_to_receive, bundles)
     }
 
     /// Test helper that runs `ChainWorkerState::reset_and_reexecute_chain` for the given

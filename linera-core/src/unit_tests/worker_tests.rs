@@ -3396,6 +3396,304 @@ where
     Ok(())
 }
 
+/// Tests that a revoked-epoch sender block is accepted when a later accepted block
+/// commits to it via `previous_message_blocks` — without the worker ever seeing the
+/// non-sender block in between. This is what lets a receiver's client re-certify a
+/// sender's old messages by downloading only the message-bearing blocks.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_revoked_epoch_block_vouched_via_previous_message_blocks<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut env =
+        TestEnvironment::new_with_amount(&mut storage_builder, false, false, Amount::ZERO).await?;
+    let mut signer = InMemorySigner::new(None);
+    let owner1 = signer.generate_new().into();
+    let chain_1_desc = env.add_root_chain(1, owner1, Amount::from_tokens(3)).await;
+    let committee = env.committee().clone();
+    let admin_chain_id = env.admin_chain_id();
+    let user_id = chain_1_desc.id();
+
+    // Height 0 (epoch 0): a transfer to the admin chain — the sender block that
+    // will later need re-certification.
+    let proposal_msg0 = make_first_block(user_id)
+        .with_simple_transfer(admin_chain_id, Amount::ONE)
+        .with_authenticated_owner(Some(owner1));
+    let cert_msg0 = env.execute_proposal(proposal_msg0, vec![]).await?;
+
+    // Have the admin chain create epoch 1.
+    let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
+    let blob_hash = committee_blob.id().hash;
+    env.write_blobs(std::slice::from_ref(&committee_blob))
+        .await?;
+    let proposal_create = make_first_block(admin_chain_id).with_operation(SystemOperation::Admin(
+        AdminOperation::CreateCommittee {
+            epoch: Epoch::from(1),
+            blob_hash,
+        },
+    ));
+    let cert_create = env.execute_proposal(proposal_create, vec![]).await?;
+
+    // Height 1 (epoch 0): the user chain migrates to epoch 1 without sending any
+    // message. Height 2 (epoch 1): another transfer to the admin chain, which
+    // commits to the height-0 block via `previous_message_blocks`.
+    let proposal_mid = make_child_block(&cert_msg0.clone().into_value())
+        .with_operation(SystemOperation::ProcessNewEpoch(Epoch::from(1)))
+        .with_authenticated_owner(Some(owner1));
+    let cert_mid = env.execute_proposal(proposal_mid, vec![]).await?;
+    let proposal_msg1 = make_child_block(&cert_mid.clone().into_value())
+        .with_epoch(1)
+        .with_simple_transfer(admin_chain_id, Amount::ONE)
+        .with_authenticated_owner(Some(owner1));
+    let cert_msg1 = env.execute_proposal(proposal_msg1, vec![]).await?;
+    assert_eq!(
+        cert_msg1.block().body.previous_message_blocks,
+        BTreeMap::from([(admin_chain_id, (cert_msg0.hash(), BlockHeight::ZERO))]),
+    );
+
+    // Retire epoch 0.
+    let proposal_revoke = make_child_block(&cert_create.clone().into_value())
+        .with_epoch(1)
+        .with_operation(SystemOperation::Admin(AdminOperation::RemoveCommittee {
+            epoch: Epoch::ZERO,
+        }));
+    let cert_revoke = env.execute_proposal(proposal_revoke, vec![]).await?;
+    env.worker()
+        .fully_handle_certificate_with_notifications(cert_create.clone(), &())
+        .await?;
+    env.worker()
+        .fully_handle_certificate_with_notifications(cert_revoke.clone(), &())
+        .await?;
+
+    // The height-0 block is rejected: its epoch is revoked and nothing vouches for
+    // it yet.
+    let error = env
+        .worker()
+        .fully_handle_certificate_with_notifications(cert_msg0.clone(), &())
+        .await
+        .unwrap_err();
+    assert_matches!(
+        error,
+        WorkerError::EpochRevoked {
+            epoch: Epoch::ZERO,
+            ..
+        }
+    );
+
+    // Preprocessing the epoch-1 sender block at height 2 vouches for the height-0
+    // block via `previous_message_blocks` (and for its parent at height 1 via
+    // `previous_block_hash`). The height-0 block is then accepted and executes —
+    // the worker never saw the non-sender block at height 1.
+    env.worker()
+        .fully_handle_certificate_with_notifications(cert_msg1.clone(), &())
+        .await?;
+    env.worker()
+        .fully_handle_certificate_with_notifications(cert_msg0.clone(), &())
+        .await?;
+
+    {
+        let user_chain = env.worker().chain_state_view(user_id).await?;
+        assert_eq!(
+            BlockHeight::from(1),
+            user_chain.tip_state.get().next_block_height
+        );
+        // The height-0 message reached the admin chain: the sender worker accepted
+        // the block through the trust mark, so its bundle is delivered even though
+        // its epoch is revoked.
+        let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
+        let inbox = admin_chain
+            .inboxes
+            .try_load_entry(&user_id)
+            .await?
+            .expect("admin chain should have an inbox for the user chain");
+        let first_bundle = inbox.added_bundles.front().await?;
+        assert_eq!(
+            first_bundle.map(|bundle| bundle.height),
+            Some(BlockHeight::ZERO),
+            "the re-certified height-0 message should have been delivered",
+        );
+    }
+
+    // The migration block at height 1 is also vouched for (as the height-2 block's
+    // parent), so it is accepted despite its revoked epoch. With the chain tip then
+    // at height 2, re-sending the height-2 block executes it, which schedules its
+    // message behind the height-0 one; the admin chain accepts it as well.
+    env.worker()
+        .fully_handle_certificate_with_notifications(cert_mid.clone(), &())
+        .await?;
+    env.worker()
+        .fully_handle_certificate_with_notifications(cert_msg1.clone(), &())
+        .await?;
+    {
+        let user_chain = env.worker().chain_state_view(user_id).await?;
+        assert_eq!(
+            BlockHeight::from(3),
+            user_chain.tip_state.get().next_block_height
+        );
+        // All trust marks have been consumed.
+        assert!(user_chain.vouched_blocks.indices().await?.is_empty());
+        let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
+        let inbox = admin_chain
+            .inboxes
+            .try_load_entry(&user_id)
+            .await?
+            .expect("admin chain should have an inbox for the user chain");
+        let last_bundle = inbox.added_bundles.back().await?;
+        assert_eq!(
+            last_bundle.map(|bundle| bundle.height),
+            Some(BlockHeight::from(2)),
+            "the height-2 message should have been delivered behind the height-0 one",
+        );
+    }
+
+    Ok(())
+}
+
+/// Tests that a block committing to a different hash than the one already accepted
+/// at that height is rejected: two certified blocks at the same height prove that
+/// the height's committee equivocated, and neither the conflicting block nor the
+/// block vouching for it must be accepted.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_conflicting_certified_blocks_are_rejected<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let owner_pubkey = signer.generate_new();
+    let owner = AccountOwner::from(owner_pubkey);
+    let balance = Amount::from_tokens(5);
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    let chain_1_desc = env.add_root_chain(1, owner, balance).await;
+    let chain_2_desc = env.add_root_chain(2, owner, Amount::ZERO).await;
+    let user_id = chain_1_desc.id();
+    let target = Account::chain(chain_2_desc.id());
+
+    // Two conflicting certified blocks at height 0, and a child of the second one.
+    let cert_a = env
+        .make_transfer_certificate_for_epoch_unprocessable(
+            chain_1_desc.clone(),
+            owner_pubkey,
+            owner,
+            AccountOwner::CHAIN,
+            target,
+            Amount::ONE,
+            vec![],
+            Epoch::ZERO,
+            balance,
+            BTreeMap::new(),
+            vec![],
+        )
+        .await;
+    let cert_b = env
+        .make_transfer_certificate_for_epoch_unprocessable(
+            chain_1_desc.clone(),
+            owner_pubkey,
+            owner,
+            AccountOwner::CHAIN,
+            target,
+            Amount::from_tokens(2),
+            vec![],
+            Epoch::ZERO,
+            balance,
+            BTreeMap::new(),
+            vec![],
+        )
+        .await;
+    assert_ne!(cert_a.hash(), cert_b.hash());
+    let cert_child = env
+        .make_transfer_certificate_for_epoch_unprocessable(
+            chain_1_desc.clone(),
+            owner_pubkey,
+            owner,
+            AccountOwner::CHAIN,
+            target,
+            Amount::ONE,
+            vec![],
+            Epoch::ZERO,
+            balance,
+            BTreeMap::new(),
+            vec![&cert_b],
+        )
+        .await;
+
+    // Preprocess the first block at height 0, then a child of the *conflicting*
+    // block: the child's `previous_block_hash` commitment exposes the equivocation
+    // and the child is rejected instead of vouching for the conflicting block.
+    env.worker()
+        .handle_confirmed_certificate(cert_a.clone(), ProcessConfirmedBlockMode::Preprocess, None)
+        .await?;
+    let error = env
+        .worker()
+        .handle_confirmed_certificate(
+            cert_child.clone(),
+            ProcessConfirmedBlockMode::Preprocess,
+            None,
+        )
+        .await
+        .unwrap_err();
+    let conflict = match &error {
+        WorkerError::ChainError(chain_error) => match &**chain_error {
+            ChainError::ConflictingCertifiedBlocks(conflict) => conflict,
+            other => panic!("expected a conflicting-blocks error, got {other}"),
+        },
+        other => panic!("expected a conflicting-blocks error, got {other}"),
+    };
+    // The child commits to the conflicting height-0 block via its parent link, so
+    // it is the witness; the existing block is the one accepted at that height.
+    assert_eq!(conflict.existing_block, cert_a.hash());
+    assert_eq!(conflict.conflicting_block, cert_b.hash());
+    assert_eq!(conflict.witness_block, cert_child.hash());
+    assert_eq!(conflict.height, BlockHeight::ZERO);
+
+    // Nothing was vouched for, and the child was not accepted. (The view holds a
+    // read lock on the chain worker, so drop it before the next request.)
+    {
+        let user_chain = env.worker().chain_state_view(user_id).await?;
+        assert!(user_chain.vouched_blocks.indices().await?.is_empty());
+        assert_eq!(
+            user_chain.block_hashes.get(&BlockHeight::from(1)).await?,
+            None
+        );
+    }
+
+    // Pushing the conflicting height-0 block itself is rejected the same way, with
+    // the block as its own witness — and rejected before it is written anywhere.
+    let error = env
+        .worker()
+        .handle_confirmed_certificate(cert_b.clone(), ProcessConfirmedBlockMode::Preprocess, None)
+        .await
+        .unwrap_err();
+    let conflict = match &error {
+        WorkerError::ChainError(chain_error) => match &**chain_error {
+            ChainError::ConflictingCertifiedBlocks(conflict) => conflict,
+            other => panic!("expected a conflicting-blocks error, got {other}"),
+        },
+        other => panic!("expected a conflicting-blocks error, got {other}"),
+    };
+    assert_eq!(conflict.existing_block, cert_a.hash());
+    assert_eq!(conflict.conflicting_block, cert_b.hash());
+    assert_eq!(conflict.witness_block, cert_b.hash());
+    assert!(
+        !env.worker()
+            .storage
+            .contains_certificate(cert_b.hash())
+            .await?,
+        "the rejected conflicting certificate must not be persisted",
+    );
+
+    Ok(())
+}
+
 #[test(tokio::test)]
 async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let mut storage_builder = MemoryStorageBuilder::default();
@@ -3403,8 +3701,9 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let chain_1 = env
         .add_root_chain(1, AccountOwner::CHAIN, Amount::ZERO)
         .await;
-    // Mark epoch 0 as revoked so the helper rejects bundles signed by it,
-    // unless they're re-certified by a later trusted-epoch bundle.
+    // Mark epoch 0 as revoked. The helper must deliver its bundles anyway: they
+    // come from the local worker for the sender chain, which only accepts blocks
+    // it trusts.
     env.worker()
         .storage_client()
         .write_events([(
@@ -3513,19 +3812,25 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     }
 
     let worker = env.worker();
-    // Bundles from a revoked epoch are rejected.
+    // Bundles are delivered regardless of their epoch's revocation.
     assert_eq!(
         worker
-            .select_message_bundles(id1, &id0, BlockHeight::ZERO, None, bundles01.clone())
+            .select_message_bundles(id1, &id0, BlockHeight::ZERO, bundles0123.clone())
             .await?,
-        vec![]
+        without_epochs(&bundles0123)
     );
     // Already-received bundles are skipped, regardless of epoch.
     assert_eq!(
         worker
-            .select_message_bundles(id1, &id0, BlockHeight::from(2), None, bundles01.clone())
+            .select_message_bundles(id1, &id0, BlockHeight::from(2), bundles01.clone())
             .await?,
         vec![]
+    );
+    assert_eq!(
+        worker
+            .select_message_bundles(id1, &id0, BlockHeight::from(1), bundles012.clone())
+            .await?,
+        without_epochs(bundles1.iter().chain(&bundles2))
     );
     // Order of certificates is checked.
     assert_matches!(
@@ -3534,7 +3839,6 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
                 id1,
                 &id0,
                 BlockHeight::ZERO,
-                None,
                 bundles1
                     .iter()
                     .cloned()
@@ -3543,49 +3847,6 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             )
             .await,
         Err(WorkerError::InvalidCrossChainRequest)
-    );
-
-    // A later bundle in a still-trusted epoch re-certifies preceding revoked-epoch
-    // bundles via prev-hash chaining, but a trailing revoked-epoch bundle (heights 3+)
-    // beyond the trusted one is dropped.
-    assert_eq!(
-        worker
-            .select_message_bundles(id1, &id0, BlockHeight::ZERO, None, bundles0123.clone())
-            .await?,
-        without_epochs(&bundles012)
-    );
-    // Skipping bundle 0 still works with re-certification across epochs.
-    assert_eq!(
-        worker
-            .select_message_bundles(id1, &id0, BlockHeight::from(1), None, bundles012.clone())
-            .await?,
-        without_epochs(bundles1.iter().chain(&bundles2))
-    );
-    // Anticipation: bundles up to `last_anticipated_block_height` are accepted even
-    // from a revoked epoch.
-    assert_eq!(
-        worker
-            .select_message_bundles(
-                id1,
-                &id0,
-                BlockHeight::from(1),
-                Some(BlockHeight::from(1)),
-                bundles01.clone()
-            )
-            .await?,
-        without_epochs(&bundles1)
-    );
-    assert_eq!(
-        worker
-            .select_message_bundles(
-                id1,
-                &id0,
-                BlockHeight::ZERO,
-                Some(BlockHeight::from(1)),
-                bundles01.clone()
-            )
-            .await?,
-        without_epochs(&bundles01)
     );
     Ok(())
 }

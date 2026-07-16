@@ -428,15 +428,17 @@ type ChainStateExtendedView {
 	"""
 	latestCheckpointHeight: BlockHeight
 	"""
-	Hashes of pre-checkpoint sender blocks the chain has seen a checkpoint cert
-	vouch for via `outbox_block_hashes`, but whose actual cert bytes are not yet
-	in storage. The worker errors a checkpoint push with
-	`BlocksNotFound` when this set is non-empty, then accepts each
-	referenced cert (regardless of its own — possibly revoked — epoch) and
-	removes the entry. Once the set is empty, the checkpoint restoration can run
-	end-to-end.
+	Hashes of blocks that are vouched for by data this chain already trusts, but
+	have not been processed here yet. A hash is inserted when a trusted source
+	commits to it: a checkpoint cert's `outbox_block_hashes`, or an accepted
+	block's `previous_block_hash`, `previous_message_blocks` or
+	`previous_event_blocks` links (unless the referenced block is already in
+	`block_hashes`). The worker accepts a cert
+	whose hash is in this set regardless of its epoch — the epoch may be revoked,
+	but the hash commitment makes the block trustworthy — and removes the entry
+	upon acceptance.
 	"""
-	preCheckpointBlockTrust: SetView_CryptoHash_87fbb60c!
+	vouchedBlocks: SetView_CryptoHash_87fbb60c!
 	"""
 	The hash of the set of fully-tracked chains that `nonempty_outboxes` and
 	`outbox_counters` were last reconciled against. On a client these two indices only hold

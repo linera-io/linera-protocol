@@ -514,6 +514,24 @@ impl Block {
         CryptoHash::new(&self.header)
     }
 
+    /// Returns the heights and hashes of the blocks on the same chain that this block
+    /// commits to: its parent via `previous_block_hash`, the latest message block per
+    /// recipient via `previous_message_blocks` and the latest event block per stream
+    /// via `previous_event_blocks`. Accepting this block vouches for those blocks.
+    pub fn vouches_for(&self) -> impl Iterator<Item = (BlockHeight, CryptoHash)> + '_ {
+        let parent = self
+            .header
+            .previous_block_hash
+            .and_then(|hash| Some((self.header.height.try_sub_one().ok()?, hash)));
+        let referenced = self
+            .body
+            .previous_message_blocks
+            .values()
+            .chain(self.body.previous_event_blocks.values())
+            .map(|(hash, height)| (*height, *hash));
+        parent.into_iter().chain(referenced)
+    }
+
     /// Returns the bundles of messages sent via the given medium to the specified
     /// recipient. Messages originating from different transactions of the original block
     /// are kept in separate bundles. If the medium is a channel, does not verify that the

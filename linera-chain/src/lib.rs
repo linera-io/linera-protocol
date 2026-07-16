@@ -30,7 +30,7 @@ pub use chain::{BlockExecutionPhase, ChainIdSet, ChainStateView, ChainTipState, 
 use data_types::{MessageBundle, PostedMessage};
 use linera_base::{
     bcs,
-    crypto::CryptoError,
+    crypto::{CryptoError, CryptoHash},
     data_types::{ArithmeticError, BlockHeight, Epoch, Round, Timestamp},
     identifiers::{ApplicationId, ChainId},
 };
@@ -207,6 +207,53 @@ pub enum ChainError {
     NotTimedOutYet(Timestamp),
     #[error("Checkpoint precondition failed: {0}")]
     CheckpointPreconditionFailed(&'static str),
+    #[error(transparent)]
+    ConflictingCertifiedBlocks(Box<ConflictingCertifiedBlocks>),
+}
+
+/// The payload of [`ChainError::ConflictingCertifiedBlocks`]: a certified block
+/// asserts a different block at some height than the one already accepted there.
+/// Since a chain has one certified block per height, the two certificates
+/// together prove that a committee equivocated.
+#[derive(Error, Debug)]
+#[error(
+    "conflicting certified blocks at height {height} on chain {chain_id}: the certificate \
+     of block {witness_block} asserts {conflicting_block} at that height, but \
+     {existing_block} was already accepted — a committee equivocated"
+)]
+pub struct ConflictingCertifiedBlocks {
+    /// The chain with two conflicting certified blocks.
+    pub chain_id: ChainId,
+    /// The height at which the two blocks conflict.
+    pub height: BlockHeight,
+    /// The hash of the block already accepted at `height`.
+    pub existing_block: CryptoHash,
+    /// The conflicting hash asserted at `height` by `witness_block`'s certificate.
+    pub conflicting_block: CryptoHash,
+    /// The hash of the block whose certificate asserts `conflicting_block` at
+    /// `height`: the conflicting block itself, or an accepted block that commits
+    /// to it via `previous_block_hash` or `previous_message_blocks`. Its
+    /// certificate, together with `existing_block`'s, proves the fault.
+    pub witness_block: CryptoHash,
+}
+
+impl ConflictingCertifiedBlocks {
+    /// Logs the equivocation, counts it in the metrics and wraps it in a
+    /// [`ChainError`]. Every detected conflict should be reported through this
+    /// method so that none is missing from the metrics.
+    pub fn into_chain_error(self) -> ChainError {
+        tracing::error!(
+            chain_id = %self.chain_id,
+            height = %self.height,
+            existing_block = %self.existing_block,
+            conflicting_block = %self.conflicting_block,
+            witness_block = %self.witness_block,
+            "conflicting certified blocks at the same height: a committee equivocated",
+        );
+        #[cfg(with_metrics)]
+        crate::chain::metrics::NUM_CONFLICTING_CERTIFIED_BLOCKS.inc();
+        ChainError::ConflictingCertifiedBlocks(Box::new(self))
+    }
 }
 
 impl ChainError {
@@ -256,6 +303,7 @@ impl ChainError {
             | ChainError::RoundDoesNotTimeOut
             | ChainError::NotTimedOutYet(_)
             | ChainError::CheckpointPreconditionFailed(_)
+            | ChainError::ConflictingCertifiedBlocks(_)
             | ChainError::MissingCrossChainUpdate { .. } => false,
             ChainError::ViewError(_)
             | ChainError::UnexpectedMessage { .. }

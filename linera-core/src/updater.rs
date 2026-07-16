@@ -13,7 +13,7 @@ use std::{
 use futures::{future, Future, StreamExt};
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{ArithmeticError, BlockHeight, Epoch, Round, TimeDelta},
+    data_types::{BlockHeight, Epoch, Round, TimeDelta},
     ensure,
     identifiers::{BlobId, BlobType, ChainId, StreamId},
     time::{timer::timeout, Duration, Instant},
@@ -251,7 +251,8 @@ where
         // Certificates still to be sent, in reverse sending order: when the validator
         // rejects the top entry because its epoch is revoked, the descendants that
         // re-certify it are stacked on top of it, so every rejected block is preceded
-        // by the child vouching for it via `previous_block_hash`.
+        // by the blocks vouching for it — each one committing to the next via
+        // `previous_block_hash`, `previous_message_blocks` or `previous_event_blocks`.
         let mut stack = vec![certificate.clone()];
         let mut expanded = HashSet::new();
         loop {
@@ -893,9 +894,13 @@ where
     }
 
     /// Reads this chain's certificates from local storage, from `height + 1` up to
-    /// and including the first one from an epoch later than `epoch`. Returns `None`
-    /// if storage runs out of blocks before a later-epoch one is found — then the
-    /// vouching chain cannot be completed.
+    /// and including the first one from an epoch later than `epoch`. Heights we hold
+    /// no certificate for are skipped: on a sparsely stored chain, each held block is
+    /// committed to by the next-higher held one — via `previous_block_hash`,
+    /// `previous_message_blocks` or `previous_event_blocks` — so the validator can
+    /// still accept them in decreasing height order. Returns `None` if none of the
+    /// blocks we hold is from a later epoch — then the vouching chain cannot be
+    /// completed.
     async fn read_descendants_up_to_next_epoch(
         &self,
         chain_id: ChainId,
@@ -904,35 +909,31 @@ where
     ) -> Result<Option<Vec<CacheArc<ConfirmedBlockCertificate>>>, chain_client::Error> {
         let storage = self.client.local_node.storage_client();
         let batch_size = self.client.options().certificate_upload_batch_size as u64;
+        let end = self
+            .client
+            .local_node
+            .get_next_height_to_preprocess(chain_id)
+            .await?;
         let mut certificates = Vec::new();
         let mut next_height = height.try_add_one()?;
-        loop {
-            let heights = (0..batch_size)
-                .map(|offset| {
-                    u64::from(next_height)
-                        .checked_add(offset)
-                        .map(BlockHeight)
-                        .ok_or(ArithmeticError::Overflow)
-                })
-                .collect::<Result<Vec<_>, _>>()?;
+        while next_height < end {
+            let batch_end = u64::from(end).min(u64::from(next_height).saturating_add(batch_size));
+            let heights = (u64::from(next_height)..batch_end)
+                .map(BlockHeight)
+                .collect::<Vec<_>>();
             let batch = storage
                 .read_certificates_by_heights(chain_id, &heights)
-                .await?
-                .into_iter()
-                .map_while(|maybe_certificate| maybe_certificate)
-                .collect::<Vec<_>>();
-            if batch.is_empty() {
-                return Ok(None);
-            }
-            for certificate in batch {
+                .await?;
+            for certificate in batch.into_iter().flatten() {
                 let is_later_epoch = certificate.block().header.epoch > epoch;
                 certificates.push(certificate);
                 if is_later_epoch {
                     return Ok(Some(certificates));
                 }
-                next_height = next_height.try_add_one()?;
             }
+            next_height = BlockHeight(batch_end);
         }
+        Ok(None)
     }
 
     /// Reads certificates for the given heights from storage.

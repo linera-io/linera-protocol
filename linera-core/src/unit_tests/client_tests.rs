@@ -1657,6 +1657,12 @@ where
 /// the `ChainDescription` itself should never be downloaded either — not during
 /// the initial message processing, and not during a later re-sync that routes the
 /// sender through `retry_pending_cross_chain_requests_from_sender_chains`.
+///
+/// The first message block's epoch is revoked before the receiver processes
+/// anything, so the walk must also re-certify it: the epoch-1 message block is
+/// preprocessed first and vouches for the epoch-0 one via
+/// `previous_message_blocks`. Sparseness proves the recovery did not fall back to
+/// downloading contiguous descendants.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[test_log::test(tokio::test)]
@@ -1666,7 +1672,7 @@ where
 {
     let signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
-    let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
+    let admin = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
     let owner = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
     let receiver_id = receiver.chain_id();
@@ -1694,8 +1700,182 @@ where
         .await?;
     sender.set_preferred_owner(sender_public_key.into());
     sender.synchronize_from_validators().await?;
+    let validator = builder
+        .initial_committee
+        .validator_addresses()
+        .next()
+        .unwrap();
 
-    // Heights 0 and 2 are burns; heights 1 and 3 send to the receiver.
+    // Height 0 is a burn; height 1 sends to the receiver. Both are epoch-0 blocks.
+    let cert0 = sender
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    let cert1 = sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(receiver_id),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // Create epoch 1. The receiver learns about it from an admin-chain `NewBlock`
+    // notification — not via `synchronize_from_validators`, which would consume
+    // the received log and deliver the height-1 transfer prematurely — and
+    // migrates to epoch 1 so it can keep proposing after epoch 0 is revoked.
+    let create_cert = admin
+        .stage_new_committee(builder.initial_committee.clone())
+        .await
+        .unwrap_ok_committed();
+    receiver
+        .process_notification_from(
+            Notification {
+                chain_id: admin.chain_id(),
+                reason: Reason::NewBlock {
+                    height: create_cert.block().header.height,
+                    hash: create_cert.hash(),
+                },
+            },
+            validator,
+        )
+        .await;
+    receiver.process_inbox().await?;
+    assert_eq!(receiver.chain_info().await?.epoch, Epoch::from(1));
+
+    // Height 2 migrates the sender to epoch 1 without sending anything; height 3
+    // sends to the receiver again, committing to the height-1 block via
+    // `previous_message_blocks`.
+    sender.synchronize_from_validators().await?;
+    let (migration_certs, _) = sender.process_inbox().await?;
+    let cert2 = migration_certs.last().expect("migration block").clone();
+    assert_eq!(sender.chain_info().await?.epoch, Epoch::from(1));
+    let cert3 = sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(receiver_id),
+        )
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(
+        cert3.block().body.previous_message_blocks,
+        BTreeMap::from([(receiver_id, (cert1.hash(), cert1.block().header.height))]),
+    );
+
+    // Revoke epoch 0, and let the receiver learn about the revocation the same way.
+    let revoke_cert = admin.revoke_epochs(Epoch::ZERO).await.unwrap_ok_committed();
+    receiver
+        .process_notification_from(
+            Notification {
+                chain_id: admin.chain_id(),
+                reason: Reason::NewBlock {
+                    height: revoke_cert.block().header.height,
+                    hash: revoke_cert.hash(),
+                },
+            },
+            validator,
+        )
+        .await;
+    assert!(
+        receiver
+            .storage_client()
+            .is_epoch_revoked(Epoch::ZERO)
+            .await?,
+        "the receiver's local node should know that epoch 0 is revoked",
+    );
+
+    // Process the notification about the most recent incoming message. This walks
+    // back along `previous_message_blocks` and preprocesses only the sender blocks
+    // that sent to us (heights 1 and 3) — height 3 first, so that it vouches for
+    // the revoked-epoch block at height 1.
+    let notification = Notification {
+        chain_id: receiver_id,
+        reason: Reason::NewIncomingBundle {
+            origin: sender_id,
+            height: cert3.block().header.height,
+        },
+    };
+    receiver
+        .process_notification_from(notification, validator)
+        .await;
+    receiver.process_inbox().await?;
+
+    // Only the blocks that sent something to the receiver should be in local
+    // storage. The burn and migration blocks in between — and the sender's
+    // `ChainDescription` blob itself — should never have been downloaded. In
+    // particular, the revoked-epoch block at height 1 was accepted through the
+    // `previous_message_blocks` vouching, not by walking contiguous descendants
+    // (which would have downloaded the migration block at height 2).
+    let storage = receiver.storage_client();
+    assert!(!storage.contains_certificate(cert0.hash()).await?);
+    assert!(storage.contains_certificate(cert1.hash()).await?);
+    assert!(!storage.contains_certificate(cert2.hash()).await?);
+    assert!(storage.contains_certificate(cert3.hash()).await?);
+    assert!(
+        !storage.contains_blob(sender_chain_desc_blob_id).await?,
+        "preprocessing non-height-0 sender blocks must not download the ChainDescription",
+    );
+
+    // `process_notification_from` does not advance the client's
+    // `received_certificate_trackers`, so a subsequent `synchronize_from_validators`
+    // still sees (sender, 1) and (sender, 3) in the received log. But the sender's
+    // outbox has those heights scheduled locally now, so `find_received_certificates`
+    // filters them out and routes the sender through
+    // `retry_pending_cross_chain_requests_from_sender_chains`. Before the fix this
+    // initialized the sender's chain worker inside the receiver's node and, on
+    // failing to find the `ChainDescription` blob in storage, triggered a download.
+    receiver.synchronize_from_validators().await?;
+    assert!(
+        !storage.contains_blob(sender_chain_desc_blob_id).await?,
+        "retry_pending_cross_chain_requests must not download the ChainDescription",
+    );
+
+    Ok(())
+}
+
+/// A receiver holding a sender chain sparsely must be able to push the sender's
+/// revoked-epoch message blocks to a validator that has never seen the sender chain.
+///
+/// The sender's message blocks (heights 1 and 3) are in the revoked epoch 0; the
+/// receiver holds them plus the contiguous run from height 4 (migration) to the
+/// epoch-1 block at height 5 that re-certified them — but not the burns at heights 0
+/// and 2. When the receiver's proposal needs the lagging validator's vote, the
+/// client must upload the held blocks in decreasing height order, skipping the gaps:
+/// each held block vouches for the next older one via `previous_block_hash` or
+/// `previous_message_blocks`. The validator must then also deliver the revoked-epoch
+/// bundles to the receiver's inbox, since its own sender-chain worker accepted the
+/// blocks behind them.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[test_log::test(tokio::test)]
+async fn test_sparse_sender_chain_upload_to_lagging_validator<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let validator_0_key = builder.node(0).name();
+
+    let admin = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(6)).await?;
+    let receiver = builder.add_root_chain(2, Amount::from_tokens(2)).await?;
+    let receiver_id = receiver.chain_id();
+    let sender_id = sender.chain_id();
+
+    // The validator the receiver gets its notifications from — not the lagging one.
+    let (validator_key, validator_addr) = builder
+        .initial_committee
+        .validator_addresses()
+        .find(|(key, _)| *key != validator_0_key)
+        .map(|(key, addr)| (key, addr.to_owned()))
+        .expect("committee should have more than one validator");
+    let validator = (validator_key, validator_addr.as_str());
+
+    // Heights 0 and 2 are burns; heights 1 and 3 send to the receiver. All are
+    // epoch-0 blocks.
     let cert0 = sender
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
@@ -1720,53 +1900,152 @@ where
         )
         .await
         .unwrap_ok_committed();
+    assert_eq!(
+        cert3.block().body.previous_message_blocks,
+        BTreeMap::from([(receiver_id, (cert1.hash(), cert1.block().header.height))]),
+    );
 
-    // Process the notification about the most recent incoming message. This walks
-    // back along `previous_message_blocks` and preprocesses only the sender blocks
-    // that sent to us (heights 1 and 3).
-    let notification = Notification {
-        chain_id: receiver_id,
-        reason: Reason::NewIncomingBundle {
-            origin: sender_id,
-            height: cert3.block().header.height,
-        },
-    };
-    let validator = builder
-        .initial_committee
-        .validator_addresses()
-        .next()
-        .unwrap();
+    // Create epoch 1. The receiver learns about it from an admin-chain `NewBlock`
+    // notification — not via `synchronize_from_validators`, which would consume
+    // the received log and deliver the transfers prematurely — and migrates to
+    // epoch 1. Its burn then gives its chain an epoch-1 block, so pushing its own
+    // history to the lagging validator is not blocked by the revocation.
+    let create_cert = admin
+        .stage_new_committee(builder.initial_committee.clone())
+        .await
+        .unwrap_ok_committed();
     receiver
-        .process_notification_from(notification, validator)
+        .process_notification_from(
+            Notification {
+                chain_id: admin.chain_id(),
+                reason: Reason::NewBlock {
+                    height: create_cert.block().header.height,
+                    hash: create_cert.hash(),
+                },
+            },
+            validator,
+        )
         .await;
     receiver.process_inbox().await?;
+    assert_eq!(receiver.chain_info().await?.epoch, Epoch::from(1));
+    receiver
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
 
-    // Only the blocks that sent something to the receiver should be in local
-    // storage. The burn blocks in between — and the sender's `ChainDescription`
-    // blob itself — should never have been downloaded.
+    // Height 4 migrates the sender to epoch 1 without sending anything; the burn at
+    // height 5 is its first epoch-1 block.
+    sender.synchronize_from_validators().await?;
+    let (migration_certs, _) = sender.process_inbox().await?;
+    let cert4 = migration_certs.last().expect("migration block").clone();
+    let cert5 = sender
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(cert5.block().header.epoch, Epoch::from(1));
+
+    // Revoke epoch 0, and let the receiver learn about the revocation the same way.
+    let revoke_cert = admin.revoke_epochs(Epoch::ZERO).await.unwrap_ok_committed();
+    receiver
+        .process_notification_from(
+            Notification {
+                chain_id: admin.chain_id(),
+                reason: Reason::NewBlock {
+                    height: revoke_cert.block().header.height,
+                    hash: revoke_cert.hash(),
+                },
+            },
+            validator,
+        )
+        .await;
+
+    // Process the notification about the most recent incoming message. The walk
+    // along `previous_message_blocks` collects the revoked-epoch blocks at heights
+    // 3 and 1; re-certifying height 3 additionally downloads the contiguous run up
+    // to the epoch-1 block at height 5.
+    receiver
+        .process_notification_from(
+            Notification {
+                chain_id: receiver_id,
+                reason: Reason::NewIncomingBundle {
+                    origin: sender_id,
+                    height: cert3.block().header.height,
+                },
+            },
+            validator,
+        )
+        .await;
+
+    // The receiver's copy of the sender chain is sparse: the burns at heights 0
+    // and 2 were never downloaded.
     let storage = receiver.storage_client();
-    assert!(!storage.contains_certificate(cert0.hash()).await?);
-    assert!(storage.contains_certificate(cert1.hash()).await?);
-    assert!(!storage.contains_certificate(cert2.hash()).await?);
-    assert!(storage.contains_certificate(cert3.hash()).await?);
+    for (contained, cert) in [
+        (false, &cert0),
+        (true, &cert1),
+        (false, &cert2),
+        (true, &cert3),
+        (true, &cert4),
+        (true, &cert5),
+    ] {
+        assert_eq!(
+            storage.contains_certificate(cert.hash()).await?,
+            contained,
+            "unexpected sender block at height {} in the receiver's storage",
+            cert.block().header.height,
+        );
+    }
+
+    // Bring validator 0 back and push the admin chain to it, so that it knows
+    // epoch 0 is revoked before it ever sees any of the sender's blocks.
+    builder.set_fault_type([0], FaultType::Honest);
+    admin
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    let validator_0_storage = builder
+        .validator_storages
+        .get(&validator_0_key)
+        .expect("validator 0 storage")
+        .clone();
     assert!(
-        !storage.contains_blob(sender_chain_desc_blob_id).await?,
-        "preprocessing non-height-0 sender blocks must not download the ChainDescription",
+        validator_0_storage.is_epoch_revoked(Epoch::ZERO).await?,
+        "validator 0 must know epoch 0 is revoked",
+    );
+    assert!(
+        !validator_0_storage
+            .contains_certificate(cert1.hash())
+            .await?,
+        "validator 0 must not know the sender chain yet",
     );
 
-    // `process_notification_from` does not advance the client's
-    // `received_certificate_trackers`, so a subsequent `synchronize_from_validators`
-    // still sees (sender, 1) and (sender, 3) in the received log. But the sender's
-    // outbox has those heights scheduled locally now, so `find_received_certificates`
-    // filters them out and routes the sender through
-    // `retry_pending_cross_chain_requests_from_sender_chains`. Before the fix this
-    // initialized the sender's chain worker inside the receiver's node and, on
-    // failing to find the `ChainDescription` blob in storage, triggered a download.
-    receiver.synchronize_from_validators().await?;
-    assert!(
-        !storage.contains_blob(sender_chain_desc_blob_id).await?,
-        "retry_pending_cross_chain_requests must not download the ChainDescription",
+    // Take validator 1 offline: the quorum for the receiver's next block now needs
+    // validator 0, so the client must push the sparse sender chain to it.
+    builder.set_fault_type([1], FaultType::Offline);
+    let (certs, _) = receiver.process_inbox().await?;
+    assert_eq!(
+        certs.len(),
+        1,
+        "the receiver should have received both transfers"
     );
+
+    // The push was sparse, too: the burns at heights 0 and 2 were never uploaded.
+    for (contained, cert) in [
+        (false, &cert0),
+        (true, &cert1),
+        (false, &cert2),
+        (true, &cert3),
+        (true, &cert4),
+        (true, &cert5),
+    ] {
+        assert_eq!(
+            validator_0_storage
+                .contains_certificate(cert.hash())
+                .await?,
+            contained,
+            "unexpected sender block at height {} in validator 0's storage",
+            cert.block().header.height,
+        );
+    }
 
     Ok(())
 }
@@ -4614,16 +4893,20 @@ where
         "validator 0 must not have received the pre-checkpoint non-sender block",
     );
 
-    // The trust-mark flow consumed every entry: the validator's first attempt at
-    // the checkpoint errored with `BlocksNotFound`, the client uploaded the missing
-    // sender block (entering the trust-mark accept path on the worker, which
-    // removed the entry), and the second attempt restored the chain cleanly.
+    // The trust-mark flow consumed the checkpoint's `outbox_block_hashes` entry:
+    // the validator's first attempt at the checkpoint errored with
+    // `BlocksNotFound`, the client uploaded the missing sender block (entering the
+    // trust-mark accept path on the worker, which removed the entry), and the
+    // second attempt restored the chain cleanly. What remains is the mark for the
+    // checkpoint block's own parent (`burn_1`, which was never pushed): accepting
+    // the checkpoint vouched for it via `previous_block_hash`.
     {
         let chain_view = validator_0_storage.load_chain(chain_id).await?;
-        let trusted = chain_view.pre_checkpoint_block_trust.indices().await?;
-        assert!(
-            trusted.is_empty(),
-            "validator 0's trust set should be empty after the flow, was {trusted:?}",
+        let trusted = chain_view.vouched_blocks.indices().await?;
+        assert_eq!(
+            trusted,
+            vec![burn_1.hash()],
+            "validator 0's trust set should hold exactly the checkpoint's parent",
         );
         // The checkpoint restored the producer's epoch-1 execution state, which
         // includes the epoch migration. Validator 0's chain is now at epoch 1 —

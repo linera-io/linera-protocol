@@ -1208,17 +1208,28 @@ impl<Env: Environment> Client<Env> {
                 // Race the validators instead of trying them one by one: a slow or
                 // faulty validator must not stall the walk. A validator that
                 // returns nothing counts as a failure so the others take over.
-                let heights = &heights;
                 let downloaded = communicate_concurrently(
                     nodes,
                     async move |remote_node| {
+                        // Bound the batch by the validator's chain height: a request
+                        // including heights the validator doesn't have would fail as
+                        // a whole.
+                        let info = remote_node
+                            .handle_chain_info_query(ChainInfoQuery::new(chain_id))
+                            .await?;
+                        let batch_end = info
+                            .next_block_height
+                            .0
+                            .min(u64::from(next_height).saturating_add(batch_size));
+                        let heights = (u64::from(next_height)..batch_end)
+                            .map(BlockHeight)
+                            .collect::<Vec<_>>();
+                        if heights.is_empty() {
+                            return Err(NodeError::MissingCertificateValue);
+                        }
                         let downloaded = self
                             .requests_scheduler
-                            .download_certificates_by_heights(
-                                &remote_node,
-                                chain_id,
-                                heights.clone(),
-                            )
+                            .download_certificates_by_heights(&remote_node, chain_id, heights)
                             .await?;
                         if downloaded.is_empty() {
                             return Err(NodeError::MissingCertificateValue);
@@ -1260,6 +1271,10 @@ impl<Env: Environment> Client<Env> {
         // Process the descendants newest-first, so that each block is vouched for
         // by the one processed just before it.
         for certificate in certificates.iter().rev() {
+            tracing::warn!(
+                "DBG preprocess_descendants: processing {}",
+                certificate.block().header.height
+            );
             Box::pin(self.handle_certificate_with_retry(
                 certificate,
                 nodes,
@@ -2049,6 +2064,13 @@ impl<Env: Environment> Client<Env> {
                 .await?;
         }
 
+        // If the oldest block's epoch has been revoked, preprocess the collected run
+        // newest-first before the ascending processing below: each block vouches for
+        // the previous message block it commits to, which the local worker would
+        // otherwise reject.
+        self.recertify_if_epoch_revoked(&certificates, remote_node)
+            .await?;
+
         // Process certificates in ascending block height order (BTreeMap keeps them sorted).
         for certificate in certificates.into_values() {
             self.receive_sender_certificate(
@@ -2059,6 +2081,43 @@ impl<Env: Environment> Client<Env> {
             .await?;
         }
 
+        Ok(())
+    }
+
+    /// Preprocesses a sparsely collected run of blocks newest-first if the oldest one's
+    /// epoch has been revoked, so that the newer blocks vouch for the older ones.
+    ///
+    /// A revoked epoch's certificate alone doesn't convince the local worker. But
+    /// accepting a block marks the hashes it commits to in `previous_message_blocks` and
+    /// `previous_event_blocks` as vouched, so the block the oldest one was reached
+    /// through makes it acceptable despite its revoked epoch — without downloading the
+    /// intermediate blocks that sent no message and published no event. Epoch revocation
+    /// is monotone, so only the oldest block needs checking; if even the newest block's
+    /// epoch is revoked, the retry logic falls back to walking contiguous descendants.
+    async fn recertify_if_epoch_revoked(
+        &self,
+        certificates: &BTreeMap<BlockHeight, CacheArc<ConfirmedBlockCertificate>>,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
+    ) -> Result<(), chain_client::Error> {
+        let Some(oldest) = certificates.values().next() else {
+            return Ok(());
+        };
+        if !self
+            .storage_client()
+            .is_epoch_revoked(oldest.block().header.epoch)
+            .await
+            .map_err(LocalNodeError::from)?
+        {
+            return Ok(());
+        }
+        for certificate in certificates.values().rev() {
+            Box::pin(self.handle_certificate_with_retry(
+                certificate,
+                std::slice::from_ref(remote_node),
+                ProcessConfirmedBlockMode::Preprocess,
+            ))
+            .await?;
+        }
         Ok(())
     }
 
@@ -2144,6 +2203,13 @@ impl<Env: Environment> Client<Env> {
 
             certificates.insert(current_height, certificate);
         }
+
+        // If the oldest block's epoch has been revoked, preprocess the collected run
+        // newest-first before the ascending processing below: each block vouches for
+        // the previous event blocks it commits to, which the local worker would
+        // otherwise reject.
+        self.recertify_if_epoch_revoked(&certificates, remote_node)
+            .await?;
 
         // Process in ascending height order.
         for certificate in certificates.into_values() {
