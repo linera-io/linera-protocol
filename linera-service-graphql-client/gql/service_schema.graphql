@@ -785,6 +785,17 @@ type InboxStateView {
 	the inbox or the removed-by-anticipation queue.
 	"""
 	restoredCursor: Cursor!
+	"""
+	The lowest cursor at which the sender may still push a new bundle. Set when an
+	update's first bundle declares no predecessor: the sender's checkpoint settled
+	the lane below that bundle, so nothing below is re-pushable — a node that never
+	received those bundles can only learn of their consumption through this chain's
+	certified blocks. Below this cursor, consumptions that cannot be reconciled with
+	`added_bundles` are ignored instead of raising `UnexpectedBundle`, nothing is
+	anticipated, and re-deliveries are dropped. Bundles actually present in
+	`added_bundles` are unaffected: they still reconcile (or get skipped) normally.
+	"""
+	senderPrunedCursor: Cursor!
 }
 
 """
