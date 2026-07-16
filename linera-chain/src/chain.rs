@@ -93,10 +93,11 @@ pub(crate) mod metrics {
     use std::sync::LazyLock;
 
     use linera_base::prometheus_util::{
-        exponential_bucket_interval, register_histogram_vec, register_int_counter_vec,
+        exponential_bucket_interval, register_histogram_vec, register_int_counter,
+        register_int_counter_vec,
     };
     use linera_execution::ResourceTracker;
-    use prometheus::{HistogramVec, IntCounterVec};
+    use prometheus::{HistogramVec, IntCounter, IntCounterVec};
 
     pub static NUM_BLOCKS_EXECUTED: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
@@ -203,6 +204,14 @@ pub(crate) mod metrics {
             "Number of entries in the outbox_counters map (in-flight message heights)",
             &[],
             exponential_bucket_interval(1.0, 1_000_000.0),
+        )
+    });
+
+    pub static NUM_CONFLICTING_CERTIFIED_BLOCKS: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "num_conflicting_certified_blocks",
+            "Number of detected pairs of conflicting certified blocks, each proving that \
+             a committee equivocated",
         )
     });
 
@@ -1526,13 +1535,11 @@ where
         Ok(updated_streams)
     }
 
-    /// Records the block references an accepted block commits to — its parent via
-    /// `previous_block_hash`, the latest message block per recipient via
-    /// `previous_message_blocks` and the latest event block per stream via
-    /// `previous_event_blocks` — in `vouched_blocks`, unless the referenced block
-    /// is already in `block_hashes`. The accepted block is trusted, so these hash
-    /// commitments remain a sufficient basis for accepting the referenced blocks
-    /// even after the epochs that certified them are revoked.
+    /// Records the blocks an accepted block commits to ([`Block::vouches_for`]) in
+    /// `vouched_blocks`, unless the referenced block is already in `block_hashes`.
+    /// The accepted block is trusted, so these hash commitments remain a sufficient
+    /// basis for accepting the referenced blocks even after the epochs that
+    /// certified them are revoked.
     ///
     /// A chain has one certified block per height, so a block committing to a
     /// different hash than the one already accepted at that height is evidence of
@@ -1541,19 +1548,7 @@ where
     /// [`ChainError::ConflictingCertifiedBlocks`], which names the certificate
     /// pair that proves the fault.
     async fn vouch_for_block_references(&mut self, block: &Block) -> Result<(), ChainError> {
-        let block_hash = block.hash();
-        let mut references = Vec::new();
-        if let Some(parent_hash) = block.header.previous_block_hash {
-            references.push((block.header.height.try_sub_one()?, parent_hash));
-        }
-        for (hash, height) in block
-            .body
-            .previous_message_blocks
-            .values()
-            .chain(block.body.previous_event_blocks.values())
-        {
-            references.push((*height, *hash));
-        }
+        let references = block.vouches_for().collect::<Vec<_>>();
         let known_hashes = self
             .block_hashes
             .multi_get(references.iter().map(|(height, _)| height))
@@ -1563,38 +1558,18 @@ where
                 Some(known_hash) if known_hash == hash => {}
                 None => self.vouched_blocks.insert(&hash)?,
                 Some(known_hash) => {
-                    return Err(self.conflicting_blocks_error(height, known_hash, hash, block_hash));
+                    return Err(ConflictingCertifiedBlocks {
+                        chain_id: self.chain_id(),
+                        height,
+                        existing_block: known_hash,
+                        conflicting_block: hash,
+                        witness_block: block.hash(),
+                    }
+                    .into_chain_error());
                 }
             }
         }
         Ok(())
-    }
-
-    /// Builds a [`ChainError::ConflictingCertifiedBlocks`] error and logs the
-    /// conflict: a certified block asserting a different block at `height` than
-    /// the one already accepted is proof that a committee equivocated.
-    fn conflicting_blocks_error(
-        &self,
-        height: BlockHeight,
-        existing_block: CryptoHash,
-        conflicting_block: CryptoHash,
-        witness_block: CryptoHash,
-    ) -> ChainError {
-        tracing::error!(
-            chain_id = %self.chain_id(),
-            %height,
-            %existing_block,
-            %conflicting_block,
-            %witness_block,
-            "conflicting certified blocks at the same height: a committee equivocated",
-        );
-        ChainError::ConflictingCertifiedBlocks(Box::new(ConflictingCertifiedBlocks {
-            chain_id: self.chain_id(),
-            height,
-            existing_block,
-            conflicting_block,
-            witness_block,
-        }))
     }
 
     /// Adds a block to `block_hashes` as preprocessed, and updates the outboxes where possible.

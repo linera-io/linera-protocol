@@ -2064,6 +2064,10 @@ impl<Env: Environment> Client<Env> {
                 .await?;
         }
 
+        // If the oldest block's epoch has been revoked, preprocess the collected run
+        // newest-first before the ascending processing below: each block vouches for
+        // the previous message block it commits to, which the local worker would
+        // otherwise reject.
         self.recertify_if_epoch_revoked(&certificates, remote_node)
             .await?;
 
@@ -2200,6 +2204,10 @@ impl<Env: Environment> Client<Env> {
             certificates.insert(current_height, certificate);
         }
 
+        // If the oldest block's epoch has been revoked, preprocess the collected run
+        // newest-first before the ascending processing below: each block vouches for
+        // the previous event blocks it commits to, which the local worker would
+        // otherwise reject.
         self.recertify_if_epoch_revoked(&certificates, remote_node)
             .await?;
 

@@ -237,6 +237,25 @@ pub struct ConflictingCertifiedBlocks {
     pub witness_block: CryptoHash,
 }
 
+impl ConflictingCertifiedBlocks {
+    /// Logs the equivocation, counts it in the metrics and wraps it in a
+    /// [`ChainError`]. Every detected conflict should be reported through this
+    /// method so that none is missing from the metrics.
+    pub fn into_chain_error(self) -> ChainError {
+        tracing::error!(
+            chain_id = %self.chain_id,
+            height = %self.height,
+            existing_block = %self.existing_block,
+            conflicting_block = %self.conflicting_block,
+            witness_block = %self.witness_block,
+            "conflicting certified blocks at the same height: a committee equivocated",
+        );
+        #[cfg(with_metrics)]
+        crate::chain::metrics::NUM_CONFLICTING_CERTIFIED_BLOCKS.inc();
+        ChainError::ConflictingCertifiedBlocks(Box::new(self))
+    }
+}
+
 impl ChainError {
     /// Returns whether this error is caused by an issue in the local node.
     ///

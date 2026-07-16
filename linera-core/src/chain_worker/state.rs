@@ -1009,19 +1009,14 @@ where
         let accepted_at_height = self.chain.block_hashes.get(&height).await?;
         if let Some(existing_hash) = accepted_at_height {
             if existing_hash != block_hash {
-                tracing::error!(
-                    %chain_id, %height, %existing_hash, conflicting_block = %block_hash,
-                    "conflicting certified blocks at the same height: a committee equivocated",
-                );
-                return Err(ChainError::ConflictingCertifiedBlocks(Box::new(
-                    ConflictingCertifiedBlocks {
-                        chain_id,
-                        height,
-                        existing_block: existing_hash,
-                        conflicting_block: block_hash,
-                        witness_block: block_hash,
-                    },
-                ))
+                return Err(ConflictingCertifiedBlocks {
+                    chain_id,
+                    height,
+                    existing_block: existing_hash,
+                    conflicting_block: block_hash,
+                    witness_block: block_hash,
+                }
+                .into_chain_error()
                 .into());
             }
         }
