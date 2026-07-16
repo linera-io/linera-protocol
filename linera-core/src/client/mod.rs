@@ -1208,17 +1208,28 @@ impl<Env: Environment> Client<Env> {
                 // Race the validators instead of trying them one by one: a slow or
                 // faulty validator must not stall the walk. A validator that
                 // returns nothing counts as a failure so the others take over.
-                let heights = &heights;
                 let downloaded = communicate_concurrently(
                     nodes,
                     async move |remote_node| {
+                        // Bound the batch by the validator's chain height: a request
+                        // including heights the validator doesn't have would fail as
+                        // a whole.
+                        let info = remote_node
+                            .handle_chain_info_query(ChainInfoQuery::new(chain_id))
+                            .await?;
+                        let batch_end = info
+                            .next_block_height
+                            .0
+                            .min(u64::from(next_height).saturating_add(batch_size));
+                        let heights = (u64::from(next_height)..batch_end)
+                            .map(BlockHeight)
+                            .collect::<Vec<_>>();
+                        if heights.is_empty() {
+                            return Err(NodeError::MissingCertificateValue);
+                        }
                         let downloaded = self
                             .requests_scheduler
-                            .download_certificates_by_heights(
-                                &remote_node,
-                                chain_id,
-                                heights.clone(),
-                            )
+                            .download_certificates_by_heights(&remote_node, chain_id, heights)
                             .await?;
                         if downloaded.is_empty() {
                             return Err(NodeError::MissingCertificateValue);
@@ -1260,6 +1271,10 @@ impl<Env: Environment> Client<Env> {
         // Process the descendants newest-first, so that each block is vouched for
         // by the one processed just before it.
         for certificate in certificates.iter().rev() {
+            tracing::warn!(
+                "DBG preprocess_descendants: processing {}",
+                certificate.block().header.height
+            );
             Box::pin(self.handle_certificate_with_retry(
                 certificate,
                 nodes,
