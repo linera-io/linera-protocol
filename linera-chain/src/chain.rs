@@ -1755,11 +1755,12 @@ where
                 if *outbox.next_height_to_schedule.get() > block_height {
                     continue; // We already added this recipient's messages to the outbox.
                 }
-                // A missing entry means a checkpoint pruned the block: the recipient had
-                // acknowledged everything we sent it below the checkpoint, so there is no
-                // predecessor left to chain to. That is the same state a node that
-                // bootstrapped from the checkpoint is in, where the outbox is rebuilt from
-                // scratch and starts out at height zero.
+                // A missing entry means a checkpoint pruned the block: its messages were
+                // acknowledged and its outbox queue had drained, but the outbox survived
+                // the drain by being ahead of the tip at the time, so it still points past
+                // the pruned block. There is no predecessor left to chain to, which
+                // matches the incoming block's body: the checkpoint dropped the
+                // acknowledged recipient's anchor too.
                 let maybe_prev_hash = match outbox.next_height_to_schedule.get().try_sub_one().ok()
                 {
                     Some(height) => self.block_hashes.get(&height).await?,

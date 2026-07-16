@@ -47,6 +47,7 @@ use crate::{
         chain_client::{self, ChainClient},
         ClientOutcome, ListeningMode,
     },
+    data_types::CrossChainRequest,
     local_node::LocalNodeError,
     node::{
         NodeError::{self, ClientIoError},
@@ -4406,6 +4407,115 @@ where
         recipient.local_balance().await?,
         Amount::from_tokens(2),
         "the post-cycle transfer must reach the checkpointed recipient",
+    );
+
+    Ok(())
+}
+
+/// Verifies that a `RevertConfirm` walk survives checkpoint pruning. With a partially
+/// acknowledged lane, the `previous_message_blocks` anchor points at the latest,
+/// unacknowledged message block, but the link in that block's body leads down into the
+/// acknowledged prefix, which a checkpoint prunes from `block_hashes` once delivery is
+/// confirmed — as it is on a validator, which hosts both chains. The walk must stop
+/// there — those bundles are covered by the recipient's own checkpoint — and still
+/// resend the blocks collected above it, so a reset recipient recovers its wiped
+/// in-flight bundles.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[test_log::test(tokio::test)]
+async fn test_revert_confirm_stops_at_pruned_heights<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let producer_id = producer.chain_id();
+    let recipient_id = recipient.chain_id();
+
+    // Producer.0: a transfer that the recipient consumes and acknowledges by
+    // checkpointing.
+    producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+    recipient.synchronize_from_validators().await?;
+    recipient.process_inbox().await?;
+    recipient.checkpoint().await.unwrap().unwrap();
+
+    // Producer.1: consume the ack. Producer.2: a second transfer, which stays
+    // unacknowledged; its body's `previous_message_blocks` link points down at the
+    // acknowledged transfer.
+    producer.synchronize_from_validators().await?;
+    producer.process_inbox().await?;
+    let transfer_2 = producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(2),
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+    let transfer_2_height = transfer_2.block().header.height;
+
+    // Producer.3: checkpoint. It vouches only for the unacknowledged second transfer.
+    producer.checkpoint().await.unwrap().unwrap();
+
+    // On a validator the first transfer's block is pruned from `block_hashes`: it is
+    // acknowledged, and the validator hosts the recipient chain too, so it has seen the
+    // delivery confirmation that drains the outbox. The second transfer's block
+    // survives because the checkpoint vouches for it, and the recipient's anchor points
+    // at it.
+    let worker = builder.node(0).worker().await;
+    {
+        let chain = worker.chain_state_view(producer_id).await?;
+        assert!(
+            chain.block_hashes.get(&BlockHeight::ZERO).await?.is_none(),
+            "the acknowledged, delivered transfer should be pruned on the validator",
+        );
+        assert!(chain.block_hashes.get(&transfer_2_height).await?.is_some());
+        assert_eq!(
+            chain
+                .execution_state
+                .previous_message_blocks
+                .get(&recipient_id)
+                .await?,
+            Some(transfer_2_height),
+        );
+    }
+
+    // A recipient that reset to its own checkpoint asks every sender to resend from the
+    // bottom. The walk starts at the anchor, re-adds the second transfer, and then hits
+    // the pruned height: it must stop there and resend what it collected rather than
+    // fail without resending anything.
+    let actions = worker
+        .handle_cross_chain_request(CrossChainRequest::RevertConfirm {
+            sender: producer_id,
+            recipient: recipient_id,
+            retransmit_from: BlockHeight::ZERO,
+        })
+        .await?;
+    let resent_heights = actions
+        .cross_chain_requests
+        .iter()
+        .filter_map(|request| match request {
+            CrossChainRequest::UpdateRecipient {
+                recipient, bundles, ..
+            } if *recipient == recipient_id => Some(bundles),
+            _ => None,
+        })
+        .flatten()
+        .map(|(_, bundle)| bundle.height)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        resent_heights,
+        vec![transfer_2_height],
+        "the revert must resend the unacknowledged transfer",
     );
 
     Ok(())

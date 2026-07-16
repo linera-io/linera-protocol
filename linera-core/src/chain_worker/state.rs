@@ -1686,24 +1686,16 @@ where
         let mut heights_to_re_add = Vec::new();
         let mut current_height = latest_height;
         while current_height >= retransmit_from {
-            // We arrived at current_height via previous_message_blocks links, starting from the
-            // chain state and following the links downwards. So these blocks should all be in
-            // `block_hashes` already.
+            // A height missing from `block_hashes` means a checkpoint pruned the block:
+            // every recipient — in particular this one — had acknowledged its messages.
+            // Acknowledgements cover a prefix of each lane, so everything from here down
+            // is included in the recipient's own latest checkpoint and needs no
+            // retransmission. Stop the walk and resend only what was collected above.
+            let Some(hash) = self.chain.block_hashes.get(&current_height).await? else {
+                break;
+            };
             heights_to_re_add.push(current_height);
             // Load the block at current_height to find the previous message block
-            let hash = match &*self
-                .chain
-                .block_hashes_for_heights([current_height])
-                .await?
-            {
-                [hash] => *hash,
-                _ => {
-                    return Err(WorkerError::BlockHashNotFound {
-                        height: current_height,
-                        chain_id: self.chain_id(),
-                    })
-                }
-            };
             let block = self
                 .read_confirmed_blocks(&[hash])
                 .await?
