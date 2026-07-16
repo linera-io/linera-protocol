@@ -205,6 +205,7 @@ impl<T: CertificateValue> GenericCertificate<T> {
                 crate::justification::JustificationChain::default(),
             ),
             signatures: std::borrow::Cow::Borrowed(&self.signatures),
+            owner_authorization: None,
         }
     }
 }

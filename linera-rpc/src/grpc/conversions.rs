@@ -11,7 +11,7 @@ use linera_base::{
     identifiers::{AccountOwner, BlobId, ChainId, EventId},
 };
 use linera_chain::{
-    data_types::{BlockProposal, LiteValue, ProposalContent},
+    data_types::{BlockProposal, LiteValue, OwnerAuthorization, ProposalContent},
     justification::JustificationChain,
     types::{
         Certificate, CertificateKind, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate,
@@ -256,9 +256,13 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
             content: bincode::serialize(&block_proposal.content)?,
             owner: Some(block_proposal.owner().try_into()?),
             signature: Some(block_proposal.signature.into()),
-            original_proposal: block_proposal
-                .original_proposal
+            validated_certificate: block_proposal
+                .validated_certificate
                 .map(|cert| bincode::serialize(&cert))
+                .transpose()?,
+            owner_authorization: block_proposal
+                .owner_authorization
+                .map(|authorization| bincode::serialize(&authorization))
                 .transpose()?,
         })
     }
@@ -276,9 +280,14 @@ impl TryFrom<api::BlockProposal> for BlockProposal {
         Ok(Self {
             content,
             signature: try_proto_convert(block_proposal.signature)?,
-            original_proposal: block_proposal
-                .original_proposal
+            validated_certificate: block_proposal
+                .validated_certificate
                 .map(|bytes| bincode::deserialize(&bytes))
+                .transpose()?,
+            owner_authorization: block_proposal
+                .owner_authorization
+                .as_deref()
+                .map(bincode::deserialize)
                 .transpose()?,
         })
     }
@@ -409,6 +418,8 @@ impl TryFrom<api::LiteCertificate> for HandleLiteCertRequest<'_> {
             signatures,
         );
         lite.justification = std::borrow::Cow::Owned(justification);
+        lite.owner_authorization =
+            owner_authorization_from_proto_bytes(certificate.owner_authorization.as_deref())?;
         Ok(Self {
             certificate: lite,
             wait_for_outgoing_messages: certificate.wait_for_outgoing_messages,
@@ -430,6 +441,9 @@ impl TryFrom<HandleLiteCertRequest<'_>> for api::LiteCertificate {
             unlocking_round: bincode::serialize(&request.certificate.unlocking_round)?,
             justification: bincode::serialize(&request.certificate.justification)?,
             first_round: request.certificate.first_round,
+            owner_authorization: owner_authorization_to_proto(
+                request.certificate.owner_authorization.as_ref(),
+            )?,
         })
     }
 }
@@ -554,6 +568,33 @@ impl TryFrom<api::Certificate> for TimeoutCertificate {
     }
 }
 
+/// Deserializes the retained owner authorization from an `api::Certificate`, if any.
+fn owner_authorization_from_proto(
+    certificate: &api::Certificate,
+) -> Result<Option<OwnerAuthorization>, GrpcProtoConversionError> {
+    owner_authorization_from_proto_bytes(certificate.owner_authorization.as_deref())
+}
+
+/// Deserializes a retained owner authorization from its wire bytes, if any.
+fn owner_authorization_from_proto_bytes(
+    bytes: Option<&[u8]>,
+) -> Result<Option<OwnerAuthorization>, GrpcProtoConversionError> {
+    bytes
+        .map(bincode::deserialize)
+        .transpose()
+        .map_err(GrpcProtoConversionError::from)
+}
+
+/// Serializes the retained owner authorization for an `api::Certificate`, if any.
+fn owner_authorization_to_proto(
+    authorization: Option<&OwnerAuthorization>,
+) -> Result<Option<Vec<u8>>, GrpcProtoConversionError> {
+    authorization
+        .map(bincode::serialize)
+        .transpose()
+        .map_err(GrpcProtoConversionError::from)
+}
+
 impl TryFrom<api::Certificate> for ValidatedBlockCertificate {
     type Error = GrpcProtoConversionError;
 
@@ -563,6 +604,7 @@ impl TryFrom<api::Certificate> for ValidatedBlockCertificate {
         let cert_type = certificate.kind;
 
         if cert_type == api::CertificateKind::Validated as i32 {
+            let owner_authorization = owner_authorization_from_proto(&certificate)?;
             let value: ValidatedBlock = bincode::deserialize(&certificate.value)?;
             let below = deserialize_justification(&certificate.justification)?;
             // The signed unlocking round and justification commitment are derived from the
@@ -576,7 +618,8 @@ impl TryFrom<api::Certificate> for ValidatedBlockCertificate {
                 justification_commitment,
                 signatures,
             );
-            Ok(ValidatedBlockCertificate::from_parts(quorum, below))
+            Ok(ValidatedBlockCertificate::from_parts(quorum, below)
+                .with_owner_authorization(owner_authorization))
         } else {
             Err(GrpcProtoConversionError::InvalidCertificateType)
         }
@@ -592,6 +635,7 @@ impl TryFrom<api::Certificate> for ConfirmedBlockCertificate {
         let cert_type = certificate.kind;
 
         if cert_type == api::CertificateKind::Confirmed as i32 {
+            let owner_authorization = owner_authorization_from_proto(&certificate)?;
             let value: ConfirmedBlock = bincode::deserialize(&certificate.value)?;
             let validated = deserialize_justification(&certificate.justification)?;
             // The signed justification commitment is derived from the carried chain, which the
@@ -605,7 +649,8 @@ impl TryFrom<api::Certificate> for ConfirmedBlockCertificate {
                 justification_commitment,
                 signatures,
             );
-            Ok(ConfirmedBlockCertificate::from_parts(quorum, validated))
+            Ok(ConfirmedBlockCertificate::from_parts(quorum, validated)
+                .with_owner_authorization(owner_authorization))
         } else {
             Err(GrpcProtoConversionError::InvalidCertificateType)
         }
@@ -628,6 +673,7 @@ impl TryFrom<TimeoutCertificate> for api::Certificate {
             kind: api::CertificateKind::Timeout as i32,
             justification: Vec::new(),
             first_round: false,
+            owner_authorization: None,
         })
     }
 }
@@ -638,6 +684,7 @@ impl TryFrom<ConfirmedBlockCertificate> for api::Certificate {
     fn try_from(certificate: ConfirmedBlockCertificate) -> Result<Self, Self::Error> {
         let round = bincode::serialize(&certificate.round())?;
         let signatures = bincode::serialize(certificate.signatures())?;
+        let owner_authorization = owner_authorization_to_proto(certificate.owner_authorization())?;
         let justification = bincode::serialize(certificate.justification())?;
         let first_round = certificate.quorum().first_round();
 
@@ -650,6 +697,7 @@ impl TryFrom<ConfirmedBlockCertificate> for api::Certificate {
             kind: api::CertificateKind::Confirmed as i32,
             justification,
             first_round,
+            owner_authorization,
         })
     }
 }
@@ -660,6 +708,7 @@ impl TryFrom<ValidatedBlockCertificate> for api::Certificate {
     fn try_from(certificate: ValidatedBlockCertificate) -> Result<Self, Self::Error> {
         let round = bincode::serialize(&certificate.round())?;
         let signatures = bincode::serialize(certificate.signatures())?;
+        let owner_authorization = owner_authorization_to_proto(certificate.owner_authorization())?;
         let justification = bincode::serialize(certificate.justification())?;
 
         let value = bincode::serialize(certificate.value())?;
@@ -671,6 +720,7 @@ impl TryFrom<ValidatedBlockCertificate> for api::Certificate {
             kind: api::CertificateKind::Validated as i32,
             justification,
             first_round: false,
+            owner_authorization,
         })
     }
 }
@@ -1156,7 +1206,7 @@ pub mod tests {
         data_types::{Amount, Blob, Epoch, Round, Timestamp},
     };
     use linera_chain::{
-        data_types::{BlockExecutionOutcome, OriginalProposal, ProposedBlock},
+        data_types::{BlockExecutionOutcome, ProposedBlock},
         test::make_first_block,
         types::CertificateKind,
     };
@@ -1333,6 +1383,7 @@ pub mod tests {
                 key_pair.public_key,
                 ValidatorSignature::new(&Foo("test".into()), &key_pair.secret_key),
             )]),
+            owner_authorization: None,
         };
         let request = HandleLiteCertRequest {
             certificate,
@@ -1410,7 +1461,8 @@ pub mod tests {
                 outcome: Some(outcome),
             },
             signature: key_pair.sign(&Foo("test".into())),
-            original_proposal: Some(OriginalProposal::Regular { certificate }),
+            owner_authorization: None,
+            validated_certificate: Some(certificate),
         };
 
         round_trip_check::<_, api::BlockProposal>(&block_proposal);

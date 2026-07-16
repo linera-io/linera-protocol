@@ -36,7 +36,7 @@ use linera_base::{data_types::Bytecode, vm::VmRuntime};
 use linera_chain::{
     data_types::{
         BlockProposal, BundleExecutionPolicy, BundleFailurePolicy, ChainAndHeight, IncomingBundle,
-        ProposedBlock, Transaction,
+        OwnerAuthorization, ProposedBlock, Transaction,
     },
     manager::LockingBlock,
     types::{
@@ -2248,14 +2248,21 @@ impl<Env: Environment> ChainClient<Env> {
         let proposal = if let Some(locking) = info.manager.requested_locking {
             Box::new(match *locking {
                 LockingBlock::Regular(cert) => {
+                    // The owner authorization is carried by the validated certificate.
                     BlockProposal::new_retry_regular(owner, round, cert, self.signer())
                         .await
                         .map_err(Error::signer_failure)?
                 }
-                LockingBlock::Fast(proposal) => {
-                    BlockProposal::new_retry_fast(owner, round, proposal, self.signer())
+                LockingBlock::Fast(fast_proposal) => {
+                    // The fast proposal's signature authorizes the block.
+                    let authorization = OwnerAuthorization {
+                        round: fast_proposal.content.round,
+                        signature: fast_proposal.signature,
+                    };
+                    BlockProposal::new_initial(owner, round, proposed_block.clone(), self.signer())
                         .await
                         .map_err(Error::signer_failure)?
+                        .with_owner_authorization(Some(authorization))
                 }
             })
         } else {

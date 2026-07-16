@@ -7,13 +7,15 @@
 
 use linera_base::{
     abi::ContractAbi,
+    crypto::AccountSecretKey,
     data_types::{Amount, ApplicationPermissions, Blob, Epoch, Timestamp},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
     ownership::TimeoutConfig,
 };
 use linera_chain::{
     data_types::{
-        BundleExecutionPolicy, IncomingBundle, MessageAction, ProposedBlock, Transaction, Vote,
+        BundleExecutionPolicy, IncomingBundle, MessageAction, OwnerAuthorization, ProposalContent,
+        ProposedBlock, Transaction, Vote,
     },
     justification::JustificationChain,
     test::VoteTestExt,
@@ -235,6 +237,7 @@ impl BlockBuilder {
     pub(crate) async fn try_sign(
         self,
         blobs: &[Blob],
+        owner_key_pair: &AccountSecretKey,
     ) -> Result<(ConfirmedBlockCertificate, ResourceTracker), WorkerError> {
         let published_blobs = self
             .block
@@ -272,6 +275,17 @@ impl BlockBuilder {
             .expect("Failed to query chain ownership")
             .info;
         let round = info.manager.ownership.first_round();
+        let owner_authorization = value.block().header.authenticated_owner.map(|_| {
+            let content = ProposalContent {
+                block: value.block().to_proposed(),
+                round,
+                outcome: None,
+            };
+            OwnerAuthorization {
+                round,
+                signature: owner_key_pair.sign(&content),
+            }
+        });
         let public_key = self.validator.key_pair().public();
         // A first-round confirmation attests that no lower round exists, so it commits to no
         // justifying quorum.
@@ -279,7 +293,8 @@ impl BlockBuilder {
             Vote::new_with_first_round(value, round, true, None, self.validator.key_pair())
                 .into_certificate(public_key);
         let certificate =
-            ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default());
+            ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default())
+                .with_owner_authorization(owner_authorization);
 
         Ok((certificate, resource_tracker))
     }

@@ -61,7 +61,9 @@ impl ValidatorNode for Client {
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {
-            Client::Grpc(grpc_client) => grpc_client.handle_block_proposal(proposal).await,
+            Client::Grpc(grpc_client) => {
+                Box::pin(grpc_client.handle_block_proposal(proposal)).await
+            }
 
             #[cfg(with_simple_network)]
             Client::Simple(simple_client) => simple_client.handle_block_proposal(proposal).await,
@@ -130,7 +132,7 @@ impl ValidatorNode for Client {
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {
             Client::Grpc(grpc_client) => {
-                grpc_client.handle_validated_certificate(certificate).await
+                Box::pin(grpc_client.handle_validated_certificate(certificate)).await
             }
 
             #[cfg(with_simple_network)]

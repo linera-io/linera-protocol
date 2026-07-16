@@ -18,6 +18,7 @@ use serde::{
 use super::{generic::GenericCertificate, Certificate, Certified, LiteCertificate};
 use crate::{
     block::{Block, ConversionError, ValidatedBlock},
+    data_types::OwnerAuthorization,
     justification::JustificationChain,
     ChainError,
 };
@@ -34,6 +35,7 @@ struct Repr<'a> {
     justification_commitment: Option<CryptoHash>,
     signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
     justification: Cow<'a, JustificationChain>,
+    owner_authorization: Option<OwnerAuthorization>,
 }
 
 /// Certificate for a [`ValidatedBlock`] instance, certified in some round whose `ValidatedBlock`
@@ -53,6 +55,10 @@ pub struct ValidatedBlockCertificate {
     /// rising from the grounding round to its top link in the unlocking round. Empty iff
     /// the unlocking round is `None`.
     justification: JustificationChain,
+    /// The chain owner's signature over the certified block's proposal content.
+    /// Not covered by the certified value's hash or the validator signatures.
+    /// Required for blocks with an `authenticated_owner`; optional otherwise.
+    owner_authorization: Option<OwnerAuthorization>,
 }
 
 impl ValidatedBlockCertificate {
@@ -65,6 +71,7 @@ impl ValidatedBlockCertificate {
         Self {
             quorum: GenericCertificate::new(value, round, signatures),
             justification: JustificationChain::default(),
+            owner_authorization: None,
         }
     }
 
@@ -76,7 +83,20 @@ impl ValidatedBlockCertificate {
         Self {
             quorum,
             justification,
+            owner_authorization: None,
         }
+    }
+
+    /// Sets the retained owner authorization.
+    pub fn with_owner_authorization(mut self, authorization: Option<OwnerAuthorization>) -> Self {
+        self.owner_authorization = authorization;
+        self
+    }
+
+    /// Returns the retained chain owner's signature over the certified block's
+    /// proposal content, if available.
+    pub fn owner_authorization(&self) -> Option<&OwnerAuthorization> {
+        self.owner_authorization.as_ref()
     }
 
     /// Returns the signed quorum of `ValidatedBlock` votes.
@@ -146,6 +166,7 @@ impl ValidatedBlockCertificate {
     pub fn lite_certificate(&self) -> LiteCertificate<'_> {
         let mut lite = self.quorum.lite_certificate_without_justification();
         lite.justification = Cow::Borrowed(&self.justification);
+        lite.owner_authorization = self.owner_authorization;
         lite
     }
 }
@@ -225,6 +246,7 @@ impl Serialize for ValidatedBlockCertificate {
             justification_commitment: self.quorum.justification_commitment(),
             signatures: Cow::Borrowed(self.quorum.signatures().as_slice()),
             justification: Cow::Borrowed(&self.justification),
+            owner_authorization: self.owner_authorization,
         }
         .serialize(serializer)
     }
@@ -252,7 +274,8 @@ impl<'de> Deserialize<'de> for ValidatedBlockCertificate {
                     signatures,
                 ),
                 inner.justification.into_owned(),
-            ))
+            )
+            .with_owner_authorization(inner.owner_authorization))
         }
     }
 }

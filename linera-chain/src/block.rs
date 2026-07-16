@@ -692,6 +692,20 @@ impl Block {
             && self.body.operation_results == *operation_results
     }
 
+    /// Returns the proposed block this block was created from, cloning the
+    /// transactions but not the execution outcome.
+    pub fn to_proposed(&self) -> ProposedBlock {
+        ProposedBlock {
+            chain_id: self.header.chain_id,
+            epoch: self.header.epoch,
+            transactions: self.body.transactions.clone(),
+            height: self.header.height,
+            timestamp: self.header.timestamp,
+            authenticated_owner: self.header.authenticated_owner,
+            previous_block_hash: self.header.previous_block_hash,
+        }
+    }
+
     /// Splits this block back into the proposed block and its execution outcome.
     pub fn into_proposal(self) -> (ProposedBlock, BlockExecutionOutcome) {
         let proposed_block = ProposedBlock {

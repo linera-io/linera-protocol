@@ -424,33 +424,115 @@ pub struct MessageBundle {
     pub messages: Vec<PostedMessage>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Allocative)]
+/// Evidence that a chain owner authorized a block: the owner's signature over the
+/// block's [`ProposalContent`], without execution outcome.
+///
+/// Every block is first proposed without an execution outcome — an outcome appears in
+/// a proposal only when re-proposing an already validated block — so such a signature
+/// always exists, and it is the one validators checked against the block's
+/// `authenticated_owner`. Retaining it alongside the certificate lets anyone verify
+/// that a chain owner really authorized the block without trusting the validator
+/// quorum. A certified block with an `authenticated_owner` is *not valid* without
+/// this signature (see [`OwnerAuthorization::check_block_authorization`]); for other
+/// blocks it is optional provenance.
+///
+/// This value is not covered by the certified block's hash or by the validator
+/// signatures. Given the block, anyone can reconstruct the signed proposal content
+/// and check the signature, so it cannot be forged — only withheld, which
+/// [`OwnerAuthorization::check_block_authorization`] rejects for blocks with an
+/// authenticated owner.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Allocative)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
-/// An earlier proposal that is being retried.
-pub enum OriginalProposal {
-    /// A proposal in the fast round.
-    Fast(AccountSignature),
-    /// A validated block certificate from an earlier round.
-    Regular {
-        /// The validated block certificate.
-        certificate: LiteCertificate<'static>,
-    },
+pub struct OwnerAuthorization {
+    /// The round of the proposal whose signature was retained.
+    pub round: Round,
+    /// The owner's signature over the [`ProposalContent`] consisting of the block's
+    /// proposed content, `round`, and no execution outcome.
+    pub signature: AccountSignature,
+}
+
+impl OwnerAuthorization {
+    /// Returns the owner who created this signature.
+    pub fn owner(&self) -> AccountOwner {
+        (&self.signature).into()
+    }
+
+    /// Verifies that this authorization is valid for the given block: the signature
+    /// must be valid over the block's proposal content, without execution outcome, in
+    /// `round`, and the signer must match the block's `authenticated_owner`, if one
+    /// is set.
+    ///
+    /// Returns the authorizing owner. Note that whether that owner was entitled to
+    /// propose in `round` under the chain's ownership at that height can only be
+    /// checked against the chain's execution state and is left to the caller.
+    pub fn verify(&self, block: &Block) -> Result<AccountOwner, ChainError> {
+        self.verify_proposed_block(block.to_proposed())
+    }
+
+    /// Checks the authorization rule for a certified block: a block with an
+    /// `authenticated_owner` is only valid together with that owner's signature over
+    /// the block's proposal content. For blocks without an authenticated owner the
+    /// signature is optional, but must be valid if present.
+    pub fn check_block_authorization(
+        authorization: Option<&OwnerAuthorization>,
+        block: &Block,
+    ) -> Result<(), ChainError> {
+        match authorization {
+            Some(authorization) => {
+                authorization.verify(block)?;
+            }
+            None => ensure!(
+                block.header.authenticated_owner.is_none(),
+                ChainError::MissingOwnerAuthorization
+            ),
+        }
+        Ok(())
+    }
+
+    /// Same as [`Self::verify`], but for a [`ProposedBlock`].
+    pub fn verify_proposed_block(&self, block: ProposedBlock) -> Result<AccountOwner, ChainError> {
+        let authenticated_owner = block.authenticated_owner;
+        let content = ProposalContent {
+            block,
+            round: self.round,
+            outcome: None,
+        };
+        self.signature
+            .verify(&content)
+            .map_err(|_| ChainError::InvalidOwnerAuthorization("invalid signature"))?;
+        let owner = self.owner();
+        if let Some(authenticated_owner) = authenticated_owner {
+            ensure!(
+                authenticated_owner == owner,
+                ChainError::InvalidOwnerAuthorization(
+                    "signer does not match the block's authenticated owner"
+                )
+            );
+        }
+        Ok(owner)
+    }
 }
 
 /// An authenticated proposal for a new block.
-// TODO(#456): the signature of the block owner is currently lost but it would be useful
-// to have it for auditing purposes.
 #[derive(Clone, Debug, Serialize, Deserialize, Allocative)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct BlockProposal {
     /// The signed content of the proposal: the proposed block, the round, and any
     /// execution outcome from a previous round.
     pub content: ProposalContent,
-    /// The proposer's signature over `content`.
+    /// The proposer's signature over `content`, authenticating their participation in
+    /// the round. The proposer need not be the block's `authenticated_owner`.
     pub signature: AccountSignature,
-    /// The earlier proposal being retried, if this proposal is a retry in a later round.
+    /// The authenticated owner's signature over the block, if the proposer is not the
+    /// authenticated owner or the signed content contains an execution outcome. When
+    /// the proposer is the authenticated owner and `content.outcome` is `None`,
+    /// `signature` doubles as the authorization and this may be omitted.
     #[debug(skip_if = Option::is_none)]
-    pub original_proposal: Option<OriginalProposal>,
+    pub owner_authorization: Option<OwnerAuthorization>,
+    /// A certificate showing that the block was validated in an earlier round, if
+    /// this proposal retries it.
+    #[debug(skip_if = Option::is_none)]
+    pub validated_certificate: Option<LiteCertificate<'static>>,
 }
 
 /// A message together with kind, authentication and grant information.
@@ -900,28 +982,8 @@ impl BlockProposal {
         Ok(Self {
             content,
             signature,
-            original_proposal: None,
-        })
-    }
-
-    /// Creates a proposal that retries a fast-round proposal in a later round.
-    pub async fn new_retry_fast<S: Signer + ?Sized>(
-        owner: AccountOwner,
-        round: Round,
-        old_proposal: BlockProposal,
-        signer: &S,
-    ) -> Result<Self, S::Error> {
-        let content = ProposalContent {
-            round,
-            block: old_proposal.content.block,
-            outcome: None,
-        };
-        let signature = signer.sign(&owner, &CryptoHash::new(&content)).await?;
-
-        Ok(Self {
-            content,
-            signature,
-            original_proposal: Some(OriginalProposal::Fast(old_proposal.signature)),
+            owner_authorization: None,
+            validated_certificate: None,
         })
     }
 
@@ -945,17 +1007,44 @@ impl BlockProposal {
         Ok(Self {
             content,
             signature,
-            original_proposal: Some(OriginalProposal::Regular { certificate }),
+            owner_authorization: None,
+            validated_certificate: Some(certificate),
         })
+    }
+
+    /// Sets the explicit owner authorization for the block.
+    pub fn with_owner_authorization(mut self, authorization: Option<OwnerAuthorization>) -> Self {
+        self.owner_authorization = authorization;
+        self
     }
 
     /// Returns the `AccountOwner` that proposed the block.
     pub fn owner(&self) -> AccountOwner {
-        match self.signature {
-            AccountSignature::Ed25519 { public_key, .. } => public_key.into(),
-            AccountSignature::Secp256k1 { public_key, .. } => public_key.into(),
-            AccountSignature::EvmSecp256k1 { address, .. } => AccountOwner::Address20(address),
+        (&self.signature).into()
+    }
+
+    /// Returns the authorization backing the block's `authenticated_owner`, if any:
+    /// the explicit one, the one retained by the validated certificate, or the
+    /// proposer's own signature when the signed content has no execution outcome.
+    ///
+    /// Whether the returned candidate is actually valid for the block is checked by
+    /// [`OwnerAuthorization::verify_proposed_block`].
+    pub fn owner_authorization(&self) -> Option<OwnerAuthorization> {
+        if let Some(authorization) = self.owner_authorization {
+            return Some(authorization);
         }
+        if let Some(certificate) = &self.validated_certificate {
+            if let Some(authorization) = certificate.owner_authorization {
+                return Some(authorization);
+            }
+        }
+        self.content
+            .outcome
+            .is_none()
+            .then_some(OwnerAuthorization {
+                round: self.content.round,
+                signature: self.signature,
+            })
     }
 
     /// Verifies the signature on this proposal.
@@ -985,24 +1074,19 @@ impl BlockProposal {
         )
     }
 
-    /// Checks that the original proposal, if present, matches the new one and has a higher round.
+    /// Checks that the validated certificate, if present, matches the proposal and
+    /// comes from an earlier round.
     pub fn check_invariants(&self) -> Result<(), &'static str> {
-        match (&self.original_proposal, &self.content.outcome) {
+        match (&self.validated_certificate, &self.content.outcome) {
             (None, None) => {}
-            (Some(OriginalProposal::Fast(_)), None) => ensure!(
-                self.content.round > Round::Fast,
-                "The new proposal's round must be greater than the original's"
-            ),
-            (None, Some(_))
-            | (Some(OriginalProposal::Fast(_)), Some(_))
-            | (Some(OriginalProposal::Regular { .. }), None) => {
+            (None, Some(_)) | (Some(_), None) => {
                 return Err("Must contain a validation certificate if and only if \
                      it contains the execution outcome from a previous round");
             }
-            (Some(OriginalProposal::Regular { certificate }), Some(outcome)) => {
+            (Some(certificate), Some(outcome)) => {
                 ensure!(
                     self.content.round > certificate.round,
-                    "The new proposal's round must be greater than the original's"
+                    "The new proposal's round must be greater than the certificate's"
                 );
                 let block = outcome.clone().with(self.content.block.clone());
                 let value = ValidatedBlock::new(block);
@@ -1228,7 +1312,8 @@ mod signing {
         let block_proposal = BlockProposal {
             content: proposal,
             signature,
-            original_proposal: None,
+            owner_authorization: None,
+            validated_certificate: None,
         };
         assert_eq!(block_proposal.owner(), public_key.into(),);
     }

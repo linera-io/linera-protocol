@@ -334,3 +334,62 @@ fn round_ordering() {
     assert!(Round::SingleLeader(2) < Round::Validator(0));
     assert!(Round::Validator(1) < Round::Validator(2))
 }
+
+#[test]
+fn owner_authorization_verifies_against_block() {
+    let key = AccountSecretKey::Ed25519(Ed25519SecretKey::generate());
+    let owner: AccountOwner = key.public().into();
+    let mut block = sample_block();
+    block.header.authenticated_owner = Some(owner);
+    let round = Round::MultiLeader(0);
+    let content = ProposalContent {
+        block: block.to_proposed(),
+        round,
+        outcome: None,
+    };
+    let authorization = OwnerAuthorization {
+        round,
+        signature: key.sign(&content),
+    };
+    assert_eq!(authorization.verify(&block).unwrap(), owner);
+
+    // A signature over a different round does not verify.
+    let wrong_round = OwnerAuthorization {
+        round: Round::MultiLeader(1),
+        ..authorization
+    };
+    assert!(wrong_round.verify(&block).is_err());
+
+    // A valid signature by a signer other than the authenticated owner does not verify.
+    let other_key = AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate());
+    let other_authorization = OwnerAuthorization {
+        round,
+        signature: other_key.sign(&content),
+    };
+    assert!(other_authorization.verify(&block).is_err());
+
+    // A block with an authenticated owner is invalid without the authorization.
+    assert_matches::assert_matches!(
+        OwnerAuthorization::check_block_authorization(None, &block),
+        Err(ChainError::MissingOwnerAuthorization)
+    );
+    assert!(OwnerAuthorization::check_block_authorization(Some(&authorization), &block).is_ok());
+
+    // Without an authenticated owner, the authorization is optional, and any owner's
+    // valid signature is accepted.
+    block.header.authenticated_owner = None;
+    assert!(OwnerAuthorization::check_block_authorization(None, &block).is_ok());
+    let content = ProposalContent {
+        block: block.to_proposed(),
+        round,
+        outcome: None,
+    };
+    let authorization = OwnerAuthorization {
+        round,
+        signature: other_key.sign(&content),
+    };
+    assert_eq!(
+        authorization.verify(&block).unwrap(),
+        other_key.public().into()
+    );
+}

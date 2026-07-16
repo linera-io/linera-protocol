@@ -281,9 +281,12 @@ message BlockProposal {
   // Signature by chain owner
   AccountSignature signature = 5;
 
-  // A lite certificate for a validated block, or a fast block proposal, that
-  // justifies the proposal in this round.
-  optional bytes original_proposal = 6;
+  // A lite certificate for a validated block that this proposal retries.
+  optional bytes validated_certificate = 6;
+
+  // The authenticated owner's signature over the block, if not implied by
+  // `signature` or by the validated certificate.
+  optional bytes owner_authorization = 7;
 }
 
 // A certified statement from the committee, without the value.
@@ -315,6 +318,11 @@ message LiteCertificate {
   // The first-round attestation the `ConfirmedBlock` voters signed. Only `true` for a confirmed
   // block certificate confirming a block in the chain's first round; always `false` otherwise.
   bool first_round = 9;
+
+  // The chain owner's signature over the certified block's proposal content.
+  // Required for blocks that declare an authenticated owner; otherwise optional.
+  // Always absent for timeout certificates.
+  optional bytes owner_authorization = 10;
 }
 
 // A certified statement from the committee, together with other certificates
@@ -393,6 +401,11 @@ message Certificate {
   // The first-round attestation the `ConfirmedBlock` voters signed. Only `true` for a confirmed
   // block certificate confirming a block in the chain's first round; always `false` otherwise.
   bool first_round = 6;
+
+  // The chain owner's signature over the certified block's proposal content.
+  // Required for blocks that declare an authenticated owner; otherwise optional.
+  // Always absent for timeout certificates.
+  optional bytes owner_authorization = 7;
 }
 
 enum CertificateKind {

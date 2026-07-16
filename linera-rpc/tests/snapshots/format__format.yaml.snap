@@ -249,9 +249,12 @@ BlockProposal:
         TYPENAME: ProposalContent
     - signature:
         TYPENAME: AccountSignature
-    - original_proposal:
+    - owner_authorization:
         OPTION:
-          TYPENAME: OriginalProposal
+          TYPENAME: OwnerAuthorization
+    - validated_certificate:
+        OPTION:
+          TYPENAME: LiteCertificate
 Certificate:
   ENUM:
     0:
@@ -461,6 +464,9 @@ ConfirmedBlockCertificate:
             - TYPENAME: Secp256k1Signature
     - justification:
         TYPENAME: JustificationChain
+    - owner_authorization:
+        OPTION:
+          TYPENAME: OwnerAuthorization
 CrateVersion:
   STRUCT:
     - major: U32
@@ -628,6 +634,9 @@ LiteCertificate:
           TUPLE:
             - TYPENAME: Secp256k1PublicKey
             - TYPENAME: Secp256k1Signature
+    - owner_authorization:
+        OPTION:
+          TYPENAME: OwnerAuthorization
 LiteValue:
   STRUCT:
     - value_hash:
@@ -943,17 +952,6 @@ OracleResponse:
                 TUPLE:
                   - TYPENAME: ChainId
                   - TYPENAME: Cursor
-OriginalProposal:
-  ENUM:
-    0:
-      Fast:
-        NEWTYPE:
-          TYPENAME: AccountSignature
-    1:
-      Regular:
-        STRUCT:
-          - certificate:
-              TYPENAME: LiteCertificate
 OutgoingMessage:
   STRUCT:
     - destination:
@@ -970,6 +968,12 @@ OutgoingMessage:
         TYPENAME: MessageKind
     - message:
         TYPENAME: Message
+OwnerAuthorization:
+  STRUCT:
+    - round:
+        TYPENAME: Round
+    - signature:
+        TYPENAME: AccountSignature
 PostedMessage:
   STRUCT:
     - authenticated_owner:
@@ -1452,6 +1456,9 @@ ValidatedBlockCertificate:
             - TYPENAME: Secp256k1Signature
     - justification:
         TYPENAME: JustificationChain
+    - owner_authorization:
+        OPTION:
+          TYPENAME: OwnerAuthorization
 VersionInfo:
   STRUCT:
     - crate_version:
