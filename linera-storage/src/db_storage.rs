@@ -12,13 +12,14 @@ use async_trait::async_trait;
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Blob, BlockHeight, NetworkDescription, TimeDelta, Timestamp},
+    data_types::{Blob, BlockHeight, Epoch, NetworkDescription, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
     time::Duration,
 };
 use linera_cache::{Arc as CacheArc, ValueCache};
 use linera_chain::{
     types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, LiteCertificate},
+    vote_ledger::{JustifiedVote, LedgerEntry, VoteRecord},
     ChainStateView,
 };
 use linera_execution::{
@@ -253,6 +254,27 @@ pub mod metrics {
         )
     });
 
+    /// The metric counting how often a confirmation vote is written to the vote
+    /// ledger.
+    #[doc(hidden)]
+    pub(super) static WRITE_CONFIRMED_VOTE_COUNTER: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "write_confirmed_vote",
+            "The metric counting how often a confirmation vote is written to the vote ledger",
+        )
+    });
+
+    /// The metric counting how often a superseded confirmation vote is written to
+    /// the vote ledger.
+    #[doc(hidden)]
+    pub(super) static WRITE_SUPERSEDED_VOTE_COUNTER: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "write_superseded_vote",
+            "The metric counting how often a superseded confirmation vote is written to the \
+            vote ledger",
+        )
+    });
+
     /// The metric counting how often a block hash is read by height from storage.
     #[doc(hidden)]
     pub(super) static READ_BLOCK_HASH_BY_HEIGHT_COUNTER: LazyLock<IntCounterVec> =
@@ -419,6 +441,46 @@ impl MultiPartitionBatch {
         self.put_key_value(root_key, key, value);
     }
 
+    /// Adds a confirmation vote to the epoch's vote ledger: overwrites the chain's
+    /// latest-vote entry, and stores the replaced vote under its own key if the new
+    /// vote superseded one at the same height. Both are blind writes, so recording
+    /// a vote never requires a read.
+    fn add_confirmed_vote(
+        &mut self,
+        epoch: Epoch,
+        chain_id: &ChainId,
+        record: &VoteRecord,
+        superseded: Option<&JustifiedVote>,
+    ) -> Result<(), ViewError> {
+        #[cfg(with_metrics)]
+        metrics::WRITE_CONFIRMED_VOTE_COUNTER.inc();
+        let root_key = to_vote_ledger_root_key(epoch, chain_id);
+        let key = to_vote_ledger_latest_key(chain_id);
+        let value = bcs::to_bytes(record)?;
+        self.put_key_value(root_key.clone(), key, value);
+        if let Some(superseded) = superseded {
+            self.add_superseded_vote(epoch, chain_id, superseded)?;
+        }
+        Ok(())
+    }
+
+    /// Adds a superseded confirmation vote to the epoch's vote ledger, without
+    /// touching the chain's latest-vote entry.
+    fn add_superseded_vote(
+        &mut self,
+        epoch: Epoch,
+        chain_id: &ChainId,
+        superseded: &JustifiedVote,
+    ) -> Result<(), ViewError> {
+        #[cfg(with_metrics)]
+        metrics::WRITE_SUPERSEDED_VOTE_COUNTER.inc();
+        let root_key = to_vote_ledger_root_key(epoch, chain_id);
+        let key = to_vote_ledger_superseded_key(chain_id, &superseded.record);
+        let value = bcs::to_bytes(superseded)?;
+        self.put_key_value(root_key, key, value);
+        Ok(())
+    }
+
     fn add_network_description(
         &mut self,
         information: &NetworkDescription,
@@ -565,6 +627,10 @@ pub enum RootKey {
     BlockByHeight(ChainId),
     /// The event-to-block-height index of a chain.
     EventBlockHeight(ChainId),
+    /// One bucket of this validator's own confirmation votes in an epoch, keyed
+    /// by chain. Buckets split the ledger by the chain ID's first byte, so that no
+    /// single partition has to hold a whole epoch's votes.
+    VoteLedger(Epoch, u8),
 }
 
 const CHAIN_ID_TAG: u8 = 2;
@@ -594,6 +660,38 @@ fn to_event_key(event_id: &EventId) -> Vec<u8> {
 
 pub(crate) fn to_height_key(height: BlockHeight) -> Vec<u8> {
     bcs::to_bytes(&height).unwrap()
+}
+
+/// Tag prefix for a chain's latest confirmation vote in a `VoteLedger` partition.
+const VOTE_LEDGER_LATEST_TAG: u8 = 0;
+/// Tag prefix for a chain's superseded confirmation votes in a `VoteLedger`
+/// partition.
+const VOTE_LEDGER_SUPERSEDED_TAG: u8 = 1;
+
+/// Returns the root key of the vote-ledger bucket holding this chain's entries.
+/// Chain IDs are hashes, so the buckets split an epoch's ledger uniformly into
+/// 256 partitions.
+fn to_vote_ledger_root_key(epoch: Epoch, chain_id: &ChainId) -> Vec<u8> {
+    let bucket = bcs::to_bytes(chain_id).unwrap()[0];
+    RootKey::VoteLedger(epoch, bucket).bytes()
+}
+
+fn to_vote_ledger_latest_key(chain_id: &ChainId) -> Vec<u8> {
+    let mut key = vec![VOTE_LEDGER_LATEST_TAG];
+    key.extend(bcs::to_bytes(chain_id).unwrap());
+    key
+}
+
+fn to_vote_ledger_superseded_prefix(chain_id: &ChainId) -> Vec<u8> {
+    let mut key = vec![VOTE_LEDGER_SUPERSEDED_TAG];
+    key.extend(bcs::to_bytes(chain_id).unwrap());
+    key
+}
+
+fn to_vote_ledger_superseded_key(chain_id: &ChainId, record: &VoteRecord) -> Vec<u8> {
+    let mut key = to_vote_ledger_superseded_prefix(chain_id);
+    key.extend(bcs::to_bytes(&(record.height, record.round)).unwrap());
+    key
 }
 
 fn is_chain_state(root_key: &[u8]) -> bool {
@@ -1558,6 +1656,68 @@ where
             batch.add_event(&event_id, value);
         }
         self.write_batch(batch).await
+    }
+
+    #[instrument(skip_all, fields(chain_id = %chain_id, epoch = %epoch))]
+    async fn record_confirmed_vote(
+        &self,
+        epoch: Epoch,
+        chain_id: ChainId,
+        record: VoteRecord,
+        superseded: Option<JustifiedVote>,
+    ) -> Result<(), ViewError> {
+        let mut batch = MultiPartitionBatch::new();
+        batch.add_confirmed_vote(epoch, &chain_id, &record, superseded.as_ref())?;
+        self.write_batch(batch).await
+    }
+
+    #[instrument(skip_all, fields(chain_id = %chain_id, epoch = %epoch))]
+    async fn record_superseded_vote(
+        &self,
+        epoch: Epoch,
+        chain_id: ChainId,
+        superseded: JustifiedVote,
+    ) -> Result<(), ViewError> {
+        let mut batch = MultiPartitionBatch::new();
+        batch.add_superseded_vote(epoch, &chain_id, &superseded)?;
+        self.write_batch(batch).await
+    }
+
+    #[instrument(skip_all, fields(chain_id = %chain_id, epoch = %epoch))]
+    async fn read_vote_ledger_entry(
+        &self,
+        epoch: Epoch,
+        chain_id: ChainId,
+    ) -> Result<Option<LedgerEntry>, ViewError> {
+        let root_key = to_vote_ledger_root_key(epoch, &chain_id);
+        let store = self.database.open_shared(&root_key)?;
+        let Some(latest) = store
+            .read_value::<VoteRecord>(&to_vote_ledger_latest_key(&chain_id))
+            .await?
+        else {
+            return Ok(None);
+        };
+        let prefix = to_vote_ledger_superseded_prefix(&chain_id);
+        let mut superseded = Vec::new();
+        for (_, value) in store.find_key_values_by_prefix(&prefix).await? {
+            superseded.push(bcs::from_bytes(&value)?);
+        }
+        Ok(Some(LedgerEntry { latest, superseded }))
+    }
+
+    #[instrument(skip_all, fields(epoch = %epoch))]
+    async fn vote_ledger_chain_ids(&self, epoch: Epoch) -> Result<Vec<ChainId>, ViewError> {
+        // Ascending buckets, and sorted keys within each, so the result is ordered
+        // by serialized chain ID.
+        let mut chain_ids = Vec::new();
+        for bucket in 0..=u8::MAX {
+            let root_key = RootKey::VoteLedger(epoch, bucket).bytes();
+            let store = self.database.open_shared(&root_key)?;
+            for short_key in store.find_keys_by_prefix(&[VOTE_LEDGER_LATEST_TAG]).await? {
+                chain_ids.push(bcs::from_bytes(&short_key)?);
+            }
+        }
+        Ok(chain_ids)
     }
 
     #[instrument(skip_all)]
