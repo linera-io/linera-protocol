@@ -157,9 +157,15 @@ query Chain(
       }
     }
     receivedLog {
+      keys
       entries {
-        chainId
-        height
+        key
+        value {
+          entries {
+            chainId
+            height
+          }
+        }
       }
     }
     inboxes {

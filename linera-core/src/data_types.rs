@@ -40,9 +40,12 @@ pub struct ChainInfoQuery {
     /// Query the received messages that are waiting to be picked in the next block.
     #[debug(skip_if = Not::not)]
     pub request_pending_message_bundles: bool,
-    /// Query new certificate sender chain IDs and block heights received from the chain.
-    #[debug(skip_if = Option::is_none)]
-    pub request_received_log_excluding_first_n: Option<u64>,
+    /// Query new certificate sender chain IDs and block heights received from the
+    /// chain: for each requested sender epoch, the entries of that epoch's received
+    /// log, excluding the first `skip`.
+    #[debug(skip_if = BTreeMap::is_empty)]
+    #[cfg_attr(with_testing, strategy(proptest::strategy::Just(BTreeMap::new())))]
+    pub request_received_log: BTreeMap<Epoch, u64>,
     /// Query values from the chain manager, not just votes.
     #[debug(skip_if = Not::not)]
     pub request_manager_values: bool,
@@ -74,7 +77,7 @@ impl ChainInfoQuery {
             test_next_block_height: None,
             request_owner_balance: AccountOwner::CHAIN,
             request_pending_message_bundles: false,
-            request_received_log_excluding_first_n: None,
+            request_received_log: BTreeMap::new(),
             request_manager_values: false,
             request_leader_timeout: None,
             request_fallback: false,
@@ -108,9 +111,10 @@ impl ChainInfoQuery {
         self
     }
 
-    /// Also requests the received log entries, excluding the first `n`.
-    pub fn with_received_log_excluding_first_n(mut self, n: u64) -> Self {
-        self.request_received_log_excluding_first_n = Some(n);
+    /// Also requests the given sender epochs' received log entries, each excluding
+    /// the given number of entries at the front of that epoch's log.
+    pub fn with_received_logs(mut self, queries: impl IntoIterator<Item = (Epoch, u64)>) -> Self {
+        self.request_received_log.extend(queries);
         self
     }
 
@@ -172,11 +176,12 @@ pub struct ChainInfo {
     /// The response to `request_sent_certificate_hashes_by_heights`.
     #[debug(skip_if = Vec::is_empty)]
     pub requested_sent_certificate_hashes: Vec<CryptoHash>,
-    /// The current number of received certificates (useful for `request_received_log_excluding_first_n`)
-    pub count_received_log: usize,
-    /// The response to `request_received_certificates_excluding_first_n`
-    #[debug(skip_if = Vec::is_empty)]
-    pub requested_received_log: Vec<ChainAndHeight>,
+    /// The response to `request_received_log`: per requested sender epoch, the
+    /// entries of that epoch's received log after the requested offset. The total
+    /// number of entries is bounded, so epochs may be missing or cut short; the
+    /// client continues with adjusted offsets.
+    #[debug(skip_if = BTreeMap::is_empty)]
+    pub requested_received_log: BTreeMap<Epoch, Vec<ChainAndHeight>>,
     /// The response to `request_previous_event_blocks`.
     #[debug(skip_if = BTreeMap::is_empty)]
     pub requested_previous_event_blocks: BTreeMap<StreamId, (BlockHeight, CryptoHash)>,
@@ -299,8 +304,7 @@ impl ChainInfo {
             requested_owner_balance: None,
             requested_pending_message_bundles: Vec::new(),
             requested_sent_certificate_hashes: Vec::new(),
-            count_received_log: view.received_log.count(),
-            requested_received_log: Vec::new(),
+            requested_received_log: BTreeMap::new(),
             requested_previous_event_blocks: BTreeMap::new(),
             requested_latest_checkpoint_height: None,
         })

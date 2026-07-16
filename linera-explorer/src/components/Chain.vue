@@ -24,6 +24,14 @@ function pendingBundleCount(): number {
   }
   return count
 }
+
+function receivedLogCount(): number {
+  let count = 0
+  for (const entry of props.chain.receivedLog?.entries || []) {
+    count += entry.value?.entries?.length || 0
+  }
+  return count
+}
 </script>
 
 <template>
@@ -374,16 +382,19 @@ function pendingBundleCount(): number {
         </div>
 
         <!-- Received Log -->
-        <li v-if="chain.receivedLog?.entries?.length" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#chain-'+chain.chainId+'-receivedlog-collapse'">
-          <span><strong>Received Log</strong> ({{ chain.receivedLog.entries.length }})</span>
+        <li v-if="receivedLogCount()" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#chain-'+chain.chainId+'-receivedlog-collapse'">
+          <span><strong>Received Log</strong> ({{ receivedLogCount() }})</span>
           <i class="bi bi-caret-down-fill"></i>
         </li>
-        <div v-if="chain.receivedLog?.entries?.length" class="collapse" :id="'chain-'+chain.chainId+'-receivedlog-collapse'">
+        <div v-if="receivedLogCount()" class="collapse" :id="'chain-'+chain.chainId+'-receivedlog-collapse'">
           <div class="list-group small">
-            <div v-for="(entry, i) in chain.receivedLog.entries" :key="i" class="list-group-item p-1 ps-3">
-              <a @click="$root.route(undefined, [['chain', entry.chainId]])" class="btn btn-link btn-sm p-0 font-monospace">{{ short_hash(entry.chainId) }}</a>
-              <span class="ms-1">height {{ displayValue(entry.height) }}</span>
-            </div>
+            <template v-for="epochLog in chain.receivedLog.entries" :key="epochLog.key">
+              <div v-for="(entry, i) in epochLog.value?.entries || []" :key="epochLog.key + '-' + i" class="list-group-item p-1 ps-3">
+                <a @click="$root.route(undefined, [['chain', entry.chainId]])" class="btn btn-link btn-sm p-0 font-monospace">{{ short_hash(entry.chainId) }}</a>
+                <span class="ms-1">height {{ displayValue(entry.height) }}</span>
+                <span class="ms-1 text-body-secondary">epoch {{ displayValue(epochLog.key) }}</span>
+              </div>
+            </template>
           </div>
         </div>
 

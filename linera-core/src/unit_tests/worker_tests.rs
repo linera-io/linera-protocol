@@ -2252,7 +2252,12 @@ where
     );
     assert_eq!(chain.tip_state.get().next_block_height, BlockHeight(0));
     assert_eq!(None, chain.tip_state.get().block_hash);
-    assert_eq!(chain.received_log.count(), 1);
+    let received_log = chain
+        .received_log
+        .try_load_entry(&Epoch::ZERO)
+        .await?
+        .expect("no received log for epoch 0");
+    assert_eq!(received_log.count(), 1);
     Ok(())
 }
 
@@ -2495,20 +2500,27 @@ where
             recipient_chain.tip_state.get().block_hash,
             Some(certificate.hash())
         );
-        assert_eq!(recipient_chain.received_log.count(), 1);
+        let received_log = recipient_chain
+            .received_log
+            .try_load_entry(&Epoch::ZERO)
+            .await?
+            .expect("no received log for epoch 0");
+        assert_eq!(received_log.count(), 1);
     }
-    let query = ChainInfoQuery::new(chain_2).with_received_log_excluding_first_n(0);
+    let query = ChainInfoQuery::new(chain_2).with_received_logs([(Epoch::ZERO, 0)]);
     let response = env
         .executing_worker()
         .handle_chain_info_query(query)
         .await?;
-    assert_eq!(response.info.requested_received_log.len(), 1);
     assert_eq!(
-        response.info.requested_received_log[0],
-        ChainAndHeight {
-            chain_id: chain_1,
-            height: BlockHeight::ZERO
-        }
+        response.info.requested_received_log,
+        BTreeMap::from([(
+            Epoch::ZERO,
+            vec![ChainAndHeight {
+                chain_id: chain_1,
+                height: BlockHeight::ZERO,
+            }],
+        )])
     );
     Ok(())
 }
@@ -3802,22 +3814,13 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         .chain(bundles3.iter().cloned())
         .collect::<Vec<_>>();
 
-    fn without_epochs<'a>(
-        bundles: impl IntoIterator<Item = &'a (Epoch, MessageBundle)>,
-    ) -> Vec<MessageBundle> {
-        bundles
-            .into_iter()
-            .map(|(_, bundle)| bundle.clone())
-            .collect()
-    }
-
     let worker = env.worker();
     // Bundles are delivered regardless of their epoch's revocation.
     assert_eq!(
         worker
             .select_message_bundles(id1, &id0, BlockHeight::ZERO, bundles0123.clone())
             .await?,
-        without_epochs(&bundles0123)
+        bundles0123
     );
     // Already-received bundles are skipped, regardless of epoch.
     assert_eq!(
@@ -3830,7 +3833,11 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         worker
             .select_message_bundles(id1, &id0, BlockHeight::from(1), bundles012.clone())
             .await?,
-        without_epochs(bundles1.iter().chain(&bundles2))
+        bundles1
+            .iter()
+            .cloned()
+            .chain(bundles2.iter().cloned())
+            .collect::<Vec<_>>()
     );
     // Order of certificates is checked.
     assert_matches!(

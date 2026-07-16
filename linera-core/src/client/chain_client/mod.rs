@@ -1001,7 +1001,7 @@ impl<Env: Environment> ChainClient<Env> {
         let _latency = super::metrics::FIND_RECEIVED_CERTIFICATES_LATENCY.measure_latency();
         // Use network information from the local chain.
         let chain_id = self.chain_id;
-        let (_, committee) = self.admin_committee().await?;
+        let (current_epoch, committee) = self.admin_committee().await?;
         let nodes = self.client.make_nodes(&committee)?;
 
         let trackers = self
@@ -1012,6 +1012,28 @@ impl<Env: Environment> ChainClient<Env> {
 
         trace!("find_received_certificates: read trackers");
 
+        // The received log is kept per sender epoch, and validators may prune the
+        // logs of revoked epochs, so only the live epochs are queried. Revocation
+        // is monotone, so these are exactly the epochs from the lowest live one up
+        // to the current one.
+        let mut live_epochs = Vec::new();
+        let mut epoch = current_epoch;
+        loop {
+            let is_revoked = self
+                .storage_client()
+                .is_epoch_revoked(epoch)
+                .await
+                .map_err(LocalNodeError::from)?;
+            if is_revoked {
+                break;
+            }
+            live_epochs.push(epoch);
+            let Some(previous_epoch) = epoch.0.checked_sub(1) else {
+                break;
+            };
+            epoch = Epoch(previous_epoch);
+        }
+
         let received_log_batches = Arc::new(std::sync::Mutex::new(Vec::new()));
         // Proceed to downloading received logs.
         let result = communicate_with_quorum(
@@ -1020,14 +1042,28 @@ impl<Env: Environment> ChainClient<Env> {
             |_| (),
             |remote_node| {
                 let client = &self.client;
-                let tracker = trackers.get(&remote_node.public_key).copied().unwrap_or(0);
+                let live_epochs = &live_epochs;
+                let trackers = &trackers;
                 let received_log_batches = Arc::clone(&received_log_batches);
                 Box::pin(async move {
-                    let batch = client
-                        .get_received_log_from_validator(chain_id, &remote_node, tracker)
+                    let offsets = live_epochs
+                        .iter()
+                        .map(|epoch| {
+                            let tracker = trackers
+                                .get(&remote_node.public_key)
+                                .and_then(|trackers| trackers.get(epoch))
+                                .copied()
+                                .unwrap_or(0);
+                            (*epoch, tracker)
+                        })
+                        .collect();
+                    let remote_logs = client
+                        .get_received_log_from_validator(chain_id, &remote_node, offsets)
                         .await?;
                     let mut batches = received_log_batches.lock().unwrap();
-                    batches.push((remote_node.public_key, batch));
+                    for (epoch, batch) in remote_logs {
+                        batches.push((remote_node.public_key, epoch, batch));
+                    }
                     Ok(())
                 })
             },
@@ -1049,7 +1085,7 @@ impl<Env: Environment> ChainClient<Env> {
 
         debug!(
             received_logs_len = %received_logs.len(),
-            received_logs_total = %received_logs.iter().map(|x| x.1.len()).sum::<usize>(),
+            received_logs_total = %received_logs.iter().map(|x| x.2.len()).sum::<usize>(),
             "collected received logs"
         );
 
@@ -1154,6 +1190,7 @@ impl<Env: Environment> ChainClient<Env> {
                 Some(async move {
                     client
                         .download_and_process_sender_chain(
+                            self.chain_id,
                             sender_chain_id,
                             &nodes,
                             received_logs,

@@ -19,7 +19,9 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
-    data_types::{IncomingBundle, MessageAction, MessageBundle, PostedMessage, Transaction},
+    data_types::{
+        ChainAndHeight, IncomingBundle, MessageAction, MessageBundle, PostedMessage, Transaction,
+    },
     manager::LockingBlock,
     types::Timeout,
     ChainError, ChainExecutionContext,
@@ -1819,9 +1821,10 @@ where
 
     // `process_notification_from` does not advance the client's
     // `received_certificate_trackers`, so a subsequent `synchronize_from_validators`
-    // still sees (sender, 1) and (sender, 3) in the received log. But the sender's
-    // outbox has those heights scheduled locally now, so `find_received_certificates`
-    // filters them out and routes the sender through
+    // still sees (sender, 3) in epoch 1's received log (epoch 0's log is not even
+    // queried: the epoch is revoked). But the sender's outbox has that height
+    // scheduled locally now, so `find_received_certificates` filters it out and
+    // routes the sender through
     // `retry_pending_cross_chain_requests_from_sender_chains`. Before the fix this
     // initialized the sender's chain worker inside the receiver's node and, on
     // failing to find the `ChainDescription` blob in storage, triggered a download.
@@ -1830,6 +1833,40 @@ where
         !storage.contains_blob(sender_chain_desc_blob_id).await?,
         "retry_pending_cross_chain_requests must not download the ChainDescription",
     );
+
+    // Serving a live epoch's received log prunes the revoked epochs' logs: after
+    // the query below, validator 0 holds only epoch 1's log for the receiver.
+    let response = builder
+        .node(0)
+        .handle_chain_info_query(
+            crate::data_types::ChainInfoQuery::new(receiver_id)
+                .with_received_logs([(Epoch::from(1), 0)]),
+        )
+        .await?;
+    assert_eq!(
+        response.info.requested_received_log,
+        BTreeMap::from([(
+            Epoch::from(1),
+            vec![ChainAndHeight {
+                chain_id: sender_id,
+                height: cert3.block().header.height,
+            }],
+        )]),
+    );
+    {
+        let validator_0_key = builder.node(0).name();
+        let validator_0_storage = builder
+            .validator_storages
+            .get(&validator_0_key)
+            .expect("validator 0 storage")
+            .clone();
+        let chain_view = validator_0_storage.load_chain(receiver_id).await?;
+        assert_eq!(
+            chain_view.received_log.indices().await?,
+            vec![Epoch::from(1)],
+            "the revoked epoch's received log should have been pruned",
+        );
+    }
 
     Ok(())
 }
@@ -2046,6 +2083,118 @@ where
             cert.block().header.height,
         );
     }
+
+    Ok(())
+}
+
+/// A receiver syncing via the received log only sees live epochs' entries, but a
+/// sender block from a revoked epoch may still be undelivered. The sync must
+/// process the lowest listed block together with its sending ancestors, so that
+/// the pruned-epoch message is re-certified and delivered — otherwise the newer
+/// messages could never be scheduled behind the missing one.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[test_log::test(tokio::test)]
+async fn test_bulk_sync_across_revoked_epoch<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let admin = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
+    let receiver_id = receiver.chain_id();
+    let validator = builder
+        .initial_committee
+        .validator_addresses()
+        .next()
+        .unwrap();
+
+    // Height 0 (epoch 0): send to the receiver.
+    let cert0 = sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(receiver_id),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // Create epoch 1. The receiver learns about it from an admin-chain `NewBlock`
+    // notification — not via `synchronize_from_validators`, which would deliver
+    // the height-0 transfer before the epoch is revoked — and migrates to epoch 1.
+    let create_cert = admin
+        .stage_new_committee(builder.initial_committee.clone())
+        .await
+        .unwrap_ok_committed();
+    receiver
+        .process_notification_from(
+            Notification {
+                chain_id: admin.chain_id(),
+                reason: Reason::NewBlock {
+                    height: create_cert.block().header.height,
+                    hash: create_cert.hash(),
+                },
+            },
+            validator,
+        )
+        .await;
+    receiver.process_inbox().await?;
+    assert_eq!(receiver.chain_info().await?.epoch, Epoch::from(1));
+
+    // Height 1 migrates the sender to epoch 1 without sending anything; height 2
+    // (epoch 1) sends to the receiver again.
+    sender.synchronize_from_validators().await?;
+    let (migration_certs, _) = sender.process_inbox().await?;
+    let cert1 = migration_certs.last().expect("migration block").clone();
+    let cert2 = sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(receiver_id),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // Revoke epoch 0, and let the receiver learn about the revocation the same way.
+    let revoke_cert = admin.revoke_epochs(Epoch::ZERO).await.unwrap_ok_committed();
+    receiver
+        .process_notification_from(
+            Notification {
+                chain_id: admin.chain_id(),
+                reason: Reason::NewBlock {
+                    height: revoke_cert.block().header.height,
+                    hash: revoke_cert.hash(),
+                },
+            },
+            validator,
+        )
+        .await;
+    assert!(
+        receiver
+            .storage_client()
+            .is_epoch_revoked(Epoch::ZERO)
+            .await?,
+        "the receiver's local node should know that epoch 0 is revoked",
+    );
+
+    // Sync via the received log: only epoch 1's log is queried, listing only the
+    // height-2 block. Its `previous_message_blocks` walk must fetch and
+    // re-certify the height-0 block, so both transfers get delivered.
+    receiver.synchronize_from_validators().await?;
+    receiver.process_inbox().await?;
+    assert_eq!(
+        receiver.local_balance().await?,
+        Amount::from_tokens(2),
+        "both transfers should have been received",
+    );
+
+    // The sender blocks were downloaded, but not the migration block in between.
+    let storage = receiver.storage_client();
+    assert!(storage.contains_certificate(cert0.hash()).await?);
+    assert!(!storage.contains_certificate(cert1.hash()).await?);
+    assert!(storage.contains_certificate(cert2.hash()).await?);
 
     Ok(())
 }

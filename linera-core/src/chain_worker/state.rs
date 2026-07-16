@@ -272,7 +272,7 @@ where
         origin: &ChainId,
         next_height_to_receive: BlockHeight,
         mut bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Vec<MessageBundle>, WorkerError> {
+    ) -> Result<Vec<(Epoch, MessageBundle)>, WorkerError> {
         let mut latest_height = None;
         let mut skipped_len = 0;
         for (i, (_, bundle)) in bundles.iter().enumerate() {
@@ -293,10 +293,7 @@ where
                 sample_bundle.height,
             );
         }
-        Ok(bundles
-            .drain(skipped_len..)
-            .map(|(_, bundle)| bundle)
-            .collect())
+        Ok(bundles.drain(skipped_len..).collect())
     }
 
     /// Returns whether the given epoch has been revoked on the admin chain,
@@ -437,7 +434,43 @@ where
         if query.request_fallback {
             self.vote_for_fallback().await?;
         }
+        if let Some(up_to) = query.request_received_log.keys().next().copied() {
+            self.prune_revoked_received_logs(up_to).await?;
+        }
         self.prepare_chain_info_response(query).await
+    }
+
+    /// Removes the received logs of revoked epochs below `up_to`. Run whenever a
+    /// client asks for received logs, with `up_to` the lowest requested epoch:
+    /// entries of revoked epochs are useless to clients — the certificates they
+    /// point to can no longer be verified on their own, and blocks that still
+    /// matter are re-certified via `previous_block_hash` /
+    /// `previous_message_blocks` links instead.
+    async fn prune_revoked_received_logs(&mut self, up_to: Epoch) -> Result<(), WorkerError> {
+        // Find the highest revoked epoch below `up_to`. Since revocation is
+        // monotone, every stored epoch at or below it is revoked and prunable.
+        // Walk the stored epochs below `up_to` from highest to lowest and stop at
+        // the first revoked one.
+        let stored = self.chain.received_log.indices().await?;
+        let mut highest_revoked = None;
+        for epoch in stored.iter().rev().filter(|epoch| **epoch < up_to) {
+            if self.is_epoch_revoked(*epoch).await? {
+                highest_revoked = Some(*epoch);
+                break;
+            }
+        }
+        let Some(highest_revoked) = highest_revoked else {
+            return Ok(());
+        };
+        let mut pruned = false;
+        for epoch in stored.iter().filter(|epoch| **epoch <= highest_revoked) {
+            self.chain.received_log.remove_entry(epoch)?;
+            pruned = true;
+        }
+        if pruned {
+            self.save().await?;
+        }
+        Ok(())
     }
 
     /// Returns the requested blob, if it belongs to the current locking block or pending proposal.
@@ -1504,13 +1537,13 @@ where
         }
 
         let bundles = self.select_message_bundles(&origin, next_height_to_receive, bundles)?;
-        let Some(last_updated_height) = bundles.last().map(|bundle| bundle.height) else {
+        let Some(last_updated_height) = bundles.last().map(|(_, bundle)| bundle.height) else {
             return Ok(CrossChainUpdateResult::NothingToDo);
         };
         // Process the received messages in certificates.
         let local_time = self.storage.clock().current_time();
         let mut previous_height = None;
-        for bundle in bundles {
+        for (epoch, bundle) in bundles {
             let add_to_received_log = previous_height != Some(bundle.height);
             previous_height = Some(bundle.height);
             // Update the staged chain state with the received block.
@@ -1518,6 +1551,7 @@ where
                 .receive_message_bundle_with_inbox(
                     &mut inbox,
                     &origin,
+                    epoch,
                     bundle,
                     local_time,
                     add_to_received_log,
@@ -1948,10 +1982,46 @@ where
     ))]
     pub(crate) async fn update_received_certificate_trackers(
         &mut self,
-        new_trackers: BTreeMap<ValidatorPublicKey, u64>,
+        new_trackers: BTreeMap<ValidatorPublicKey, BTreeMap<Epoch, u64>>,
     ) -> Result<(), WorkerError> {
         self.chain
-            .update_received_certificate_trackers(new_trackers);
+            .update_received_certificate_trackers(new_trackers)
+            .await?;
+        // Drop tracker entries for revoked epochs: those epochs' received logs are
+        // pruned by validators and never queried again. Revocation is monotone, so
+        // the walk over the ascending epoch set can stop at the first live one.
+        let all_trackers = self
+            .chain
+            .received_certificate_trackers
+            .index_values()
+            .await?;
+        let epochs = all_trackers
+            .iter()
+            .flat_map(|(_, trackers)| trackers.keys().copied())
+            .collect::<BTreeSet<_>>();
+        let mut revoked_epochs = BTreeSet::new();
+        for epoch in epochs {
+            let is_revoked = self.is_epoch_revoked(epoch).await?;
+            if !is_revoked {
+                break;
+            }
+            revoked_epochs.insert(epoch);
+        }
+        for (validator, mut trackers) in all_trackers {
+            if !trackers.keys().any(|epoch| revoked_epochs.contains(epoch)) {
+                continue;
+            }
+            trackers.retain(|epoch, _| !revoked_epochs.contains(epoch));
+            if trackers.is_empty() {
+                self.chain
+                    .received_certificate_trackers
+                    .remove(&validator)?;
+            } else {
+                self.chain
+                    .received_certificate_trackers
+                    .insert(&validator, trackers)?;
+            }
+        }
         self.save().await?;
         Ok(())
     }
@@ -2096,8 +2166,15 @@ where
     /// Gets received certificate trackers.
     pub(crate) async fn get_received_certificate_trackers(
         &self,
-    ) -> Result<HashMap<ValidatorPublicKey, u64>, WorkerError> {
-        Ok(self.chain.received_certificate_trackers.get().clone())
+    ) -> Result<HashMap<ValidatorPublicKey, BTreeMap<Epoch, u64>>, WorkerError> {
+        Ok(self
+            .chain
+            .received_certificate_trackers
+            .index_values()
+            .await?
+            .into_iter()
+            .map(|(validator, trackers)| (validator, trackers.into()))
+            .collect())
     }
 
     /// Gets tip state and outbox info for next_outbox_heights calculation.
@@ -2706,13 +2783,26 @@ where
             .block_hashes_for_heights(query.request_sent_certificate_hashes_by_heights)
             .await?;
         info.requested_sent_certificate_hashes = hashes;
-        if let Some(start) = query.request_received_log_excluding_first_n {
-            let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
-            let max_received_log_entries = self.config.chain_info_max_received_log_entries;
-            let end = start
-                .saturating_add(max_received_log_entries)
-                .min(chain.received_log.count());
-            info.requested_received_log = chain.received_log.read(start..end).await?;
+        if !query.request_received_log.is_empty() {
+            // Serve the requested epochs in ascending order, bounding the total
+            // number of entries in the response: if the bound cuts an epoch's log
+            // short, the client repeats the request with advanced offsets.
+            let mut remaining = self.config.chain_info_max_received_log_entries;
+            for (epoch, skip) in query.request_received_log {
+                if remaining == 0 {
+                    break;
+                }
+                let skip = usize::try_from(skip).map_err(|_| ArithmeticError::Overflow)?;
+                let Some(log) = chain.received_log.try_load_entry(&epoch).await? else {
+                    continue;
+                };
+                let end = skip.saturating_add(remaining).min(log.count());
+                if skip < end {
+                    let entries = log.read(skip..end).await?;
+                    remaining -= entries.len();
+                    info.requested_received_log.insert(epoch, entries);
+                }
+            }
         }
         if query.request_manager_values {
             info.manager.add_values(&chain.manager);

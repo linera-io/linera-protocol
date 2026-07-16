@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     sync::Arc,
 };
 
@@ -25,6 +25,7 @@ use linera_execution::{
     ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
+    collection_view::CustomCollectionView,
     context::Context,
     log_view::LogView,
     map_view::{CustomMapView, MapView},
@@ -306,10 +307,20 @@ where
     /// `height < next_block_height` is executed; a block at `height >= next_block_height`
     /// is preprocessed (verified but not yet executed) and may not be contiguous.
     pub block_hashes: CustomMapView<C, BlockHeight, CryptoHash>,
-    /// Sender chain and height of all certified blocks known as a receiver (local ordering).
-    pub received_log: LogView<C, ChainAndHeight>,
-    /// The number of `received_log` entries we have synchronized, for each validator.
-    pub received_certificate_trackers: RegisterView<C, HashMap<ValidatorPublicKey, u64>>,
+    /// Sender chain and height of all certified blocks known as a receiver (local
+    /// ordering), keyed by the epoch of the sender block's certificate. Partitioned
+    /// by epoch so that a revoked epoch's log can be dropped wholesale: clients
+    /// cannot verify those certificates on their own anymore, and blocks that still
+    /// matter are re-certified via `previous_block_hash` /
+    /// `previous_message_blocks` links instead.
+    pub received_log: CustomCollectionView<C, Epoch, LogView<C, ChainAndHeight>>,
+    /// The number of `received_log` entries we have synchronized, per validator and
+    /// per sender epoch. There are only few epochs at a time, so we keep them all in a
+    /// single entry per validator. Node-local synchronization bookkeeping, not exposed
+    /// via GraphQL.
+    #[cfg_attr(with_graphql, graphql(skip))]
+    pub received_certificate_trackers:
+        MapView<C, ValidatorPublicKey, NonCanonicalBTreeMap<Epoch, u64>>,
 
     /// Mailboxes used to receive messages indexed by their origin.
     pub inboxes: ReentrantCollectionView<C, ChainId, InboxStateView<C>>,
@@ -598,6 +609,7 @@ where
         &mut self,
         inbox: &mut InboxStateView<C>,
         origin: &ChainId,
+        epoch: Epoch,
         bundle: MessageBundle,
         local_time: Timestamp,
         add_to_received_log: bool,
@@ -643,29 +655,39 @@ where
 
         // Remember the certificate for future validator/client synchronizations.
         if add_to_received_log {
-            self.received_log.push(chain_and_height);
+            self.received_log
+                .load_entry_mut(&epoch)
+                .await?
+                .push(chain_and_height);
         }
         Ok(())
     }
 
     /// Updates the `received_log` trackers.
-    pub fn update_received_certificate_trackers(
+    pub async fn update_received_certificate_trackers(
         &mut self,
-        new_trackers: BTreeMap<ValidatorPublicKey, u64>,
-    ) {
-        for (name, tracker) in new_trackers {
-            self.received_certificate_trackers
-                .get_mut()
-                .entry(name)
-                .and_modify(|t| {
-                    // Because several synchronizations could happen in parallel, we need to make
-                    // sure to never go backward.
-                    if tracker > *t {
-                        *t = tracker;
-                    }
-                })
-                .or_insert(tracker);
+        new_trackers: BTreeMap<ValidatorPublicKey, BTreeMap<Epoch, u64>>,
+    ) -> Result<(), ChainError> {
+        for (name, epoch_trackers) in new_trackers {
+            let mut trackers = self
+                .received_certificate_trackers
+                .get(&name)
+                .await?
+                .unwrap_or_default();
+            let mut changed = false;
+            for (epoch, tracker) in epoch_trackers {
+                // Because several synchronizations could happen in parallel, we need to
+                // make sure to never go backward.
+                if tracker > trackers.get(&epoch).copied().unwrap_or(0) {
+                    trackers.insert(epoch, tracker);
+                    changed = true;
+                }
+            }
+            if changed {
+                self.received_certificate_trackers.insert(&name, trackers)?;
+            }
         }
+        Ok(())
     }
 
     /// Returns the current epoch and committee of this chain.

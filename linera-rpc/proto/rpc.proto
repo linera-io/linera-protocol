@@ -241,8 +241,9 @@ message ChainInfoQuery {
   // Query the received messages that are waiting to be picked in the next block.
   bool request_pending_message_bundles = 3;
 
-  // Query new certificate removed from the chain.
-  optional uint64 request_received_log_excluding_first_n = 4;
+  // Query the entries of the given sender epochs' received logs, skipping the
+  // given number of entries at the front of each epoch's log.
+  map<uint32, uint64> request_received_log = 4;
 
   // Query values from the chain manager, not just votes.
   bool request_manager_values = 5;

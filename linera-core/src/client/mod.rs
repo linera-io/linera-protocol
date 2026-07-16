@@ -1774,6 +1774,7 @@ impl<Env: Environment> Client<Env> {
     #[instrument(level = "debug", skip_all, fields(chain_id = %sender_chain_id))]
     async fn download_and_process_sender_chain(
         &self,
+        receiver_chain_id: ChainId,
         sender_chain_id: ChainId,
         nodes: &[RemoteNode<Env::ValidatorNode>],
         received_log: &ReceivedLogs,
@@ -1781,6 +1782,55 @@ impl<Env: Environment> Client<Env> {
         sender: mpsc::UnboundedSender<ChainAndHeight>,
     ) {
         let mut nodes = nodes.to_vec();
+        // Process the lowest block together with its earlier message blocks first:
+        // its `previous_message_blocks` chain may reach into revoked epochs, whose
+        // received-log entries are pruned by validators and therefore missing from
+        // `remote_heights`. The ancestor walk downloads exactly the message-bearing
+        // predecessors (re-certifying revoked-epoch ones via the blocks that
+        // commit to them), so that the newer blocks' messages can actually be
+        // scheduled in the outbox. The downloaded certificates land in storage,
+        // where the loop below picks them up.
+        if let Some(lowest_height) = remote_heights.first().copied() {
+            let received_log = &received_log;
+            let result = communicate_concurrently(
+                &nodes,
+                async move |remote_node| {
+                    if !received_log.validator_has_block(
+                        &remote_node.public_key,
+                        sender_chain_id,
+                        lowest_height,
+                    ) {
+                        // The validator's log didn't contain the block; let the
+                        // others handle it.
+                        return Err(chain_client::Error::RemoteNodeError(
+                            NodeError::MissingCertificateValue,
+                        ));
+                    }
+                    self.download_sender_block_with_sending_ancestors(
+                        receiver_chain_id,
+                        sender_chain_id,
+                        lowest_height,
+                        &remote_node,
+                    )
+                    .await
+                },
+                self.options.certificate_batch_download_hedge_delay,
+                self.storage_client().clock(),
+            )
+            .await;
+            if let Err(errors) = result {
+                for (validator, error) in errors {
+                    warn!(
+                        %validator,
+                        %sender_chain_id,
+                        %lowest_height,
+                        %error,
+                        "failed to process the lowest sender block with its \
+                         sending ancestors",
+                    );
+                }
+            }
+        }
         while !remote_heights.is_empty() {
             // Check local storage first — certificates may already be available from
             // a prior sync cycle, another receiver chain, or a concurrent notification.
@@ -1941,30 +1991,37 @@ impl<Env: Environment> Client<Env> {
         trace!("find_received_certificates: finished processing chain");
     }
 
-    /// Downloads the log of received messages for a chain from a validator.
-    #[instrument(level = "trace", skip(self))]
+    /// Downloads the per-epoch logs of messages received from senders in the given
+    /// epochs for a chain from a validator, starting at the given per-epoch
+    /// offsets. All epochs are requested in a single query; the validator bounds
+    /// the total number of entries per response, so the request is repeated with
+    /// advanced offsets until nothing is cut short anymore.
+    #[instrument(level = "trace", skip(self, offsets))]
     async fn get_received_log_from_validator(
         &self,
         chain_id: ChainId,
         remote_node: &RemoteNode<Env::ValidatorNode>,
-        tracker: u64,
-    ) -> Result<Vec<ChainAndHeight>, chain_client::Error> {
-        let mut offset = tracker;
-
+        mut offsets: BTreeMap<Epoch, u64>,
+    ) -> Result<BTreeMap<Epoch, Vec<ChainAndHeight>>, chain_client::Error> {
         // Retrieve the list of newly received certificates from this validator.
-        let mut remote_log = Vec::new();
+        let mut remote_logs = BTreeMap::<Epoch, Vec<ChainAndHeight>>::new();
         loop {
             trace!("get_received_log_from_validator: looping");
-            let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(offset);
+            let query = ChainInfoQuery::new(chain_id).with_received_logs(offsets.clone());
             let info = remote_node.handle_chain_info_query(query).await?;
-            let received_entries = info.requested_received_log.len();
-            offset += received_entries as u64;
-            remote_log.extend(info.requested_received_log);
+            let received_entries: usize = info.requested_received_log.values().map(Vec::len).sum();
+            for (epoch, entries) in info.requested_received_log {
+                if let Some(offset) = offsets.get_mut(&epoch) {
+                    *offset += entries.len() as u64;
+                    remote_logs.entry(epoch).or_default().extend(entries);
+                }
+            }
             trace!(
                 remote_node = remote_node.address(),
                 %received_entries,
                 "get_received_log_from_validator: received log batch",
             );
+            // A response below the total bound means no epoch's log was cut short.
             if received_entries < CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES {
                 break;
             }
@@ -1972,11 +2029,11 @@ impl<Env: Environment> Client<Env> {
 
         trace!(
             remote_node = remote_node.address(),
-            num_entries = remote_log.len(),
+            num_entries = remote_logs.values().map(Vec::len).sum::<usize>(),
             "get_received_log_from_validator: returning downloaded log",
         );
 
-        Ok(remote_log)
+        Ok(remote_logs)
     }
 
     /// Downloads a specific sender block and recursively downloads any earlier blocks

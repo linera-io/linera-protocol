@@ -326,10 +326,13 @@ ChainInfo:
     - requested_sent_certificate_hashes:
         SEQ:
           TYPENAME: CryptoHash
-    - count_received_log: U64
     - requested_received_log:
-        SEQ:
-          TYPENAME: ChainAndHeight
+        MAP:
+          KEY:
+            TYPENAME: Epoch
+          VALUE:
+            SEQ:
+              TYPENAME: ChainAndHeight
     - requested_previous_event_blocks:
         MAP:
           KEY:
@@ -351,8 +354,11 @@ ChainInfoQuery:
     - request_owner_balance:
         TYPENAME: AccountOwner
     - request_pending_message_bundles: BOOL
-    - request_received_log_excluding_first_n:
-        OPTION: U64
+    - request_received_log:
+        MAP:
+          KEY:
+            TYPENAME: Epoch
+          VALUE: U64
     - request_manager_values: BOOL
     - request_leader_timeout:
         OPTION:
