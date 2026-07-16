@@ -15,8 +15,8 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, OracleResponse, Round,
-        Timestamp,
+        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Cursor, Epoch, OracleResponse,
+        Round, Timestamp,
     },
     ensure,
     hashed::Hashed,
@@ -1505,6 +1505,22 @@ where
             return Ok(CrossChainUpdateResult::NothingToDo);
         }
         Ok(CrossChainUpdateResult::Updated(last_updated_height))
+    }
+
+    /// Removes an incoming bundle that can never be consumed by this chain's blocks —
+    /// enough validators cannot hold it that no proposal consuming it gets certified —
+    /// and marks the lane as settled up to it, so that a certified consumption by
+    /// another owner's block still reconciles as a no-op.
+    pub(crate) async fn settle_unavailable_bundle(
+        &mut self,
+        origin: ChainId,
+        cursor: Cursor,
+    ) -> Result<(), WorkerError> {
+        let mut inbox = self.chain.inboxes.try_load_entry_mut(&origin).await?;
+        inbox.settle_unavailable_bundle(cursor).await?;
+        drop(inbox);
+        self.save().await?;
+        Ok(())
     }
 
     /// Handles the cross-chain request confirming that the recipient was updated.

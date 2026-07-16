@@ -4573,6 +4573,102 @@ where
     Ok(())
 }
 
+/// A proposal consuming a `CheckpointAck` bundle that some validator can never hold
+/// must be retried without it. Validator 0 misses the recipient's ack-sending
+/// checkpoint and is later bootstrapped from the recipient's *next* checkpoint, so the
+/// ack block stays below its tip: pushing certificates cannot heal it, and it rejects
+/// every ack-consuming proposal with `MissingCrossChainUpdate`. With a second validator
+/// offline, such a proposal cannot reach quorum — the client must drop the skippable
+/// ack bundle and move on instead of wedging.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[test_log::test(tokio::test)]
+async fn test_unavailable_checkpoint_ack_is_skipped<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    // Validator 0 sees nothing of what follows: not the transfer, and crucially not the
+    // recipient's checkpoints.
+    builder.set_fault_type([0], FaultType::NoChains);
+    let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let recipient_id = recipient.chain_id();
+
+    // The recipient consumes a transfer and checkpoints, acknowledging it; then burns
+    // and checkpoints again, so its latest checkpoint sits above the ack-sending block.
+    producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(2),
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+    recipient.synchronize_from_validators().await?;
+    recipient.process_inbox().await?;
+    recipient.checkpoint().await.unwrap().unwrap();
+    recipient
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    recipient.checkpoint().await.unwrap().unwrap();
+
+    // Validator 0 comes back and validator 1 goes offline. The recipient's next block
+    // bootstraps validator 0 from the latest checkpoint — past the ack-sending block,
+    // which nothing can deliver to it anymore.
+    builder.set_fault_type([0], FaultType::Honest);
+    builder.set_fault_type([1], FaultType::Offline);
+    recipient
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+
+    // The producer's inbox holds only the unavailable ack. Consuming it can never be
+    // certified (validator 0 rejects it, validator 1 is offline), so the client skips
+    // the bundle; with nothing else to include, no block is proposed at all.
+    producer.synchronize_from_validators().await?;
+    let (certificates, _) = producer.process_inbox().await?;
+    assert!(
+        certificates.is_empty(),
+        "the unconsumable ack must be skipped, not wedge the client",
+    );
+
+    // The skip is durable: the ack was settled in the local inbox, so a fresh
+    // `process_inbox` — e.g. after a client restart — has nothing to retry.
+    {
+        let chain = producer
+            .client
+            .local_node
+            .chain_state_view(producer.chain_id())
+            .await?;
+        let inbox = chain
+            .inboxes
+            .try_load_entry(&recipient_id)
+            .await?
+            .expect("the producer has an inbox for the recipient");
+        assert_eq!(
+            inbox.added_bundles.count(),
+            0,
+            "the settled ack must be gone from the local inbox",
+        );
+    }
+
+    // The chain stays fully usable: a new transfer commits — without the ack.
+    let certificate = producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+    assert!(!certificate.block().consumes_checkpoint_ack());
+
+    Ok(())
+}
+
 /// Verifies the push side of the checkpoint flow: a validator that missed the whole
 /// chain is brought up to speed by the proposing client pushing only the latest
 /// checkpoint plus the pre-checkpoint sender blocks it certifies, not every

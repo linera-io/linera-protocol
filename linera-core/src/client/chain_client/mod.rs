@@ -21,7 +21,7 @@ use linera_base::{
     crypto::{signer, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlobContent,
-        BlockHeight, ChainDescription, Epoch, MessagePolicy, Round, TimeDelta, Timestamp,
+        BlockHeight, ChainDescription, Cursor, Epoch, MessagePolicy, Round, TimeDelta, Timestamp,
     },
     ensure,
     identifiers::{
@@ -425,6 +425,22 @@ impl<Env: Environment> ChainClient<Env> {
             .get(&self.chain_id)
             .expect("Chain client constructed for invalid chain")
             .proposal_mutex()
+    }
+
+    /// Settles acknowledgement bundles that a validator rejected as unavailable in the
+    /// local inbox: they are removed from the pending bundles, durably, so future
+    /// proposals leave them out without a failed round-trip.
+    async fn settle_unavailable_acks(
+        &self,
+        acks: BTreeMap<(ChainId, BlockHeight), Cursor>,
+    ) -> Result<(), Error> {
+        for ((origin, _), cursor) in acks {
+            self.client
+                .local_node
+                .settle_unavailable_bundle(self.chain_id, origin, cursor)
+                .await?;
+        }
+        Ok(())
     }
 
     /// Returns the pending proposal, if any.
@@ -1452,22 +1468,41 @@ impl<Env: Environment> ChainClient<Env> {
         // Even if there is no pending proposal, this still calls
         // `request_leader_timeout_if_needed` which ensures the local chain state
         // is synchronized with the current consensus round.
+        let pending_acks = proposal_guard
+            .as_ref()
+            .map(|pending| ack_bundles_in(&pending.block.transactions))
+            .unwrap_or_default();
         match self
             .process_pending_block_without_prepare(&mut proposal_guard)
-            .await?
+            .await
         {
-            ClientOutcome::Committed(Some(certificate)) => {
+            Ok(ClientOutcome::Committed(Some(certificate))) => {
                 return Ok(self.classify_committed(certificate, &operations));
             }
-            ClientOutcome::WaitForTimeout(timeout) => {
+            Ok(ClientOutcome::WaitForTimeout(timeout)) => {
                 return Ok(ClientOutcome::WaitForTimeout(timeout))
             }
-            ClientOutcome::Conflict(certificate) => {
+            Ok(ClientOutcome::Conflict(certificate)) => {
                 return Ok(ClientOutcome::Conflict(certificate))
             }
-            ClientOutcome::Committed(None) => {}
+            Ok(ClientOutcome::Committed(None)) => {}
+            Err(error) => {
+                // The leftover proposal itself may contain an unavailable
+                // acknowledgement bundle; discard it rather than stay wedged. The loop
+                // below rebuilds the block without the bundle.
+                let unavailable = unavailable_ack_bundles(&error, &pending_acks);
+                if unavailable.is_empty() {
+                    return Err(error);
+                }
+                warn!(
+                    chain_id = %self.chain_id,
+                    ?unavailable,
+                    "discarding a pending proposal with unavailable acknowledgement bundles",
+                );
+                self.settle_unavailable_acks(unavailable).await?;
+                *proposal_guard = None;
+            }
         }
-
         loop {
             // Collect pending messages and epoch changes after acquiring the lock to avoid
             // race conditions where messages valid for one block height are proposed at a
@@ -1483,13 +1518,38 @@ impl<Env: Environment> ChainClient<Env> {
                 )));
             }
 
+            let proposed_acks = ack_bundles_in(&transactions);
+
             self.new_pending_block(transactions, blobs.clone(), &mut proposal_guard)
                 .await?;
 
-            match self
+            let outcome = match self
                 .process_pending_block_without_prepare(&mut proposal_guard)
-                .await?
+                .await
             {
+                Ok(outcome) => outcome,
+                Err(error) => {
+                    let unavailable = unavailable_ack_bundles(&error, &proposed_acks);
+                    if unavailable.is_empty() {
+                        return Err(error);
+                    }
+                    // A validator rejected an acknowledgement bundle it does not hold —
+                    // e.g. it bootstrapped the sender chain from a checkpoint past the
+                    // acknowledgement, which nothing resends. Settle the bundle in the
+                    // local inbox and retry without it: validators that do hold it
+                    // discard it when the lane's next bundle is consumed.
+                    warn!(
+                        chain_id = %self.chain_id,
+                        ?unavailable,
+                        "retrying the proposal without unavailable acknowledgement bundles",
+                    );
+                    self.settle_unavailable_acks(unavailable).await?;
+                    *proposal_guard = None;
+                    continue;
+                }
+            };
+
+            match outcome {
                 ClientOutcome::Committed(Some(certificate)) => {
                     return Ok(self.classify_committed(certificate, &operations));
                 }
@@ -3527,6 +3587,60 @@ impl<Env: Environment> ChainClient<Env> {
 
         Ok(())
     }
+}
+
+/// Returns the transactions' incoming bundles that consist solely of `CheckpointAck`
+/// messages, keyed by `(origin, height)` — the fields named by
+/// [`NodeError::MissingCrossChainUpdate`] — with their inbox cursors as values.
+fn ack_bundles_in(transactions: &[Transaction]) -> BTreeMap<(ChainId, BlockHeight), Cursor> {
+    transactions
+        .iter()
+        .filter_map(|transaction| match transaction {
+            Transaction::ReceiveMessages(incoming)
+                if incoming
+                    .bundle
+                    .messages
+                    .iter()
+                    .all(|posted| posted.message.is_checkpoint_ack()) =>
+            {
+                Some((
+                    (incoming.origin, incoming.bundle.height),
+                    incoming.bundle.cursor(),
+                ))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// Returns the subset of `ack_bundles` — the proposed bundles consisting solely of
+/// `CheckpointAck` messages, keyed by `(origin, height)` — that a validator rejected
+/// with [`NodeError::MissingCrossChainUpdate`]. An acknowledgement's bundle has no
+/// availability guarantee, so a validator that does not hold it never will; a proposal
+/// containing it can only be certified by retrying without it.
+fn unavailable_ack_bundles(
+    error: &Error,
+    ack_bundles: &BTreeMap<(ChainId, BlockHeight), Cursor>,
+) -> BTreeMap<(ChainId, BlockHeight), Cursor> {
+    let Error::CommunicationError(error) = error else {
+        return BTreeMap::new();
+    };
+    let node_errors = match error {
+        CommunicationError::Trusted(error) => vec![error],
+        CommunicationError::Sample(samples) => samples.iter().map(|(error, _)| error).collect(),
+        CommunicationError::NoConsensus(_, _) => Vec::new(),
+    };
+    node_errors
+        .into_iter()
+        .filter_map(|error| match error {
+            NodeError::MissingCrossChainUpdate { origin, height, .. } => {
+                let key = (*origin, *height);
+                let cursor = ack_bundles.get(&key)?;
+                Some((key, *cursor))
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 #[cfg(with_testing)]

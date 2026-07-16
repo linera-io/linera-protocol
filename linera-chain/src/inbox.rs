@@ -235,6 +235,26 @@ where
         Ok(())
     }
 
+    /// Removes the added bundle at `cursor` and records the lane as settled up to and
+    /// including it, as if the sender had declared it so. Used for a bundle that can
+    /// never be consumed by this chain's blocks — enough validators cannot hold it that
+    /// no proposal consuming it gets certified. A certified consumption by another
+    /// owner's block still reconciles, as a no-op below `sender_pruned_cursor`.
+    pub async fn settle_unavailable_bundle(&mut self, cursor: Cursor) -> Result<(), ViewError> {
+        let bundles = self.added_bundles.elements().await?;
+        self.added_bundles.clear();
+        for bundle in bundles {
+            if bundle.cursor() != cursor {
+                self.added_bundles.push_back(bundle);
+            }
+        }
+        self.note_sender_pruned_below(Cursor {
+            height: cursor.height,
+            index: cursor.index.saturating_add(1),
+        })
+        .await
+    }
+
     /// Consumes a bundle from the inbox.
     ///
     /// Returns `true` if the bundle was already known, i.e. it was present in `added_bundles`.
