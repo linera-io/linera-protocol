@@ -946,10 +946,9 @@ where
         // Trust-mark accept path: an earlier checkpoint cert recorded this block's
         // hash in `pre_checkpoint_block_trust`. Removing the trust mark here is
         // only an in-memory change; if anything below fails before `save`, the
-        // mark survives on the next reload. The dispatch's `gap` definition
-        // (`!=` rather than `<`) routes both above-tip and below-tip trust
-        // uploads to `preprocess_certified_block` so the chain can write the
-        // cert without advancing the tip.
+        // mark survives on the next reload. Below-tip uploads are routed to
+        // `preprocess_certified_block` so the chain can write the cert without
+        // advancing the tip.
         let in_trust_set = self
             .chain
             .pre_checkpoint_block_trust
@@ -959,9 +958,19 @@ where
             self.chain.pre_checkpoint_block_trust.remove(&block_hash)?;
         }
 
-        // Check if we already processed this block.
+        // Check if we already processed this block. Being below the tip is not enough
+        // to tell: a chain bootstrapped from a checkpoint is sparse, so a below-tip
+        // block may never have been seen — e.g. the client pushes the block that
+        // published a blob the latest checkpoint no longer vouches for, so that this
+        // worker learns the blob. Skip only if the block's hash is recorded on the
+        // chain or its certificate is in storage (certificates are written together
+        // with their blobs); otherwise fall through and process it.
         let tip = self.chain.tip_state.get().clone();
-        if !in_trust_set && tip.next_block_height > height {
+        if !in_trust_set
+            && tip.next_block_height > height
+            && (self.chain.block_hashes.contains_key(&height).await?
+                || self.storage.contains_certificate(block_hash).await?)
+        {
             let actions = self.create_network_actions(None).await?;
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
@@ -1009,6 +1018,15 @@ where
             .into_iter()
             .map(|blob| (blob.id(), blob))
             .collect::<BTreeMap<_, _>>();
+
+        // A below-tip block is never executed and never restores a checkpoint — that
+        // would rewind the chain. It is only written to storage (together with its
+        // blobs, above) and preprocessed, whatever the mode.
+        if height < tip.next_block_height {
+            return self
+                .preprocess_certified_block(certificate, notify_when_messages_are_delivered)
+                .await;
+        }
 
         // Dispatch on the actual outcome (preprocess / checkpoint-restore-then-execute
         // / contiguous execute):
