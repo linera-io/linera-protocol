@@ -85,6 +85,15 @@ where
     /// validator (e.g. when a sender re-pushes) must be a no-op rather than re-enter
     /// the inbox or the removed-by-anticipation queue.
     pub restored_cursor: RegisterView<C, Cursor>,
+    /// The lowest cursor at which the sender may still push a new bundle. Set when an
+    /// update's first bundle declares no predecessor: the sender's checkpoint settled
+    /// the lane below that bundle, so nothing below is re-pushable — a node that never
+    /// received those bundles can only learn of their consumption through this chain's
+    /// certified blocks. Below this cursor, consumptions that cannot be reconciled with
+    /// `added_bundles` are ignored instead of raising `UnexpectedBundle`, nothing is
+    /// anticipated, and re-deliveries are dropped. Bundles actually present in
+    /// `added_bundles` are unaffected: they still reconcile (or get skipped) normally.
+    pub sender_pruned_cursor: RegisterView<C, Cursor>,
 }
 
 #[derive(Error, Debug)]
@@ -207,6 +216,25 @@ where
         Ok(())
     }
 
+    /// Records that the sender will never push a bundle with a cursor below `cursor`
+    /// again, because an update declared no predecessor for its first bundle — the
+    /// sender's checkpoint settled the lane below it. Anticipated bundles below the
+    /// cursor are dropped: the push each of them is waiting for will never arrive, and
+    /// leaving them in place would fail the reconciliation of every future push.
+    pub async fn note_sender_pruned_below(&mut self, cursor: Cursor) -> Result<(), ViewError> {
+        if cursor <= *self.sender_pruned_cursor.get() {
+            return Ok(());
+        }
+        self.sender_pruned_cursor.set(cursor);
+        while let Some(front) = self.removed_bundles.front().await? {
+            if front.cursor() >= cursor {
+                break;
+            }
+            self.removed_bundles.delete_front();
+        }
+        Ok(())
+    }
+
     /// Consumes a bundle from the inbox.
     ///
     /// Returns `true` if the bundle was already known, i.e. it was present in `added_bundles`.
@@ -245,6 +273,18 @@ where
         }
         // Reconcile the bundle with the next added bundle, or mark it as removed.
         let already_known = match self.added_bundles.front().await? {
+            Some(previous_bundle)
+                if previous_bundle.cursor() > cursor
+                    && cursor < *self.sender_pruned_cursor.get() =>
+            {
+                // The bundle was never added and never will be — but the sender's
+                // checkpoint settled the lane below `sender_pruned_cursor`, so the push
+                // is not missing, it is gone for good. The consumption executes from the
+                // certified block's own copy of the bundle; there is nothing to
+                // reconcile.
+                tracing::trace!("Ignoring consumption of pruned bundle {:?}", bundle);
+                false
+            }
             Some(previous_bundle) => {
                 // Rationale: If the two cursors are equal, then the bundles should match.
                 // Otherwise, at this point we know that `self.next_cursor_to_add >
@@ -261,6 +301,12 @@ where
                 self.added_bundles.delete_front();
                 tracing::trace!("Consuming bundle {:?}", bundle);
                 true
+            }
+            None if cursor < *self.sender_pruned_cursor.get() => {
+                // Nothing to anticipate: the sender's checkpoint settled the lane below
+                // `sender_pruned_cursor`, so this bundle will never be pushed.
+                tracing::trace!("Ignoring consumption of pruned bundle {:?}", bundle);
+                false
             }
             None => {
                 tracing::trace!("Marking bundle as expected: {:?}", bundle);
@@ -286,6 +332,12 @@ where
         if cursor < *self.restored_cursor.get() {
             // The sender is re-delivering a bundle whose effects are already baked
             // into our restored execution state. Silently drop it.
+            return Ok(false);
+        }
+        if cursor < *self.sender_pruned_cursor.get() {
+            // A re-delivery racing the update that declared the lane settled below
+            // `sender_pruned_cursor`. Whatever this bundle's fate — consumed and
+            // acknowledged, or skipped — reconciliation for it is over. Silently drop it.
             return Ok(false);
         }
         ensure!(

@@ -5451,19 +5451,26 @@ where
     Ok(())
 }
 
-/// Preprocessing must tolerate a predecessor height that a checkpoint pruned from
-/// `block_hashes`. An outbox drained while ahead of the tip survives with
+/// Both ends of a message lane must tolerate blocks that a checkpoint pruned.
+///
+/// Sender side: an outbox drained while ahead of the tip survives with
 /// `next_height_to_schedule` pointing past its last scheduled block; once that block's
 /// messages are acknowledged, the next checkpoint prunes it. Preprocessing a later
 /// message block on the same lane (with a gap) then finds no hash at the predecessor
 /// height. That is legitimate pruning, not corruption: the checkpoint also dropped the
 /// recipient's `previous_message_blocks` anchor, so the incoming block carries no
 /// predecessor either, and its messages must be scheduled for delivery.
+///
+/// Receiver side: a node that never received the pruned block's bundle gets the
+/// post-checkpoint bundle with `previous_height: None`, which marks the lane as settled
+/// below it. When a certified block later consumes the missed bundle, the inbox must
+/// reconcile it as a no-op — its cursor is below an already-added bundle, which without
+/// the settling mark is a fatal `UnexpectedBundle`, wedging the lane for good.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
-async fn test_preprocess_tolerates_pruned_predecessor<B>(
+async fn test_checkpoint_pruned_lane_sender_and_receiver<B>(
     mut storage_builder: B,
 ) -> anyhow::Result<()>
 where
@@ -5622,19 +5629,72 @@ where
             None,
         )
         .await?;
-    let chain = env.worker().chain_state_view(chain_1).await?;
-    assert_eq!(
-        chain
-            .outboxes
-            .try_load_entry(&chain_2)
-            .await?
-            .expect("the outbox for chain_2 still exists")
-            .queue
-            .elements()
-            .await?,
-        vec![cert_final.inner().block().header.height],
-        "the post-checkpoint transfer must be scheduled despite the pruned predecessor",
+    {
+        let chain = env.worker().chain_state_view(chain_1).await?;
+        assert_eq!(
+            chain
+                .outboxes
+                .try_load_entry(&chain_2)
+                .await?
+                .expect("the outbox for chain_2 still exists")
+                .queue
+                .elements()
+                .await?,
+            vec![cert_final.inner().block().header.height],
+            "the post-checkpoint transfer must be scheduled despite the pruned predecessor",
+        );
+    }
+
+    // Receiver side. This worker's chain_2 never received the first transfer's bundle:
+    // it only gets the post-checkpoint transfer, whose update declares no predecessor
+    // and thereby marks the lane as settled below it.
+    let update = update_recipient_direct(chain_2, &cert_final);
+    assert_matches!(
+        &update,
+        CrossChainRequest::UpdateRecipient {
+            previous_height: None,
+            ..
+        }
     );
+    env.worker().handle_cross_chain_request(update).await?;
+
+    // Replaying chain_2's certified blocks consumes the first transfer's bundle — never
+    // added here, and sitting below the added post-checkpoint bundle. The settled mark
+    // makes that a no-op instead of a fatal `UnexpectedBundle`.
+    for cert in [&cert_consume, &cert_checkpoint_2] {
+        env.worker()
+            .process_confirmed_block(cert.clone(), ProcessConfirmedBlockMode::Execute, None)
+            .await?;
+    }
+
+    // The lane stays healthy: the pending post-checkpoint bundle reconciles normally
+    // when chain_2's next block consumes it.
+    let final_bundle = IncomingBundle {
+        origin: chain_1,
+        bundle: cert_final
+            .message_bundles_for(chain_2)
+            .next()
+            .expect("the post-checkpoint transfer sends a bundle to chain_2")
+            .1,
+        action: MessageAction::Accept,
+    };
+    let cert_consume_final = env
+        .execute_proposal(
+            make_child_block(cert_checkpoint_2.value()).with_incoming_bundle(final_bundle),
+            vec![],
+        )
+        .await?;
+    env.worker()
+        .process_confirmed_block(cert_consume_final, ProcessConfirmedBlockMode::Execute, None)
+        .await?;
+    let chain = env.worker().chain_state_view(chain_2).await?;
+    let inbox = chain
+        .inboxes
+        .try_load_entry(&chain_1)
+        .await?
+        .expect("chain_2 has an inbox for chain_1");
+    assert_eq!(inbox.added_bundles.count(), 0);
+    assert_eq!(inbox.removed_bundles.count(), 0);
     Ok(())
 }
 

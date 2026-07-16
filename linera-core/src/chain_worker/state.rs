@@ -1419,6 +1419,16 @@ where
     ) -> Result<CrossChainUpdateResult, WorkerError> {
         // Only process certificates with relevant heights and epochs.
         let mut inbox = self.chain.inboxes.try_load_entry_mut(&origin).await?;
+        // An update whose first bundle declares no predecessor certifies that the sender
+        // will never push anything below that bundle on this lane again: either the lane
+        // is fresh, or the sender's checkpoint settled everything below. Record that in
+        // the inbox, so that consumptions of the settled bundles by this chain's
+        // certified blocks reconcile as no-ops instead of wedging the lane.
+        if sender_previous_height.is_none() {
+            if let Some((_, bundle)) = bundles.first() {
+                inbox.note_sender_pruned_below(bundle.cursor()).await?;
+            }
+        }
         let next_height_to_receive = inbox.next_block_height_to_receive()?;
         let last_anticipated_block_height = inbox
             .removed_bundles
