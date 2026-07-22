@@ -148,12 +148,6 @@ jobs:
             linera-bridge:latest
             ${{ github.event_name != 'workflow_dispatch' && format('{0}/linera-bridge:{1}', env.GCP_REGISTRY, github.base_ref || github.ref_name) || '' }}
 
-      - name: Push bridge image to registry
-        if: steps.build-bridge.outcome == 'success' && github.event_name != 'workflow_dispatch'
-        run: |
-          BRANCH="${{ github.base_ref || github.ref_name }}"
-          docker push "${GCP_REGISTRY}/linera-bridge:${BRANCH}"
-
       - name: Build evm-bridge Wasm module
         run: cargo build --release --target wasm32-unknown-unknown
         working-directory: linera-bridge/contracts/evm-bridge
