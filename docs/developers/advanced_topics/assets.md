@@ -24,12 +24,12 @@ The
 does this:
 
 ```rust,ignore
-    async fn execute_operation(&mut self, operation: Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Operation) -> Self::Response {
         match operation {
             // ...
             Operation::CloseChain => {
-                for order_id in self.state.orders.indices().await.unwrap() {
-                    match self.modify_order(order_id, ModifyAmount::All).await {
+                for order_id in self.state.orders.indices().unwrap() {
+                    match self.modify_order(order_id, ModifyAmount::All) {
                         Some(transfer) => self.send_to(transfer),
                         // Orders with amount zero may have been cleared in an earlier iteration.
                         None => continue,

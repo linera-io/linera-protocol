@@ -27,9 +27,8 @@ impl Service for CounterService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = CounterState::load(runtime.root_view_storage_context())
-            .await
-            .expect("Failed to load state");
+        let state =
+            CounterState::load(runtime.root_view_storage_context()).expect("Failed to load state");
         CounterService {
             state,
             runtime: Arc::new(runtime),
@@ -65,7 +64,6 @@ mod tests {
     use futures::FutureExt as _;
     use linera_sdk::{
         linera_base_types::{ChainId, CryptoHash},
-        util::BlockingWait,
         views::View,
         Service, ServiceRuntime,
     };
@@ -80,7 +78,6 @@ mod tests {
         runtime.set_chain_id(hash);
         runtime.set_application_creator_chain_id(hash);
         let mut state = CounterState::load(runtime.root_view_storage_context())
-            .blocking_wait()
             .expect("Failed to read from mock key value store");
         state.value.set(value);
 

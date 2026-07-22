@@ -45,7 +45,6 @@ impl Service for EvmBridgeService {
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
         let state = BridgeState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         EvmBridgeService {
             state: Arc::new(state),
@@ -198,7 +197,6 @@ impl EvmBridgeService {
         self.state
             .processed_deposits
             .contains(&bytes)
-            .await
             .expect("failed to check processed deposits")
     }
 

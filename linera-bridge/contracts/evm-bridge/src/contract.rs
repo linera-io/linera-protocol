@@ -12,6 +12,7 @@ use linera_bridge::proof;
 use linera_sdk::{
     ethereum::{ContractEthereumClient, EthereumQueries},
     linera_base_types::{StreamName, WithContractAbi, U128},
+    util::BlockingWait as _,
     views::{linera_views, RegisterView, RootView, SetView, View, ViewStorageContext},
     Contract, ContractRuntime,
 };
@@ -47,19 +48,18 @@ impl Contract for EvmBridge {
     type InstantiationArgument = BridgeInstantiationArgument;
     type EventValue = BurnEvent;
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = BridgeState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         EvmBridge { state, runtime }
     }
 
-    async fn instantiate(&mut self, argument: BridgeInstantiationArgument) {
-        self.validate_rpc_endpoint(&argument.rpc_endpoint).await;
+    fn instantiate(&mut self, argument: BridgeInstantiationArgument) {
+        self.validate_rpc_endpoint(&argument.rpc_endpoint);
         self.state.rpc_endpoint.set(argument.rpc_endpoint);
     }
 
-    async fn execute_operation(&mut self, operation: BridgeOperation) {
+    fn execute_operation(&mut self, operation: BridgeOperation) {
         match operation {
             BridgeOperation::ProcessDeposit {
                 block_header_rlp,
@@ -74,11 +74,10 @@ impl Contract for EvmBridge {
                     &proof_nodes,
                     tx_index,
                     log_index,
-                )
-                .await;
+                );
             }
             BridgeOperation::VerifyBlockHash { block_hash } => {
-                self.verify_block_hash(block_hash).await;
+                self.verify_block_hash(block_hash);
 
                 // Only cache when called by an authenticated signer (chain owner),
                 // preventing unauthenticated callers from bloating state.
@@ -103,7 +102,7 @@ impl Contract for EvmBridge {
                 self.runtime
                     .authenticated_owner()
                     .expect("SetRpcEndpoint requires an authenticated signer");
-                self.validate_rpc_endpoint(&rpc_endpoint).await;
+                self.validate_rpc_endpoint(&rpc_endpoint);
                 self.state.rpc_endpoint.set(rpc_endpoint);
             }
             BridgeOperation::Burn { amount, evm_target } => {
@@ -112,7 +111,7 @@ impl Contract for EvmBridge {
         }
     }
 
-    async fn execute_message(&mut self, message: BridgeMessage) {
+    fn execute_message(&mut self, message: BridgeMessage) {
         match message {
             BridgeMessage::Burn { amount, evm_target } => {
                 // A bouncing delivery is a no-op: the funding transfer is part
@@ -129,8 +128,8 @@ impl Contract for EvmBridge {
         }
     }
 
-    async fn store(mut self) {
-        self.state.save().await.expect("Failed to save state");
+    fn store(mut self) {
+        self.state.save().expect("Failed to save state");
     }
 }
 
@@ -142,7 +141,7 @@ impl EvmBridge {
     /// leaving the previously stored endpoint unchanged. Shared by both so a
     /// live bridge cannot be repointed at a wrong-chain endpoint without the
     /// same check applied at genesis.
-    async fn validate_rpc_endpoint(&mut self, rpc_endpoint: &str) {
+    fn validate_rpc_endpoint(&mut self, rpc_endpoint: &str) {
         if rpc_endpoint.is_empty() {
             return;
         }
@@ -150,7 +149,7 @@ impl EvmBridge {
         let client = ContractEthereumClient::new(rpc_endpoint.to_string());
         let chain_id = client
             .get_chain_id()
-            .await
+            .blocking_wait()
             .expect("failed to query chain ID from RPC endpoint");
         assert_eq!(
             chain_id, source_chain_id,
@@ -158,7 +157,7 @@ impl EvmBridge {
         );
     }
 
-    async fn verify_block_hash(&mut self, block_hash: [u8; 32]) {
+    fn verify_block_hash(&mut self, block_hash: [u8; 32]) {
         let rpc_endpoint = self.state.rpc_endpoint.get();
         assert!(
             !rpc_endpoint.is_empty(),
@@ -187,7 +186,7 @@ impl EvmBridge {
         log::info!("verified block hash 0x{hash_hex} is finalized");
     }
 
-    async fn process_deposit(
+    fn process_deposit(
         &mut self,
         block_header_rlp: &[u8],
         receipt_rlp: &[u8],
@@ -210,10 +209,9 @@ impl EvmBridge {
             .state
             .verified_block_hashes
             .contains(&block_hash.0)
-            .await
             .expect("failed to check verified block hashes")
         {
-            self.verify_block_hash(block_hash.0).await;
+            self.verify_block_hash(block_hash.0);
         }
 
         // 2. Verify receipt inclusion via MPT proof
@@ -272,7 +270,6 @@ impl EvmBridge {
                 .state
                 .processed_deposits
                 .contains(&deposit_hash)
-                .await
                 .expect("failed to check processed deposits"),
             "deposit already processed"
         );
