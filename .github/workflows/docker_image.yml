@@ -2,7 +2,7 @@ name: Docker Image
 
 on:
   push:
-    branches: [ main, 'devnet_*', 'testnet_*', 'bridge-main' ]
+    branches: [ main, 'devnet_*', 'testnet_*' ]
   workflow_dispatch:
 
 permissions:
@@ -65,7 +65,7 @@ jobs:
 
           REGISTRY_BASE="us-docker.pkg.dev/linera-io-dev/linera-public-registry"
 
-          for IMAGE_VAR in LINERA:linera LINERA_TESTS:linera-tests INDEXER:linera-indexer EXPLORER:linera-explorer EXPORTER:linera-exporter BRIDGE:linera-bridge PLAYGROUND:linera-playground; do
+          for IMAGE_VAR in LINERA:linera LINERA_TESTS:linera-tests INDEXER:linera-indexer EXPLORER:linera-explorer EXPORTER:linera-exporter PLAYGROUND:linera-playground; do
             VAR="${IMAGE_VAR%%:*}"
             NAME="${IMAGE_VAR##*:}"
             echo "${VAR}_IMAGE_BRANCH=${REGISTRY_BASE}/${NAME}:${BRANCH_TAG}" >> "$GITHUB_ENV"
@@ -152,17 +152,13 @@ jobs:
             "${EXPORTER_IMAGE_BRANCH}" "${EXPORTER_IMAGE_SHORT}" "${EXPORTER_IMAGE_LONG}" "Exporter" "" &
           PID_EXPORTER=$!
 
-          build_and_push "docker/Dockerfile.bridge" \
-            "${BRIDGE_IMAGE_BRANCH}" "${BRIDGE_IMAGE_SHORT}" "${BRIDGE_IMAGE_LONG}" "Bridge" "" &
-          PID_BRIDGE=$!
-
           build_and_push "docker/Dockerfile.playground" \
             "${PLAYGROUND_IMAGE_BRANCH}" "${PLAYGROUND_IMAGE_SHORT}" "${PLAYGROUND_IMAGE_LONG}" "Playground" "" &
           PID_PLAYGROUND=$!
 
           SUCCESS_NAMES=""
           FAILED_NAMES=""
-          for NAME_PID in Linera:$PID_LINERA LineraTests:$PID_LINERA_TESTS Indexer:$PID_INDEXER Explorer:$PID_EXPLORER Exporter:$PID_EXPORTER Bridge:$PID_BRIDGE Playground:$PID_PLAYGROUND; do
+          for NAME_PID in Linera:$PID_LINERA LineraTests:$PID_LINERA_TESTS Indexer:$PID_INDEXER Explorer:$PID_EXPLORER Exporter:$PID_EXPORTER Playground:$PID_PLAYGROUND; do
             NAME="${NAME_PID%%:*}"
             PID="${NAME_PID##*:}"
             if wait "$PID"; then
