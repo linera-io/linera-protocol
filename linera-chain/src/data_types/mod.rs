@@ -27,7 +27,7 @@ use linera_base::{
 };
 use linera_execution::{committee::Committee, Message, MessageKind, Operation, OutgoingMessage};
 use serde::{Deserialize, Serialize};
-use tracing::instrument;
+use tracing::{info, instrument};
 
 use crate::{
     block::{Block, ValidatedBlock},
@@ -308,6 +308,10 @@ impl IncomingBundle {
             if self.bundle.is_skippable() {
                 return None;
             } else if !self.bundle.is_protected() {
+                info!(
+                    origin = %self.origin,
+                    "Rejecting incoming message bundle due to the message policy"
+                );
                 self.action = MessageAction::Reject;
             }
         }
