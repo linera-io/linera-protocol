@@ -1137,6 +1137,161 @@ where
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
+async fn test_proposal_batches_missing_cross_chain_update_catch_up<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    // A block that consumes incoming bundles from several sender chains is proposed to a
+    // validator that is behind on *all* of those senders. The validator must report every
+    // missing sender at once (as a single `MissingCrossChainUpdates`) and the client must catch
+    // them up in a single batch, instead of the one-rejection-and-round-trip-per-sender loop
+    // that serialized into multi-minute stalls on busy hub chains. This exercises the
+    // client-side batching/termination logic in `updater.rs`.
+    let signer = InMemorySigner::new(None);
+    // Zero default-faulty validators so the only unavailable validators are the ones this test
+    // deliberately takes offline below; the quorum is still three out of four.
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+
+    // Three independent sender chains and one recipient ("hub") chain. The committee has four
+    // validators with a quorum of three.
+    let sender1 = builder.add_root_chain(1, Amount::from_tokens(2)).await?;
+    let sender2 = builder.add_root_chain(2, Amount::from_tokens(2)).await?;
+    let sender3 = builder.add_root_chain(3, Amount::from_tokens(2)).await?;
+    let recipient = builder.add_root_chain(4, Amount::ZERO).await?;
+    let recipient_id = recipient.chain_id();
+
+    // Phase A: validator 3 is unavailable while the senders transfer to the recipient. In the
+    // single-process harness a validator only delivers a cross-chain message to the recipient's
+    // inbox when it handles the sender's certificate, so validator 3 ends up missing both the
+    // sender blocks and the resulting bundles in the recipient's inbox. The transfers still
+    // reach the quorum {0, 1, 2}.
+    builder.set_fault_type([3], FaultType::OfflineWithInfo);
+    for sender in [&sender1, &sender2, &sender3] {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::ONE,
+                Account::chain(recipient_id),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+
+    // The recipient learns about all three incoming bundles (and preprocesses the sender blocks
+    // into its local storage) from the honest quorum.
+    recipient.synchronize_from_validators().await?;
+
+    // Phase B: validator 3 comes back, but validator 2 — one of the validators that *does* have
+    // the sender blocks — goes offline. The recipient's block now needs validator 3's vote to
+    // reach a quorum {0, 1, 3}, so the updater cannot route around validator 3: it must catch it
+    // up on every missing sender before validator 3 can accept the proposal.
+    builder.set_fault_type([3], FaultType::Honest);
+    builder.set_fault_type([2], FaultType::Offline);
+
+    // Consume all three bundles in a single block. Validator 3 rejects the proposal with an
+    // aggregated `MissingCrossChainUpdates` listing all three senders; the client syncs them in
+    // one batch and the block is confirmed.
+    recipient.process_inbox().await?;
+
+    assert_eq!(
+        recipient.local_balance().await.unwrap(),
+        Amount::from_tokens(3),
+    );
+    // A single block consumed all three bundles (height 1, not 3).
+    assert_eq!(
+        recipient.chain_info().await?.next_block_height,
+        BlockHeight::from(1),
+    );
+    assert!(recipient.pending_proposal().await.is_none());
+
+    // The previously-lagging validator 3 was caught up and voted: the block reached the quorum
+    // {0, 1, 3} (validator 2 is offline and is skipped by the check).
+    builder
+        .check_that_validators_have_certificate(recipient_id, BlockHeight::ZERO, 3)
+        .await
+        .unwrap();
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_proposal_catch_up_with_sender_gap<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    // A lagging validator must be caught up on a sender that has a *gap* from the recipient's
+    // perspective: sender block 0 messages the recipient, block 1 does not, block 2 does. The
+    // recipient consumes those two bundles in two separate blocks, so the second proposal only
+    // references sender block 2 — whose bundle can only be scheduled once block 0 is executed.
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let sender_id = sender.chain_id();
+    let recipient_id = recipient.chain_id();
+
+    // Validator 3 is offline while the sender builds a gapped chain and the recipient consumes
+    // the first bundle.
+    builder.set_fault_type([3], FaultType::OfflineWithInfo);
+
+    // Sender block 0 -> recipient.
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+    recipient.synchronize_from_validators().await?;
+    recipient.process_inbox().await?; // recipient block 0 consumes sender block 0's bundle
+
+    // Sender block 1 -> itself (no message to the recipient: the gap), block 2 -> recipient.
+    sender
+        .transfer_to_account(AccountOwner::CHAIN, Amount::ONE, Account::chain(sender_id))
+        .await
+        .unwrap_ok_committed();
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(3),
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+    recipient.synchronize_from_validators().await?;
+
+    // Validator 3 comes back; validator 2 goes offline so the recipient's next block needs
+    // validator 3's vote — the updater must catch it up on the sender across the gap.
+    builder.set_fault_type([3], FaultType::Honest);
+    builder.set_fault_type([2], FaultType::Offline);
+
+    recipient.process_inbox().await?; // recipient block 1 consumes sender block 2's bundle
+
+    assert_eq!(
+        recipient.local_balance().await.unwrap(),
+        Amount::from_tokens(4),
+    );
+    assert_eq!(
+        recipient.chain_info().await?.next_block_height,
+        BlockHeight::from(2),
+    );
+    builder
+        .check_that_validators_have_certificate(recipient_id, BlockHeight::from(1), 3)
+        .await
+        .unwrap();
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
 async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances<B>(
     storage_builder: B,
 ) -> anyhow::Result<()>
