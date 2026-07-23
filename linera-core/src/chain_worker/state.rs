@@ -15,8 +15,8 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, OracleResponse, Round,
-        Timestamp,
+        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Cursor, Epoch, OracleResponse,
+        Round, Timestamp,
     },
     ensure,
     hashed::Hashed,
@@ -1419,6 +1419,16 @@ where
     ) -> Result<CrossChainUpdateResult, WorkerError> {
         // Only process certificates with relevant heights and epochs.
         let mut inbox = self.chain.inboxes.try_load_entry_mut(&origin).await?;
+        // An update whose first bundle declares no predecessor certifies that the sender
+        // will never push anything below that bundle on this lane again: either the lane
+        // is fresh, or the sender's checkpoint settled everything below. Record that in
+        // the inbox, so that consumptions of the settled bundles by this chain's
+        // certified blocks reconcile as no-ops instead of wedging the lane.
+        if sender_previous_height.is_none() {
+            if let Some((_, bundle)) = bundles.first() {
+                inbox.note_sender_pruned_below(bundle.cursor()).await?;
+            }
+        }
         let next_height_to_receive = inbox.next_block_height_to_receive()?;
         let last_anticipated_block_height = inbox
             .removed_bundles
@@ -1495,6 +1505,22 @@ where
             return Ok(CrossChainUpdateResult::NothingToDo);
         }
         Ok(CrossChainUpdateResult::Updated(last_updated_height))
+    }
+
+    /// Removes an incoming bundle that can never be consumed by this chain's blocks —
+    /// enough validators cannot hold it that no proposal consuming it gets certified —
+    /// and marks the lane as settled up to it, so that a certified consumption by
+    /// another owner's block still reconciles as a no-op.
+    pub(crate) async fn settle_unavailable_bundle(
+        &mut self,
+        origin: ChainId,
+        cursor: Cursor,
+    ) -> Result<(), WorkerError> {
+        let mut inbox = self.chain.inboxes.try_load_entry_mut(&origin).await?;
+        inbox.settle_unavailable_bundle(cursor).await?;
+        drop(inbox);
+        self.save().await?;
+        Ok(())
     }
 
     /// Handles the cross-chain request confirming that the recipient was updated.
@@ -1686,24 +1712,16 @@ where
         let mut heights_to_re_add = Vec::new();
         let mut current_height = latest_height;
         while current_height >= retransmit_from {
-            // We arrived at current_height via previous_message_blocks links, starting from the
-            // chain state and following the links downwards. So these blocks should all be in
-            // `block_hashes` already.
+            // A height missing from `block_hashes` means a checkpoint pruned the block:
+            // every recipient — in particular this one — had acknowledged its messages.
+            // Acknowledgements cover a prefix of each lane, so everything from here down
+            // is included in the recipient's own latest checkpoint and needs no
+            // retransmission. Stop the walk and resend only what was collected above.
+            let Some(hash) = self.chain.block_hashes.get(&current_height).await? else {
+                break;
+            };
             heights_to_re_add.push(current_height);
             // Load the block at current_height to find the previous message block
-            let hash = match &*self
-                .chain
-                .block_hashes_for_heights([current_height])
-                .await?
-            {
-                [hash] => *hash,
-                _ => {
-                    return Err(WorkerError::BlockHashNotFound {
-                        height: current_height,
-                        chain_id: self.chain_id(),
-                    })
-                }
-            };
             let block = self
                 .read_confirmed_blocks(&[hash])
                 .await?
@@ -2553,6 +2571,10 @@ where
         ensure!(
             !round.is_fast() || !block.has_oracle_responses(),
             WorkerError::FastBlockUsingOracles
+        );
+        ensure!(
+            !round.is_fast() || !block.consumes_checkpoint_ack(),
+            WorkerError::FastBlockConsumingCheckpointAck
         );
         let chain = &mut self.chain;
         // Don't save the changes since the block is not confirmed yet.

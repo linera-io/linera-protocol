@@ -5451,6 +5451,253 @@ where
     Ok(())
 }
 
+/// Both ends of a message lane must tolerate blocks that a checkpoint pruned.
+///
+/// Sender side: an outbox drained while ahead of the tip survives with
+/// `next_height_to_schedule` pointing past its last scheduled block; once that block's
+/// messages are acknowledged, the next checkpoint prunes it. Preprocessing a later
+/// message block on the same lane (with a gap) then finds no hash at the predecessor
+/// height. That is legitimate pruning, not corruption: the checkpoint also dropped the
+/// recipient's `previous_message_blocks` anchor, so the incoming block carries no
+/// predecessor either, and its messages must be scheduled for delivery.
+///
+/// Receiver side: a node that never received the pruned block's bundle gets the
+/// post-checkpoint bundle with `previous_height: None`, which marks the lane as settled
+/// below it. When a certified block later consumes the missed bundle, the inbox must
+/// reconcile it as a no-op — its cursor is below an already-added bundle, which without
+/// the settling mark is a fatal `UnexpectedBundle`, wedging the lane for good.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_checkpoint_pruned_lane_sender_and_receiver<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let sender_key_pair = AccountSecretKey::generate();
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    let chain_1 = env
+        .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(10))
+        .await
+        .id();
+    let chain_2 = env
+        .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ZERO)
+        .await
+        .id();
+
+    // chain_1.0: a transfer to chain_2.
+    let cert_transfer = env
+        .make_simple_transfer_certificate(
+            chain_1,
+            sender_key_pair.public(),
+            chain_2,
+            Amount::ONE,
+            Vec::new(),
+            None,
+        )
+        .await;
+
+    // chain_2.0 consumes the transfer, and chain_2.1 checkpoints, acknowledging it.
+    let transfer_bundle = IncomingBundle {
+        origin: chain_1,
+        bundle: cert_transfer
+            .message_bundles_for(chain_2)
+            .next()
+            .expect("the transfer sends a bundle to chain_2")
+            .1,
+        action: MessageAction::Accept,
+    };
+    let cert_consume = env
+        .execute_proposal(
+            make_first_block(chain_2).with_incoming_bundle(transfer_bundle),
+            vec![],
+        )
+        .await?;
+    let cert_checkpoint_2 = env
+        .execute_proposal(
+            make_child_block(cert_consume.value()).with_operation(SystemOperation::Checkpoint),
+            vec![],
+        )
+        .await?;
+
+    // chain_1.1 consumes the ack, and chain_1.2 checkpoints: with the whole lane
+    // acknowledged there is nothing to vouch for, and chain_2's anchor is dropped.
+    let ack_bundle = IncomingBundle {
+        origin: chain_2,
+        bundle: cert_checkpoint_2
+            .message_bundles_for(chain_1)
+            .next()
+            .expect("chain_2's checkpoint sends a CheckpointAck to chain_1")
+            .1,
+        action: MessageAction::Accept,
+    };
+    let cert_ack = env
+        .execute_proposal(
+            make_child_block(cert_transfer.value()).with_incoming_bundle(ack_bundle),
+            vec![],
+        )
+        .await?;
+    let cert_checkpoint_1 = env
+        .execute_proposal(
+            make_child_block(cert_ack.value()).with_operation(SystemOperation::Checkpoint),
+            vec![],
+        )
+        .await?;
+
+    // chain_1.3: a message-free filler, so the next transfer sits above it. chain_1.4:
+    // another transfer to chain_2 — since the checkpoint dropped the lane's anchor, its
+    // body carries no predecessor for chain_2.
+    let cert_filler = env
+        .execute_proposal(
+            make_child_block(cert_checkpoint_1.value())
+                .with_burn(Amount::ONE)
+                .with_authenticated_owner(Some(sender_key_pair.public().into())),
+            vec![],
+        )
+        .await?;
+    let cert_final = env
+        .make_simple_transfer_certificate(
+            chain_1,
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(2),
+            Vec::new(),
+            Some(&cert_filler),
+        )
+        .await;
+    assert!(
+        cert_final
+            .inner()
+            .block()
+            .body
+            .previous_message_blocks
+            .is_empty(),
+        "the checkpoint should have dropped the acknowledged lane's anchor",
+    );
+
+    // The worker under test preprocesses the transfer and then receives its delivery
+    // confirmation while still at height zero: the queue drains, but the outbox is
+    // ahead of the tip and therefore survives, remembering the transfer as its
+    // predecessor.
+    env.worker()
+        .process_confirmed_block(
+            cert_transfer.clone(),
+            ProcessConfirmedBlockMode::Preprocess,
+            None,
+        )
+        .await?;
+    env.worker()
+        .handle_cross_chain_request(CrossChainRequest::ConfirmUpdatedRecipient {
+            sender: chain_1,
+            recipient: chain_2,
+            latest_height: BlockHeight::ZERO,
+        })
+        .await?;
+
+    // Execute up to and including chain_1's checkpoint. The checkpoint vouches for
+    // nothing and no outbox queues the transfer, so both pre-checkpoint blocks are
+    // pruned — while the drained outbox lingers, still pointing past the transfer.
+    for cert in [&cert_transfer, &cert_ack, &cert_checkpoint_1] {
+        env.worker()
+            .process_confirmed_block(cert.clone(), ProcessConfirmedBlockMode::Execute, None)
+            .await?;
+    }
+    {
+        let chain = env.worker().chain_state_view(chain_1).await?;
+        assert_eq!(
+            chain.block_hashes.indices().await?,
+            vec![cert_checkpoint_1.inner().block().header.height],
+        );
+        let outbox = chain
+            .outboxes
+            .try_load_entry(&chain_2)
+            .await?
+            .expect("the drained outbox survives, being ahead of the tip");
+        assert_eq!(*outbox.next_height_to_schedule.get(), BlockHeight::from(1));
+        assert_eq!(outbox.queue.count(), 0);
+    }
+
+    // Preprocess the post-checkpoint transfer, skipping the filler, so there is a gap.
+    // The outbox's predecessor height has no `block_hashes` entry, but the transfer
+    // must still be scheduled for delivery.
+    env.worker()
+        .process_confirmed_block(
+            cert_final.clone(),
+            ProcessConfirmedBlockMode::Preprocess,
+            None,
+        )
+        .await?;
+    {
+        let chain = env.worker().chain_state_view(chain_1).await?;
+        assert_eq!(
+            chain
+                .outboxes
+                .try_load_entry(&chain_2)
+                .await?
+                .expect("the outbox for chain_2 still exists")
+                .queue
+                .elements()
+                .await?,
+            vec![cert_final.inner().block().header.height],
+            "the post-checkpoint transfer must be scheduled despite the pruned predecessor",
+        );
+    }
+
+    // Receiver side. This worker's chain_2 never received the first transfer's bundle:
+    // it only gets the post-checkpoint transfer, whose update declares no predecessor
+    // and thereby marks the lane as settled below it.
+    let update = update_recipient_direct(chain_2, &cert_final);
+    assert_matches!(
+        &update,
+        CrossChainRequest::UpdateRecipient {
+            previous_height: None,
+            ..
+        }
+    );
+    env.worker().handle_cross_chain_request(update).await?;
+
+    // Replaying chain_2's certified blocks consumes the first transfer's bundle — never
+    // added here, and sitting below the added post-checkpoint bundle. The settled mark
+    // makes that a no-op instead of a fatal `UnexpectedBundle`.
+    for cert in [&cert_consume, &cert_checkpoint_2] {
+        env.worker()
+            .process_confirmed_block(cert.clone(), ProcessConfirmedBlockMode::Execute, None)
+            .await?;
+    }
+
+    // The lane stays healthy: the pending post-checkpoint bundle reconciles normally
+    // when chain_2's next block consumes it.
+    let final_bundle = IncomingBundle {
+        origin: chain_1,
+        bundle: cert_final
+            .message_bundles_for(chain_2)
+            .next()
+            .expect("the post-checkpoint transfer sends a bundle to chain_2")
+            .1,
+        action: MessageAction::Accept,
+    };
+    let cert_consume_final = env
+        .execute_proposal(
+            make_child_block(cert_checkpoint_2.value()).with_incoming_bundle(final_bundle),
+            vec![],
+        )
+        .await?;
+    env.worker()
+        .process_confirmed_block(cert_consume_final, ProcessConfirmedBlockMode::Execute, None)
+        .await?;
+    let chain = env.worker().chain_state_view(chain_2).await?;
+    let inbox = chain
+        .inboxes
+        .try_load_entry(&chain_1)
+        .await?
+        .expect("chain_2 has an inbox for chain_1");
+    assert_eq!(inbox.added_bundles.count(), 0);
+    assert_eq!(inbox.removed_bundles.count(), 0);
+    Ok(())
+}
+
 /// A confirmation whose first-round attestation is untruthful is rejected when the block is
 /// executed in order, where the chain's ownership — and thus its real first round — is known.
 /// This single-owner chain's first round is `MultiLeader(0)`, but the certificate claims the

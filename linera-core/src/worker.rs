@@ -17,8 +17,8 @@ use futures::{
 use linera_base::{
     crypto::{CryptoError, CryptoHash, ValidatorPublicKey},
     data_types::{
-        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, TimeDelta,
-        Timestamp,
+        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Cursor, Epoch, Round,
+        TimeDelta, Timestamp,
     },
     doc_scalar,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
@@ -400,6 +400,8 @@ pub enum WorkerError {
     InvalidLiteCertificate,
     #[error("Fast blocks cannot query oracles")]
     FastBlockUsingOracles,
+    #[error("Fast blocks cannot receive checkpoint acknowledgements")]
+    FastBlockConsumingCheckpointAck,
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
     /// Variant raised when the chain references these block hashes via a
@@ -454,6 +456,7 @@ impl WorkerError {
             | WorkerError::MissingCertificateValue
             | WorkerError::InvalidLiteCertificate
             | WorkerError::FastBlockUsingOracles
+            | WorkerError::FastBlockConsumingCheckpointAck
             | WorkerError::BlobsNotFound(_)
             | WorkerError::BlocksNotFound(_)
             | WorkerError::InvalidBlockProposal(_)
@@ -1572,6 +1575,20 @@ where
                 bundles,
             )
             .await
+    }
+
+    /// Removes an incoming bundle of `chain_id` that can never be consumed by its
+    /// blocks, and marks the lane from `origin` as settled up to it. See
+    /// `ChainWorkerState::settle_unavailable_bundle`.
+    pub async fn settle_unavailable_bundle(
+        &self,
+        chain_id: ChainId,
+        origin: ChainId,
+        cursor: Cursor,
+    ) -> Result<(), WorkerError> {
+        let state = self.get_or_create_chain_worker(chain_id).await?;
+        let mut guard = handle::write_lock(&state).await?;
+        guard.settle_unavailable_bundle(origin, cursor).await
     }
 
     /// Test helper that runs `ChainWorkerState::reset_and_reexecute_chain` for the given
