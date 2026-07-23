@@ -124,6 +124,8 @@ impl From<CryptoHash> for AccountOwner {
     Debug,
     PartialEq,
     Eq,
+    PartialOrd,
+    Ord,
     Hash,
     Copy,
     Clone,
