@@ -1186,6 +1186,17 @@ RpcMessage:
         NEWTYPE:
           SEQ:
             TYPENAME: BlobId
+    36:
+      EventBlockHeights:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: EventId
+    37:
+      EventBlockHeightsResponse:
+        NEWTYPE:
+          SEQ:
+            OPTION:
+              TYPENAME: BlockHeight
 Secp256k1PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:

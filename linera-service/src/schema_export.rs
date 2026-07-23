@@ -7,7 +7,7 @@ use futures::lock::Mutex;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlobContent, BlockHeight, Epoch, NetworkDescription, Timestamp},
-    identifiers::{AccountOwner, BlobId, ChainId},
+    identifiers::{AccountOwner, BlobId, ChainId, EventId},
 };
 use linera_chain::{
     data_types::BlockProposal,
@@ -162,6 +162,13 @@ impl ValidatorNode for DummyValidatorNode {
         &self,
         _blob_id: BlobId,
     ) -> Result<ConfirmedBlockCertificate, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
+
+    async fn event_block_heights(
+        &self,
+        _: Vec<EventId>,
+    ) -> Result<Vec<Option<BlockHeight>>, NodeError> {
         Err(NodeError::UnexpectedMessage)
     }
 
