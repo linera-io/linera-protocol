@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TruncSide"],"struct":["CoreWrapper","CtVariableCoreWrapper","RtVariableCoreWrapper","XofReaderCoreWrapper"],"trait":["AlgorithmName","BlockSizeUser","BufferKindUser","CoreProxy","ExtendableOutputCore","FixedOutputCore","OutputSizeUser","Reset","UpdateCore","VariableOutputCore","XofReaderCore"],"type":["Block","Buffer"]};

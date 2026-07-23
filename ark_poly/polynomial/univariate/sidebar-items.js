@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DenseOrSparsePolynomial"],"struct":["DensePolynomial","SparsePolynomial"]};

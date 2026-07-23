@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FungibleOperation","FungibleResponse"],"struct":["FungibleOperationMutationRoot","FungibleTokenAbi","InitialState","InitialStateBuilder","Parameters"]};

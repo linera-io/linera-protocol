@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["MakeLatest"],"struct":["CreateReleaseBuilder","GenerateReleaseNotesBuilder","ListReleaseAssetsBuilder","ListReleasesBuilder","ReleasesHandler","UpdateReleaseBuilder","UploadAssetBuilder"]};

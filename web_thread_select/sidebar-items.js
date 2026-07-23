@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error"],"struct":["SendTask","Task","Thread"],"trait":["Post"],"type":["Result"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["instrument"],"mod":["costs"],"trait":["Costs"],"type":["Error"]};

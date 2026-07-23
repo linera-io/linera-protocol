@@ -1,0 +1,80 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="github crates-io docs-rs"><title>typeid - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="typeid" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Crate typeid</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../typeid/index.html">typeid</a><span class="version">1.0.3</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#const-typeid-and-non-static-typeid" title="Const `TypeId` and non-’static `TypeId`">Const <code>TypeId</code> and non-’static <code>TypeId</code></a><ul><li><a href="#const-typeid" title="Const `TypeId`">Const <code>TypeId</code></a></li><li><a href="#non-static-typeid" title="Non-’static `TypeId`">Non-’static <code>TypeId</code></a></li></ul></li></ul><h3><a href="#structs">Crate Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1>Crate <span>typeid</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/typeid/lib.rs.html#1-222">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><a href="https://github.com/dtolnay/typeid"><img src="https://img.shields.io/badge/github-8da0cb?style=for-the-badge&amp;labelColor=555555&amp;logo=github" alt="github" /></a> <a href="https://crates.io/crates/typeid"><img src="https://img.shields.io/badge/crates.io-fc8d62?style=for-the-badge&amp;labelColor=555555&amp;logo=rust" alt="crates-io" /></a> <a href="https://docs.rs/typeid"><img src="https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&amp;labelColor=555555&amp;logo=docs.rs" alt="docs-rs" /></a></p>
+<h2 id="const-typeid-and-non-static-typeid"><a class="doc-anchor" href="#const-typeid-and-non-static-typeid">§</a>Const <code>TypeId</code> and non-’static <code>TypeId</code></h2><br>
+<h5 id="const-typeid"><a class="doc-anchor" href="#const-typeid">§</a>Const <code>TypeId</code></h5>
+<p>This crate provides <a href="struct.ConstTypeId.html" title="struct typeid::ConstTypeId"><code>ConstTypeId</code></a>, which is like <a href="https://doc.rust-lang.org/1.95.0/core/any/struct.TypeId.html" title="struct core::any::TypeId"><code>core::any::TypeId</code></a> but
+is constructible in const in stable Rust. (The standard library’s TypeId’s
+is nightly-only to construct in const; the tracking issue for this is
+<a href="https://github.com/rust-lang/rust/issues/77125">rust#77125</a>.)</p>
+<p>Being able to construct <code>ConstTypeId</code> in const makes it suitable for use
+cases that rely on static promotion:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display};
+<span class="kw">use </span>std::ptr;
+<span class="kw">use </span>typeid::ConstTypeId;
+
+<span class="kw">pub struct </span>ObjectVTable {
+    type_id: ConstTypeId,
+    drop_in_place: <span class="kw">unsafe fn</span>(<span class="kw-2">*mut </span>()),
+    display: <span class="kw">unsafe fn</span>(<span class="kw-2">*const </span>(), <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result,
+    debug: <span class="kw">unsafe fn</span>(<span class="kw-2">*const </span>(), <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result,
+}
+
+<span class="kw">impl </span>ObjectVTable {
+    <span class="kw">pub const fn </span>new&lt;T: Display + Debug&gt;() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="self">Self </span>{
+        <span class="kw-2">&amp;</span>ObjectVTable {
+            type_id: <span class="kw">const </span>{ ConstTypeId::of::&lt;T&gt;() },
+            drop_in_place: |ptr| <span class="kw">unsafe </span>{ ptr::drop_in_place(ptr.cast::&lt;T&gt;()) },
+            display: |ptr, f| <span class="kw">unsafe </span>{ Display::fmt(<span class="kw-2">&amp;*</span>ptr.cast::&lt;T&gt;(), f) },
+            debug: |ptr, f| <span class="kw">unsafe </span>{ Debug::fmt(<span class="kw-2">&amp;*</span>ptr.cast::&lt;T&gt;(), f) },
+        }
+    }
+}</code></pre></div>
+<p>and in associated constants:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>typeid::ConstTypeId;
+
+<span class="kw">pub trait </span>GetTypeId {
+    <span class="kw">const </span>TYPEID: ConstTypeId;
+}
+
+<span class="kw">impl</span>&lt;T: <span class="lifetime">'static</span>&gt; GetTypeId <span class="kw">for </span>T {
+    <span class="kw">const </span>TYPEID: ConstTypeId = ConstTypeId::of::&lt;<span class="self">Self</span>&gt;();
+}</code></pre></div><br>
+<h5 id="non-static-typeid"><a class="doc-anchor" href="#non-static-typeid">§</a>Non-’static <code>TypeId</code></h5>
+<p>This crate provides <a href="fn.of.html" title="fn typeid::of"><code>typeid::of</code></a>, which takes an arbitrary non-’static
+type <code>T</code> and produces the <code>TypeId</code> for the type obtained by replacing all
+lifetimes in <code>T</code> by <code>'static</code>, other than higher-rank lifetimes found in
+trait objects.</p>
+<p>For example if <code>T</code> is <code>&amp;'b dyn for&lt;'a&gt; Trait&lt;'a, 'c&gt;</code>, then
+<code>typeid::of::&lt;T&gt;()</code> produces the TypeId of <code>&amp;'static dyn for&lt;'a&gt; Trait&lt;'a, 'static&gt;</code>.</p>
+<p>It should be obvious that unlike with the standard library’s TypeId,
+<code>typeid::of::&lt;A&gt;() == typeid::of::&lt;B&gt;()</code> does <strong>not</strong> mean that <code>A</code> and <code>B</code>
+are the same type. However, there is a common special case where this
+behavior is exactly what is needed. If:</p>
+<ul>
+<li><code>A</code> is an arbitrary non-’static type parameter, <em>and</em></li>
+<li><code>B</code> is ’static, <em>and</em></li>
+<li>all types with the same id as <code>B</code> are also ’static</li>
+</ul>
+<p>then <code>typeid::of::&lt;A&gt;() == typeid::of::&lt;B&gt;()</code> guarantees that <code>A</code> and <code>B</code>
+are the same type.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>core::any::TypeId;
+<span class="kw">use </span>core::slice;
+
+<span class="kw">pub fn </span>example&lt;T&gt;(slice: <span class="kw-2">&amp;</span>[T]) {
+    <span class="comment">// T is arbitrary and non-'static.
+
+    </span><span class="kw">if </span>typeid::of::&lt;T&gt;() == TypeId::of::&lt;u8&gt;() {
+        <span class="comment">// T is definitely u8
+        </span><span class="kw">let </span>bytes = <span class="kw">unsafe </span>{ slice::from_raw_parts(slice.as_ptr().cast(), slice.len()) };
+        process_bytes(bytes);
+    } <span class="kw">else </span>{
+        <span class="kw">for </span>t <span class="kw">in </span>slice {
+            process(t);
+        }
+    }
+}
+
+<span class="kw">fn </span>process&lt;T&gt;(<span class="kw">_</span>: <span class="kw-2">&amp;</span>T) {<span class="comment">/* ... */</span>}
+<span class="kw">fn </span>process_bytes(<span class="kw">_</span>: <span class="kw-2">&amp;</span>[u8]) {<span class="comment">/* ... */</span>}</code></pre></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.ConstTypeId.html" title="struct typeid::ConstTypeId">Const<wbr>Type<wbr>Id</a></dt></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.of.html" title="fn typeid::of">of</a></dt></dl></section></div></main></body></html>

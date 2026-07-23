@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["group_logs_by_resource_and_scope"]};

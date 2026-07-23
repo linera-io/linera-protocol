@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["IpAddrRange","IpNet","IpSubnets"],"fn":["ip_mask_to_prefix","ipv4_mask_to_prefix","ipv6_mask_to_prefix"],"struct":["AddrParseError","Ipv4AddrRange","Ipv4Net","Ipv4Subnets","Ipv6AddrRange","Ipv6Net","Ipv6Subnets","PrefixLenError"],"trait":["IpAdd","IpBitAnd","IpBitOr","IpSub"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Update"],"fn":["from_bytes_option"],"trait":["CustomSerialize","SliceExt"]};

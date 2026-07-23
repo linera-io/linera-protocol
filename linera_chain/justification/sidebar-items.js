@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["EquivocationProof"],"fn":["audit_confirmation","extract_double_validations","extract_equivocations"],"struct":["CommittedQuorum","JustificationChain","JustificationLink","JustifiedConfirmation","ValidatedQuorum"]};

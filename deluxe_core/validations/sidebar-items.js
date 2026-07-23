@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["all_or_none","only_one"]};

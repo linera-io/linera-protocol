@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Reverse"],"trait":["Iterable"]};

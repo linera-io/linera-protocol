@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["visit_array","visit_array_of_tables","visit_document","visit_inline_table","visit_item","visit_table","visit_table_like","visit_table_like_kv","visit_value"],"trait":["Visit"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["CODE_SECTION_SIZE","CONTAINER_SECTION_SIZE","EOF_MAGIC","EOF_MAGIC_HASH","KIND_CODE","KIND_CODE_INFO","KIND_CONTAINER","KIND_DATA","KIND_TERMINAL"],"enum":["EofDecodeError"],"mod":["printer","verification"],"static":["EOF_MAGIC_BYTES"],"struct":["CodeInfo","Eof","EofBody","EofHeader"]};

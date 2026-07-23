@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CreateTeamBuilder","EditTeamBuilder","ListChildTeamsBuilder","ListTeamInvitationsBuilder","ListTeamMembersBuilder","ListTeamsBuilder","TeamHandler","TeamRepoHandler"]};

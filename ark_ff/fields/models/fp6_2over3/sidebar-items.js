@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Fp6ConfigWrapper"],"trait":["Fp6Config"],"type":["Fp6"]};

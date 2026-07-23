@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Fq12Config"],"type":["Fq12"]};

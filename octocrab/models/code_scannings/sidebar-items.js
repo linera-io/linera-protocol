@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Classifications","CodeScanningState","DismissedReason","SecuritySeverityLevel","Severity"],"struct":["CodeScanningAlert","Environment","Location","Message","MostRecentInstance","Rule","Tool"]};
