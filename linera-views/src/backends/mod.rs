@@ -24,8 +24,11 @@ pub mod rocks_db;
 pub mod indexed_db;
 
 #[cfg(with_testing)]
-/// Creates a RocksDB backup of the underlying database into a directory.
+/// Serializes the contents of a database namespace to disk for test backup/restore.
 pub trait DatabaseBackup {
-    /// Writes a RocksDB backup snapshot into `dir`.
-    fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()>;
+    /// Writes a snapshot of the namespace into `dir`.
+    fn backup_to(
+        &self,
+        dir: &std::path::Path,
+    ) -> impl std::future::Future<Output = anyhow::Result<()>> + Send;
 }
