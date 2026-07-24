@@ -432,3 +432,73 @@ async fn execute_checkpoint_rejects_chain_with_published_events() -> anyhow::Res
     ));
     Ok(())
 }
+
+/// Saves the view, then prepares and applies a checkpoint, returning the blob IDs
+/// listed in the resulting [`OracleResponse::Checkpoint`].
+async fn checkpoint_used_blobs(
+    view: &mut ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>,
+) -> anyhow::Result<Vec<BlobId>> {
+    use linera_base::data_types::OracleResponse;
+    use linera_views::{batch::Batch, store::WritableKeyValueStore as _, views::View as _};
+
+    let mut batch = Batch::new();
+    view.pre_save(&mut batch)?;
+    view.context().store().write_batch(batch).await?;
+    view.post_save();
+
+    let blobs = view.prepare_checkpoint(u64::MAX).await?;
+    let mut txn_tracker = TransactionTracker::default();
+    view.apply_checkpoint(
+        PreparedCheckpoint {
+            blobs,
+            origin_cursors: Vec::new(),
+            inbox_cursors: Vec::new(),
+            outbox_block_hashes: Vec::new(),
+        },
+        &mut txn_tracker,
+    )
+    .await?;
+    let outcome = txn_tracker.into_outcome()?;
+    let [OracleResponse::Checkpoint { used_blobs, .. }] = outcome.oracle_responses.as_slice()
+    else {
+        anyhow::bail!("expected a single checkpoint oracle response");
+    };
+    Ok(used_blobs.clone())
+}
+
+#[tokio::test]
+async fn used_blobs_expire_after_two_unused_checkpoints() -> anyhow::Result<()> {
+    let mut view = SystemExecutionState {
+        description: Some(dummy_chain_description(0)),
+        ..SystemExecutionState::default()
+    }
+    .into_view()
+    .await;
+
+    let hot_blob = BlobId::new(CryptoHash::test_hash("hot"), BlobType::Data);
+    let cold_blob = BlobId::new(CryptoHash::test_hash("cold"), BlobType::Data);
+    let mut txn_tracker = TransactionTracker::default();
+
+    // The first use of each blob creates an oracle response; a repeated use in the
+    // same generation does not.
+    assert!(view.system.blob_used(&mut txn_tracker, hot_blob).await?);
+    assert!(view.system.blob_used(&mut txn_tracker, cold_blob).await?);
+    assert!(!view.system.blob_used(&mut txn_tracker, hot_blob).await?);
+
+    // First checkpoint: both blobs were used since the chain's creation, so the
+    // checkpoint lists both and keeps their records. Using the hot blob afterwards
+    // re-records it under the new generation without a new oracle response.
+    let mut expected = vec![hot_blob, cold_blob];
+    expected.sort();
+    assert_eq!(checkpoint_used_blobs(&mut view).await?, expected);
+    assert!(!view.system.blob_used(&mut txn_tracker, hot_blob).await?);
+
+    // Second checkpoint: the refreshed hot blob survives, while the cold blob's
+    // last recorded use predates the previous checkpoint, so it is forgotten and
+    // using it again requires a new oracle response.
+    assert_eq!(checkpoint_used_blobs(&mut view).await?, vec![hot_blob]);
+    assert!(!view.system.blob_used(&mut txn_tracker, hot_blob).await?);
+    assert!(view.system.blob_used(&mut txn_tracker, cold_blob).await?);
+
+    Ok(())
+}

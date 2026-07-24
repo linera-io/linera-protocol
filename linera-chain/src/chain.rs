@@ -893,13 +893,14 @@ where
         );
 
         for blob in published_blobs {
-            let blob_id = blob.id();
             resource_controller
                 .policy()
                 .check_blob_size(blob.content())
                 .with_execution_context(ChainExecutionContext::Block)?;
-            chain.system.used_blobs.insert(&blob_id)?;
         }
+        chain
+            .system
+            .record_used_blobs(published_blobs.iter().map(|blob| blob.id()))?;
 
         let mut block_execution_tracker = BlockExecutionTracker::new(
             &mut resource_controller,
