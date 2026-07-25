@@ -60,7 +60,7 @@ pub trait LocalChainState {
 /// needed.
 ///
 /// This is the confirmed-certificate synchronization path shared by the client's
-/// [`crate::updater::ValidatorUpdater`] and by out-of-crate consumers such as the block exporter.
+/// `ValidatorUpdater` and by out-of-crate consumers such as the block exporter.
 /// Certificates and blobs are read from `storage` directly, and the remaining chain-level queries
 /// go through [`LocalChainState`], so this requires neither a wallet nor a signer.
 ///
@@ -144,8 +144,7 @@ where
     ///
     /// This is the height-synchronization phase: it sends the certificates in storage for the range
     /// `[validator_next_height, target_next_block_height)`, in order. Only heights actually present
-    /// in storage are sent; missing heights are silently skipped (see
-    /// [`Self::read_certificates_for_heights`]). This is what makes the "leave gaps on the validator
+    /// in storage are sent; missing heights are silently skipped. This is what makes the "leave gaps on the validator
     /// side" behavior (#4181) work: a chain we merely *receive* from is stored only at its
     /// message-bearing heights, so exactly those are pushed. The validator executes the contiguous
     /// prefix and preprocesses any block that sits above a gap.

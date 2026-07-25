@@ -34,7 +34,10 @@ pub(crate) mod updater;
 
 pub use local_node::LocalNodeError;
 pub use remote_node::RemoteNode;
-pub use updater::{confirmed_sender::ConfirmedCertificateSender, DEFAULT_QUORUM_GRACE_PERIOD};
+pub use updater::{
+    confirmed_sender::{ConfirmedCertificateSender, LocalChainState},
+    DEFAULT_QUORUM_GRACE_PERIOD,
+};
 
 pub use crate::join_set_ext::{JoinSetExt, TaskHandle};
 
