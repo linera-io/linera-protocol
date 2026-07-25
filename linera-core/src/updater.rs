@@ -12,7 +12,7 @@ use std::{
 
 use futures::{future, Future, StreamExt};
 use linera_base::{
-    crypto::ValidatorPublicKey,
+    crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{BlockHeight, Round, TimeDelta},
     ensure,
     identifiers::{BlobId, ChainId},
@@ -35,11 +35,50 @@ use crate::{
     environment::Environment,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     remote_node::RemoteNode,
-    updater::confirmed_sender::ConfirmedCertificateSender,
+    updater::confirmed_sender::{ConfirmedCertificateSender, LocalChainState},
     LocalNodeError,
 };
 
 pub(crate) mod confirmed_sender;
+
+/// Answers chain-level queries through the local worker, which owns the chain state views.
+struct WorkerChainState<Env: Environment> {
+    client: Arc<Client<Env>>,
+}
+
+impl<Env: Environment> Clone for WorkerChainState<Env> {
+    fn clone(&self) -> Self {
+        WorkerChainState {
+            client: self.client.clone(),
+        }
+    }
+}
+
+impl<Env: Environment> LocalChainState for WorkerChainState<Env> {
+    async fn next_block_height(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<BlockHeight, chain_client::Error> {
+        Ok(self
+            .client
+            .local_node
+            .chain_info(chain_id)
+            .await?
+            .next_block_height)
+    }
+
+    async fn block_hashes(
+        &self,
+        chain_id: ChainId,
+        heights: Vec<BlockHeight>,
+    ) -> Result<Vec<CryptoHash>, chain_client::Error> {
+        Ok(self
+            .client
+            .local_node
+            .get_block_hashes(chain_id, heights)
+            .await?)
+    }
+}
 
 /// The default amount of time we wait for additional validators to contribute
 /// to the result, as a fraction of how long it took to reach a quorum.
@@ -663,10 +702,13 @@ where
     /// neither the wallet, the signer, nor the local worker.
     fn confirmed_certificate_sender(
         &self,
-    ) -> ConfirmedCertificateSender<Env::Storage, Env::ValidatorNode> {
+    ) -> ConfirmedCertificateSender<Env::Storage, Env::ValidatorNode, WorkerChainState<Env>> {
         ConfirmedCertificateSender::new(
             self.client.local_node.storage_client(),
             self.remote_node.clone(),
+            WorkerChainState {
+                client: self.client.clone(),
+            },
             self.admin_chain_id,
             self.client.options().certificate_upload_batch_size,
         )
