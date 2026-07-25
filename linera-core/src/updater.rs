@@ -15,7 +15,7 @@ use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{BlockHeight, Round, TimeDelta},
     ensure,
-    identifiers::{BlobId, BlobType, ChainId, StreamId},
+    identifiers::{BlobId, ChainId},
     time::{timer::timeout, Duration, Instant},
 };
 use linera_chain::{
@@ -23,11 +23,11 @@ use linera_chain::{
     manager::LockingBlock,
     types::{ConfirmedBlock, GenericCertificate, ValidatedBlock, ValidatedBlockCertificate},
 };
-use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
-use linera_storage::{Arc as CacheArc, Clock, ResultReadCertificates, Storage};
+use linera_execution::committee::Committee;
+use linera_storage::{Arc as CacheArc, Clock, Storage};
 use thiserror::Error;
 use tokio::sync::mpsc;
-use tracing::{instrument, Level};
+use tracing::instrument;
 
 use crate::{
     client::{chain_client, Client},
@@ -35,8 +35,11 @@ use crate::{
     environment::Environment,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     remote_node::RemoteNode,
+    updater::confirmed_sender::ConfirmedCertificateSender,
     LocalNodeError,
 };
+
+pub(crate) mod confirmed_sender;
 
 /// The default amount of time we wait for additional validators to contribute
 /// to the result, as a fraction of how long it took to reach a quorum.
@@ -253,67 +256,6 @@ where
                 %err,
                 "unexpected error from validator",
             );
-        }
-    }
-
-    #[instrument(
-        level = "trace", skip_all, err(level = Level::DEBUG),
-        fields(chain_id = %certificate.block().header.chain_id)
-    )]
-    async fn send_confirmed_certificate(
-        &mut self,
-        certificate: &CacheArc<GenericCertificate<ConfirmedBlock>>,
-        delivery: CrossChainMessageDelivery,
-    ) -> Result<Box<ChainInfo>, chain_client::Error> {
-        let mut result = self
-            .remote_node
-            .handle_optimized_confirmed_certificate(certificate, delivery)
-            .await;
-
-        let mut sent_admin_chain = false;
-        let mut sent_blobs = false;
-        loop {
-            match result {
-                Err(NodeError::EventsNotFound(event_ids))
-                    if !sent_admin_chain
-                        && certificate.inner().chain_id() != self.admin_chain_id
-                        && event_ids.iter().all(|event_id| {
-                            event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)
-                                && event_id.chain_id == self.admin_chain_id
-                        }) =>
-                {
-                    // The validator doesn't have the committee that signed the certificate.
-                    self.update_admin_chain().await?;
-                    sent_admin_chain = true;
-                }
-                Err(NodeError::BlobsNotFound(blob_ids)) if !sent_blobs => {
-                    // The validator is missing the blobs required by the certificate.
-                    self.remote_node
-                        .check_blobs_not_found(certificate, &blob_ids)?;
-                    // The certificate is confirmed, so the blobs must be in storage.
-                    let maybe_blobs = self
-                        .client
-                        .local_node
-                        .read_blobs_from_storage(&blob_ids)
-                        .await?;
-                    let blobs = maybe_blobs.ok_or(NodeError::BlobsNotFound(blob_ids))?;
-                    self.remote_node
-                        .node
-                        .upload_blobs(blobs.into_iter().map(|b| b.into_std()).collect())
-                        .await?;
-                    sent_blobs = true;
-                }
-                result => {
-                    if let Err(err) = &result {
-                        self.warn_if_unexpected(err);
-                    }
-                    return Ok(result?);
-                }
-            }
-            result = self
-                .remote_node
-                .handle_confirmed_certificate(certificate.clone(), delivery)
-                .await;
         }
     }
 
@@ -699,11 +641,12 @@ where
                         .await?;
 
                     tracing::debug!("Sending chains for missing blobs");
-                    self.send_chain_info_for_blobs(
-                        &missing_blob_ids,
-                        CrossChainMessageDelivery::NonBlocking,
-                    )
-                    .await?;
+                    self.confirmed_certificate_sender()
+                        .send_chain_info_for_blobs(
+                            &missing_blob_ids,
+                            CrossChainMessageDelivery::NonBlocking,
+                        )
+                        .await?;
                 }
                 // Fail immediately on other errors.
                 Err(err) => {
@@ -714,19 +657,20 @@ where
         }
     }
 
-    async fn update_admin_chain(&mut self) -> Result<(), chain_client::Error> {
-        let local_admin_info = self
-            .client
-            .local_node
-            .chain_info(self.admin_chain_id)
-            .await?;
-        Box::pin(self.send_chain_information(
+    /// Builds a [`ConfirmedCertificateSender`] for this updater's target validator.
+    ///
+    /// The sender reads confirmed blocks and their dependencies straight from storage, so it needs
+    /// neither the wallet, the signer, nor the local worker.
+    fn confirmed_certificate_sender(
+        &self,
+    ) -> ConfirmedCertificateSender<Env::Storage, Env::ValidatorNode> {
+        ConfirmedCertificateSender::new(
+            self.client.local_node.storage_client(),
+            self.remote_node.clone(),
             self.admin_chain_id,
-            local_admin_info.next_block_height,
-            CrossChainMessageDelivery::NonBlocking,
-            None,
-        ))
-        .await
+            self.client.options().certificate_upload_batch_size,
+        )
+        .with_height_index_backfill()
     }
 
     /// Sends chain information to bring a validator up to date with a specific chain.
@@ -738,7 +682,7 @@ where
     ///    for the current consensus round.
     ///
     /// Only certificates that are actually in our local storage are sent; heights we don't have are
-    /// silently skipped (see [`Self::read_certificates_for_heights`]). This is deliberate and is what
+    /// silently skipped (see [`ConfirmedCertificateSender`]). This is deliberate and is what
     /// makes the "leave gaps on the validator side" behavior (#4181) work: a chain we merely *receive*
     /// from is stored only at its message-bearing heights, so we push exactly those. The validator
     /// executes the contiguous prefix and preprocesses any block that sits above a gap — enough to
@@ -782,13 +726,11 @@ where
         delivery: CrossChainMessageDelivery,
         latest_certificate: Option<CacheArc<GenericCertificate<ConfirmedBlock>>>,
     ) -> Result<(), chain_client::Error> {
-        // Phase 1: Height synchronization
-        let info = if target_block_height.0 > 0 {
-            self.sync_chain_height(chain_id, target_block_height, delivery, latest_certificate)
-                .await?
-        } else {
-            self.initialize_new_chain_on_validator(chain_id).await?
-        };
+        // Phase 1: Height synchronization (delegated to the reusable, storage-only primitive).
+        let info = self
+            .confirmed_certificate_sender()
+            .send_confirmed_chain(chain_id, target_block_height, delivery, latest_certificate)
+            .await?;
 
         // Phase 2: Round synchronization (if needed)
         // Height synchronization is complete. Now check if we need to synchronize
@@ -814,161 +756,6 @@ where
 
         // Validator is at our height but behind on consensus round
         self.sync_consensus_round(remote_round, &manager).await
-    }
-
-    /// Synchronizes a validator to a specific block height by sending the certificates we hold.
-    ///
-    /// Uses an optimistic approach: sends the last certificate first, then, based on the
-    /// validator's reported height, sends the earlier certificates in the range. Only the heights
-    /// we actually have in local storage are sent — any we're missing are silently skipped rather
-    /// than treated as an error, which is what leaves genuine gaps on the validator (see
-    /// [`Self::send_chain_information`] for why that is both safe and intended).
-    ///
-    /// Returns the [`ChainInfo`] from the validator after synchronization.
-    async fn sync_chain_height(
-        &mut self,
-        chain_id: ChainId,
-        target_block_height: BlockHeight,
-        delivery: CrossChainMessageDelivery,
-        latest_certificate: Option<CacheArc<GenericCertificate<ConfirmedBlock>>>,
-    ) -> Result<Box<ChainInfo>, chain_client::Error> {
-        let height = target_block_height.try_sub_one()?;
-
-        // Get the certificate for the last block we want to send
-        let certificate = if let Some(cert) = latest_certificate {
-            cert
-        } else {
-            self.read_certificates_for_heights(chain_id, vec![height])
-                .await?
-                .into_iter()
-                .next()
-                .ok_or_else(|| {
-                    chain_client::Error::InternalError(
-                        "failed to read latest certificate for height sync",
-                    )
-                })?
-        };
-
-        // Optimistically try sending just the last certificate
-        let info = match self
-            .send_confirmed_certificate(&certificate, delivery)
-            .await
-        {
-            Ok(info) => info,
-            Err(error) => {
-                tracing::debug!(
-                    address = self.remote_node.address(), %error,
-                    "validator failed to handle confirmed certificate; sending whole chain",
-                );
-                let query = ChainInfoQuery::new(chain_id);
-                self.remote_node.handle_chain_info_query(query).await?
-            }
-        };
-
-        // Calculate which block heights the validator is still missing
-        let heights: Vec<_> = (info.next_block_height.0..target_block_height.0)
-            .map(BlockHeight)
-            .collect();
-
-        if heights.is_empty() {
-            return Ok(info);
-        }
-
-        let batch_size = self.client.options().certificate_upload_batch_size as usize;
-        for chunk in heights.chunks(batch_size) {
-            let certificates = self
-                .read_certificates_for_heights(chain_id, chunk.to_vec())
-                .await?;
-
-            for certificate in certificates {
-                self.send_confirmed_certificate(&certificate, delivery)
-                    .await?;
-            }
-        }
-
-        Ok(info)
-    }
-
-    /// Reads certificates for the given heights from local storage.
-    ///
-    /// First attempts to use the optimized `read_certificates_by_heights` method.
-    /// Falls back to the traditional `get_block_hashes` + `read_certificates` approach
-    /// if the direct height lookup doesn't return all certificates.
-    ///
-    /// When using the fallback, writes the discovered height->hash indices back to storage
-    /// so subsequent lookups can use the optimized path.
-    ///
-    /// Heights we don't have are silently dropped: the returned vector contains only the
-    /// certificates actually present, so callers naturally skip any block we never downloaded
-    /// (e.g. a sender's non-message-bearing blocks). Callers must not assume the result covers
-    /// every requested height.
-    async fn read_certificates_for_heights(
-        &self,
-        chain_id: ChainId,
-        heights: Vec<BlockHeight>,
-    ) -> Result<Vec<CacheArc<GenericCertificate<ConfirmedBlock>>>, chain_client::Error> {
-        let storage = self.client.local_node.storage_client();
-
-        // First, try the direct height-based lookup
-        let certificates_by_height = storage
-            .read_certificates_by_heights(chain_id, &heights)
-            .await?;
-
-        // Check if we got all certificates (no None values)
-        let all_found = certificates_by_height.len() == heights.len()
-            && certificates_by_height.iter().all(|c| c.is_some());
-
-        if all_found {
-            return Ok(certificates_by_height.into_iter().flatten().collect());
-        }
-
-        // Fallback to the traditional approach
-        let hashes = self
-            .client
-            .local_node
-            .get_block_hashes(chain_id, heights.clone())
-            .await?;
-
-        let certificates = storage.read_certificates(&hashes).await?;
-
-        match ResultReadCertificates::new(certificates, hashes.clone()) {
-            ResultReadCertificates::Certificates(certs) => {
-                // Write back the height->hash indices we learned from the fallback
-                let indices: Vec<_> = heights.into_iter().zip(hashes.clone()).collect();
-                storage
-                    .write_certificate_height_indices(chain_id, &indices)
-                    .await?;
-                Ok(certs
-                    .into_iter()
-                    .map(|c| storage.cache_certificate(c))
-                    .collect())
-            }
-            ResultReadCertificates::InvalidHashes(hashes) => {
-                Err(chain_client::Error::ReadCertificatesError(hashes))
-            }
-        }
-    }
-
-    /// Initializes a new chain on the validator by sending the chain description and dependencies.
-    ///
-    /// This is called when the validator doesn't know about the chain yet.
-    ///
-    /// Returns the [`ChainInfo`] from the validator after initialization.
-    async fn initialize_new_chain_on_validator(
-        &self,
-        chain_id: ChainId,
-    ) -> Result<Box<ChainInfo>, chain_client::Error> {
-        // Send chain description and all dependency chains
-        self.send_chain_info_for_blobs(
-            &[BlobId::new(chain_id.0, BlobType::ChainDescription)],
-            CrossChainMessageDelivery::NonBlocking,
-        )
-        .await?;
-
-        // Query the validator's state for this chain
-        let query = ChainInfoQuery::new(chain_id);
-        let info = self.remote_node.handle_chain_info_query(query).await?;
-        Ok(info)
     }
 
     /// Synchronizes the consensus round state with the validator.
@@ -1061,76 +848,6 @@ where
         // If we reach here, either we had no round sync data to send, or all attempts failed.
         // This is not a fatal error - height sync succeeded which is the primary goal.
         tracing::debug!("round sync not performed: no applicable data or all attempts failed");
-        Ok(())
-    }
-
-    /// Sends chain information for all chains referenced by the given blobs.
-    ///
-    /// Reads blob states from storage, determines the specific chain heights needed,
-    /// and sends chain information for those heights. With sparse chains, this only
-    /// sends the specific blocks containing the blobs, not all blocks up to those heights.
-    async fn send_chain_info_for_blobs(
-        &self,
-        blob_ids: &[BlobId],
-        delivery: CrossChainMessageDelivery,
-    ) -> Result<(), chain_client::Error> {
-        let blob_states = self
-            .client
-            .local_node
-            .read_blob_states_from_storage(blob_ids)
-            .await?;
-
-        let mut chain_heights: BTreeMap<ChainId, BTreeSet<BlockHeight>> = BTreeMap::new();
-        for blob_state in blob_states {
-            let block_chain_id = blob_state.chain_id;
-            let block_height = blob_state.block_height;
-            chain_heights
-                .entry(block_chain_id)
-                .or_default()
-                .insert(block_height);
-        }
-
-        self.send_chain_info_at_heights(chain_heights, delivery)
-            .await
-    }
-
-    /// Sends the blocks at exactly the specified heights on multiple chains.
-    ///
-    /// Unlike [`Self::send_chain_info_up_to_heights`], this sends *only* the blocks at the given
-    /// heights, not the locally-held prefix leading up to them. Use it only when the required
-    /// blocks are fully self-describing to the validator — e.g. bringing over the specific blocks
-    /// that carry a set of blobs.
-    async fn send_chain_info_at_heights(
-        &self,
-        chain_heights: impl IntoIterator<Item = (ChainId, BTreeSet<BlockHeight>)>,
-        delivery: CrossChainMessageDelivery,
-    ) -> Result<(), chain_client::Error> {
-        future::try_join_all(chain_heights.into_iter().map(|(chain_id, heights)| {
-            let mut updater = self.clone();
-            async move {
-                // Get all block hashes for this chain at the specified heights in one call
-                let heights_vec = heights.into_iter().collect::<Vec<_>>();
-                let certificates = updater
-                    .client
-                    .local_node
-                    .storage_client()
-                    .read_certificates_by_heights(chain_id, &heights_vec)
-                    .await?
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>();
-
-                // Send each certificate
-                for certificate in certificates {
-                    updater
-                        .send_confirmed_certificate(&certificate, delivery)
-                        .await?;
-                }
-
-                Ok::<_, chain_client::Error>(())
-            }
-        }))
-        .await?;
         Ok(())
     }
 

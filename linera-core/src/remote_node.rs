@@ -29,7 +29,9 @@ use crate::{
 /// A validator node together with the validator's name.
 #[derive(Clone, Debug)]
 pub struct RemoteNode<N> {
+    /// The validator's public key.
     pub public_key: ValidatorPublicKey,
+    /// The client used to communicate with the validator node.
     #[debug(skip)]
     pub node: N,
 }
@@ -197,6 +199,8 @@ impl<N: ValidatorNode> RemoteNode<N> {
         Ok(())
     }
 
+    /// Downloads a blob from the validator, returning `None` if the validator does not have it
+    /// or returns an invalid blob.
     #[instrument(level = "trace")]
     pub async fn download_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, NodeError> {
         match self.node.download_blob(blob_id).await {
