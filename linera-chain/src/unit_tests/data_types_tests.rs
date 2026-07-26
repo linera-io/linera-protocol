@@ -11,6 +11,7 @@ use super::*;
 use crate::{
     block::{Block, BlockBodyField, ConfirmedBlock, ValidatedBlock},
     test::{make_first_block, BlockTestExt},
+    types::{ConfirmedBlockCertificate, GenericCertificate, ValidatedBlockCertificate},
 };
 
 fn dummy_chain_id(index: u32) -> ChainId {
@@ -333,4 +334,45 @@ fn round_ordering() {
     assert!(Round::SingleLeader(1) < Round::SingleLeader(2));
     assert!(Round::SingleLeader(2) < Round::Validator(0));
     assert!(Round::Validator(1) < Round::Validator(2))
+}
+
+#[test]
+fn test_cited_validated_certificate() {
+    let block = sample_block();
+    let validated = ValidatedBlock::new(block.clone());
+    // A lineage of two validated quorums: one in round 1, one in round 2 citing it.
+    let validated1 =
+        ValidatedBlockCertificate::new(validated.clone(), Round::SingleLeader(1), vec![]);
+    let validated2 = ValidatedBlockCertificate::from_parts(
+        GenericCertificate::new_with_payload(
+            validated,
+            Round::SingleLeader(2),
+            Some(Round::SingleLeader(1)),
+            false,
+            Some(validated1.full_justification_commitment()),
+            vec![],
+        ),
+        validated1.full_justification(),
+    );
+    // A certificate confirming the block in round 2, carrying the full chain.
+    let confirmed = ConfirmedBlockCertificate::from_parts(
+        GenericCertificate::new_with_payload(
+            ConfirmedBlock::new(block),
+            Round::SingleLeader(2),
+            None,
+            false,
+            Some(validated2.full_justification_commitment()),
+            vec![],
+        ),
+        validated2.full_justification(),
+    );
+    // Each quorum in the chain is reconstructible by its commitment.
+    for original in [&validated2, &validated1] {
+        let commitment = original.full_justification_commitment();
+        let cited = confirmed.cited_validated_certificate(commitment).unwrap();
+        assert_eq!(cited, *original);
+    }
+    assert!(confirmed
+        .cited_validated_certificate(CryptoHash::test_hash("unrelated"))
+        .is_none());
 }

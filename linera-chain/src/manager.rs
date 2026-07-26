@@ -74,7 +74,7 @@ use allocative::Allocative;
 use custom_debug_derive::Debug;
 use futures::future::Either;
 use linera_base::{
-    crypto::{AccountPublicKey, ValidatorSecretKey},
+    crypto::{AccountPublicKey, CryptoHash, ValidatorSecretKey},
     data_types::{Blob, BlockHeight, Epoch, NonCanonicalBTreeMap, Round, Timestamp},
     ensure,
     identifiers::{AccountOwner, BlobId, ChainId},
@@ -95,7 +95,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     block::{Block, ConfirmedBlock, Timeout, ValidatedBlock},
     data_types::{BlockProposal, LiteVote, OriginalProposal, ProposedBlock, Vote},
-    types::{TimeoutCertificate, ValidatedBlockCertificate},
+    types::{CertificateValue as _, TimeoutCertificate, ValidatedBlockCertificate},
+    vote_ledger::{JustifiedVote, LedgerDelta, VoteRecord},
     ChainError,
 };
 
@@ -142,6 +143,36 @@ impl LockingBlock {
     }
 }
 
+/// The latest confirmation vote this validator cast, stored together with the
+/// validated-block certificate it cited — the same pairing the vote ledger
+/// records. Keeping them as one value means that later updates to the locking
+/// block can never orphan the vote's justification.
+#[derive(Debug, Clone, Serialize, Deserialize, Allocative)]
+pub struct JustifiedConfirmedVote {
+    /// The confirmation vote.
+    pub vote: Vote<ConfirmedBlock>,
+    /// The validated-block certificate the vote cited, or `None` for a vote in the
+    /// chain's first round, which cites none.
+    pub justification: Option<ValidatedBlockCertificate>,
+}
+
+impl JustifiedConfirmedVote {
+    /// Returns the vote as a [`JustifiedVote`], the form in which the vote ledger
+    /// and epoch commitments keep superseded votes.
+    fn justified_vote(&self) -> JustifiedVote {
+        JustifiedVote {
+            record: VoteRecord::new(&self.vote),
+            justification: self.justification.clone(),
+        }
+    }
+
+    /// Returns the vote as a [`JustifiedVote`] if its block differs from the given
+    /// one: the vote lost out at its height and must be preserved as superseded.
+    fn superseded_by(&self, block_hash: CryptoHash) -> Option<JustifiedVote> {
+        (self.vote.value().hash() != block_hash).then(|| self.justified_vote())
+    }
+}
+
 /// The state of the certification process for a chain's next block.
 #[cfg_attr(with_graphql, derive(async_graphql::SimpleObject), graphql(complex))]
 #[derive(Debug, View, ClonableView, Allocative)]
@@ -183,9 +214,10 @@ where
     /// Latest leader timeout certificate we have received.
     #[cfg_attr(with_graphql, graphql(skip))]
     pub timeout: RegisterView<C, Option<TimeoutCertificate>>,
-    /// Latest vote we cast to confirm a block.
+    /// Latest vote we cast to confirm a block, together with the validated
+    /// certificate it cited.
     #[cfg_attr(with_graphql, graphql(skip))]
-    pub confirmed_vote: RegisterView<C, Option<Vote<ConfirmedBlock>>>,
+    pub confirmed_vote: RegisterView<C, Option<JustifiedConfirmedVote>>,
     /// Latest vote we cast to validate a block.
     #[cfg_attr(with_graphql, graphql(skip))]
     pub validated_vote: RegisterView<C, Option<Vote<ValidatedBlock>>>,
@@ -263,6 +295,12 @@ where
 
     /// Returns the most recent confirmed vote we cast.
     pub fn confirmed_vote(&self) -> Option<&Vote<ConfirmedBlock>> {
+        Some(&self.confirmed_vote.get().as_ref()?.vote)
+    }
+
+    /// Returns the most recent confirmed vote we cast, together with the validated
+    /// certificate it cited.
+    pub fn justified_confirmed_vote(&self) -> Option<&JustifiedConfirmedVote> {
         self.confirmed_vote.get().as_ref()
     }
 
@@ -435,8 +473,8 @@ where
     ) -> Result<Outcome, ChainError> {
         let new_block = certificate.block();
         let new_round = certificate.round;
-        if let Some(Vote { value, round, .. }) = self.confirmed_vote.get() {
-            if value.block() == new_block && *round == new_round {
+        if let Some(vote) = self.confirmed_vote() {
+            if vote.value().block() == new_block && vote.round == new_round {
                 return Ok(Outcome::Skip); // We already voted to confirm this block.
             }
         }
@@ -455,7 +493,8 @@ where
         Ok(Outcome::Accept)
     }
 
-    /// Signs a vote to validate the proposed block.
+    /// Signs a vote to validate the proposed block. Along with the vote, returns
+    /// the ledger delta to persist if a confirmation vote was cast.
     pub fn create_vote(
         &mut self,
         proposal: &BlockProposal,
@@ -463,7 +502,7 @@ where
         key_pair: Option<&ValidatorSecretKey>,
         local_time: Timestamp,
         blobs: BTreeMap<BlobId, Blob>,
-    ) -> Result<Option<ValidatedOrConfirmedVote<'_>>, ChainError> {
+    ) -> Result<(Option<ValidatedOrConfirmedVote<'_>>, Option<LedgerDelta>), ChainError> {
         let round = proposal.content.round;
 
         match &proposal.original_proposal {
@@ -509,21 +548,37 @@ where
 
         let Some(key_pair) = key_pair else {
             // Not a validator.
-            return Ok(None);
+            return Ok((None, None));
         };
 
         // If this is a fast block, vote to confirm. Otherwise vote to validate.
         if round.is_fast() {
             self.validated_vote.set(None);
             let value = ConfirmedBlock::new(block);
+            let epoch = value.block().header.epoch;
             // Attest that this confirmation is in the chain's first round, so the justification
             // chain may be omitted: such a block is always the lower one in any fork. A fast
             // block needs no validation, so there is no quorum to commit to.
             let first_round = round == self.ownership.get().first_round();
             let vote = Vote::new_with_first_round(value, round, first_round, None, key_pair);
-            Ok(Some(Either::Right(
-                self.confirmed_vote.get_mut().insert(vote),
-            )))
+            let superseded = self
+                .confirmed_vote
+                .get()
+                .as_ref()
+                .and_then(|old| old.superseded_by(vote.value().hash()));
+            let delta = LedgerDelta {
+                epoch,
+                latest: VoteRecord::new(&vote),
+                superseded,
+            };
+            let justified = self
+                .confirmed_vote
+                .get_mut()
+                .insert(JustifiedConfirmedVote {
+                    vote,
+                    justification: None,
+                });
+            Ok((Some(Either::Right(&justified.vote)), Some(delta)))
         } else {
             // The unlocking round we sign is the round of the justification this proposal relies
             // on, and the justification commitment is the hash of that justifying quorum — by
@@ -546,22 +601,25 @@ where
                 justification_commitment,
                 key_pair,
             );
-            Ok(Some(Either::Left(
-                self.validated_vote.get_mut().insert(vote),
-            )))
+            Ok((
+                Some(Either::Left(self.validated_vote.get_mut().insert(vote))),
+                None,
+            ))
         }
     }
 
-    /// Signs a vote to confirm the validated block.
+    /// Signs a vote to confirm the validated block. Returns the ledger delta to
+    /// persist if a vote was cast.
     pub fn create_final_vote(
         &mut self,
         validated: ValidatedBlockCertificate,
         key_pair: Option<&ValidatorSecretKey>,
         local_time: Timestamp,
         blobs: BTreeMap<BlobId, Blob>,
-    ) -> Result<(), ViewError> {
+    ) -> Result<Option<LedgerDelta>, ViewError> {
         let round = validated.round;
         let confirmed_block = ConfirmedBlock::new(validated.inner().block().clone());
+        let epoch = confirmed_block.block().header.epoch;
         // Vote to confirm. Attest whether this confirmation is in the chain's first round, so the
         // justification chain may be omitted: such a block is always the lower one in any fork.
         // Otherwise commit to the quorum that validated the block, attesting that we verified it
@@ -572,11 +630,14 @@ where
         } else {
             Some(validated.full_justification_commitment())
         };
+        // A vote in the chain's first round signs no justification commitment, so it must carry
+        // no justification either.
+        let justification = (!first_round).then(|| validated.clone());
         self.update_locking(LockingBlock::Regular(validated), blobs)?;
         self.update_current_round(local_time);
         if let Some(key_pair) = key_pair {
             if self.current_round() != round {
-                return Ok(()); // We never vote in a past round.
+                return Ok(None); // We never vote in a past round.
             }
             let vote = Vote::new_with_first_round(
                 confirmed_block,
@@ -585,11 +646,25 @@ where
                 justification_commitment,
                 key_pair,
             );
+            let superseded = self
+                .confirmed_vote
+                .get()
+                .as_ref()
+                .and_then(|old| old.superseded_by(vote.value().hash()));
+            let delta = LedgerDelta {
+                epoch,
+                latest: VoteRecord::new(&vote),
+                superseded,
+            };
             // Ok to overwrite validation votes with confirmation votes at equal or higher round.
-            self.confirmed_vote.set(Some(vote));
+            self.confirmed_vote.set(Some(JustifiedConfirmedVote {
+                vote,
+                justification,
+            }));
             self.validated_vote.set(None);
+            return Ok(Some(delta));
         }
-        Ok(())
+        Ok(None)
     }
 
     /// Returns the requested blob if it belongs to the proposal or the locking block.
@@ -813,7 +888,7 @@ where
 /// being tricked into double-signing at a height/round it has already voted on.
 #[derive(Debug, Default)]
 pub struct ManagerSafetySnapshot {
-    confirmed_vote: Option<Vote<ConfirmedBlock>>,
+    confirmed_vote: Option<JustifiedConfirmedVote>,
     validated_vote: Option<Vote<ValidatedBlock>>,
     timeout_vote: Option<Vote<Timeout>>,
     fallback_vote: Option<Vote<Timeout>>,
@@ -910,7 +985,7 @@ where
 {
     fn from(manager: &ChainManager<C>) -> Self {
         let current_round = manager.current_round();
-        let pending = match (manager.confirmed_vote.get(), manager.validated_vote.get()) {
+        let pending = match (manager.confirmed_vote(), manager.validated_vote()) {
             (None, None) => None,
             (Some(confirmed_vote), Some(validated_vote))
                 if validated_vote.round > confirmed_vote.round =>
@@ -950,9 +1025,7 @@ impl ChainManagerInfo {
         self.requested_proposed = manager.proposed.get().clone().map(Box::new);
         self.requested_locking = manager.locking_block.get().clone().map(Box::new);
         self.requested_confirmed = manager
-            .confirmed_vote
-            .get()
-            .as_ref()
+            .confirmed_vote()
             .map(|vote| Box::new(vote.value.clone()));
         self.requested_validated = manager
             .validated_vote

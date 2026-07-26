@@ -30,9 +30,10 @@ use linera_chain::{
     },
     manager::{self, ManagerSafetySnapshot},
     types::{
-        Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
-        ValidatedBlockCertificate,
+        Block, CertificateValue as _, ConfirmedBlock, ConfirmedBlockCertificate,
+        TimeoutCertificate, ValidatedBlockCertificate,
     },
+    vote_ledger::{JustifiedVote, LedgerDelta, VoteRecord},
     BlockExecutionPhase, ChainError, ChainExecutionContext, ChainIdSet, ChainStateView,
     ChainTipState, ExecutionResultExt as _, StreamCounts,
 };
@@ -326,6 +327,58 @@ where
         } else {
             vec![]
         })
+    }
+
+    /// Persists a ledger delta reported by a chain manager operation that cast a
+    /// confirmation vote. This must run before the chain state is saved, so that no
+    /// vote can leave this worker without being in the ledger.
+    async fn record_ledger_delta(&self, delta: Option<LedgerDelta>) -> Result<(), WorkerError> {
+        if let Some(delta) = delta {
+            self.storage
+                .record_confirmed_vote(delta.epoch, self.chain_id(), delta.latest, delta.superseded)
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// If this validator's pending confirmation vote would become unrecoverable
+    /// once the confirmed block about to be executed clears the manager state,
+    /// persists it in the vote ledger. That is the case when a different block was
+    /// confirmed at the vote's height (the vote was bypassed), and also when the
+    /// vote is for the confirmed block itself but the certificate's justification
+    /// chain does not contain the quorum the vote cited — then the certificate
+    /// cannot reproduce it later.
+    async fn record_bypassed_vote(
+        &self,
+        certificate: &ConfirmedBlockCertificate,
+    ) -> Result<(), WorkerError> {
+        let Some(justified) = self.chain.manager.justified_confirmed_vote() else {
+            return Ok(());
+        };
+        let vote = &justified.vote;
+        if vote.value().hash() == certificate.hash() {
+            let recoverable_from_certificate = match vote.justification_commitment {
+                None => true, // The vote cited nothing; the latest-vote entry suffices.
+                Some(commitment) => certificate
+                    .cited_validated_certificate(commitment)
+                    .is_some(),
+            };
+            if recoverable_from_certificate {
+                return Ok(());
+            }
+        }
+        let epoch = vote.value().block().header.epoch;
+        self.storage
+            .record_superseded_vote(
+                epoch,
+                self.chain_id(),
+                JustifiedVote {
+                    record: VoteRecord::new(vote),
+                    justification: justified.justification.clone(),
+                },
+            )
+            .await?;
+        Ok(())
     }
 
     /// Returns whether this chain is known to be active (initialized).
@@ -911,12 +964,13 @@ where
             .filter_map(|(blob_id, maybe_blob)| Some((blob_id, maybe_blob?)))
             .collect();
         let old_round = self.chain.manager.current_round();
-        self.chain.manager.create_final_vote(
+        let delta = self.chain.manager.create_final_vote(
             certificate,
             self.config.key_pair(),
             self.storage.clock().current_time(),
             blobs,
         )?;
+        self.record_ledger_delta(delta).await?;
         self.save().await?;
         let actions = self.create_network_actions(Some(old_round)).await?;
         Ok((
@@ -1128,6 +1182,8 @@ where
                 inbox_cursors.clone(),
             )
         };
+        self.record_bypassed_vote(&certificate).await?;
+
         // Every pre-checkpoint sender block the oracle response names must already
         // be in storage before we touch any chain state. If some aren't, record
         // their hashes as trusted-by-this-checkpoint and error with `BlocksNotFound`
@@ -1266,6 +1322,8 @@ where
         self.initialize_and_save_if_needed().await?;
         let (epoch, _) = self.chain.current_committee().await?;
         check_block_epoch(epoch, chain_id, block.header.epoch)?;
+
+        self.record_bypassed_vote(&certificate).await?;
 
         // The chain is initialized and this block has not executed yet, so the current ownership
         // is the configuration the block was proposed under — even for the chain's first block,
@@ -2564,7 +2622,8 @@ where
             .await?;
         let key_pair = self.config.key_pair();
         let manager = &mut self.chain.manager;
-        match manager.create_vote(&proposal, block, key_pair, local_time, blobs)? {
+        let (vote, delta) = manager.create_vote(&proposal, block, key_pair, local_time, blobs)?;
+        match vote {
             // Cache the value we voted on, so the client doesn't have to send it again.
             Some(Either::Left(vote)) => {
                 self.block_values
@@ -2576,6 +2635,7 @@ where
             }
             None => (),
         }
+        self.record_ledger_delta(delta).await?;
         self.save().await?;
         let actions = self.create_network_actions(Some(old_round)).await?;
         Ok((self.chain_info_response().await?, actions))
