@@ -53,13 +53,18 @@ pub fn parse_chain_set(s: &str) -> Result<HashSet<ChainId>, CryptoError> {
 
 /// Parses a comma-separated list of application IDs into a set.
 pub fn parse_app_set(s: &str) -> anyhow::Result<HashSet<GenericApplicationId>> {
-    s.trim()
-        .split(",")
-        .map(|app_str| {
-            GenericApplicationId::from_str(app_str)
-                .or_else(|_| Ok(ApplicationId::from_str(app_str)?.into()))
-        })
-        .collect()
+    match s.trim() {
+        // An empty set is meaningful (e.g. `--process-events-from-application-ids ""` to follow
+        // only the admin chain), so accept it here instead of failing to parse an empty id.
+        "" => Ok(HashSet::new()),
+        s => s
+            .split(",")
+            .map(|app_str| {
+                GenericApplicationId::from_str(app_str)
+                    .or_else(|_| Ok(ApplicationId::from_str(app_str)?.into()))
+            })
+            .collect(),
+    }
 }
 
 /// Returns after the specified time or if we receive a notification that a new round has started.
@@ -91,3 +96,15 @@ macro_rules! impl_from_infallible {
 }
 
 pub(crate) use impl_from_infallible;
+
+#[cfg(test)]
+mod tests {
+    use super::parse_app_set;
+
+    #[test]
+    fn parse_app_set_accepts_empty() {
+        assert!(parse_app_set("").unwrap().is_empty());
+        assert!(parse_app_set("   ").unwrap().is_empty());
+        assert!(parse_app_set("not-an-application-id").is_err());
+    }
+}
