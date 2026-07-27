@@ -1893,9 +1893,10 @@ impl BcsHashable<'_> for Event {}
 pub struct MessagePolicy {
     /// The blanket policy applied to all messages.
     pub blanket: BlanketMessagePolicy,
-    /// A collection of chains which restrict the origin of messages to be
-    /// accepted. `Option::None` means that messages from all chains are accepted. An empty
-    /// `HashSet` denotes that messages from no chains are accepted.
+    /// A collection of chains which restrict the origin of messages and events to be
+    /// accepted. `Option::None` means that messages and events from all chains are accepted. An
+    /// empty `HashSet` denotes that none are accepted. The admin chain's event stream is always
+    /// followed regardless of this setting.
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
     /// A collection of chains whose incoming messages should be ignored.
     pub ignore_chain_ids: HashSet<ChainId>,
@@ -1906,7 +1907,7 @@ pub struct MessagePolicy {
     /// applications will be accepted.
     pub reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
     /// A collection of applications: If `Some`, only event streams from those
-    /// applications will be processed.
+    /// applications are processed and followed. The admin chain's event stream is always followed.
     pub process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
     /// A collection of applications whose messages must never be rejected. Bundles whose
     /// messages are all from one of these applications bypass the other rejection rules
@@ -1966,6 +1967,21 @@ impl MessagePolicy {
                 .restrict_chain_ids_to
                 .as_ref()
                 .is_some_and(|set| !set.contains(origin))
+    }
+
+    /// Returns `true` if events from `stream_id`, published by `chain_id`, should be followed
+    /// and processed: `restrict_chain_ids_to` (if set) must contain `chain_id`, and
+    /// `process_events_from_application_ids` (if set) must contain the stream's application. The
+    /// admin chain is exempt; callers always follow it.
+    #[instrument(level = "trace", skip(self))]
+    pub fn accepts_event_stream(&self, chain_id: &ChainId, stream_id: &StreamId) -> bool {
+        self.restrict_chain_ids_to
+            .as_ref()
+            .is_none_or(|chain_ids| chain_ids.contains(chain_id))
+            && self
+                .process_events_from_application_ids
+                .as_ref()
+                .is_none_or(|app_ids| app_ids.contains(&stream_id.application_id))
     }
 }
 

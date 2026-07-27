@@ -502,8 +502,16 @@ impl<Env: Environment> ChainClient<Env> {
             .get_event_subscriptions(self.chain_id)
             .await?;
         let mut publishers = BTreeMap::<ChainId, BTreeSet<StreamId>>::new();
-        for ((chain_id, stream_name), _) in subscriptions {
-            publishers.entry(chain_id).or_default().insert(stream_name);
+        // Only follow publishers whose events pass the message policy; events from the others are
+        // discarded in `collect_stream_updates`, so subscribing to them is wasted work.
+        for ((chain_id, stream_id), _) in subscriptions {
+            if self
+                .options
+                .message_policy
+                .accepts_event_stream(&chain_id, &stream_id)
+            {
+                publishers.entry(chain_id).or_default().insert(stream_id);
+            }
         }
         if self.chain_id != self.client.admin_chain_id {
             // Empty streams = follow all for admin chain.
@@ -658,19 +666,10 @@ impl<Env: Environment> ChainClient<Env> {
         // Collect the indices of all new events.
         let futures = subscription_map
             .into_iter()
-            .filter(|((chain_id, _), _)| {
+            .filter(|((chain_id, stream_id), _)| {
                 self.options
                     .message_policy
-                    .restrict_chain_ids_to
-                    .as_ref()
-                    .is_none_or(|chain_set| chain_set.contains(chain_id))
-            })
-            .filter(|((_, stream_id), _)| {
-                self.options
-                    .message_policy
-                    .process_events_from_application_ids
-                    .as_ref()
-                    .is_none_or(|app_set| app_set.contains(&stream_id.application_id))
+                    .accepts_event_stream(chain_id, stream_id)
             })
             .map(|((chain_id, stream_id), subscriptions)| {
                 let client = self.client.clone();
@@ -958,7 +957,14 @@ impl<Env: Environment> ChainClient<Env> {
         // Group subscribed streams by publisher chain.
         let mut streams_by_chain = BTreeMap::<ChainId, BTreeSet<StreamId>>::new();
         for ((chain_id, stream_id), _) in &subscriptions {
-            if *chain_id != self.chain_id {
+            // The admin chain is synced separately below; other publishers are only synced if
+            // their events pass the message policy, matching what we follow and process.
+            if *chain_id != self.chain_id
+                && self
+                    .options
+                    .message_policy
+                    .accepts_event_stream(chain_id, stream_id)
+            {
                 streams_by_chain
                     .entry(*chain_id)
                     .or_default()
