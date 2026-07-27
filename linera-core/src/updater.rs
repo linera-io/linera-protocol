@@ -47,6 +47,55 @@ pub type ClockSkewReport = (ValidatorPublicKey, TimeDelta);
 /// The maximum timeout for requests to a stake-weighted quorum if no quorum is reached.
 const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{
+        exponential_bucket_latencies, register_histogram_vec, register_int_counter_vec,
+    };
+    use prometheus::{HistogramVec, IntCounterVec};
+
+    /// Requests dispatched to each validator while communicating with a quorum.
+    ///
+    /// Incremented at dispatch rather than on completion, so the series exists even for a
+    /// validator that never answers. Subtracting the responses below from this yields the
+    /// share of requests a validator left unanswered.
+    pub(super) static QUORUM_REQUESTS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "communicate_with_quorum_requests",
+            "Requests dispatched to each validator while communicating with a quorum",
+            &["validator"],
+        )
+    });
+
+    /// Responses received from each validator while communicating with a quorum.
+    ///
+    /// The `outcome` label is `before_quorum` when the response arrived while a quorum was
+    /// still outstanding, and `after_quorum` when it only arrived during the grace period
+    /// that follows a quorum being reached. A validator whose responses are consistently
+    /// `after_quorum` is holding up nothing yet, but it is the one that will stall
+    /// confirmation as soon as any other validator degrades.
+    pub(super) static QUORUM_RESPONSES: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "communicate_with_quorum_responses",
+            "Responses from each validator, by whether a quorum had already been reached",
+            &["validator", "outcome"],
+        )
+    });
+
+    /// Time each validator took to respond while communicating with a quorum.
+    pub(super) static QUORUM_RESPONSE_TIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "communicate_with_quorum_response_time_ms",
+            "Time taken by each validator to respond while communicating with a quorum, \
+             in milliseconds",
+            &["validator"],
+            exponential_bucket_latencies(60_000.0),
+        )
+    });
+}
+
 /// Used for `communicate_chain_action`
 #[derive(Clone)]
 pub enum CommunicateAction {
@@ -148,7 +197,21 @@ where
             }
             let execute = execute.clone();
             let remote_node = remote_node.clone();
-            Some(async move { (remote_node.public_key, execute(remote_node).await) })
+            #[cfg(with_metrics)]
+            metrics::QUORUM_REQUESTS
+                .with_label_values(&[&remote_node.public_key.to_string()])
+                .inc();
+            Some(async move {
+                let public_key = remote_node.public_key;
+                #[cfg(with_metrics)]
+                let request_start = Instant::now();
+                let result = execute(remote_node).await;
+                #[cfg(with_metrics)]
+                metrics::QUORUM_RESPONSE_TIME
+                    .with_label_values(&[&public_key.to_string()])
+                    .observe(request_start.elapsed().as_secs_f64() * 1000.0);
+                (public_key, result)
+            })
         })
         .collect();
 
@@ -166,6 +229,17 @@ where
     .await
     {
         remaining_votes -= committee.weight(&name);
+        #[cfg(with_metrics)]
+        metrics::QUORUM_RESPONSES
+            .with_label_values(&[
+                &name.to_string(),
+                if end_time.is_none() {
+                    "before_quorum"
+                } else {
+                    "after_quorum"
+                },
+            ])
+            .inc();
         match result {
             Ok(value) => {
                 let key = group_by(&value);
