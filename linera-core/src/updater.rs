@@ -61,11 +61,15 @@ mod metrics {
     /// Incremented at dispatch rather than on completion, so the series exists even for a
     /// validator that never answers. Subtracting the responses below from this yields the
     /// share of requests a validator left unanswered.
+    ///
+    /// The `address` label carries the validator's gRPC URL so that dashboards and alerts can
+    /// name a validator without an out-of-band lookup of its public key. It is functionally
+    /// dependent on `validator`, so it adds no series.
     pub(super) static QUORUM_REQUESTS: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
-            "communicate_with_quorum_requests",
+            "communicate_with_quorum_requests_total",
             "Requests dispatched to each validator while communicating with a quorum",
-            &["validator"],
+            &["validator", "address"],
         )
     });
 
@@ -78,9 +82,9 @@ mod metrics {
     /// confirmation as soon as any other validator degrades.
     pub(super) static QUORUM_RESPONSES: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
-            "communicate_with_quorum_responses",
+            "communicate_with_quorum_responses_total",
             "Responses from each validator, by whether a quorum had already been reached",
-            &["validator", "outcome"],
+            &["validator", "address", "outcome"],
         )
     });
 
@@ -90,7 +94,7 @@ mod metrics {
             "communicate_with_quorum_response_time_ms",
             "Time taken by each validator to respond while communicating with a quorum, \
              in milliseconds",
-            &["validator"],
+            &["validator", "address"],
             exponential_bucket_latencies(60_000.0),
         )
     });
@@ -199,16 +203,18 @@ where
             let remote_node = remote_node.clone();
             #[cfg(with_metrics)]
             metrics::QUORUM_REQUESTS
-                .with_label_values(&[&remote_node.public_key.to_string()])
+                .with_label_values(&[&remote_node.public_key.to_string(), &remote_node.address()])
                 .inc();
             Some(async move {
                 let public_key = remote_node.public_key;
+                #[cfg(with_metrics)]
+                let address = remote_node.address();
                 #[cfg(with_metrics)]
                 let request_start = Instant::now();
                 let result = execute(remote_node).await;
                 #[cfg(with_metrics)]
                 metrics::QUORUM_RESPONSE_TIME
-                    .with_label_values(&[&public_key.to_string()])
+                    .with_label_values(&[&public_key.to_string(), &address])
                     .observe(request_start.elapsed().as_secs_f64() * 1000.0);
                 (public_key, result)
             })
@@ -224,6 +230,11 @@ where
     let mut value_scores: HashMap<K, (u64, Vec<(ValidatorPublicKey, V)>)> = HashMap::new();
     let mut error_scores = HashMap::new();
     let mut responses_received = 0;
+    #[cfg(with_metrics)]
+    let addresses: HashMap<ValidatorPublicKey, String> = validator_clients
+        .iter()
+        .map(|remote_node| (remote_node.public_key, remote_node.address()))
+        .collect();
 
     'vote_wait: while let Ok(Some((name, result))) = timeout(
         end_time.map_or(MAX_TIMEOUT, |t| t.saturating_duration_since(Instant::now())),
@@ -237,6 +248,7 @@ where
         metrics::QUORUM_RESPONSES
             .with_label_values(&[
                 &name.to_string(),
+                addresses.get(&name).map_or("", String::as_str),
                 if end_time.is_none() {
                     "before_quorum"
                 } else {
