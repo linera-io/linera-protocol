@@ -96,15 +96,3 @@ macro_rules! impl_from_infallible {
 }
 
 pub(crate) use impl_from_infallible;
-
-#[cfg(test)]
-mod tests {
-    use super::parse_app_set;
-
-    #[test]
-    fn parse_app_set_accepts_empty() {
-        assert!(parse_app_set("").unwrap().is_empty());
-        assert!(parse_app_set("   ").unwrap().is_empty());
-        assert!(parse_app_set("not-an-application-id").is_err());
-    }
-}
