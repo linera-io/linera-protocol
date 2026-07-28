@@ -164,9 +164,9 @@ pub struct Options {
     #[arg(long, default_value_t, value_enum)]
     pub blanket_message_policy: BlanketMessagePolicy,
 
-    /// A set of chains to restrict incoming messages from. By default, messages
-    /// from all chains are accepted. To reject messages from all chains, specify
-    /// an empty string.
+    /// A set of chains to restrict incoming messages and events from. By default, messages and
+    /// events from all chains are accepted. To reject all of them, specify an empty string. The
+    /// admin chain's event stream is always followed regardless of this setting.
     #[arg(long, value_parser = util::parse_chain_set)]
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
 
@@ -180,8 +180,8 @@ pub struct Options {
     #[arg(long, value_parser = util::parse_app_set)]
     pub reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
 
-    /// A set of application IDs. If specified, only events coming from streams created by
-    /// applications from this set will be processed.
+    /// A set of application IDs. If specified, only event streams created by applications from
+    /// this set are processed and followed. The admin chain's event stream is always followed.
     #[arg(long, value_parser = util::parse_app_set)]
     pub process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
 

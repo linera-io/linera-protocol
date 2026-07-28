@@ -990,6 +990,11 @@ impl<Env: Environment> Client<Env> {
 
     /// Registers publisher chains in `EventsOnly` listening mode based on the event
     /// subscriptions of the given chain.
+    ///
+    /// Unlike `ChainClient::event_stream_publishers`, this deliberately does not apply the
+    /// message policy: it only records in-memory modes with no network I/O, and the `Client`
+    /// holds no single policy (each `ChainClient` has its own). Actual subscriptions and syncs
+    /// remain gated by the policy in the methods that reach validators.
     async fn update_publisher_chain_modes(&self, chain_id: ChainId) -> Result<(), LocalNodeError> {
         let subscriptions = self.local_node.get_event_subscriptions(chain_id).await?;
         let mut publishers = BTreeMap::<ChainId, BTreeSet<StreamId>>::new();
