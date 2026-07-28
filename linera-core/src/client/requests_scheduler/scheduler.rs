@@ -49,7 +49,7 @@ pub(super) mod metrics {
         register_histogram_vec(
             "requests_scheduler_response_time_ms",
             "Response time for requests to validators in milliseconds",
-            &["validator"],
+            &["validator", "address"],
             exponential_bucket_latencies(10000.0), // up to 10 seconds
         )
     });
@@ -59,7 +59,7 @@ pub(super) mod metrics {
         register_int_counter_vec(
             "requests_scheduler_request_total",
             "Total number of requests made to each validator",
-            &["validator"],
+            &["validator", "address"],
         )
     });
 
@@ -68,7 +68,7 @@ pub(super) mod metrics {
         register_int_counter_vec(
             "requests_scheduler_request_success",
             "Number of successful requests to each validator",
-            &["validator"],
+            &["validator", "address"],
         )
     });
 
@@ -545,15 +545,16 @@ impl<Env: Environment> RequestsScheduler<Env> {
         #[cfg(with_metrics)]
         {
             let validator_name = public_key.to_string();
+            let address = peer.address();
             metrics::VALIDATOR_RESPONSE_TIME
-                .with_label_values(&[&validator_name])
+                .with_label_values(&[&validator_name, &address])
                 .observe(response_time_ms as f64);
             metrics::VALIDATOR_REQUEST_TOTAL
-                .with_label_values(&[&validator_name])
+                .with_label_values(&[&validator_name, &address])
                 .inc();
             if is_success {
                 metrics::VALIDATOR_REQUEST_SUCCESS
-                    .with_label_values(&[&validator_name])
+                    .with_label_values(&[&validator_name, &address])
                     .inc();
             }
         }
