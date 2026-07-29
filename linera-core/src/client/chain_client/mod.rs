@@ -79,6 +79,12 @@ use crate::{
     worker::{Notification, Reason, WorkerError},
 };
 
+/// Maximum number of received-log entries fetched from each validator in one slice of
+/// [`ChainClient::find_received_certificates`]. Bounds the sync's memory footprint and
+/// the amount of work that can be lost to an interruption: trackers are persisted after
+/// each slice is processed.
+const RECEIVED_LOG_SYNC_SLICE_ENTRIES: usize = 200_000;
+
 /// Options that configure the behavior of a [`ChainClient`].
 #[derive(Debug, Clone)]
 pub struct Options {
@@ -1010,80 +1016,125 @@ impl<Env: Environment> ChainClient<Env> {
         let (_, committee) = self.admin_committee().await?;
         let nodes = self.client.make_nodes(&committee)?;
 
-        let trackers = self
-            .client
-            .local_node
-            .get_received_certificate_trackers(chain_id)
-            .await?;
-
-        trace!("find_received_certificates: read trackers");
-
-        let received_log_batches = Arc::new(std::sync::Mutex::new(Vec::new()));
-        // Proceed to downloading received logs.
-        let result = communicate_with_quorum(
-            &nodes,
-            &committee,
-            |_| (),
-            |remote_node| {
-                let client = &self.client;
-                let tracker = trackers.get(&remote_node.public_key).copied().unwrap_or(0);
-                let received_log_batches = Arc::clone(&received_log_batches);
-                Box::pin(async move {
-                    let batch = client
-                        .get_received_log_from_validator(chain_id, &remote_node, tracker)
-                        .await?;
-                    let mut batches = received_log_batches.lock().unwrap();
-                    batches.push((remote_node.public_key, batch));
-                    Ok(())
-                })
-            },
-            self.options.quorum_grace_period,
-        )
-        .await;
-
-        if let Err(error) = result {
-            error!(
-                %error,
-                "Failed to synchronize received_logs from at least a quorum of validators",
-            );
-        }
-
-        let received_logs: Vec<_> = {
-            let mut received_log_batches = received_log_batches.lock().unwrap();
-            std::mem::take(received_log_batches.as_mut())
-        };
-
-        debug!(
-            received_logs_len = %received_logs.len(),
-            received_logs_total = %received_logs.iter().map(|x| x.1.len()).sum::<usize>(),
-            "collected received logs"
-        );
-
-        let (received_logs, mut validator_trackers) = {
-            (
-                ReceivedLogs::from_received_result(received_logs.clone()),
-                ValidatorTrackers::new(received_logs, &trackers),
-            )
-        };
-
-        debug!(
-            num_chains = %received_logs.num_chains(),
-            num_certs = %received_logs.num_certs(),
-            "find_received_certificates: total number of chains and certificates to sync",
-        );
-
-        let max_blocks_per_chain =
-            self.options.sender_certificate_download_batch_size / self.options.max_joined_tasks * 2;
-        for received_log in received_logs.into_batches(
-            self.options.sender_certificate_download_batch_size,
-            max_blocks_per_chain,
-        ) {
-            validator_trackers = self
-                .receive_sender_certificates(received_log, validator_trackers, &nodes)
+        // Work through the backlog in slices of at most
+        // `RECEIVED_LOG_SYNC_SLICE_ENTRIES` entries per validator. Fetching the whole
+        // backlog at once would hold it in memory in its entirety, and the trackers —
+        // which are only persisted after entries are processed — would not advance
+        // until the full download completed: an interruption (crash, OOM kill) would
+        // then restart the download from the beginning. With slices, memory stays
+        // bounded and every completed slice is durable progress.
+        let mut previous_trackers = None;
+        loop {
+            let trackers = self
+                .client
+                .local_node
+                .get_received_certificate_trackers(chain_id)
                 .await?;
 
-            self.update_received_certificate_trackers(&validator_trackers)
-                .await;
+            // A slice that leaves the persisted trackers unchanged means no durable
+            // progress was made: an entry that can never be processed (e.g. a
+            // certificate from a revoked epoch, or a nonexistent block advertised by
+            // a faulty validator) pins its validator's tracker, and a failure to
+            // persist tracker updates rolls them back. Repeating the slice would
+            // refetch the same entries forever, so stop; like a sync before slicing
+            // was introduced, this leaves catching up to a later invocation.
+            if previous_trackers.as_ref() == Some(&trackers) {
+                warn!(
+                    "the last slice of received certificates made no durable progress; \
+                     stopping this sync"
+                );
+                break;
+            }
+            previous_trackers = Some(trackers.clone());
+
+            trace!("find_received_certificates: read trackers");
+
+            let received_log_batches = Arc::new(std::sync::Mutex::new(Vec::new()));
+            // Proceed to downloading received logs.
+            let result = communicate_with_quorum(
+                &nodes,
+                &committee,
+                |_| (),
+                |remote_node| {
+                    let client = &self.client;
+                    let tracker = trackers.get(&remote_node.public_key).copied().unwrap_or(0);
+                    let received_log_batches = Arc::clone(&received_log_batches);
+                    Box::pin(async move {
+                        let batch = client
+                            .get_received_log_from_validator(
+                                chain_id,
+                                &remote_node,
+                                tracker,
+                                RECEIVED_LOG_SYNC_SLICE_ENTRIES,
+                            )
+                            .await?;
+                        let mut batches = received_log_batches.lock().unwrap();
+                        batches.push((remote_node.public_key, batch));
+                        Ok(())
+                    })
+                },
+                self.options.quorum_grace_period,
+            )
+            .await;
+
+            if let Err(error) = result {
+                error!(
+                    %error,
+                    "Failed to synchronize received_logs from at least a quorum of validators",
+                );
+            }
+
+            let received_logs: Vec<_> = {
+                let mut received_log_batches = received_log_batches.lock().unwrap();
+                std::mem::take(received_log_batches.as_mut())
+            };
+
+            // A validator that returned a full slice may have more entries; one that
+            // returned a short slice is exhausted. Validators that did not respond
+            // are absent from `received_logs` and keep their trackers, so the next
+            // sync retries them.
+            let backlog_is_exhausted = received_logs
+                .iter()
+                .all(|(_, log)| log.len() < RECEIVED_LOG_SYNC_SLICE_ENTRIES);
+
+            debug!(
+                received_logs_len = %received_logs.len(),
+                received_logs_total = %received_logs.iter().map(|x| x.1.len()).sum::<usize>(),
+                %backlog_is_exhausted,
+                "collected received logs"
+            );
+
+            let (received_logs, mut validator_trackers) = {
+                (
+                    ReceivedLogs::from_received_result(received_logs.clone()),
+                    ValidatorTrackers::new(received_logs, &trackers),
+                )
+            };
+
+            debug!(
+                num_chains = %received_logs.num_chains(),
+                num_certs = %received_logs.num_certs(),
+                "find_received_certificates: number of chains and certificates in this slice",
+            );
+
+            let max_blocks_per_chain = self.options.sender_certificate_download_batch_size
+                / self.options.max_joined_tasks
+                * 2;
+            for received_log in received_logs.into_batches(
+                self.options.sender_certificate_download_batch_size,
+                max_blocks_per_chain,
+            ) {
+                validator_trackers = self
+                    .receive_sender_certificates(received_log, validator_trackers, &nodes)
+                    .await?;
+
+                self.update_received_certificate_trackers(&validator_trackers)
+                    .await;
+            }
+
+            if backlog_is_exhausted {
+                break;
+            }
         }
 
         trace!("find_received_certificates finished");

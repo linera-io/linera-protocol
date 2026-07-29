@@ -1794,13 +1794,16 @@ impl<Env: Environment> Client<Env> {
         trace!("find_received_certificates: finished processing chain");
     }
 
-    /// Downloads the log of received messages for a chain from a validator.
+    /// Downloads the log of received messages for a chain from a validator, up to
+    /// `max_entries` entries. A returned log shorter than `max_entries` means the
+    /// validator's log is exhausted; a full one means there may be more.
     #[instrument(level = "trace", skip(self))]
     async fn get_received_log_from_validator(
         &self,
         chain_id: ChainId,
         remote_node: &RemoteNode<Env::ValidatorNode>,
         tracker: u64,
+        max_entries: usize,
     ) -> Result<Vec<ChainAndHeight>, chain_client::Error> {
         let mut offset = tracker;
 
@@ -1818,7 +1821,9 @@ impl<Env: Environment> Client<Env> {
                 %received_entries,
                 "get_received_log_from_validator: received log batch",
             );
-            if received_entries < CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES {
+            if received_entries < CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES
+                || remote_log.len() >= max_entries
+            {
                 break;
             }
         }
