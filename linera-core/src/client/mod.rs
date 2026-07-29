@@ -62,6 +62,11 @@ use crate::{
     ChainWorkerConfig, ProcessConfirmedBlockMode, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
 
+/// Number of received-log pages downloaded from one validator between two `info`-level
+/// progress messages. One page holds up to [`CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES`]
+/// entries, so with the default page size a message is emitted every 500,000 entries.
+const RECEIVED_LOG_PAGES_PER_PROGRESS_MESSAGE: usize = 25;
+
 /// The client for interacting with a single chain.
 pub mod chain_client;
 pub use chain_client::ChainClient;
@@ -1806,6 +1811,7 @@ impl<Env: Environment> Client<Env> {
 
         // Retrieve the list of newly received certificates from this validator.
         let mut remote_log = Vec::new();
+        let mut num_pages = 0usize;
         loop {
             trace!("get_received_log_from_validator: looping");
             let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(offset);
@@ -1818,6 +1824,15 @@ impl<Env: Environment> Client<Env> {
                 %received_entries,
                 "get_received_log_from_validator: received log batch",
             );
+            num_pages += 1;
+            if num_pages.is_multiple_of(RECEIVED_LOG_PAGES_PER_PROGRESS_MESSAGE) {
+                info!(
+                    %chain_id,
+                    remote_node = remote_node.address(),
+                    num_entries = remote_log.len(),
+                    "still downloading the received log",
+                );
+            }
             if received_entries < CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES {
                 break;
             }
