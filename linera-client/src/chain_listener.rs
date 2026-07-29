@@ -26,11 +26,17 @@ use linera_core::{
     Environment, Wallet,
 };
 use linera_storage::{Arc as CacheArc, Storage as _};
-use tokio::sync::{mpsc::UnboundedReceiver, Notify};
+use tokio::sync::{mpsc::UnboundedReceiver, Notify, Semaphore};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn, Instrument as _};
 
 use crate::error::{self, Error};
+
+/// Maximum number of chains whose background received-certificate sync may run at the
+/// same time. Syncs beyond this limit wait for a permit, so all chains still get synced
+/// eventually; small backlogs are unaffected in practice because their syncs finish in
+/// well under a second.
+const MAX_CONCURRENT_BACKGROUND_SYNCS: usize = 2;
 
 /// The configuration for the chain listener.
 #[derive(Default, Debug, Clone, clap::Args, serde::Serialize, serde::Deserialize, tsify::Tsify)]
@@ -345,6 +351,10 @@ pub struct ChainListener<C: ClientContext> {
     command_receiver: UnboundedReceiver<ListenerCommand>,
     /// Whether to fully sync chains in the background.
     enable_background_sync: bool,
+    /// Bounds how many background received-certificate syncs may run at the same time.
+    /// Without a bound, a process that listens to many chains starts one sync per chain
+    /// at startup, and the combined backlog walks can overwhelm the validators' storage.
+    background_sync_semaphore: Arc<Semaphore>,
 }
 
 impl<C: ClientContext + 'static> ChainListener<C> {
@@ -366,6 +376,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
             event_subscribers: Default::default(),
             command_receiver,
             enable_background_sync,
+            background_sync_semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_BACKGROUND_SYNCS)),
         }
     }
 
@@ -582,11 +593,19 @@ impl<C: ClientContext + 'static> ChainListener<C> {
 
     /// Background task that syncs received certificates in small batches.
     /// This discovers unacknowledged sender blocks gradually without overwhelming the system.
-    #[instrument(skip(context))]
+    /// The semaphore bounds how many of these syncs run concurrently; the permit is held
+    /// for the duration of one sync, not for the lifetime of the task.
+    #[instrument(skip(context, semaphore))]
     async fn background_sync_received_certificates(
         context: Arc<Mutex<C>>,
         chain_id: ChainId,
+        semaphore: Arc<Semaphore>,
     ) -> Result<(), Error> {
+        let Ok(_permit) = semaphore.acquire().await else {
+            // The semaphore is never closed, so this is unreachable; if it ever
+            // happens, skipping the background sync is the safe fallback.
+            return Ok(());
+        };
         info!("Starting background certificate sync");
         let client = context.lock().await.make_chain_client(chain_id).await?;
 
@@ -654,8 +673,11 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         }
 
         let context = Arc::clone(&self.context);
+        let semaphore = Arc::clone(&self.background_sync_semaphore);
         Task::spawn(async move {
-            if let Err(e) = Self::background_sync_received_certificates(context, chain_id).await {
+            if let Err(e) =
+                Self::background_sync_received_certificates(context, chain_id, semaphore).await
+            {
                 warn!("Background sync failed for chain {chain_id}: {e}");
             }
         })
