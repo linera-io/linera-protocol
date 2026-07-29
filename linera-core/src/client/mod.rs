@@ -62,6 +62,11 @@ use crate::{
     ChainWorkerConfig, ProcessConfirmedBlockMode, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
 
+/// Number of full received-log pages a download may fetch back-to-back before pacing
+/// kicks in. With pages of [`CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES`] entries this lets
+/// backlogs of up to just under 100,000 entries sync at full speed.
+const RECEIVED_LOG_PAGES_BEFORE_PACING: usize = 5;
+
 /// The client for interacting with a single chain.
 pub mod chain_client;
 pub use chain_client::ChainClient;
@@ -1806,10 +1811,13 @@ impl<Env: Environment> Client<Env> {
 
         // Retrieve the list of newly received certificates from this validator.
         let mut remote_log = Vec::new();
+        let mut num_full_pages = 0usize;
         loop {
             trace!("get_received_log_from_validator: looping");
             let query = ChainInfoQuery::new(chain_id).with_received_log_excluding_first_n(offset);
+            let page_start = linera_base::time::Instant::now();
             let info = remote_node.handle_chain_info_query(query).await?;
+            let page_duration = page_start.elapsed();
             let received_entries = info.requested_received_log.len();
             offset += received_entries as u64;
             remote_log.extend(info.requested_received_log);
@@ -1820,6 +1828,17 @@ impl<Env: Environment> Client<Env> {
             );
             if received_entries < CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES {
                 break;
+            }
+            // Serving a page makes the validator read one storage row per log entry, so
+            // walking a long backlog page after page can monopolize the validator's
+            // storage and degrade its read latency for everyone else. Once the walk is
+            // clearly a backlog walk, pause between pages for as long as the previous
+            // page took: this caps the walk at roughly half of the validator's serving
+            // capacity and automatically backs off further when the validator slows
+            // down. Short syncs never reach this point and are unaffected.
+            num_full_pages += 1;
+            if num_full_pages >= RECEIVED_LOG_PAGES_BEFORE_PACING {
+                linera_base::time::timer::sleep(page_duration).await;
             }
         }
 
