@@ -62,6 +62,24 @@ pub struct ChainListenerConfig {
         env = "LINERA_LISTENER_DELAY_AFTER"
     )]
     pub delay_after_ms: u64,
+
+    /// The time between two background received-certificate syncs of the same chain, in
+    /// milliseconds. Repeating the sync keeps the received-certificate trackers fresh,
+    /// so a process restart only has to walk the short backlog accumulated since the
+    /// last refresh instead of everything since the previous restart. Set to 0 to sync
+    /// only once, when the chain listener starts.
+    #[serde(default = "default_background_sync_interval_ms")]
+    #[arg(
+        long = "listener-background-sync-interval-ms",
+        default_value = "900000",
+        env = "LINERA_LISTENER_BACKGROUND_SYNC_INTERVAL_MS"
+    )]
+    pub background_sync_interval_ms: u64,
+}
+
+/// The default value of [`ChainListenerConfig::background_sync_interval_ms`]: 15 minutes.
+fn default_background_sync_interval_ms() -> u64 {
+    900_000
 }
 
 type ContextChainClient<C> = ChainClient<<C as ClientContext>::Environment>;
@@ -654,9 +672,19 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         }
 
         let context = Arc::clone(&self.context);
+        let interval = Duration::from_millis(self.config.background_sync_interval_ms);
         Task::spawn(async move {
-            if let Err(e) = Self::background_sync_received_certificates(context, chain_id).await {
-                warn!("Background sync failed for chain {chain_id}: {e}");
+            loop {
+                if let Err(e) =
+                    Self::background_sync_received_certificates(Arc::clone(&context), chain_id)
+                        .await
+                {
+                    warn!("Background sync failed for chain {chain_id}: {e}");
+                }
+                if interval.is_zero() {
+                    return;
+                }
+                linera_base::time::timer::sleep(interval).await;
             }
         })
     }
