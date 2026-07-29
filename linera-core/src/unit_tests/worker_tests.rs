@@ -2498,6 +2498,7 @@ where
         assert_eq!(recipient_chain.received_log.count(), 1);
     }
     let query = ChainInfoQuery::new(chain_2).with_received_log_excluding_first_n(0);
+    assert!(query.is_received_log_page());
     let response = env
         .executing_worker()
         .handle_chain_info_query(query)
@@ -2510,6 +2511,8 @@ where
             height: BlockHeight::ZERO
         }
     );
+    // Received-log pages are served under a read lock and skip the state hash.
+    assert!(response.info.state_hash.is_none());
     Ok(())
 }
 
@@ -2551,6 +2554,22 @@ where
     assert_eq!(BlockHeight::from(1), info.next_block_height);
     assert_eq!(Some(certificate.hash()), info.block_hash);
     assert!(info.manager.pending.is_none());
+
+    // A received-log page query against an inactive chain must fall back from the
+    // read path to the write path and fail exactly like any other chain info query.
+    let page_query = ChainInfoQuery::new(chain_2).with_received_log_excluding_first_n(0);
+    assert!(page_query.is_received_log_page());
+    let page_error = env
+        .executing_worker()
+        .handle_chain_info_query(page_query)
+        .await
+        .unwrap_err();
+    let plain_error = env
+        .executing_worker()
+        .handle_chain_info_query(ChainInfoQuery::new(chain_2))
+        .await
+        .unwrap_err();
+    assert_eq!(format!("{page_error:?}"), format!("{plain_error:?}"));
     Ok(())
 }
 
