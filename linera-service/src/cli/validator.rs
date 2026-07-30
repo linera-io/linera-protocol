@@ -114,7 +114,7 @@ pub struct Add {
     /// Account public key for receiving payments and rewards
     #[arg(long)]
     account_key: AccountPublicKey,
-    /// Network address where the validator can be reached (e.g., grpcs://host:port)
+    /// Network address where the validator can be reached (e.g., grpcs:host:port)
     #[arg(long)]
     address: url::Url,
     /// Voting weight for consensus (default: 1)
@@ -182,7 +182,7 @@ pub struct List {
 /// view of the blockchain state, including block height and committee information.
 #[derive(Debug, Clone, clap::Parser)]
 pub struct Query {
-    /// Network address of the validator (e.g., grpcs://host:port)
+    /// Network address of the validator (e.g., grpcs:host:port)
     address: String,
     /// Chain ID to query about (defaults to default chain)
     #[arg(long)]
@@ -198,7 +198,7 @@ pub struct Query {
 /// view of the blockchain.
 #[derive(Debug, Clone, clap::Parser)]
 pub struct QueryBlock {
-    /// Network address of the validator (e.g., grpcs://host:port)
+    /// Network address of the validator (e.g., grpcs:host:port)
     address: String,
     /// Chain ID to query about (defaults to default chain)
     #[arg(long)]
@@ -228,7 +228,7 @@ pub struct Remove {
 /// ensuring the validator has up-to-date information about specified chains.
 #[derive(Debug, Clone, clap::Parser)]
 pub struct Sync {
-    /// Network address of the validator to sync (e.g., grpcs://host:port)
+    /// Network address of the validator to sync (e.g., grpcs:host:port)
     address: String,
     /// Chain IDs to synchronize (defaults to all chains in wallet)
     #[arg(long)]
