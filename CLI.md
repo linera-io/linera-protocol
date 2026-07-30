@@ -1442,7 +1442,7 @@ Adds a new validator with the specified public key, account key, network address
 
 * `--public-key <PUBLIC_KEY>` — Public key of the validator to add
 * `--account-key <ACCOUNT_KEY>` — Account public key for receiving payments and rewards
-* `--address <ADDRESS>` — Network address where the validator can be reached (e.g., grpcs://host:port)
+* `--address <ADDRESS>` — Network address where the validator can be reached (e.g., grpcs:host:port)
 * `--votes <VOTES>` — Voting weight for consensus (default: 1)
 * `--skip-online-check` — Skip online connectivity verification before adding
 
@@ -1478,7 +1478,7 @@ PREREQUISITE: the read layers are only meaningful if the candidate already holds
 
 ###### **Arguments:**
 
-* `<ADDRESS>` — Network address of the candidate validator (e.g. `grpcs://host:port`)
+* `<ADDRESS>` — Network address of the candidate validator (e.g. `grpcs:host:port`)
 
 ###### **Options:**
 
@@ -1577,7 +1577,7 @@ Connects to a validator at the specified network address and queries its view of
 
 ###### **Arguments:**
 
-* `<ADDRESS>` — Network address of the validator (e.g., grpcs://host:port)
+* `<ADDRESS>` — Network address of the validator (e.g., grpcs:host:port)
 
 ###### **Options:**
 
@@ -1596,7 +1596,7 @@ Connects to a validator at the specified network address and queries its view of
 
 ###### **Arguments:**
 
-* `<ADDRESS>` — Network address of the validator (e.g., grpcs://host:port)
+* `<ADDRESS>` — Network address of the validator (e.g., grpcs:host:port)
 
 ###### **Options:**
 
@@ -1630,7 +1630,7 @@ Pushes the current chain state from local storage to a validator node, ensuring 
 
 ###### **Arguments:**
 
-* `<ADDRESS>` — Network address of the validator to sync (e.g., grpcs://host:port)
+* `<ADDRESS>` — Network address of the validator to sync (e.g., grpcs:host:port)
 
 ###### **Options:**
 
