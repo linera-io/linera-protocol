@@ -10,7 +10,10 @@
 #![allow(async_fn_in_trait)]
 
 mod chain_worker;
-pub use chain_worker::{ChainWorkerConfig, ProcessConfirmedBlockMode};
+pub use chain_worker::{
+    spawn_chain_exporter, BlockExportConfig, ChainExportSetup, ChainExporter, ChainExporterFactory,
+    ChainWorkerConfig, ProcessConfirmedBlockMode,
+};
 /// The high-level client for interacting with chains and validators.
 pub mod client;
 pub use client::Client;
