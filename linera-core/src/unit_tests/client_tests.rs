@@ -4381,3 +4381,87 @@ where
 
     Ok(())
 }
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[test_log::test(tokio::test)]
+async fn test_blocks_are_exported_to_the_committee<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new_with_block_export(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = sender.chain_id();
+
+    // Each save folds in whatever the export task has acknowledged *so far*, so the recorded
+    // heights necessarily trail the tip: the block being saved has only just been queued. Keep
+    // producing blocks until the exports of the earlier ones have been folded in.
+    let mut exported = BTreeMap::new();
+    for _ in 0..10 {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+        exported = builder.exported_heights(0, chain_id).await;
+        if exported.len() == 3 && exported.values().all(|height| *height >= BlockHeight(1)) {
+            break;
+        }
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(50)).await;
+    }
+
+    // One entry per *other* committee member: a validator never exports to itself.
+    assert_eq!(
+        exported.len(),
+        3,
+        "expected the first validator to have exported to the three others, got {exported:?}"
+    );
+    assert!(
+        exported.values().all(|height| *height >= BlockHeight(1)),
+        "expected every destination to have acknowledged at least height 1, got {exported:?}"
+    );
+
+    // The destinations really do hold the chain, and the exporter's cursors agree with them.
+    let tip = sender.chain_info().await?.next_block_height;
+    for index in 0..4 {
+        assert_eq!(builder.next_block_height(index, chain_id).await, tip);
+    }
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_blocks_are_not_exported_without_the_flag<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+
+    for _ in 0..3 {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+
+    assert!(
+        builder
+            .exported_heights(0, sender.chain_id())
+            .await
+            .is_empty(),
+        "block export must stay off unless the server asks for it",
+    );
+    Ok(())
+}

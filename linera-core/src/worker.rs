@@ -64,11 +64,12 @@ impl<S: Storage> std::ops::Deref for ChainStateViewReadGuard<S> {
 pub(crate) use crate::chain_worker::EventSubscriptionsResult;
 use crate::{
     chain_worker::{
-        handle, state::ChainWorkerState, BlockOutcome, ChainWorkerConfig, CrossChainUpdateResult,
-        DeliveryNotifier, ProcessConfirmedBlockMode,
+        handle, state::ChainWorkerState, BlockOutcome, ChainExporterFactory, ChainWorkerConfig,
+        CrossChainUpdateResult, DeliveryNotifier, ProcessConfirmedBlockMode,
     },
     client::{ChainModes, ListeningMode},
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
+    local_node::LocalNodeClient,
     notifier::Notifier,
 };
 
@@ -719,6 +720,10 @@ pub struct WorkerState<StorageClient: Storage> {
     /// corrupted chain. The RPC server layer installs this; without it, we fall
     /// back to dispatching locally through `handle_cross_chain_request`.
     outbound_cross_chain_sender: Option<OutboundCrossChainSender>,
+    /// Creates each chain worker's block-export task. The server binary installs this, since it
+    /// is the only layer that knows how to reach another validator; without it, executed blocks
+    /// are not pushed to the rest of the committee.
+    chain_exporter_factory: Option<ChainExporterFactory<StorageClient>>,
 }
 
 /// Dispatcher for outbound cross-chain requests that handles the source-shard-to-
@@ -740,6 +745,7 @@ where
             chain_workers: self.chain_workers.clone(),
             chain_batches: self.chain_batches.clone(),
             outbound_cross_chain_sender: self.outbound_cross_chain_sender.clone(),
+            chain_exporter_factory: self.chain_exporter_factory.clone(),
         }
     }
 }
@@ -887,7 +893,21 @@ where
             #[cfg_attr(web, expect(clippy::arc_with_non_send_sync))]
             chain_batches: Arc::new(papaya::HashMap::new()),
             outbound_cross_chain_sender: None,
+            chain_exporter_factory: None,
         }
+    }
+
+    /// Installs the factory that creates each chain worker's block-export task, so that the
+    /// blocks this worker executes are pushed to the other validators in the committee.
+    ///
+    /// Must be called before any chain worker is created: workers capture the factory as they are
+    /// loaded, so one created earlier would never export.
+    pub fn with_chain_exporter_factory(
+        mut self,
+        factory: ChainExporterFactory<StorageClient>,
+    ) -> Self {
+        self.chain_exporter_factory = Some(factory);
+        self
     }
 
     /// Installs a shard-routing dispatcher used for outbound cross-chain requests
@@ -1270,6 +1290,8 @@ where
             chain_id,
             service_runtime_endpoint,
             service_runtime_task,
+            self.chain_exporter_factory.clone(),
+            LocalNodeClient::new(self.clone()),
         )
         .await?;
 
