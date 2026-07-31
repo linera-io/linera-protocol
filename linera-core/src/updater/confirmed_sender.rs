@@ -16,7 +16,6 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use futures::future;
 use linera_base::{
-    crypto::CryptoHash,
     data_types::{Blob, BlockHeight},
     identifiers::{BlobId, BlobType, ChainId, StreamId},
 };
@@ -28,42 +27,19 @@ use tracing::{instrument, Level};
 use crate::{
     client::chain_client,
     data_types::{ChainInfo, ChainInfoQuery},
+    local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     remote_node::RemoteNode,
     LocalNodeError,
 };
 
-/// Answers the few chain-level queries that cannot be served from the certificate, blob, and
-/// height-index partitions.
-///
-/// Those partitions can be read directly, but a chain's own state view is owned by the chain worker
-/// while it is running: loading it elsewhere races with the worker and can corrupt data. Consumers
-/// therefore supply their own way to answer these queries — the client routes them through its
-/// local worker.
-pub(crate) trait LocalChainState {
-    /// Returns the next block height of the given chain, according to local state.
-    async fn next_block_height(
-        &self,
-        chain_id: ChainId,
-    ) -> Result<BlockHeight, chain_client::Error>;
-
-    /// Returns the hashes of the given chain's blocks at the given heights.
-    ///
-    /// Heights the chain does not have are omitted, so the result may be shorter than `heights`.
-    async fn block_hashes(
-        &self,
-        chain_id: ChainId,
-        heights: Vec<BlockHeight>,
-    ) -> Result<Vec<CryptoHash>, chain_client::Error>;
-}
-
 /// Pushes confirmed-block certificates to a single validator, uploading their dependencies as
 /// needed.
 ///
 /// This is the confirmed-certificate synchronization path shared by the client's
-/// `ValidatorUpdater` and by the server's chain workers. Certificates and blobs are read from
-/// `storage` directly, and the remaining chain-level queries go through [`LocalChainState`], so
-/// this requires neither a client, a wallet, nor a signer.
+/// `ValidatorUpdater` and by the server's chain workers. Certificates and blobs are read straight
+/// from storage, and the remaining chain-level queries go through the local worker, so this
+/// requires neither a client, a wallet, nor a signer.
 ///
 /// A confirmed certificate can be rejected by a validator that is missing one of the certificate's
 /// dependencies. This type reproduces the client's recovery logic:
@@ -73,26 +49,25 @@ pub(crate) trait LocalChainState {
 ///   from `storage` and uploaded.
 ///
 /// The certificate is then retried.
-pub(crate) struct ConfirmedCertificateSender<S, N, L> {
+pub(crate) struct ConfirmedCertificateSender<S: Storage, N> {
     storage: S,
     remote_node: RemoteNode<N>,
-    local_chain_state: L,
+    local_node: LocalNodeClient<S>,
     admin_chain_id: ChainId,
     certificate_upload_batch_size: u64,
     backfill_height_indices: bool,
 }
 
-impl<S, N, L> Clone for ConfirmedCertificateSender<S, N, L>
+impl<S, N> Clone for ConfirmedCertificateSender<S, N>
 where
-    S: Clone,
+    S: Storage + Clone,
     N: Clone,
-    L: Clone,
 {
     fn clone(&self) -> Self {
         ConfirmedCertificateSender {
             storage: self.storage.clone(),
             remote_node: self.remote_node.clone(),
-            local_chain_state: self.local_chain_state.clone(),
+            local_node: self.local_node.clone(),
             admin_chain_id: self.admin_chain_id,
             certificate_upload_batch_size: self.certificate_upload_batch_size,
             backfill_height_indices: self.backfill_height_indices,
@@ -100,29 +75,32 @@ where
     }
 }
 
-impl<S, N, L> ConfirmedCertificateSender<S, N, L>
+impl<S, N> ConfirmedCertificateSender<S, N>
 where
     S: Storage + Clone,
     N: ValidatorNode + Clone,
-    L: LocalChainState + Clone,
 {
     /// Creates a new sender targeting `remote_node`, reading confirmed blocks and their
-    /// dependencies from `storage`.
+    /// dependencies from the storage behind `local_node`.
+    ///
+    /// `local_node` also answers the few chain-level queries that the certificate, blob, and
+    /// height-index partitions cannot: those partitions can be read directly, but a chain's own
+    /// state view is owned by its chain worker while it is running, and loading it elsewhere races
+    /// with the worker. Routing them through the local worker is what avoids that.
     ///
     /// `admin_chain_id` identifies the chain whose epoch stream carries committee events.
     /// `certificate_upload_batch_size` bounds how many certificates are read and pushed per batch
     /// during height synchronization.
     pub(crate) fn new(
-        storage: S,
         remote_node: RemoteNode<N>,
-        local_chain_state: L,
+        local_node: LocalNodeClient<S>,
         admin_chain_id: ChainId,
         certificate_upload_batch_size: u64,
     ) -> Self {
         ConfirmedCertificateSender {
-            storage,
+            storage: local_node.storage_client(),
             remote_node,
-            local_chain_state,
+            local_node,
             admin_chain_id,
             certificate_upload_batch_size,
             backfill_height_indices: false,
@@ -274,9 +252,10 @@ where
     /// without a local worker.
     async fn update_admin_chain(&mut self) -> Result<(), chain_client::Error> {
         let admin_next_block_height = self
-            .local_chain_state
-            .next_block_height(self.admin_chain_id)
-            .await?;
+            .local_node
+            .chain_info(self.admin_chain_id)
+            .await?
+            .next_block_height;
         Box::pin(self.send_confirmed_chain(
             self.admin_chain_id,
             admin_next_block_height,
@@ -395,8 +374,8 @@ where
         }
 
         let hashes = self
-            .local_chain_state
-            .block_hashes(chain_id, heights.clone())
+            .local_node
+            .get_block_hashes(chain_id, heights.clone())
             .await?;
 
         let certificates = self.storage.read_certificates(&hashes).await?;
