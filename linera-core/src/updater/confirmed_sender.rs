@@ -5,11 +5,12 @@
 //! validator.
 //!
 //! [`ConfirmedCertificateSender`] extracts the confirmed-certificate synchronization path out of
-//! [`crate::updater::ValidatorUpdater`] so it can be reused by clients that do not construct a
-//! full [`crate::client::Client`] or [`crate::local_node::LocalNodeClient`] (e.g. the block
-//! exporter). It operates directly on a [`Storage`] handle, a [`RemoteNode`], and the admin chain
-//! id, reusing the existing dependency-upload logic (missing blobs, missing epoch/committee events
-//! via the admin chain, and ancestor certificates).
+//! [`crate::updater::ValidatorUpdater`], which owns an [`crate::client::Client`], so that it can
+//! also be used where no client exists — in particular by the chain workers in the server binary,
+//! which push the blocks they execute to the other validators in the committee. It operates on a
+//! [`Storage`] handle, a [`RemoteNode`], and the admin chain id, reusing the existing
+//! dependency-upload logic (missing blobs, and missing epoch/committee events via the admin
+//! chain).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -39,7 +40,7 @@ use crate::{
 /// while it is running: loading it elsewhere races with the worker and can corrupt data. Consumers
 /// therefore supply their own way to answer these queries — the client routes them through its
 /// local worker.
-pub trait LocalChainState {
+pub(crate) trait LocalChainState {
     /// Returns the next block height of the given chain, according to local state.
     async fn next_block_height(
         &self,
@@ -60,9 +61,9 @@ pub trait LocalChainState {
 /// needed.
 ///
 /// This is the confirmed-certificate synchronization path shared by the client's
-/// `ValidatorUpdater` and by out-of-crate consumers such as the block exporter.
-/// Certificates and blobs are read from `storage` directly, and the remaining chain-level queries
-/// go through [`LocalChainState`], so this requires neither a wallet nor a signer.
+/// `ValidatorUpdater` and by the server's chain workers. Certificates and blobs are read from
+/// `storage` directly, and the remaining chain-level queries go through [`LocalChainState`], so
+/// this requires neither a client, a wallet, nor a signer.
 ///
 /// A confirmed certificate can be rejected by a validator that is missing one of the certificate's
 /// dependencies. This type reproduces the client's recovery logic:
@@ -72,7 +73,7 @@ pub trait LocalChainState {
 ///   from `storage` and uploaded.
 ///
 /// The certificate is then retried.
-pub struct ConfirmedCertificateSender<S, N, L> {
+pub(crate) struct ConfirmedCertificateSender<S, N, L> {
     storage: S,
     remote_node: RemoteNode<N>,
     local_chain_state: L,
@@ -111,7 +112,7 @@ where
     /// `admin_chain_id` identifies the chain whose epoch stream carries committee events.
     /// `certificate_upload_batch_size` bounds how many certificates are read and pushed per batch
     /// during height synchronization.
-    pub fn new(
+    pub(crate) fn new(
         storage: S,
         remote_node: RemoteNode<N>,
         local_chain_state: L,
@@ -132,7 +133,7 @@ where
     /// were only found through the block-hash-list fallback.
     ///
     /// This is meant for consumers that own the storage they read from. Consumers that merely read
-    /// another component's storage, such as the block exporter, must leave it disabled.
+    /// another component's storage must leave it disabled.
     pub(crate) fn with_height_index_backfill(mut self) -> Self {
         self.backfill_height_indices = true;
         self
@@ -154,7 +155,7 @@ where
     /// (`target_next_block_height == 0`) it sends the chain description and dependencies first, then
     /// queries the validator's state.
     #[instrument(level = "debug", skip_all, fields(%chain_id))]
-    pub async fn send_confirmed_chain(
+    pub(crate) async fn send_confirmed_chain(
         &mut self,
         chain_id: ChainId,
         target_next_block_height: BlockHeight,
