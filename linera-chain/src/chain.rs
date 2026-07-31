@@ -319,23 +319,18 @@ where
     /// that tracks all chains and never filters.
     pub outbox_index_tracked_hash: RegisterView<C, Option<CryptoHash>>,
 
+    // A *lower* bound, not an exact record: the export task reports progress asynchronously, so
+    // blocks pushed since the last save are missing here, and a crash loses the reports that were
+    // never folded in. That is deliberate — re-sending a block the destination already has is
+    // skipped by an integer comparison before signature verification, whereas *under*-sending
+    // would leave a permanent gap. Validators that leave the committee are pruned, so this stays
+    // bounded by the committee size.
+    //
+    // This field must stay **last**: the `RootView` derive assigns each field's storage tag
+    // positionally, so appending is what makes an existing database readable by the new code.
     /// The height of the highest block of this chain that has been pushed to each of the other
-    /// committee validators, as reported by this chain's export task the last time the chain was
-    /// saved.
-    ///
-    /// This is a *lower* bound on what the destination has: the export task reports progress
-    /// asynchronously, so blocks pushed since the last save are missing here, and a crash loses
-    /// the reports that were never folded in. That is deliberate — re-sending a block the
-    /// destination already has is skipped by an integer comparison before signature verification,
-    /// whereas *under*-sending would leave a permanent gap. An entry that is absent (a validator
-    /// we have never exported to, or a pre-existing database entry from before this field was
-    /// added) simply means the export task queries the destination before its first send.
-    ///
-    /// Validators that leave the committee are pruned, so this stays bounded by the committee
-    /// size.
-    ///
-    /// This field must stay **last**: the `RootView` derive assigns each field's storage tag
-    /// positionally, so appending is what makes an existing database readable by the new code.
+    /// committee validators. A validator with no entry has not been exported to yet, and is
+    /// queried before the first push.
     pub exported_heights: RegisterView<C, NonCanonicalBTreeMap<ValidatorPublicKey, BlockHeight>>,
 }
 
