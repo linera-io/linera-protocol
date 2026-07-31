@@ -4436,7 +4436,7 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[test_log::test(tokio::test)]
-async fn test_blocks_are_not_exported_without_the_flag<B>(storage_builder: B) -> anyhow::Result<()>
+async fn test_blocks_are_not_exported_by_default<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
@@ -4461,7 +4461,7 @@ where
             .exported_heights(0, sender.chain_id())
             .await
             .is_empty(),
-        "block export must stay off unless the server asks for it",
+        "block export must stay off unless a chain exporter factory is installed",
     );
     Ok(())
 }

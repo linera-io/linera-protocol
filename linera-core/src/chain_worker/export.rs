@@ -26,7 +26,7 @@ use futures::future;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
-    crypto::{CryptoHash, ValidatorPublicKey},
+    crypto::ValidatorPublicKey,
     data_types::{Blob, BlockHeight},
     identifiers::ChainId,
     time::{Duration, Instant},
@@ -38,11 +38,10 @@ use tokio::sync::mpsc;
 use tracing::{debug, instrument, warn};
 
 use crate::{
-    client::chain_client,
     local_node::LocalNodeClient,
     node::{ValidatorNode, ValidatorNodeProvider},
     remote_node::RemoteNode,
-    updater::confirmed_sender::{ConfirmedCertificateSender, LocalChainState},
+    updater::confirmed_sender::ConfirmedCertificateSender,
 };
 
 #[cfg(with_metrics)]
@@ -188,14 +187,16 @@ impl ChainExporter {
             committee,
             admin_chain_id,
         };
-        if self.blocks.send(block).is_err() {
-            // The task exits only when this sender is dropped, so it cannot be gone while we
-            // hold it.
-            warn!("Block export task stopped unexpectedly; blocks are no longer being exported");
-            return;
+        match self.blocks.send(block) {
+            Ok(()) => {
+                #[cfg(with_metrics)]
+                metrics::QUEUE_SIZE.inc();
+            }
+            // The task runs until this sender is dropped, so it cannot be gone while we hold it.
+            Err(_) => {
+                warn!("Block export task stopped unexpectedly; blocks are no longer being exported")
+            }
         }
-        #[cfg(with_metrics)]
-        metrics::QUEUE_SIZE.inc();
     }
 
     /// Returns how far each validator has been exported to, restricted to `committee` so that
@@ -222,7 +223,6 @@ impl ChainExporter {
 /// worker is dropped — so an idle chain costs neither a task nor a connection.
 pub fn spawn_chain_exporter<S, P>(
     setup: ChainExportSetup<S>,
-    storage: S,
     node_provider: Arc<P>,
     config: BlockExportConfig,
     own_public_key: Option<ValidatorPublicKey>,
@@ -240,11 +240,8 @@ where
 
     let task = ChainExportTask {
         chain_id: setup.chain_id,
-        storage,
         node_provider,
-        local_chain_state: LocalNodeChainState {
-            local_node: setup.local_node,
-        },
+        local_node: setup.local_node,
         config,
         own_public_key,
         destinations: HashMap::new(),
@@ -255,43 +252,9 @@ where
     ChainExporter { blocks, progress }
 }
 
-/// Answers chain-level queries through the local worker, which owns the chain state views.
-///
-/// The export task runs outside its worker's lock, so it must never load a chain state view
-/// itself — the worker may be executing on it, and two loads of the same chain race. Routing the
-/// queries through the worker is how the client answers them too.
-#[derive(Clone)]
-struct LocalNodeChainState<S: Storage> {
-    local_node: LocalNodeClient<S>,
-}
-
-impl<S> LocalChainState for LocalNodeChainState<S>
-where
-    S: Storage + Clone + 'static,
-{
-    async fn next_block_height(
-        &self,
-        chain_id: ChainId,
-    ) -> Result<BlockHeight, chain_client::Error> {
-        Ok(self
-            .local_node
-            .chain_info(chain_id)
-            .await?
-            .next_block_height)
-    }
-
-    async fn block_hashes(
-        &self,
-        chain_id: ChainId,
-        heights: Vec<BlockHeight>,
-    ) -> Result<Vec<CryptoHash>, chain_client::Error> {
-        Ok(self.local_node.get_block_hashes(chain_id, heights).await?)
-    }
-}
-
 /// One destination validator, and what we believe it holds of this chain.
-struct Destination<S, N, L> {
-    sender: ConfirmedCertificateSender<S, N, L>,
+struct Destination<S: Storage, N> {
+    sender: ConfirmedCertificateSender<S, N>,
     address: String,
     /// The next height the validator needs, or `None` when we have to ask it — before the first
     /// push, and after any failed one.
@@ -303,29 +266,30 @@ struct Destination<S, N, L> {
 }
 
 /// The body of one chain's export task.
-struct ChainExportTask<S, P, L>
+struct ChainExportTask<S, P>
 where
+    S: Storage,
     P: ValidatorNodeProvider,
 {
     chain_id: ChainId,
-    storage: S,
     node_provider: Arc<P>,
-    local_chain_state: L,
+    /// Answers the chain-level queries the certificate partitions cannot, through the local
+    /// worker that owns the chain state views.
+    local_node: LocalNodeClient<S>,
     config: BlockExportConfig,
     own_public_key: Option<ValidatorPublicKey>,
-    destinations: HashMap<ValidatorPublicKey, Destination<S, P::Node, L>>,
+    destinations: HashMap<ValidatorPublicKey, Destination<S, P::Node>>,
     /// The highest height each validator has acknowledged. Seeded from what the worker had
     /// persisted, so a destination we meet for the first time — after a restart, or after the
     /// chain worker was dropped and reloaded — starts from there instead of being queried.
     progress: Arc<Mutex<BTreeMap<ValidatorPublicKey, BlockHeight>>>,
 }
 
-impl<S, P, L> ChainExportTask<S, P, L>
+impl<S, P> ChainExportTask<S, P>
 where
     S: Storage + Clone,
     P: ValidatorNodeProvider,
     P::Node: Clone,
-    L: LocalChainState + Clone,
 {
     /// Exports each block in turn, and returns when the chain worker has dropped its end.
     #[instrument(level = "debug", skip_all, fields(chain_id = %self.chain_id))]
@@ -417,12 +381,11 @@ where
                 continue;
             };
             let sender = ConfirmedCertificateSender::new(
-                self.storage.clone(),
                 RemoteNode {
                     public_key: validator,
                     node,
                 },
-                self.local_chain_state.clone(),
+                self.local_node.clone(),
                 block.admin_chain_id,
                 self.config.certificate_upload_batch_size,
             );
@@ -444,11 +407,10 @@ where
     }
 }
 
-impl<S, N, L> Destination<S, N, L>
+impl<S, N> Destination<S, N>
 where
     S: Storage + Clone,
     N: ValidatorNode + Clone,
-    L: LocalChainState + Clone,
 {
     /// Pushes the block, along with any earlier ones this validator is missing, and returns the
     /// validator's next block height afterwards — or `None` if it was skipped or failed.

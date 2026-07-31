@@ -965,11 +965,9 @@ where
             let mut state = WorkerState::new(storage.clone(), config, None);
             if block_export {
                 let node_provider = Arc::new(node_provider.clone());
-                let storage = storage.clone();
                 state = state.with_chain_exporter_factory(Arc::new(move |setup| {
                     crate::spawn_chain_exporter(
                         setup,
-                        storage.clone(),
                         node_provider.clone(),
                         crate::BlockExportConfig::default(),
                         Some(validator_public_key),
