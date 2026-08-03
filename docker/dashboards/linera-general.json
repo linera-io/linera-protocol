@@ -925,7 +925,7 @@
           "disableTextWrap": false,
           "editorMode": "builder",
           "exemplar": false,
-          "expr": "rate(block_execution_latency_bucket{service=\"shards\"}[$__rate_interval])",
+          "expr": "rate(linera_block_execution_latency_bucket{job=\"linera-shard\"}[$__rate_interval])",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -940,8 +940,8 @@
     },
     {
       "datasource": {
-        "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -990,24 +990,22 @@
       "pluginVersion": "11.2.0",
       "targets": [
         {
+          "refId": "A",
           "datasource": {
-            "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
+            "type": "prometheus",
+            "uid": "prometheus"
           },
-          "editorMode": "code",
-          "expr": "sum by (pod) (count_over_time({app=\"shards\"} |= `OpenChain` [24h]))",
-          "legendFormat": "{{pod}}",
-          "queryType": "range",
-          "refId": "A"
+          "expr": "sum by (shard) (linera_open_chain_count{job=\"linera-shard\"})",
+          "legendFormat": "shard {{shard}}"
         }
       ],
-      "title": "Chains per Shard (24h)",
+      "title": "Open Chains per Shard",
       "type": "gauge"
     },
     {
       "datasource": {
-        "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "description": "Shard and proxy panics",
       "fieldConfig": {
@@ -1058,28 +1056,16 @@
       "pluginVersion": "11.2.0",
       "targets": [
         {
+          "refId": "A",
           "datasource": {
-            "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
+            "type": "prometheus",
+            "uid": "prometheus"
           },
-          "editorMode": "builder",
-          "expr": "{app=\"shards\"} |= `panic`",
-          "queryType": "range",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
-          },
-          "editorMode": "builder",
-          "expr": "{app=\"proxy\"} |= `panic`",
-          "hide": false,
-          "queryType": "range",
-          "refId": "B"
+          "expr": "up{job=~\"linera-.*\"}",
+          "legendFormat": "{{job}} {{instance}} {{shard}}"
         }
       ],
-      "title": "Panics",
+      "title": "Service Up (a panicking process flaps here)",
       "type": "table"
     },
     {
