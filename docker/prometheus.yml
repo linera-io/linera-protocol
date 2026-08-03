@@ -1,15 +1,27 @@
 global:
   scrape_interval: 15s
 
+# Job names and the `shard` label are deliberately identical to the ones
+# alloy-config.river attaches, so a dashboard written against one scrape path
+# works unchanged on the other. `shard` is NOT emitted by the binaries — it
+# only exists because the scrape config adds it here, and every per-shard
+# dashboard panel groups by it.
 scrape_configs:
-  - job_name: 'proxy'
+  - job_name: 'linera-proxy'
     static_configs:
       - targets: ['proxy:21100']
 
-  - job_name: 'shards'
+  - job_name: 'linera-shard'
     static_configs:
-      - targets:
-        - 'docker-shard-1:21100'
-        - 'docker-shard-2:21100'
-        - 'docker-shard-3:21100'
-        - 'docker-shard-4:21100'
+      - targets: ['docker-shard-1:21100']
+        labels:
+          shard: '0'
+      - targets: ['docker-shard-2:21100']
+        labels:
+          shard: '1'
+      - targets: ['docker-shard-3:21100']
+        labels:
+          shard: '2'
+      - targets: ['docker-shard-4:21100']
+        labels:
+          shard: '3'
