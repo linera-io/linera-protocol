@@ -761,14 +761,15 @@ NodeError:
           - found_block_height:
               TYPENAME: BlockHeight
     8:
-      MissingCrossChainUpdate:
+      MissingCrossChainUpdates:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
-          - origin:
-              TYPENAME: ChainId
-          - height:
-              TYPENAME: BlockHeight
+          - bundles:
+              SEQ:
+                TUPLE:
+                  - TYPENAME: ChainId
+                  - TYPENAME: BlockHeight
     9:
       BlobsNotFound:
         NEWTYPE:
