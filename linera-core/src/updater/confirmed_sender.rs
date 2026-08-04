@@ -16,10 +16,13 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use futures::future;
 use linera_base::{
-    data_types::{Blob, BlockHeight},
+    data_types::{Blob, BlockHeight, Round},
     identifiers::{BlobId, BlobType, ChainId, StreamId},
 };
-use linera_chain::types::{ConfirmedBlock, GenericCertificate};
+use linera_chain::{
+    manager::LockingBlock,
+    types::{ConfirmedBlock, GenericCertificate},
+};
 use linera_execution::{system::EPOCH_STREAM_NAME, BlobState};
 use linera_storage::{Arc as CacheArc, ResultReadCertificates, Storage};
 use tracing::{instrument, Level};
@@ -56,6 +59,7 @@ pub(crate) struct ConfirmedCertificateSender<S: Storage, N> {
     admin_chain_id: ChainId,
     certificate_upload_batch_size: u64,
     backfill_height_indices: bool,
+    sync_consensus_rounds: bool,
 }
 
 impl<S, N> Clone for ConfirmedCertificateSender<S, N>
@@ -71,6 +75,7 @@ where
             admin_chain_id: self.admin_chain_id,
             certificate_upload_batch_size: self.certificate_upload_batch_size,
             backfill_height_indices: self.backfill_height_indices,
+            sync_consensus_rounds: self.sync_consensus_rounds,
         }
     }
 }
@@ -104,7 +109,20 @@ where
             admin_chain_id,
             certificate_upload_batch_size,
             backfill_height_indices: false,
+            sync_consensus_rounds: false,
         }
+    }
+
+    /// Also synchronizes the validator's *consensus round* after its height, when it turns out to
+    /// be at our height but in an earlier round.
+    ///
+    /// Height synchronization delivers confirmed blocks; this additionally pushes the evidence
+    /// that justifies a later round — a locking certificate, a timeout certificate, or a proposal.
+    /// That is consensus participation rather than replication, so it is opt-in: the client wants
+    /// it, and a chain worker pushing the blocks it has executed does not.
+    pub(crate) fn with_consensus_round_sync(mut self) -> Self {
+        self.sync_consensus_rounds = true;
+        self
     }
 
     /// Enables writing `(chain_id, height) -> hash` indices back to storage for certificates that
@@ -140,17 +158,148 @@ where
         delivery: CrossChainMessageDelivery,
         latest_certificate: Option<CacheArc<GenericCertificate<ConfirmedBlock>>>,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
-        if target_next_block_height.0 > 0 {
+        let info = if target_next_block_height.0 > 0 {
             self.sync_chain_height(
                 chain_id,
                 target_next_block_height,
                 delivery,
                 latest_certificate,
             )
-            .await
+            .await?
         } else {
-            self.initialize_new_chain_on_validator(chain_id).await
+            self.initialize_new_chain_on_validator(chain_id).await?
+        };
+
+        if self.sync_consensus_rounds {
+            self.sync_round_at_height(chain_id, &info).await?;
         }
+        Ok(info)
+    }
+
+    /// Brings the validator's consensus round up to ours, if it is at our height but behind.
+    ///
+    /// Only reachable once height synchronization has finished, and it returns immediately unless
+    /// the validator's height already equals ours — so this can never be what delivers a block or
+    /// an event the validator was missing. It exists purely to unstick a round.
+    async fn sync_round_at_height(
+        &self,
+        chain_id: ChainId,
+        info: &ChainInfo,
+    ) -> Result<(), chain_client::Error> {
+        let (remote_height, remote_round) = (info.next_block_height, info.manager.current_round);
+        let query = ChainInfoQuery::new(chain_id).with_manager_values();
+        let local_info = match self.local_node.handle_chain_info_query(query).await {
+            Ok(response) => response.info,
+            // If we don't have the full chain description locally, we can't help the
+            // validator with round synchronization. This is not an error - the validator
+            // should retry later once the chain is fully initialized locally.
+            Err(LocalNodeError::BlobsNotFound(_)) => {
+                tracing::debug!("local chain description not fully available, skipping round sync");
+                return Ok(());
+            }
+            Err(error) => return Err(error.into()),
+        };
+
+        let manager = local_info.manager;
+        if local_info.next_block_height != remote_height || manager.current_round <= remote_round {
+            return Ok(());
+        }
+
+        // Validator is at our height but behind on consensus round
+        self.sync_consensus_round(remote_round, &manager).await
+    }
+
+    /// Synchronizes the consensus round state with the validator.
+    ///
+    /// If the validator is at the same height but an earlier round, sends the evidence
+    /// (proposal, validated block, or timeout certificate) that justifies the current round.
+    ///
+    /// This is a best-effort operation - failures are logged but don't fail the entire sync.
+    async fn sync_consensus_round(
+        &self,
+        remote_round: Round,
+        manager: &linera_chain::manager::ChainManagerInfo,
+    ) -> Result<(), chain_client::Error> {
+        let target_round = manager.current_round;
+
+        // First, push the locking certificate if it justifies our current round. A
+        // locking block from an earlier round is not enough on its own to advance the
+        // remote: the remote may still be ahead via a timeout or signed proposal, and
+        // pushing a stale lock would not move them. Push only the current-round lock.
+        if let Some(LockingBlock::Regular(validated)) = manager.requested_locking.as_deref() {
+            if validated.round == target_round {
+                match self
+                    .remote_node
+                    .handle_optimized_validated_certificate(
+                        validated,
+                        CrossChainMessageDelivery::NonBlocking,
+                    )
+                    .await
+                {
+                    Ok(info) => {
+                        tracing::debug!("successfully sent validated block for round sync");
+                        if info.manager.current_round >= target_round {
+                            return Ok(());
+                        }
+                    }
+                    Err(error) => {
+                        tracing::debug!(%error, "failed to send validated block");
+                    }
+                }
+            }
+        }
+
+        // Try to send a timeout certificate. The remote applies `next_round(cert.round)`
+        // to its current round, which (for the cert we hold) lands at our current round.
+        if let Some(cert) = &manager.timeout {
+            if cert.round >= remote_round {
+                match self
+                    .remote_node
+                    .handle_timeout_certificate(cert.as_ref().clone())
+                    .await
+                {
+                    Ok(info) => {
+                        tracing::debug!(round = %cert.round, "successfully sent timeout certificate");
+                        if info.manager.current_round >= target_round {
+                            return Ok(());
+                        }
+                    }
+                    Err(error) => {
+                        tracing::debug!(%error, round = %cert.round, "failed to send timeout certificate");
+                    }
+                }
+            }
+        }
+
+        // Finally, try to push a proposal at the current round.
+        for proposal in manager
+            .requested_proposed
+            .iter()
+            .chain(manager.requested_signed_proposal.iter())
+        {
+            if proposal.content.round == target_round {
+                match self
+                    .remote_node
+                    .handle_block_proposal(proposal.clone())
+                    .await
+                {
+                    Ok(info) => {
+                        tracing::debug!("successfully sent block proposal for round sync");
+                        if info.manager.current_round >= target_round {
+                            return Ok(());
+                        }
+                    }
+                    Err(error) => {
+                        tracing::debug!(%error, "failed to send block proposal");
+                    }
+                }
+            }
+        }
+
+        // If we reach here, either we had no round sync data to send, or all attempts failed.
+        // This is not a fatal error - height sync succeeded which is the primary goal.
+        tracing::debug!("round sync not performed: no applicable data or all attempts failed");
+        Ok(())
     }
 
     /// Sends chain information for all chains referenced by the given blobs.
@@ -246,10 +395,9 @@ where
     /// storage.
     ///
     /// Called when the validator reports that it is missing the committee that signed a
-    /// certificate. Unlike the client's `ValidatorUpdater`, this performs only height
-    /// synchronization (no consensus-round synchronization), which is all that is required to
-    /// deliver the confirmed committee events and all that the storage-only primitive can do
-    /// without a local worker.
+    /// certificate. Committee events are emitted by *confirmed* blocks, so height synchronization
+    /// is what resolves the error; a consumer that opted into round synchronization gets that too,
+    /// unchanged from before this path was extracted.
     async fn update_admin_chain(&mut self) -> Result<(), chain_client::Error> {
         let admin_next_block_height = self
             .local_node
