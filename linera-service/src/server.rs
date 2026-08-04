@@ -33,7 +33,8 @@ use linera_base::{
 };
 use linera_client::config::{CommitteeConfig, ValidatorConfig, ValidatorServerConfig};
 use linera_core::{
-    worker::WorkerState, ChainWorkerConfig, JoinSetExt as _, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
+    spawn_chain_exporter, worker::WorkerState, BlockExportConfig, ChainExporterFactory,
+    ChainWorkerConfig, JoinSetExt as _, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
 use linera_execution::{WasmRuntime, WithWasmDefault};
 #[cfg(with_metrics)]
@@ -73,6 +74,8 @@ struct ServerContext {
     allow_revert_confirm: bool,
     reset_on_corrupted_chain_state_mins: Option<u64>,
     recovery_whitelist: Option<HashSet<ChainId>>,
+    /// How to push executed blocks to the other committee validators, or `None` to not push them.
+    block_export_config: Option<BlockExportConfig>,
     #[cfg(with_metrics)]
     enable_memory_profiling: bool,
 }
@@ -112,8 +115,43 @@ impl ServerContext {
             cross_chain_message_chunk_limit: self.cross_chain_message_chunk_limit,
             ..ChainWorkerConfig::default()
         };
-        let state = WorkerState::new(storage, config, None);
+        let mut state = WorkerState::new(storage, config, None);
+        if let Some(export_config) = self.block_export_config.clone() {
+            state = state.with_chain_exporter_factory(self.chain_exporter_factory(export_config));
+        }
         (state, shard_id, shard.clone())
+    }
+
+    /// Builds the factory that gives each chain worker its export task.
+    ///
+    /// Every validator is reached through this validator's own proxy: a shard holds the validator
+    /// secret key, so it must not be able to open outbound connections itself. The proxy is
+    /// addressed at the same internal endpoint the shards already send their notifications to,
+    /// and the provider is shared across chain workers so a peer costs one pooled connection
+    /// rather than one per chain.
+    fn chain_exporter_factory<S>(&self, export_config: BlockExportConfig) -> ChainExporterFactory<S>
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+    {
+        let internal_network = &self.server_config.internal_network;
+        let relay_address = internal_network
+            .proxies
+            .first()
+            .expect("a validator always has at least one proxy")
+            .internal_address(&internal_network.protocol);
+        let node_provider = Arc::new(grpc::RelayNodeProvider::new(
+            relay_address,
+            linera_rpc::NodeOptions::default(),
+        ));
+        let own_public_key = self.server_config.validator_secret.public();
+        Arc::new(move |setup| {
+            spawn_chain_exporter(
+                setup,
+                node_provider.clone(),
+                export_config.clone(),
+                Some(own_public_key),
+            )
+        })
     }
 
     #[cfg_attr(not(with_metrics), allow(unused_variables))]
@@ -499,6 +537,22 @@ enum ServerCommand {
         #[arg(long, value_delimiter = ',')]
         recovery_whitelist: Option<Vec<ChainId>>,
 
+        /// Push each block this validator executes to the other validators in the committee, so
+        /// that every validator ends up holding every chain rather than only the quorum that
+        /// signed each block. The pushes go out through this validator's proxy; shards never
+        /// connect to another validator themselves.
+        #[arg(
+            long,
+            default_value_t = false,
+            env = "LINERA_EXPORT_BLOCKS_TO_COMMITTEE"
+        )]
+        export_blocks_to_committee: bool,
+
+        /// How many certificates are read from storage and pushed per batch when a block export
+        /// has to catch a lagging validator up. Only used with `--export-blocks-to-committee`.
+        #[arg(long, default_value_t = BlockExportConfig::default().certificate_upload_batch_size)]
+        block_export_batch_size: u64,
+
         /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
         #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
         otlp_exporter_endpoint: Option<String>,
@@ -635,6 +689,8 @@ async fn run(options: ServerOptions) {
             allow_revert_confirm,
             reset_on_corrupted_chain_state_mins,
             recovery_whitelist,
+            export_blocks_to_committee,
+            block_export_batch_size,
             otlp_exporter_endpoint: _,
         } => {
             linera_version::VERSION_INFO.log();
@@ -657,6 +713,10 @@ async fn run(options: ServerOptions) {
                 allow_revert_confirm,
                 reset_on_corrupted_chain_state_mins,
                 recovery_whitelist: recovery_whitelist.map(HashSet::from_iter),
+                block_export_config: export_blocks_to_committee.then(|| BlockExportConfig {
+                    certificate_upload_batch_size: block_export_batch_size,
+                    ..BlockExportConfig::default()
+                }),
                 #[cfg(with_metrics)]
                 enable_memory_profiling,
             };

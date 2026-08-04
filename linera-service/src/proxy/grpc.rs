@@ -8,6 +8,7 @@ use std::{
     fmt::Debug,
     marker::PhantomData,
     net::SocketAddr,
+    str::FromStr as _,
     sync::Arc,
     task::{Context, Poll},
     time::Duration,
@@ -31,12 +32,17 @@ use linera_rpc::propagation::get_traffic_type_from_request;
 #[cfg(feature = "opentelemetry")]
 use linera_rpc::propagation::OtelContextLayer;
 use linera_rpc::{
-    config::{ProxyConfig, ShardConfig, TlsConfig, ValidatorInternalNetworkConfig},
+    config::{
+        ProxyConfig, ShardConfig, TlsConfig, ValidatorInternalNetworkConfig,
+        ValidatorPublicNetworkConfig,
+    },
     grpc::{
         api::{
             self,
             notifier_service_server::{NotifierService, NotifierServiceServer},
+            validator_node_client::ValidatorNodeClient,
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
+            validator_relay_server::{ValidatorRelay, ValidatorRelayServer},
             validator_worker_client::ValidatorWorkerClient,
             BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificatesBatchRequest,
             CertificatesBatchResponse, ChainInfoResult, CryptoHash, HandlePendingBlobRequest,
@@ -201,6 +207,10 @@ pub struct GrpcProxy<S>(Arc<GrpcProxyInner<S>>);
 struct GrpcProxyInner<S> {
     internal_config: ValidatorInternalNetworkConfig,
     worker_connection_pool: GrpcConnectionPool,
+    /// Connections to the other validators, used to carry requests on behalf of this validator's
+    /// shards, which have no route to the internet of their own. Pooled, so a peer costs one
+    /// connection for the whole process rather than one per shard.
+    peer_connection_pool: GrpcConnectionPool,
     notifier: ChannelNotifier<Result<Notification, Status>>,
     tls: TlsConfig,
     storage: S,
@@ -222,6 +232,9 @@ where
         Self(Arc::new(GrpcProxyInner {
             internal_config,
             worker_connection_pool: GrpcConnectionPool::default()
+                .with_connect_timeout(connect_timeout)
+                .with_timeout(timeout),
+            peer_connection_pool: GrpcConnectionPool::default()
                 .with_connect_timeout(connect_timeout)
                 .with_timeout(timeout),
             notifier: ChannelNotifier::default(),
@@ -247,6 +260,30 @@ where
 
     fn as_notifier_service(&self) -> NotifierServiceServer<Self> {
         NotifierServiceServer::new(self.clone())
+    }
+
+    fn as_validator_relay(&self) -> ValidatorRelayServer<Self> {
+        ValidatorRelayServer::new(self.clone())
+            .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+            .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+    }
+
+    /// Returns a client for the validator a relayed request names.
+    ///
+    /// Relayed requests are forwarded as they arrived, without being decoded into their Rust
+    /// types and re-encoded: the proxy is carrying the shard's request, not making its own.
+    fn peer(&self, destination: &str) -> Result<ValidatorNodeClient<Channel>, Status> {
+        let network = ValidatorPublicNetworkConfig::from_str(destination).map_err(|_| {
+            Status::invalid_argument(format!("invalid destination validator: {destination}"))
+        })?;
+        let channel = self
+            .0
+            .peer_connection_pool
+            .channel(network.http_address())
+            .map_err(|error| Status::unavailable(format!("cannot reach {destination}: {error}")))?;
+        Ok(ValidatorNodeClient::new(channel)
+            .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+            .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE))
     }
 
     fn public_address(&self) -> SocketAddr {
@@ -319,6 +356,7 @@ where
         let internal_server = join_set.spawn_task(
             Server::builder()
                 .add_service(self.as_notifier_service())
+                .add_service(self.as_validator_relay())
                 .serve(self.internal_address())
                 .in_current_span(),
         );
@@ -955,6 +993,79 @@ where
         let cert_hash = self.blob_last_used_by(request).await?;
         let request = Request::new(cert_hash.into_inner());
         self.download_certificate(request).await
+    }
+}
+
+/// Performs, on behalf of this validator's shards, the requests they need to send to other
+/// validators.
+///
+/// Shards hold the validator's secret key and so must not be able to open outbound connections;
+/// the proxy is the one component that may. Each method here dials the validator named in the
+/// request and returns its answer verbatim, so that the shard sees exactly what it would have
+/// seen had it made the call itself — including the peer's errors, which the export logic
+/// depends on to decide what to send next.
+///
+/// Served only on the internal listener, and deliberately limited to the four requests block
+/// export makes.
+#[async_trait]
+impl<S> ValidatorRelay for GrpcProxy<S>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+{
+    #[instrument(skip_all, err(Display), fields(method = "relay_lite_certificate"))]
+    async fn relay_lite_certificate(
+        &self,
+        request: Request<api::RelayLiteCertificateRequest>,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        let request = request.into_inner();
+        let inner = request
+            .inner
+            .ok_or_else(|| Status::invalid_argument("missing lite certificate"))?;
+        self.peer(&request.destination)?
+            .handle_lite_certificate(Request::new(inner))
+            .await
+    }
+
+    #[instrument(skip_all, err(Display), fields(method = "relay_confirmed_certificate"))]
+    async fn relay_confirmed_certificate(
+        &self,
+        request: Request<api::RelayConfirmedCertificateRequest>,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        let request = request.into_inner();
+        let inner = request
+            .inner
+            .ok_or_else(|| Status::invalid_argument("missing confirmed certificate"))?;
+        self.peer(&request.destination)?
+            .handle_confirmed_certificate(Request::new(inner))
+            .await
+    }
+
+    #[instrument(skip_all, err(Display), fields(method = "relay_chain_info_query"))]
+    async fn relay_chain_info_query(
+        &self,
+        request: Request<api::RelayChainInfoQueryRequest>,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        let request = request.into_inner();
+        let inner = request
+            .inner
+            .ok_or_else(|| Status::invalid_argument("missing chain info query"))?;
+        self.peer(&request.destination)?
+            .handle_chain_info_query(Request::new(inner))
+            .await
+    }
+
+    #[instrument(skip_all, err(Display), fields(method = "relay_upload_blob"))]
+    async fn relay_upload_blob(
+        &self,
+        request: Request<api::RelayUploadBlobRequest>,
+    ) -> Result<Response<api::BlobId>, Status> {
+        let request = request.into_inner();
+        let inner = request
+            .inner
+            .ok_or_else(|| Status::invalid_argument("missing blob"))?;
+        self.peer(&request.destination)?
+            .upload_blob(Request::new(inner))
+            .await
     }
 }
 
