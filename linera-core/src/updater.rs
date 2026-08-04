@@ -88,6 +88,30 @@ mod metrics {
         )
     });
 
+    /// Errors returned by each validator while communicating with a quorum.
+    ///
+    /// Counts *every* error, including the ones [`NodeError::is_expected`] classifies as
+    /// expected. That classification means "the client recovers from this automatically",
+    /// which is a claim about the client, not about the validator being healthy — so an
+    /// expected error repeating forever is exactly the case nothing else surfaces. It is
+    /// deliberately not logged (see `warn_if_unexpected`), and `communicate_with_quorum`
+    /// returns `Ok` regardless as long as the remaining validators reach a quorum, so
+    /// without this counter a validator can fail every request indefinitely in silence.
+    ///
+    /// `error_type` is the error's variant name via [`NodeError::error_type`], never its
+    /// `Display` text, which embeds chain and blob ids and would be unbounded.
+    ///
+    /// Alert on a sustained rate for a single `address`. Unlike the unanswered share
+    /// derived from the two counters above, this distinguishes a validator that is
+    /// *failing* from one that is merely far away and routinely misses the grace period.
+    pub(super) static QUORUM_ERRORS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "communicate_with_quorum_errors_total",
+            "Errors returned by each validator while communicating with a quorum",
+            &["validator", "address", "error_type"],
+        )
+    });
+
     /// Time each validator took to respond while communicating with a quorum.
     pub(super) static QUORUM_RESPONSE_TIME: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
@@ -268,6 +292,14 @@ where
                         error: err.to_string(),
                     },
                 };
+                #[cfg(with_metrics)]
+                metrics::QUORUM_ERRORS
+                    .with_label_values(&[
+                        &name.to_string(),
+                        addresses.get(&name).map_or("", String::as_str),
+                        &err.error_type(),
+                    ])
+                    .inc();
                 let entry = error_scores.entry(err.clone()).or_insert(0);
                 *entry += committee.weight(&name);
             }

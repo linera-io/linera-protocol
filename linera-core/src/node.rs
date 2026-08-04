@@ -240,7 +240,9 @@ pub trait ValidatorNodeProvider: 'static {
 ///
 /// This error is meant to be serialized over the network and aggregated by clients (i.e.
 /// clients will track validator votes on each error value).
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
+#[derive(
+    Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, strum::IntoStaticStr,
+)]
 #[allow(missing_docs)]
 pub enum NodeError {
     #[error("Cryptographic error: {error}")]
@@ -417,6 +419,15 @@ impl NodeError {
             | NodeError::NoValidators => false,
         }
     }
+
+    /// Returns the qualified error variant name for the `error_type` metric label.
+    ///
+    /// The variant name only — never the `Display` text, which embeds chain ids, blob ids
+    /// and heights and would give the label unbounded cardinality.
+    pub fn error_type(&self) -> String {
+        let variant: &'static str = self.into();
+        format!("NodeError::{variant}")
+    }
 }
 
 impl From<tonic::Status> for NodeError {
@@ -534,5 +545,42 @@ impl From<WorkerError> for NodeError {
                 error: error.to_string(),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use linera_base::identifiers::{ApplicationId, GenericApplicationId, StreamId, StreamName};
+
+    use super::*;
+
+    #[test]
+    fn error_type_is_the_variant_name() {
+        assert_eq!(
+            NodeError::InvalidChainInfoResponse.error_type(),
+            "NodeError::InvalidChainInfoResponse"
+        );
+    }
+
+    /// The label must not vary with the error's payload — `Display` embeds chain, blob and
+    /// event ids, and using it would give the `error_type` series unbounded cardinality.
+    #[test]
+    fn error_type_does_not_depend_on_the_payload() {
+        let event_id = |index: u32| EventId {
+            chain_id: ChainId(CryptoHash::test_hash("chain")),
+            stream_id: StreamId {
+                application_id: GenericApplicationId::User(ApplicationId::new(
+                    CryptoHash::test_hash("app"),
+                )),
+                stream_name: StreamName(b"epoch".to_vec()),
+            },
+            index,
+        };
+        let one = NodeError::EventsNotFound(vec![event_id(1)]);
+        let other = NodeError::EventsNotFound(vec![event_id(2), event_id(3)]);
+
+        assert_eq!(one.error_type(), "NodeError::EventsNotFound");
+        assert_eq!(one.error_type(), other.error_type());
+        assert_ne!(one.to_string(), other.to_string());
     }
 }
