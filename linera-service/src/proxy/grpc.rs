@@ -88,6 +88,18 @@ mod metrics {
             linear_bucket_interval(1.0, 50.0, 5000.0),
         )
     });
+    /// Requests this proxy has carried to another validator on behalf of one of its shards.
+    ///
+    /// Shards have no route to the internet, so this counting up is what shows that
+    /// validator-to-validator traffic is flowing, and through the relay rather than around it.
+    pub static RELAYED_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "proxy_relayed_request_count",
+            "Requests forwarded to another validator on behalf of a shard",
+            &[METHOD_NAME_LABEL],
+        )
+    });
+
     pub static PROXY_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "proxy_request_count",
@@ -272,7 +284,15 @@ where
     ///
     /// Relayed requests are forwarded as they arrived, without being decoded into their Rust
     /// types and re-encoded: the proxy is carrying the shard's request, not making its own.
-    fn peer(&self, destination: &str) -> Result<ValidatorNodeClient<Channel>, Status> {
+    fn peer(
+        &self,
+        destination: &str,
+        #[cfg_attr(not(with_metrics), allow(unused_variables))] method: &str,
+    ) -> Result<ValidatorNodeClient<Channel>, Status> {
+        #[cfg(with_metrics)]
+        metrics::RELAYED_REQUEST_COUNT
+            .with_label_values(&[method])
+            .inc();
         let network = ValidatorPublicNetworkConfig::from_str(destination).map_err(|_| {
             Status::invalid_argument(format!("invalid destination validator: {destination}"))
         })?;
@@ -1021,7 +1041,7 @@ where
         let inner = request
             .inner
             .ok_or_else(|| Status::invalid_argument("missing lite certificate"))?;
-        self.peer(&request.destination)?
+        self.peer(&request.destination, "relay_lite_certificate")?
             .handle_lite_certificate(Request::new(inner))
             .await
     }
@@ -1035,7 +1055,7 @@ where
         let inner = request
             .inner
             .ok_or_else(|| Status::invalid_argument("missing confirmed certificate"))?;
-        self.peer(&request.destination)?
+        self.peer(&request.destination, "relay_confirmed_certificate")?
             .handle_confirmed_certificate(Request::new(inner))
             .await
     }
@@ -1049,7 +1069,7 @@ where
         let inner = request
             .inner
             .ok_or_else(|| Status::invalid_argument("missing chain info query"))?;
-        self.peer(&request.destination)?
+        self.peer(&request.destination, "relay_chain_info_query")?
             .handle_chain_info_query(Request::new(inner))
             .await
     }
@@ -1063,7 +1083,7 @@ where
         let inner = request
             .inner
             .ok_or_else(|| Status::invalid_argument("missing blob"))?;
-        self.peer(&request.destination)?
+        self.peer(&request.destination, "relay_upload_blob")?
             .upload_blob(Request::new(inner))
             .await
     }

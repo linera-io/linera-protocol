@@ -153,6 +153,7 @@ pub async fn handle_net_up_service(
         block_exporter_port,
     );
     let config = LocalNetConfig {
+        export_blocks_to_committee: false,
         network,
         database,
         testing_prng_seed,

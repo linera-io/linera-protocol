@@ -224,6 +224,9 @@ pub struct LocalNetConfig {
     pub path_provider: PathProvider,
     /// The setup describing how block exporters are run or reached.
     pub block_exporters: ExportersSetup,
+    /// Whether the validators push each block they execute to the rest of the committee,
+    /// through their own proxies.
+    pub export_blocks_to_committee: bool,
 }
 
 /// The setup for the block exporters.
@@ -268,6 +271,7 @@ pub struct LocalNet {
     cross_chain_config: CrossChainConfig,
     path_provider: PathProvider,
     block_exporters: ExportersSetup,
+    export_blocks_to_committee: bool,
 }
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -378,6 +382,7 @@ impl LocalNetConfig {
             path_provider,
             block_exporters: ExportersSetup::Local(vec![]),
             http_request_allow_list: Some(vec!["localhost".to_string()]),
+            export_blocks_to_committee: false,
         }
     }
 }
@@ -399,6 +404,7 @@ impl LineraNetConfig for LocalNetConfig {
             self.cross_chain_config,
             self.path_provider,
             self.block_exporters,
+            self.export_blocks_to_committee,
         );
         let client = net.make_client().await;
         ensure!(
@@ -473,6 +479,7 @@ impl LocalNet {
         cross_chain_config: CrossChainConfig,
         path_provider: PathProvider,
         block_exporters: ExportersSetup,
+        export_blocks_to_committee: bool,
     ) -> Self {
         Self {
             network,
@@ -489,6 +496,7 @@ impl LocalNet {
             cross_chain_config,
             path_provider,
             block_exporters,
+            export_blocks_to_committee,
         }
     }
 
@@ -518,7 +526,8 @@ impl LocalNet {
         test_offset_port() + 2000 + validator * self.num_shards + shard + 1
     }
 
-    fn proxy_metrics_port(&self, validator: usize, proxy_id: usize) -> usize {
+    /// Returns the metrics port of the given proxy of the given validator.
+    pub fn proxy_metrics_port(&self, validator: usize, proxy_id: usize) -> usize {
         test_offset_port() + 3000 + validator * self.num_proxies + proxy_id + 1
     }
 
@@ -949,6 +958,9 @@ impl LocalNet {
             .args(["--server", &format!("server_{validator}.json")])
             .args(["--shard", &shard.to_string()])
             .args(self.cross_chain_config.to_args());
+        if self.export_blocks_to_committee {
+            command.arg("--export-blocks-to-committee");
+        }
         let child = command.spawn_into()?;
 
         let port = self.shard_port(validator, shard);
