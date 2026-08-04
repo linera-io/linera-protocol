@@ -139,9 +139,18 @@ impl ServerContext {
             .first()
             .expect("a validator always has at least one proxy")
             .internal_address(&internal_network.protocol);
+        // `NodeOptions::default()` leaves every timeout at zero, which the transport turns into
+        // a deadline that has already passed; these are the values the block exporter used for
+        // the same validator-to-validator traffic.
         let node_provider = Arc::new(grpc::RelayNodeProvider::new(
             relay_address,
-            linera_rpc::NodeOptions::default(),
+            linera_rpc::NodeOptions {
+                send_timeout: linera_base::time::Duration::from_secs(4),
+                recv_timeout: linera_base::time::Duration::from_secs(4),
+                retry_delay: linera_base::time::Duration::from_secs(1),
+                max_retries: 10,
+                ..linera_rpc::NodeOptions::default()
+            },
         ));
         let own_public_key = self.server_config.validator_secret.public();
         Arc::new(move |setup| {

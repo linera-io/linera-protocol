@@ -56,10 +56,13 @@ fn unsupported(operation: &str) -> NodeError {
 /// A validator reached through this validator's proxy.
 #[derive(Clone)]
 pub struct RelayClient {
-    /// The public address of the validator this client talks to. Sent with every request so the
-    /// proxy knows where to forward it, and reported by [`ValidatorNode::address`] so that logs
-    /// and metrics name the destination rather than the relay.
+    /// The destination validator's address exactly as the committee spells it, e.g.
+    /// `grpc:host:port`. Sent with every request so the proxy knows where to forward it, and kept
+    /// in the committee's own form so the proxy resolves it the same way any other consumer of
+    /// the committee would.
     destination: String,
+    /// The same validator as a URL, used only to name it in logs and metrics.
+    address: String,
     client: ValidatorRelayClient<transport::Channel>,
 }
 
@@ -90,10 +93,10 @@ impl ValidatorNode for RelayClient {
     type NotificationStream = NotificationStream;
 
     fn address(&self) -> String {
-        self.destination.clone()
+        self.address.clone()
     }
 
-    #[instrument(target = "relay_client", skip_all, err(level = Level::DEBUG), fields(destination = self.destination))]
+    #[instrument(target = "relay_client", skip_all, err(level = Level::DEBUG), fields(destination = self.address))]
     async fn handle_lite_certificate(
         &self,
         certificate: types::LiteCertificate<'_>,
@@ -117,7 +120,7 @@ impl ValidatorNode for RelayClient {
         Self::try_into_chain_info(result)
     }
 
-    #[instrument(target = "relay_client", skip_all, err(level = Level::DEBUG), fields(destination = self.destination))]
+    #[instrument(target = "relay_client", skip_all, err(level = Level::DEBUG), fields(destination = self.address))]
     async fn handle_confirmed_certificate(
         &self,
         certificate: linera_storage::Arc<types::GenericCertificate<types::ConfirmedBlock>>,
@@ -144,7 +147,7 @@ impl ValidatorNode for RelayClient {
         Self::try_into_chain_info(result)
     }
 
-    #[instrument(target = "relay_client", skip_all, err(level = Level::DEBUG), fields(destination = self.destination))]
+    #[instrument(target = "relay_client", skip_all, err(level = Level::DEBUG), fields(destination = self.address))]
     async fn handle_chain_info_query(
         &self,
         query: linera_core::data_types::ChainInfoQuery,
@@ -163,7 +166,7 @@ impl ValidatorNode for RelayClient {
         Self::try_into_chain_info(result)
     }
 
-    #[instrument(target = "relay_client", skip(self), err(level = Level::DEBUG), fields(destination = self.destination))]
+    #[instrument(target = "relay_client", skip(self), err(level = Level::DEBUG), fields(destination = self.address))]
     async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError> {
         let request = api::RelayUploadBlobRequest {
             destination: self.destination.clone(),
@@ -322,7 +325,8 @@ impl ValidatorNodeProvider for RelayNodeProvider {
                     error: format!("error creating channel to the relay: {error}"),
                 })?;
         Ok(RelayClient {
-            destination: network.http_address(),
+            destination: address.to_owned(),
+            address: network.http_address(),
             client: ValidatorRelayClient::new(channel),
         })
     }
