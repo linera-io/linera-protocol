@@ -1304,7 +1304,7 @@ impl<Env: Environment> Client<Env> {
     fn remote_node_updater(
         &self,
         remote_node: RemoteNode<Env::ValidatorNode>,
-    ) -> RemoteNodeUpdater<Env> {
+    ) -> RemoteNodeUpdater<Env::Storage, Env::ValidatorNode> {
         RemoteNodeUpdater {
             remote_node,
             local_node: self.local_node.clone(),
@@ -1319,7 +1319,7 @@ impl<Env: Environment> Client<Env> {
     /// original error so the outer logic can rebuild on top of the refreshed local state.
     async fn sync_and_retry_chain_update(
         self: &Arc<Self>,
-        mut updater: RemoteNodeUpdater<Env>,
+        mut updater: RemoteNodeUpdater<Env::Storage, Env::ValidatorNode>,
         action: CommunicateAction,
         chain_id: ChainId,
         error: NodeError,

@@ -41,7 +41,7 @@ use crate::{
     local_node::LocalNodeClient,
     node::{ValidatorNode, ValidatorNodeProvider},
     remote_node::RemoteNode,
-    updater::confirmed_sender::ConfirmedCertificateSender,
+    updater::RemoteNodeUpdater,
 };
 
 #[cfg(with_metrics)]
@@ -259,7 +259,7 @@ where
 
 /// One destination validator, and what we believe it holds of this chain.
 struct Destination<S: Storage, N> {
-    sender: ConfirmedCertificateSender<S, N>,
+    updater: RemoteNodeUpdater<S, N>,
     address: String,
     /// The next height the validator needs, or `None` when we have to ask it — before the first
     /// push, and after any failed one.
@@ -293,9 +293,9 @@ where
 
 impl<S, P> ChainExportTask<S, P>
 where
-    S: Storage + Clone,
+    S: Storage + Clone + 'static,
     P: ValidatorNodeProvider,
-    P::Node: Clone,
+    P::Node: Clone + 'static,
 {
     /// Exports each block in turn, and returns when the chain worker has dropped its end.
     #[instrument(level = "debug", skip_all, fields(chain_id = %self.chain_id))]
@@ -386,19 +386,19 @@ where
             else {
                 continue;
             };
-            let sender = ConfirmedCertificateSender::new(
-                RemoteNode {
+            let updater = RemoteNodeUpdater {
+                remote_node: RemoteNode {
                     public_key: validator,
                     node,
                 },
-                self.local_node.clone(),
-                block.admin_chain_id,
-                self.config.certificate_upload_batch_size,
-            );
+                local_node: self.local_node.clone(),
+                admin_chain_id: block.admin_chain_id,
+                certificate_upload_batch_size: self.config.certificate_upload_batch_size,
+            };
             self.destinations.insert(
                 validator,
                 Destination {
-                    sender,
+                    updater,
                     address,
                     // An acknowledged height was reported by the validator itself, so the block
                     // after it is the one the validator needs next.
@@ -415,8 +415,8 @@ where
 
 impl<S, N> Destination<S, N>
 where
-    S: Storage + Clone,
-    N: ValidatorNode + Clone,
+    S: Storage + Clone + 'static,
+    N: ValidatorNode + Clone + 'static,
 {
     /// Pushes the block, along with any earlier ones this validator is missing, and returns the
     /// validator's next block height afterwards — or `None` if it was skipped or failed.
@@ -440,7 +440,7 @@ where
             .observe(self.lag(block) as f64);
 
         match self
-            .sender
+            .updater
             .send_block(&block.certificate, &block.blobs, self.next_height)
             .await
         {
