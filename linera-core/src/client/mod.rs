@@ -1457,9 +1457,11 @@ impl<Env: Environment> Client<Env> {
     async fn process_lag_reports(&self, mut reports: Vec<LagReport<Env::ValidatorNode>>) {
         reports.sort_by_key(|report| Reverse(report.remote_progress()));
         for report in reports {
-            if let Err(error) = self
-                .synchronize_chain_state_from(&report.remote_node, report.chain_id)
-                .await
+            // Boxed to keep this future small: the synchronization future is large, and it
+            // would otherwise be inlined into every caller of the quorum communication.
+            if let Err(error) =
+                Box::pin(self.synchronize_chain_state_from(&report.remote_node, report.chain_id))
+                    .await
             {
                 debug!(
                     remote_node = report.remote_node.address(),
