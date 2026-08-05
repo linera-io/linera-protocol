@@ -26,7 +26,9 @@ use super::{
 use crate::{
     client::{
         communicate_concurrently,
-        requests_scheduler::{in_flight_tracker::Subscribed, request::Cacheable},
+        requests_scheduler::{
+            in_flight_tracker::Subscribed, request::Cacheable, PEER_SELECTION_SCORE_TOLERANCE,
+        },
         ClockOf, RequestsSchedulerConfig,
     },
     environment::Environment,
@@ -818,31 +820,40 @@ impl<Env: Environment> RequestsScheduler<Env> {
     ///
     /// This method:
     /// 1. Sorts nodes by performance score
-    /// 2. Performs weighted random selection from the top 3 performers
+    /// 2. Performs weighted random selection among the peers whose score is within
+    ///    [`PEER_SELECTION_SCORE_TOLERANCE`] of the best score
     ///
     /// This approach balances between choosing high-performing nodes and distributing
-    /// load across multiple validators to avoid creating hotspots.
+    /// load across multiple validators to avoid creating hotspots. The eligible set is
+    /// bounded by how far a peer's score has actually fallen behind, not by a fixed
+    /// number of peers, so growing the committee does not starve its slowest members.
     ///
     /// Returns `None` if no nodes are available.
     async fn select_best_peer(&self) -> Option<RemoteNode<Env::ValidatorNode>> {
         let scored_nodes = self.peers_by_score().await;
+        let best_score = scored_nodes.first()?.0;
 
-        if scored_nodes.is_empty() {
-            return None;
-        }
-
-        // Use weighted random selection from top performers (top 3 or all if less)
-        let top_count = scored_nodes.len().min(3);
-        let top_nodes = &scored_nodes[..top_count];
+        // `scored_nodes` is sorted by descending score, so the eligible peers are a
+        // prefix of it. The best peer always clears its own cutoff, so this is never
+        // empty.
+        let cutoff = best_score * (1.0 - PEER_SELECTION_SCORE_TOLERANCE);
+        let eligible_count = scored_nodes
+            .iter()
+            .take_while(|(score, _)| *score >= cutoff)
+            .count();
+        let eligible_nodes = &scored_nodes[..eligible_count];
 
         // Create weights based on normalized scores
         // Add small epsilon to prevent zero weights
-        let weights: Vec<f64> = top_nodes.iter().map(|(score, _)| score.max(0.01)).collect();
+        let weights: Vec<f64> = eligible_nodes
+            .iter()
+            .map(|(score, _)| score.max(0.01))
+            .collect();
 
         if let Ok(dist) = WeightedIndex::new(&weights) {
             let mut rng = rand::thread_rng();
             let index = dist.sample(&mut rng);
-            Some(top_nodes[index].1.clone())
+            Some(eligible_nodes[index].1.clone())
         } else {
             // Fallback to the best node if weights are invalid
             tracing::warn!("failed to create weighted distribution, defaulting to best node");
@@ -879,7 +890,9 @@ mod tests {
 
     use super::{super::request::RequestKey, *};
     use crate::{
-        client::requests_scheduler::{MAX_REQUEST_TTL_MS, STAGGERED_DELAY_MS},
+        client::requests_scheduler::{
+            MAX_ACCEPTED_LATENCY_MS, MAX_REQUEST_TTL_MS, STAGGERED_DELAY_MS,
+        },
         node::NodeError,
     };
 
@@ -1429,5 +1442,142 @@ mod tests {
             order.contains(&node2_key),
             "Retry should have reached the working peer (node 2)"
         );
+    }
+
+    /// Builds a scheduler over `count` validators, normalizing latency against the
+    /// production `MAX_ACCEPTED_LATENCY_MS` so the scores the test reasons about are
+    /// the ones the deployed client computes.
+    async fn create_scored_manager(
+        count: usize,
+    ) -> (
+        Arc<RequestsScheduler<TestEnvironment>>,
+        Vec<RemoteNode<<TestEnvironment as Environment>::ValidatorNode>>,
+    ) {
+        use crate::test_utils::{MemoryStorageBuilder, TestBuilder};
+
+        let mut builder = TestBuilder::new(
+            MemoryStorageBuilder::default(),
+            count,
+            0,
+            InMemorySigner::new(None),
+        )
+        .await
+        .unwrap();
+
+        let nodes: Vec<_> = (0..count)
+            .map(|index| {
+                let node = builder.node(index);
+                let public_key = node.name();
+                RemoteNode { public_key, node }
+            })
+            .collect();
+
+        let manager = Arc::new(RequestsScheduler::<TestEnvironment>::with_config(
+            nodes.clone(),
+            ScoringWeights::default(),
+            0.1,
+            MAX_ACCEPTED_LATENCY_MS,
+            Duration::from_secs(60),
+            100,
+            Duration::from_millis(MAX_REQUEST_TTL_MS),
+            Duration::from_millis(STAGGERED_DELAY_MS),
+            TestClock::new(),
+        ));
+
+        (manager, nodes)
+    }
+
+    /// Drives a peer's EMAs to convergence. With alpha = 0.1, 200 observations leave
+    /// the residual at 0.9^200 (~7e-10), and take `total_requests` past the 10-sample
+    /// cold-start threshold so the confidence factor is 1.0.
+    async fn settle_peer(
+        manager: &RequestsScheduler<TestEnvironment>,
+        public_key: ValidatorPublicKey,
+        success: bool,
+        response_time_ms: u64,
+    ) {
+        let mut nodes = manager.nodes.write().await;
+        let info = nodes.get_mut(&public_key).expect("peer must be registered");
+        for _ in 0..200 {
+            info.update_metrics(success, response_time_ms);
+        }
+    }
+
+    /// A healthy-but-slower validator must keep receiving traffic.
+    ///
+    /// These are the latencies measured on testnet_conway on 2026-08-05: four
+    /// validators answering in 50-57 ms and a fifth, geographically distant one
+    /// answering in 171 ms at a 1.000 success ratio. Because latency is normalized
+    /// against 5000 ms, the distant validator scores 0.78632 against the best peer's
+    /// 0.79600 — under 1.3% behind. Selecting a fixed top 3 by rank made that
+    /// sub-1.3% gap mean zero traffic, so it was never selected at all.
+    #[tokio::test]
+    async fn test_slightly_slower_peer_stays_eligible() {
+        let (manager, nodes) = create_scored_manager(5).await;
+
+        for (index, response_time_ms) in [50, 52, 55, 57].into_iter().enumerate() {
+            settle_peer(&manager, nodes[index].public_key, true, response_time_ms).await;
+        }
+        let distant_key = nodes[4].public_key;
+        settle_peer(&manager, distant_key, true, 171).await;
+
+        let scored = manager.peers_by_score().await;
+        assert_eq!(
+            scored
+                .last()
+                .expect("five peers are registered")
+                .1
+                .public_key,
+            distant_key,
+            "the distant validator should rank last, which is what made it starve"
+        );
+
+        let mut selected_distant = false;
+        for _ in 0..500 {
+            if manager
+                .select_best_peer()
+                .await
+                .expect("a peer is available")
+                .public_key
+                == distant_key
+            {
+                selected_distant = true;
+                break;
+            }
+        }
+
+        assert!(
+            selected_distant,
+            "a validator 1.3% behind on score must stay in rotation; ranking it 5th of 5 \
+             must not exclude it"
+        );
+    }
+
+    /// The tolerance must not turn into "select anyone". A validator that is failing
+    /// requests scores far enough below the best peer to fall outside the band, and
+    /// must never be selected.
+    #[tokio::test]
+    async fn test_degraded_peer_is_excluded() {
+        let (manager, nodes) = create_scored_manager(5).await;
+
+        for (index, response_time_ms) in [50, 52, 55, 57].into_iter().enumerate() {
+            settle_peer(&manager, nodes[index].public_key, true, response_time_ms).await;
+        }
+        // Same latency as its peers, but failing every request: success EMA -> 0, which
+        // removes the 0.4 success term and halves the score.
+        let failing_key = nodes[4].public_key;
+        settle_peer(&manager, failing_key, false, 55).await;
+
+        for _ in 0..500 {
+            assert_ne!(
+                manager
+                    .select_best_peer()
+                    .await
+                    .expect("a peer is available")
+                    .public_key,
+                failing_key,
+                "a validator failing every request must fall outside the score band"
+            );
+        }
     }
 }

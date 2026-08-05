@@ -29,6 +29,18 @@ pub const MAX_REQUEST_TTL_MS: u64 = 200;
 pub const ALPHA_SMOOTHING_FACTOR: f64 = 0.1;
 /// Default delay in milliseconds between starting requests to different peers.
 pub const STAGGERED_DELAY_MS: u64 = 150;
+/// How far below the best peer's score a peer may sit and still be eligible for
+/// selection, as a fraction of the best score.
+///
+/// Scores are compressed into a narrow band: `max_accepted_latency_ms`
+/// normalizes latency against 5000 ms, so a peer answering in 171 ms scores only
+/// about 1.2% below one answering in 55 ms. Selecting a fixed number of peers by
+/// rank therefore behaves as a cliff rather than as a preference — on a
+/// committee of five, the fifth-ranked peer received no traffic at all despite
+/// answering every request it was given. Comparing against the best score keeps
+/// peers that are merely slightly slower in rotation, while still excluding one
+/// that is genuinely degraded.
+pub const PEER_SELECTION_SCORE_TOLERANCE: f64 = 0.05;
 
 /// Configuration for the `RequestsScheduler`.
 #[derive(Debug, Clone)]
