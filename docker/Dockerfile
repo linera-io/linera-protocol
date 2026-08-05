@@ -224,6 +224,14 @@ ARG build_flag
 ARG build_folder
 ARG build_features
 
+# `[profile.release] debug = true` (root Cargo.toml) is there so production
+# binaries can be profiled, and it costs a LOT: the client links to 1693 MB with
+# debuginfo versus 123 MB without, while keeping ~212k symbols either way, so
+# panic backtraces still symbolicate. Linking that with thin LTO does not fit in
+# a 16 GB arm64 runner. The validator keeps debuginfo — it is the one being
+# profiled — so this is set on the client stage only, not in cook_base.
+ENV CARGO_PROFILE_RELEASE_DEBUG=false
+
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,target=/app/target,sharing=locked \

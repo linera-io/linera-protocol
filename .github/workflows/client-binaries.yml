@@ -37,6 +37,16 @@ env:
   CARGO_NET_RETRY: 10
   RUST_BACKTRACE: short
   RUSTUP_MAX_RETRIES: 10
+  # The root Cargo.toml sets `[profile.release] debug = true` so production
+  # binaries can be profiled. For something people download it is the difference
+  # between a 368 MB and a 42 MB tarball (1693 MB vs 123 MB on disk), and it
+  # keeps ~212k symbols either way, so panic backtraces still symbolicate.
+  #
+  # This has to be a CARGO_PROFILE_* override rather than RUSTFLAGS: setting
+  # RUSTFLAGS in the environment REPLACES the per-target rustflags in
+  # .cargo/config.toml, which would silently drop `-fuse-ld=lld` and
+  # `force-frame-pointers` from the x86_64-linux build.
+  CARGO_PROFILE_RELEASE_DEBUG: "false"
 
 jobs:
   build:
@@ -73,6 +83,21 @@ jobs:
 
       - name: Install Protoc
         uses: ./.github/actions/install-protoc
+
+      # .cargo/config.toml pins `linker = "aarch64-linux-gnu-gcc"` for this
+      # target. Nothing in this repo builds on arm64 today, so do not assume the
+      # runner image ships that exact name — a missing linker only surfaces at
+      # the very end of an hour-long build.
+      - name: Ensure the pinned aarch64 linker exists
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          set -euo pipefail
+          if ! command -v aarch64-linux-gnu-gcc >/dev/null; then
+            echo "aarch64-linux-gnu-gcc not found; installing it"
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu
+          fi
+          aarch64-linux-gnu-gcc --version | head -1
 
       - name: Build the client
         run: cargo build --locked --release --bin linera --target ${{ matrix.target }}

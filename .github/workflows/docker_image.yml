@@ -210,14 +210,10 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: linera-io-self-hosted-builder
             # The self-hosted builder keeps warm BuildKit cache mounts.
-            reclaim_disk: false
+            runner: linera-io-self-hosted-builder
           - arch: arm64
             runner: ubuntu-24.04-arm
-            # Hosted runners give 14 GB of disk, which a release build of this
-            # workspace can exhaust. Reclaim what the image ships unused.
-            reclaim_disk: true
     runs-on: ${{ matrix.runner }}
     # No warm cache on the hosted arm runner: this is a from-scratch release
     # build of the whole dependency graph on 4 cores.
@@ -246,16 +242,14 @@ jobs:
           echo "Docker daemon did not become ready in 120s"
           exit 1
 
-      # Log free space either way: "no space left on device" partway through a
-      # 60-minute cargo build is otherwise indistinguishable from a build error.
-      - name: Reclaim disk space
+      # A build that dies from exhausted disk or memory looks nothing like a
+      # compile error in the log, so record both up front. (The hosted arm64
+      # runner reports 145 GB free, not the 14 GB the docs table lists — disk is
+      # not the constraint here, memory during the final link is.)
+      - name: Log available resources
         run: |
-          echo "Before:"; df -h /
-          if [ "${{ matrix.reclaim_disk }}" = "true" ]; then
-            sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-                        /usr/local/share/powershell /usr/share/swift || true
-            echo "After:"; df -h /
-          fi
+          df -h /
+          free -h
 
       - name: Build and push the arch-specific image
         env:
