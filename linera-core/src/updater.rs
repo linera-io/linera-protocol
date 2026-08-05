@@ -12,7 +12,7 @@ use std::{
 use futures::{future, Future, StreamExt};
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{BlockHeight, Round, TimeDelta},
+    data_types::{Blob, BlockHeight, Round, TimeDelta},
     ensure,
     identifiers::{BlobId, BlobType, ChainId, StreamId},
     time::{timer::timeout, Duration, Instant},
@@ -31,7 +31,6 @@ use tracing::{instrument, Level};
 use crate::{
     client::chain_client,
     data_types::{ChainInfo, ChainInfoQuery},
-    environment::Environment,
     local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     remote_node::RemoteNode,
@@ -137,17 +136,17 @@ impl CommunicateAction {
 /// node must not mutate the client's own state. When a validator turns out to be *ahead* of the
 /// local node, the updater signals that with [`chain_client::Error::LocalNodeLagging`] and lets
 /// the caller decide whether to pull the missing state.
-pub struct RemoteNodeUpdater<Env>
+pub struct RemoteNodeUpdater<S, N>
 where
-    Env: Environment,
+    S: Storage,
 {
-    pub remote_node: RemoteNode<Env::ValidatorNode>,
-    pub local_node: LocalNodeClient<Env::Storage>,
+    pub remote_node: RemoteNode<N>,
+    pub local_node: LocalNodeClient<S>,
     pub admin_chain_id: ChainId,
     pub certificate_upload_batch_size: u64,
 }
 
-impl<Env: Environment> Clone for RemoteNodeUpdater<Env> {
+impl<S: Storage + Clone, N: Clone> Clone for RemoteNodeUpdater<S, N> {
     fn clone(&self) -> Self {
         RemoteNodeUpdater {
             remote_node: self.remote_node.clone(),
@@ -335,9 +334,10 @@ where
     })
 }
 
-impl<Env> RemoteNodeUpdater<Env>
+impl<S, N> RemoteNodeUpdater<S, N>
 where
-    Env: Environment + 'static,
+    S: Storage + Clone + 'static,
+    N: ValidatorNode + Clone + 'static,
 {
     /// Logs a warning if the error is not an expected part of the protocol flow.
     fn warn_if_unexpected(&self, err: &NodeError) {
@@ -354,9 +354,15 @@ where
         level = "trace", skip_all, err(level = Level::DEBUG),
         fields(chain_id = %certificate.block().header.chain_id)
     )]
+    /// Sends a single confirmed certificate, uploading its missing dependencies and retrying.
+    ///
+    /// Blobs the validator reports missing are taken from `held` when present there, and read from
+    /// storage otherwise. Callers that already hold the block's blobs in memory pass them so that
+    /// publishing a blob — where the validator is missing it by definition — costs no read.
     async fn send_confirmed_certificate(
         &mut self,
         certificate: &CacheArc<GenericCertificate<ConfirmedBlock>>,
+        held: &[CacheArc<Blob>],
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let mut result = self
@@ -384,12 +390,10 @@ where
                     // The validator is missing the blobs required by the certificate.
                     self.remote_node
                         .check_blobs_not_found(certificate, &blob_ids)?;
-                    // The certificate is confirmed, so the blobs must be in storage.
-                    let maybe_blobs = self.local_node.read_blobs_from_storage(&blob_ids).await?;
-                    let blobs = maybe_blobs.ok_or(NodeError::BlobsNotFound(blob_ids))?;
+                    let blobs = self.resolve_blobs(&blob_ids, held).await?;
                     self.remote_node
                         .node
-                        .upload_blobs(blobs.into_iter().map(|b| b.into_std()).collect())
+                        .upload_blobs(blobs.into_iter().map(CacheArc::into_std).collect())
                         .await?;
                     sent_blobs = true;
                 }
@@ -792,6 +796,82 @@ where
         }
     }
 
+    /// Pushes a block the caller already holds to the validator, preceded by whichever earlier
+    /// blocks of the same chain it is still missing, and returns its next block height afterwards.
+    ///
+    /// `certificate` and `blobs` are a block the caller holds in memory — the block a chain worker
+    /// has just executed — so the common case costs a single request and no read from storage.
+    ///
+    /// `destination_next_height` is the height we believe the validator to be at. When it is
+    /// exactly this block's height the block is contiguous there and is sent with no preceding
+    /// query. Otherwise — a gap, a first send, or a send that previously failed — the validator is
+    /// queried first and the missing earlier blocks are read from storage and sent before it.
+    /// Guessing "contiguous" wrongly is what must be avoided: a block landing above a gap is
+    /// silently preprocessed and never advances the tip, whereas re-sending a block the validator
+    /// already has costs it an integer comparison.
+    ///
+    /// The returned height is the validator's own, rather than an assumed `height + 1`, so a
+    /// validator that could not close its gap reports the truth and is queried again next time.
+    pub async fn send_block(
+        &mut self,
+        certificate: &CacheArc<GenericCertificate<ConfirmedBlock>>,
+        blobs: &[CacheArc<Blob>],
+        destination_next_height: Option<BlockHeight>,
+    ) -> Result<BlockHeight, chain_client::Error> {
+        let block = certificate.block();
+        let (chain_id, height) = (block.header.chain_id, block.header.height);
+        let delivery = CrossChainMessageDelivery::NonBlocking;
+
+        if destination_next_height != Some(height) {
+            let query = ChainInfoQuery::new(chain_id);
+            let info = self.remote_node.handle_chain_info_query(query).await?;
+            let heights = (info.next_block_height.0..height.0)
+                .map(BlockHeight)
+                .collect::<Vec<_>>();
+            let batch_size = self.certificate_upload_batch_size as usize;
+            for chunk in heights.chunks(batch_size) {
+                let certificates = self
+                    .read_certificates_for_heights(chain_id, chunk.to_vec())
+                    .await?;
+                for certificate in certificates {
+                    self.send_confirmed_certificate(&certificate, &[], delivery)
+                        .await?;
+                }
+            }
+        }
+
+        let info = self
+            .send_confirmed_certificate(certificate, blobs, delivery)
+            .await?;
+        Ok(info.next_block_height)
+    }
+
+    /// Collects the given blobs, taking each from `held` if it is there and reading the rest from
+    /// storage.
+    ///
+    /// The certificate is confirmed, so every blob it requires must be available; one that is in
+    /// neither place is reported back as still missing.
+    async fn resolve_blobs(
+        &self,
+        blob_ids: &[BlobId],
+        held: &[CacheArc<Blob>],
+    ) -> Result<Vec<CacheArc<Blob>>, chain_client::Error> {
+        let mut blobs = Vec::with_capacity(blob_ids.len());
+        let mut to_read = Vec::new();
+        for blob_id in blob_ids {
+            match held.iter().find(|blob| blob.id() == *blob_id) {
+                Some(blob) => blobs.push(blob.clone()),
+                None => to_read.push(*blob_id),
+            }
+        }
+        if to_read.is_empty() {
+            return Ok(blobs);
+        }
+        let read = self.local_node.read_blobs_from_storage(&to_read).await?;
+        blobs.extend(read.ok_or(NodeError::BlobsNotFound(to_read))?);
+        Ok(blobs)
+    }
+
     async fn update_admin_chain(&mut self) -> Result<(), chain_client::Error> {
         let local_admin_info = self.local_node.chain_info(self.admin_chain_id).await?;
         Box::pin(self.send_chain_information(
@@ -925,7 +1005,7 @@ where
 
         // Optimistically try sending just the last certificate
         let info = match self
-            .send_confirmed_certificate(&certificate, delivery)
+            .send_confirmed_certificate(&certificate, &[], delivery)
             .await
         {
             Ok(info) => info,
@@ -955,7 +1035,7 @@ where
                 .await?;
 
             for certificate in certificates {
-                self.send_confirmed_certificate(&certificate, delivery)
+                self.send_confirmed_certificate(&certificate, &[], delivery)
                     .await?;
             }
         }
@@ -1194,7 +1274,7 @@ where
                 // Send each certificate
                 for certificate in certificates {
                     updater
-                        .send_confirmed_certificate(&certificate, delivery)
+                        .send_confirmed_certificate(&certificate, &[], delivery)
                         .await?;
                 }
 
