@@ -1212,10 +1212,12 @@ where
             })),
         };
 
+        // Through the cache rather than `Arc::new`: these blobs are already in storage's cache
+        // in the common case, and the cache is what keeps one allocation per blob content.
         let blobs = published_blobs
             .into_iter()
             .chain(read_blobs.into_values())
-            .map(Arc::new)
+            .map(|blob| self.storage.cache_blob(blob))
             .collect();
         exporter.export(
             certificate.clone(),

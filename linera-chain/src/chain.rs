@@ -323,14 +323,11 @@ where
     // blocks pushed since the last save are missing here, and a crash loses the reports that were
     // never folded in. That is deliberate — re-sending a block the destination already has is
     // skipped by an integer comparison before signature verification, whereas *under*-sending
-    // would leave a permanent gap. Validators that leave the committee are pruned, so this stays
-    // bounded by the committee size.
-    //
-    // This field must stay **last**: the `RootView` derive assigns each field's storage tag
-    // positionally, so appending is what makes an existing database readable by the new code.
+    // would leave a permanent gap.
     /// The height of the highest block of this chain that has been pushed to each of the other
     /// committee validators. A validator with no entry has not been exported to yet, and is
-    /// queried before the first push.
+    /// queried before the first push. Validators that leave the committee are pruned, so this
+    /// stays bounded by the committee size.
     pub exported_heights: RegisterView<C, NonCanonicalBTreeMap<ValidatorPublicKey, BlockHeight>>,
 }
 

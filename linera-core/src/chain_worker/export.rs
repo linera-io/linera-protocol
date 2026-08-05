@@ -105,12 +105,16 @@ pub struct BlockExportConfig {
     /// How many certificates are read from storage and pushed per batch when catching a
     /// destination up.
     pub certificate_upload_batch_size: u64,
-    /// How long a destination is skipped after a failed push, doubling up to
-    /// `max_retry_delay` while it keeps failing.
+    /// How long a destination is skipped after a failed push, doubling up to `max_retry_delay`
+    /// while it keeps failing.
     ///
     /// A destination that is down must not stall export for the rest of the committee, and must
     /// not cost a full round trip on every block either. Skipping it leaves its cursor stale, so
     /// the first push that does go through queries it and fills in whatever it missed.
+    ///
+    /// This is a coarser layer than the transport's own per-request retries: those decide whether
+    /// one call is worth attempting again, this decides whether the destination is worth
+    /// attempting at all right now.
     pub retry_delay: Duration,
     /// The longest a failing destination is skipped for.
     pub max_retry_delay: Duration,
@@ -149,8 +153,9 @@ pub type ChainExporterFactory<S> = Arc<dyn Fn(ChainExportSetup<S>) -> ChainExpor
 struct ExportedBlock {
     certificate: CacheArc<ConfirmedBlockCertificate>,
     /// The block's required blobs, so that a destination missing them — which is always the case
-    /// for a blob this very block publishes — is served without a read from storage.
-    blobs: Vec<Arc<Blob>>,
+    /// for a blob this very block publishes — is served without a read from storage. Held as the
+    /// storage cache's pointers, so queued blocks share the allocations rather than copying them.
+    blobs: Vec<CacheArc<Blob>>,
     /// The chain's committee *after* the block was applied, so that a validator joining in this
     /// block is exported to immediately, including the admin-chain block that admitted it.
     committee: Arc<Committee>,
@@ -177,7 +182,7 @@ impl ChainExporter {
     pub(crate) fn export(
         &self,
         certificate: CacheArc<ConfirmedBlockCertificate>,
-        blobs: Vec<Arc<Blob>>,
+        blobs: Vec<CacheArc<Blob>>,
         committee: Arc<Committee>,
         admin_chain_id: ChainId,
     ) {
@@ -261,8 +266,9 @@ struct Destination<S: Storage, N> {
     next_height: Option<BlockHeight>,
     /// While this is in the future the validator is skipped; it failed recently.
     retry_at: Option<Instant>,
-    /// How long the next skip lasts, doubling for as long as pushes keep failing.
-    backoff: Duration,
+    /// How many pushes to this destination have failed in a row, which sets how long the next
+    /// skip lasts.
+    failures: u32,
 }
 
 /// The body of one chain's export task.
@@ -400,7 +406,7 @@ where
                         .get(&validator)
                         .map(|height| BlockHeight(height.0.saturating_add(1))),
                     retry_at: None,
-                    backoff: self.config.retry_delay,
+                    failures: 0,
                 },
             );
         }
@@ -441,20 +447,24 @@ where
             Ok(next_height) => {
                 self.next_height = Some(next_height);
                 self.retry_at = None;
-                self.backoff = config.retry_delay;
+                self.failures = 0;
                 Some(next_height)
             }
             Err(error) => {
+                let backoff = config
+                    .retry_delay
+                    .saturating_mul(1u32.checked_shl(self.failures).unwrap_or(u32::MAX))
+                    .min(config.max_retry_delay);
                 let height = block.certificate.block().header.height;
                 warn!(
-                    validator = %self.address, %height, %error, backoff = ?self.backoff,
+                    validator = %self.address, %height, %error, ?backoff,
                     "Failed to export block; will query the validator before the next push",
                 );
                 // Forget the cursor: the next push must ask what this validator actually has
                 // rather than assume the block we just failed to send arrived.
                 self.next_height = None;
-                self.retry_at = Some(now + self.backoff);
-                self.backoff = (self.backoff * 2).min(config.max_retry_delay);
+                self.retry_at = Some(now + backoff);
+                self.failures = self.failures.saturating_add(1);
                 None
             }
         }

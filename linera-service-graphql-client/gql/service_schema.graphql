@@ -449,7 +449,8 @@ type ChainStateExtendedView {
 	"""
 	The height of the highest block of this chain that has been pushed to each of the other
 	committee validators. A validator with no entry has not been exported to yet, and is
-	queried before the first push.
+	queried before the first push. Validators that leave the committee are pruned, so this
+	stays bounded by the committee size.
 	"""
 	exportedHeights: JSONObject!
 }
