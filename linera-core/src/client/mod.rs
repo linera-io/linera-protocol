@@ -57,7 +57,7 @@ use crate::{
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode as _, ValidatorNodeProvider as _},
     notifier::{ChannelNotifier, Notifier as _},
     remote_node::RemoteNode,
-    updater::{communicate_with_quorum, CommunicateAction, ValidatorUpdater},
+    updater::{communicate_with_quorum, CommunicateAction, RemoteNodeUpdater},
     worker::{Notification, ProcessableCertificate, Reason, WorkerError, WorkerState},
     ChainWorkerConfig, ProcessConfirmedBlockMode, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
@@ -487,10 +487,6 @@ impl<Env: Environment> Client<Env> {
     /// Returns the provider used to connect to validator nodes.
     pub fn validator_node_provider(&self) -> &Env::Network {
         self.environment.network()
-    }
-
-    pub(crate) fn options(&self) -> &chain_client::Options {
-        &self.options
     }
 
     /// Handles any pending local cross-chain requests, notifying subscribers.
@@ -1432,6 +1428,62 @@ impl<Env: Environment> Client<Env> {
         Ok(certificate)
     }
 
+    /// Creates a [`RemoteNodeUpdater`] for the given validator, backed by our local node.
+    fn remote_node_updater(
+        &self,
+        remote_node: RemoteNode<Env::ValidatorNode>,
+    ) -> RemoteNodeUpdater<Env> {
+        RemoteNodeUpdater {
+            remote_node,
+            local_node: self.local_node.clone(),
+            admin_chain_id: self.admin_chain_id,
+            certificate_upload_batch_size: self.options.certificate_upload_batch_size,
+        }
+    }
+
+    /// Handles a [`chain_client::Error::LocalNodeLagging`] signal from a [`RemoteNodeUpdater`]:
+    /// pulls the missing chain state from the validator that turned out to be ahead of us, then
+    /// either retries the action once (when finalizing a block) or surfaces the validator's
+    /// original error so the outer logic can rebuild on top of the refreshed local state.
+    async fn sync_and_retry_chain_update(
+        self: &Arc<Self>,
+        mut updater: RemoteNodeUpdater<Env>,
+        action: CommunicateAction,
+        chain_id: ChainId,
+        error: NodeError,
+    ) -> Result<LiteVote, chain_client::Error> {
+        match &action {
+            CommunicateAction::SubmitBlock { .. } => {
+                // Pull the manager state that justified the proposal's rejection (signatures
+                // are checked locally, so the source can't fool us), best-effort, and surface
+                // the rejection either way. If our local state actually advanced,
+                // `execute_operations` will rebuild and re-propose.
+                if let Err(sync_err) = self
+                    .synchronize_chain_state_from(&updater.remote_node, chain_id)
+                    .await
+                {
+                    debug!(%sync_err, "failed to pull manager state from validator");
+                }
+                Err(error.into())
+            }
+            CommunicateAction::RequestTimeout { .. } => {
+                self.synchronize_chain_state_from(&updater.remote_node, chain_id)
+                    .await?;
+                Err(error.into())
+            }
+            CommunicateAction::FinalizeBlock { .. } => {
+                self.synchronize_chain_state_from(&updater.remote_node, chain_id)
+                    .await?;
+                match updater.send_chain_update(action).await {
+                    Err(chain_client::Error::LocalNodeLagging { error, .. }) => {
+                        Err((*error).into())
+                    }
+                    result => result,
+                }
+            }
+        }
+    }
+
     /// Broadcasts certified blocks to validators.
     #[instrument(level = "trace", skip_all, fields(chain_id, block_height, delivery))]
     async fn communicate_chain_updates(
@@ -1448,11 +1500,7 @@ impl<Env: Environment> Client<Env> {
             committee,
             |_: &()| (),
             |remote_node| {
-                let mut updater = ValidatorUpdater {
-                    remote_node,
-                    client: self.clone(),
-                    admin_chain_id: self.admin_chain_id,
-                };
+                let mut updater = self.remote_node_updater(remote_node);
                 let certificate = latest_certificate.clone();
                 Box::pin(async move {
                     updater
@@ -1496,13 +1544,17 @@ impl<Env: Environment> Client<Env> {
                 )
             },
             |remote_node| {
-                let mut updater = ValidatorUpdater {
-                    remote_node,
-                    client: self.clone(),
-                    admin_chain_id: self.admin_chain_id,
-                };
+                let mut updater = self.remote_node_updater(remote_node);
                 let action = action.clone();
-                Box::pin(async move { updater.send_chain_update(action).await })
+                Box::pin(async move {
+                    match updater.send_chain_update(action.clone()).await {
+                        Err(chain_client::Error::LocalNodeLagging { chain_id, error }) => {
+                            self.sync_and_retry_chain_update(updater, action, chain_id, *error)
+                                .await
+                        }
+                        result => result,
+                    }
+                })
             },
             self.options.quorum_grace_period,
         )

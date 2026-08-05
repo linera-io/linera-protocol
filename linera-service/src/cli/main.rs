@@ -2190,7 +2190,7 @@ fn main() -> anyhow::Result<process::ExitCode> {
         builder
     };
 
-    // The default stack size 2 MiB causes some stack overflows in ValidatorUpdater methods.
+    // The default stack size 2 MiB causes some stack overflows in RemoteNodeUpdater methods.
     runtime.thread_stack_size(4 << 20);
     if let Some(blocking_threads) = options.common.tokio_blocking_threads {
         runtime.max_blocking_threads(blocking_threads);
