@@ -432,7 +432,7 @@ where
                 self.remote_node.send_pending_blobs(chain_id, blobs).await?;
             }
             Err(error) => {
-                self.sync_if_needed(
+                self.sync_remote_if_needed(
                     chain_id,
                     certificate.round,
                     certificate.block().header.height,
@@ -468,7 +468,8 @@ where
             .handle_chain_info_query(query.clone())
             .await;
         if let Err(err) = &result {
-            self.sync_if_needed(chain_id, round, height, err).await?;
+            self.sync_remote_if_needed(chain_id, round, height, err)
+                .await?;
             self.warn_if_unexpected(err);
         }
         Ok(result?)
@@ -479,7 +480,7 @@ where
     /// If the error reveals that the *local* node is behind instead, returns
     /// [`chain_client::Error::LocalNodeLagging`] carrying the original error: pulling remote
     /// state is a client-level decision, not something updating another node may do.
-    async fn sync_if_needed(
+    async fn sync_remote_if_needed(
         &mut self,
         chain_id: ChainId,
         round: Round,
