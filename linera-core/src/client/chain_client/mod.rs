@@ -256,6 +256,14 @@ pub enum Error {
     #[error("Remote node operation failed: {0}")]
     RemoteNodeError(#[from] NodeError),
 
+    /// A validator reported state ahead of the local node for this chain. The caller may pull
+    /// the missing state from that validator, then retry or surface the carried error.
+    #[error("The local node is lagging behind a validator on chain {chain_id}: {error}")]
+    LocalNodeLagging {
+        chain_id: ChainId,
+        error: Box<NodeError>,
+    },
+
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
 
