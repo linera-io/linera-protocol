@@ -1,0 +1,115 @@
+name: Client Binaries
+
+# Prebuilt `linera` client binaries so nobody has to compile the client to use
+# it. Each target is built NATIVELY on its own runner — no cross-compilation and
+# no QEMU, both of which are painful here because the client pulls in rocksdb
+# (C++), wasmer and protobuf.
+#
+# Every runner label below is a STANDARD GitHub-hosted runner, and standard
+# runners are free and unlimited on public repositories (linera-protocol is
+# public). Do NOT switch any of these to a larger runner: larger runners are
+# billed even for public repos.
+#
+# Windows is deliberately absent — we do not support it.
+
+on:
+  # Deliberately NOT `push: tags:`. Releases here are created by hand after the
+  # tag lands (v0.15.20: tag 01:38Z, release published 04:19Z, prerelease=true),
+  # so a tag-triggered upload would find no release and CREATE one, overriding
+  # the prerelease flag and title. Reacting to `published` means the release
+  # already exists and we only ever add assets to it.
+  release:
+    types: [published]
+  # Build the binaries for any ref on demand — this is how to get a build for an
+  # arbitrary commit without putting four ~1h native builds on every merge.
+  workflow_dispatch:
+
+concurrency:
+  group: "${{ github.workflow }} @ ${{ github.event.release.tag_name || github.ref }}"
+  cancel-in-progress: true
+
+permissions:
+  contents: write # required to attach assets to a release
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: short
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    # The smallest leg here is macos-latest at 3 cores / 7 GB, building the whole
+    # dependency graph in release mode from a cold cache.
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          # On a release event the default ref is the default branch, not the
+          # tag — build the code that was actually released.
+          ref: ${{ github.event.release.tag_name || github.ref }}
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: ${{ matrix.target }}
+          # Cache per target so the four jobs don't fight over one key.
+          cache-key: client-${{ matrix.target }}
+
+      - name: Install Protoc
+        uses: ./.github/actions/install-protoc
+
+      - name: Build the client
+        run: cargo build --locked --release --bin linera --target ${{ matrix.target }}
+
+      # Sanity-check the artifact actually runs on the machine that built it.
+      # `--version` is enough to catch a bad link or a missing shared library,
+      # which is the whole failure mode this workflow exists to prevent.
+      - name: Smoke-test the binary
+        run: ./target/${{ matrix.target }}/release/linera --version
+
+      - name: Package
+        id: package
+        run: |
+          set -euo pipefail
+          NAME="linera-${{ matrix.target }}"
+          mkdir -p "dist/${NAME}"
+          cp "target/${{ matrix.target }}/release/linera" "dist/${NAME}/linera"
+          tar -C dist -czf "${NAME}.tar.gz" "${NAME}"
+          # Checksums so a download can be verified without trusting the transport.
+          shasum -a 256 "${NAME}.tar.gz" > "${NAME}.tar.gz.sha256"
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+
+      # Always available per-commit via `gh run download`, independent of releases.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.name }}
+          path: |
+            ${{ steps.package.outputs.name }}.tar.gz
+            ${{ steps.package.outputs.name }}.tar.gz.sha256
+          retention-days: 30
+
+      # `gh release upload` only ever adds assets. Creating the release, and
+      # choosing its title and prerelease flag, stays with whoever cuts it.
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+          NAME: ${{ steps.package.outputs.name }}
+        run: gh release upload "${TAG}" "${NAME}.tar.gz" "${NAME}.tar.gz.sha256" --clobber

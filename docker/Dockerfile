@@ -44,7 +44,12 @@ ARG build_date
 ARG build_flag=--release
 ARG build_folder=release
 ARG build_features=scylladb,metrics,jemalloc
-ARG rustflags="-C force-frame-pointers=yes -L /usr/lib/x86_64-linux-gnu"
+# The `-L` lets the linker find libunwind, jemalloc's stack-trace backend (#5602).
+# Debian's multiarch lib dir is arch-dependent (x86_64-linux-gnu vs
+# aarch64-linux-gnu), so this points at a stable symlink that cook_base resolves
+# from the build machine. Hardcoding one arch would silently drop libunwind on
+# the other.
+ARG rustflags="-C force-frame-pointers=yes -L /usr/lib/deb-multiarch"
 
 # ── Stage 0: chef base (rust + cargo-chef + system deps) ──
 FROM rust:1.86-slim-bookworm AS chef
@@ -129,6 +134,10 @@ COPY linera-sdk/wit linera-sdk/wit
 COPY --from=planner /examples-stubs examples
 
 ENV GIT_COMMIT=${git_commit}
+
+# Resolve the multiarch lib dir from the machine actually doing the build, so
+# `rustflags` above stays arch-agnostic and amd64/arm64 need no separate value.
+RUN ln -s "/usr/lib/$(uname -m)-linux-gnu" /usr/lib/deb-multiarch
 ENV RUSTFLAGS=${rustflags}
 
 # ── Stage 3a: builder_src — all three binaries, for the `tests` image only ──
