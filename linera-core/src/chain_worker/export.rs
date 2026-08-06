@@ -122,7 +122,10 @@ pub struct BlockExportConfig {
     /// destinations are behind.
     ///
     /// Live blocks always win: catching up only happens when nothing has arrived for this long,
-    /// and only one round per interval, so it can never crowd out export or spin.
+    /// and only one round per interval, so it can never crowd out export or spin. Together with
+    /// `max_catch_up_blocks` this sets the backfill rate — blocks per interval — so the two should
+    /// be tuned as a pair; a shorter interval with a proportionally smaller bound keeps the same
+    /// throughput while returning to live blocks sooner.
     pub idle_catch_up_interval: Duration,
     /// How many missing blocks are pushed to one destination in a single round.
     ///
@@ -131,6 +134,9 @@ pub struct BlockExportConfig {
     /// rounds keeps one far-behind destination from holding up every other destination and every
     /// later block of the chain; the remainder is picked up on subsequent rounds, including while
     /// the chain is idle.
+    ///
+    /// The bound is what a live block may have to wait behind, so it is deliberately small: the
+    /// backfill rate is set by how often rounds happen, not by how much each one does.
     pub max_catch_up_blocks: u64,
 }
 
@@ -140,8 +146,8 @@ impl Default for BlockExportConfig {
             certificate_upload_batch_size: crate::client::DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
             retry_delay: Duration::from_secs(1),
             max_retry_delay: Duration::from_secs(60),
-            idle_catch_up_interval: Duration::from_secs(1),
-            max_catch_up_blocks: 1_000,
+            idle_catch_up_interval: Duration::from_millis(200),
+            max_catch_up_blocks: 200,
         }
     }
 }

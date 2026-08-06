@@ -570,6 +570,37 @@ enum ServerCommand {
         #[arg(long, default_value_t = BlockExportConfig::default().certificate_upload_batch_size)]
         block_export_batch_size: u64,
 
+        /// How many missing blocks block export pushes to one validator per round. Bounds how
+        /// long a freshly-joined validator's backfill can delay a live block.
+        #[arg(long, default_value_t = BlockExportConfig::default().max_catch_up_blocks)]
+        block_export_max_catch_up_blocks: u64,
+
+        /// How long block export waits for a new block before spending a round backfilling
+        /// validators that are behind. With the catch-up bound, this sets the backfill rate.
+        #[arg(
+            long = "block-export-idle-interval-ms",
+            default_value = "200",
+            value_parser = util::parse_millis
+        )]
+        block_export_idle_interval: Duration,
+
+        /// How long block export skips a validator after a failed push, doubling up to
+        /// `--block-export-max-retry-delay-ms` while it keeps failing.
+        #[arg(
+            long = "block-export-retry-delay-ms",
+            default_value = "1000",
+            value_parser = util::parse_millis
+        )]
+        block_export_retry_delay: Duration,
+
+        /// The longest block export skips a failing validator for.
+        #[arg(
+            long = "block-export-max-retry-delay-ms",
+            default_value = "60000",
+            value_parser = util::parse_millis
+        )]
+        block_export_max_retry_delay: Duration,
+
         /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
         #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
         otlp_exporter_endpoint: Option<String>,
@@ -708,6 +739,10 @@ async fn run(options: ServerOptions) {
             recovery_whitelist,
             export_blocks_to_committee,
             block_export_batch_size,
+            block_export_max_catch_up_blocks,
+            block_export_idle_interval,
+            block_export_retry_delay,
+            block_export_max_retry_delay,
             otlp_exporter_endpoint: _,
         } => {
             linera_version::VERSION_INFO.log();
@@ -732,7 +767,10 @@ async fn run(options: ServerOptions) {
                 recovery_whitelist: recovery_whitelist.map(HashSet::from_iter),
                 block_export_config: export_blocks_to_committee.then(|| BlockExportConfig {
                     certificate_upload_batch_size: block_export_batch_size,
-                    ..BlockExportConfig::default()
+                    max_catch_up_blocks: block_export_max_catch_up_blocks,
+                    idle_catch_up_interval: block_export_idle_interval,
+                    retry_delay: block_export_retry_delay,
+                    max_retry_delay: block_export_max_retry_delay,
                 }),
                 #[cfg(with_metrics)]
                 enable_memory_profiling,
