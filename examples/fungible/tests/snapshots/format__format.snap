@@ -12,6 +12,8 @@ REGISTRY:
   ChainId:
     NEWTYPESTRUCT:
       TYPENAME: CryptoHash
+  FungibleAmount:
+    NEWTYPESTRUCT: U128
   FungibleOperation:
     ENUM:
       142627141:
@@ -22,7 +24,7 @@ REGISTRY:
             - owner:
                 TYPENAME: AccountOwner
             - amount:
-                TYPENAME: Amount
+                TYPENAME: FungibleAmount
             - target_account:
                 TYPENAME: Account
       158617459:
@@ -33,14 +35,14 @@ REGISTRY:
             - spender:
                 TYPENAME: AccountOwner
             - allowance:
-                TYPENAME: Amount
+                TYPENAME: FungibleAmount
       204322437:
         Claim:
           STRUCT:
             - source_account:
                 TYPENAME: Account
             - amount:
-                TYPENAME: Amount
+                TYPENAME: FungibleAmount
             - target_account:
                 TYPENAME: Account
       206964944:
@@ -56,7 +58,7 @@ REGISTRY:
             - spender:
                 TYPENAME: AccountOwner
             - amount:
-                TYPENAME: Amount
+                TYPENAME: FungibleAmount
             - target_account:
                 TYPENAME: Account
   FungibleResponse:
@@ -67,7 +69,7 @@ REGISTRY:
       206964944:
         Balance:
           NEWTYPE:
-            TYPENAME: Amount
+            TYPENAME: FungibleAmount
       211312752:
         Ok: UNIT
   InitialState:
@@ -77,7 +79,7 @@ REGISTRY:
             KEY:
               TYPENAME: AccountOwner
             VALUE:
-              TYPENAME: Amount
+              TYPENAME: FungibleAmount
   Message:
     ENUM:
       0:
@@ -86,7 +88,7 @@ REGISTRY:
             - target:
                 TYPENAME: AccountOwner
             - amount:
-                TYPENAME: Amount
+                TYPENAME: FungibleAmount
             - source:
                 TYPENAME: AccountOwner
       1:
@@ -95,12 +97,13 @@ REGISTRY:
             - owner:
                 TYPENAME: AccountOwner
             - amount:
-                TYPENAME: Amount
+                TYPENAME: FungibleAmount
             - target_account:
                 TYPENAME: Account
   Parameters:
     STRUCT:
       - ticker_symbol: STR
+      - decimals: U8
 OPERATION:
   TYPENAME: FungibleOperation
 RESPONSE:

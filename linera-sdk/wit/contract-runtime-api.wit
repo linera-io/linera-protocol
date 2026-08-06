@@ -7,11 +7,11 @@ interface contract-runtime-api {
     message-origin-timestamp: func() -> option<timestamp>;
     authenticated-caller-id: func() -> option<application-id>;
     send-message: func(message: send-message-request);
-    transfer: func(source: account-owner, destination: account, amount: amount);
-    claim: func(source: account, destination: account, amount: amount);
-    approve: func(owner: account-owner, spender: account-owner, amount: amount);
-    transfer-from: func(owner: account-owner, spender: account-owner, destination: account, amount: amount);
-    open-chain: func(chain-ownership: chain-ownership, application-permissions: application-permissions, balance: amount) -> chain-id;
+    transfer: func(source: account-owner, destination: account, amount: token-amount);
+    claim: func(source: account, destination: account, amount: token-amount);
+    approve: func(owner: account-owner, spender: account-owner, amount: token-amount);
+    transfer-from: func(owner: account-owner, spender: account-owner, destination: account, amount: token-amount);
+    open-chain: func(chain-ownership: chain-ownership, application-permissions: application-permissions, balance: token-amount) -> chain-id;
     close-chain: func() -> result<tuple<>, manage-chain-error>;
     change-ownership: func(ownership: chain-ownership) -> result<tuple<>, manage-chain-error>;
     change-application-permissions: func(application-permissions: application-permissions) -> result<tuple<>, manage-chain-error>;
@@ -39,10 +39,6 @@ interface contract-runtime-api {
         reserved(u8),
         address32(crypto-hash),
         address20(array20),
-    }
-
-    record amount {
-        inner0: u128,
     }
 
     record application-id {
@@ -145,6 +141,10 @@ interface contract-runtime-api {
 
     record timestamp {
         inner0: u64,
+    }
+
+    record token-amount {
+        inner: u128,
     }
 
     type u128 = tuple<u64, u64>;

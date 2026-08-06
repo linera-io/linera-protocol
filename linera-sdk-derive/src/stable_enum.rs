@@ -15,7 +15,10 @@
 
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use sha3::{Digest, Keccak256};
-use syn::{__private::quote::quote, spanned::Spanned, Error, Fields, ItemEnum, Result, Variant};
+use syn::{
+    __private::quote::quote, parse_quote, spanned::Spanned, Error, Fields, ItemEnum, Result,
+    Variant,
+};
 
 /// Where the `StableEnumTrace` trait lives, from the perspective of the code
 /// being generated.
@@ -84,16 +87,6 @@ fn variant_tags(input: &ItemEnum) -> Result<Vec<(String, u32, &Variant)>> {
     Ok(out)
 }
 
-fn reject_generics(input: &ItemEnum) -> Result<()> {
-    if !input.generics.params.is_empty() || input.generics.where_clause.is_some() {
-        return Err(Error::new(
-            input.generics.span(),
-            "#[derive(StableEnum)] does not yet support generic enums",
-        ));
-    }
-    Ok(())
-}
-
 /// Emits the combined `Serialize` + `Deserialize` + `StableEnumTrace` impls.
 pub fn generate_all(input: &ItemEnum, crate_root: CrateRoot) -> Result<TokenStream2> {
     let ser = generate_serialize(input, &crate_root)?;
@@ -107,11 +100,11 @@ pub fn generate_all(input: &ItemEnum, crate_root: CrateRoot) -> Result<TokenStre
 }
 
 pub fn generate_serialize(input: &ItemEnum, crate_root: &CrateRoot) -> Result<TokenStream2> {
-    reject_generics(input)?;
     let enum_ident = &input.ident;
     let enum_name_str = enum_ident.to_string();
     let tagged = variant_tags(input)?;
     let serde = crate_root.serde_path();
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
     let arms = tagged.iter().map(|(name, tag, variant)| {
         let variant_ident = &variant.ident;
@@ -171,7 +164,7 @@ pub fn generate_serialize(input: &ItemEnum, crate_root: &CrateRoot) -> Result<To
 
     Ok(quote! {
         #[automatically_derived]
-        impl #serde::Serialize for #enum_ident {
+        impl #impl_generics #serde::Serialize for #enum_ident #ty_generics #where_clause {
             fn serialize<__S>(&self, __serializer: __S) -> ::core::result::Result<__S::Ok, __S::Error>
             where
                 __S: #serde::Serializer,
@@ -185,13 +178,35 @@ pub fn generate_serialize(input: &ItemEnum, crate_root: &CrateRoot) -> Result<To
 }
 
 pub fn generate_deserialize(input: &ItemEnum, crate_root: &CrateRoot) -> Result<TokenStream2> {
-    reject_generics(input)?;
     let enum_ident = &input.ident;
     let enum_name_str = enum_ident.to_string();
     let tagged = variant_tags(input)?;
     let serde = crate_root.serde_path();
 
     let variant_name_lits: Vec<String> = tagged.iter().map(|(n, _, _)| n.clone()).collect();
+
+    let (_, ty_generics, where_clause) = input.generics.split_for_impl();
+    // The `Deserialize<'de>` impl needs a `'de` lifetime prepended to the enum's own generics.
+    let mut de_generics = input.generics.clone();
+    de_generics.params.insert(0, parse_quote!('de));
+    let (de_impl_generics, _, _) = de_generics.split_for_impl();
+
+    // For a generic enum, the local visitor helper structs must carry the enum's type
+    // parameters (via `PhantomData`) so their `Value` associated types can name them. For a
+    // non-generic enum these expand to nothing, keeping the emitted code identical.
+    let is_generic = !input.generics.params.is_empty();
+    let (impl_generics, _, _) = input.generics.split_for_impl();
+    let (vis_decl, vis_ty, vis_field, vis_where, vis_ctor) = if is_generic {
+        (
+            quote! { #impl_generics },
+            quote! { #ty_generics },
+            quote! { (::core::marker::PhantomData<fn() -> #enum_ident #ty_generics>) },
+            quote! { #where_clause },
+            quote! { ::#ty_generics(::core::marker::PhantomData) },
+        )
+    } else {
+        (quote! {}, quote! {}, quote! {}, quote! {}, quote! {})
+    };
 
     let arms = tagged.iter().map(|(name, tag, variant)| {
         let variant_ident = &variant.ident;
@@ -228,8 +243,8 @@ pub fn generate_deserialize(input: &ItemEnum, crate_root: &CrateRoot) -> Result<
                 let expecting_msg = format!("tuple variant `{name_lit}`");
                 quote! {
                     #tag => {
-                        struct __TupleVisitor;
-                        impl<'de> #serde::de::Visitor<'de> for __TupleVisitor {
+                        struct __TupleVisitor #vis_decl #vis_field #vis_where;
+                        impl #de_impl_generics #serde::de::Visitor<'de> for __TupleVisitor #vis_ty #vis_where {
                             type Value = (#(#types,)*);
                             fn expecting(&self, __f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
                                 __f.write_str(#expecting_msg)
@@ -243,7 +258,7 @@ pub fn generate_deserialize(input: &ItemEnum, crate_root: &CrateRoot) -> Result<
                             }
                         }
                         let (#(#bindings,)*) = #serde::de::VariantAccess::tuple_variant(
-                            __variant, #len, __TupleVisitor,
+                            __variant, #len, __TupleVisitor #vis_ctor,
                         )?;
                         ::core::result::Result::Ok(#enum_ident::#variant_ident(#(#bindings,)*))
                     }
@@ -272,8 +287,8 @@ pub fn generate_deserialize(input: &ItemEnum, crate_root: &CrateRoot) -> Result<
                 let expecting_msg = format!("struct variant `{name_lit}`");
                 quote! {
                     #tag => {
-                        struct __StructVisitor;
-                        impl<'de> #serde::de::Visitor<'de> for __StructVisitor {
+                        struct __StructVisitor #vis_decl #vis_field #vis_where;
+                        impl #de_impl_generics #serde::de::Visitor<'de> for __StructVisitor #vis_ty #vis_where {
                             type Value = (#(#types,)*);
                             fn expecting(&self, __f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
                                 __f.write_str(#expecting_msg)
@@ -288,7 +303,7 @@ pub fn generate_deserialize(input: &ItemEnum, crate_root: &CrateRoot) -> Result<
                         }
                         const __FIELDS: &[&::core::primitive::str] = &[#(#field_strs),*];
                         let (#(#field_idents,)*) = #serde::de::VariantAccess::struct_variant(
-                            __variant, __FIELDS, __StructVisitor,
+                            __variant, __FIELDS, __StructVisitor #vis_ctor,
                         )?;
                         ::core::result::Result::Ok(#enum_ident::#variant_ident { #(#field_idents,)* })
                     }
@@ -301,14 +316,14 @@ pub fn generate_deserialize(input: &ItemEnum, crate_root: &CrateRoot) -> Result<
 
     Ok(quote! {
         #[automatically_derived]
-        impl<'de> #serde::Deserialize<'de> for #enum_ident {
+        impl #de_impl_generics #serde::Deserialize<'de> for #enum_ident #ty_generics #where_clause {
             fn deserialize<__D>(__deserializer: __D) -> ::core::result::Result<Self, __D::Error>
             where
                 __D: #serde::Deserializer<'de>,
             {
-                struct __OuterVisitor;
-                impl<'de> #serde::de::Visitor<'de> for __OuterVisitor {
-                    type Value = #enum_ident;
+                struct __OuterVisitor #vis_decl #vis_field #vis_where;
+                impl #de_impl_generics #serde::de::Visitor<'de> for __OuterVisitor #vis_ty #vis_where {
+                    type Value = #enum_ident #vis_ty;
                     fn expecting(&self, __f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
                         __f.write_str(#expecting_msg)
                     }
@@ -334,7 +349,7 @@ pub fn generate_deserialize(input: &ItemEnum, crate_root: &CrateRoot) -> Result<
                     __deserializer,
                     #enum_name_str,
                     __VARIANTS,
-                    __OuterVisitor,
+                    __OuterVisitor #vis_ctor,
                 )
             }
         }
@@ -342,12 +357,12 @@ pub fn generate_deserialize(input: &ItemEnum, crate_root: &CrateRoot) -> Result<
 }
 
 pub fn generate_trace(input: &ItemEnum, crate_root: &CrateRoot) -> Result<TokenStream2> {
-    reject_generics(input)?;
     let enum_ident = &input.ident;
     let enum_name_str = enum_ident.to_string();
     let tagged = variant_tags(input)?;
     let trait_path = crate_root.trait_path();
     let sr = crate_root.serde_reflection_path();
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
     let variants_const_entries = tagged.iter().map(|(name, tag, _)| {
         let n = name.as_str();
@@ -364,7 +379,7 @@ pub fn generate_trace(input: &ItemEnum, crate_root: &CrateRoot) -> Result<TokenS
                 let (__fmt, _) = #sr::Tracer::trace_value(
                     __tracer,
                     &mut __scratch,
-                    &#enum_ident::#variant_ident,
+                    &Self::#variant_ident,
                 )?;
                 __format = ::core::option::Option::Some(__fmt);
             },
@@ -384,7 +399,7 @@ pub fn generate_trace(input: &ItemEnum, crate_root: &CrateRoot) -> Result<TokenS
                     let (__fmt, _) = #sr::Tracer::trace_value(
                         __tracer,
                         &mut __scratch,
-                        &#enum_ident::#variant_ident(#(#bindings),*),
+                        &Self::#variant_ident(#(#bindings),*),
                     )?;
                     __format = ::core::option::Option::Some(__fmt);
                 }
@@ -411,7 +426,7 @@ pub fn generate_trace(input: &ItemEnum, crate_root: &CrateRoot) -> Result<TokenS
                     let (__fmt, _) = #sr::Tracer::trace_value(
                         __tracer,
                         &mut __scratch,
-                        &#enum_ident::#variant_ident {
+                        &Self::#variant_ident {
                             #( #field_idents: #bindings ),*
                         },
                     )?;
@@ -426,7 +441,7 @@ pub fn generate_trace(input: &ItemEnum, crate_root: &CrateRoot) -> Result<TokenS
         // depend on for native (non-wasm) builds (e.g. format snapshot tests).
         #[cfg(not(target_arch = "wasm32"))]
         #[automatically_derived]
-        impl #trait_path for #enum_ident {
+        impl #impl_generics #trait_path for #enum_ident #ty_generics #where_clause {
             const STABLE_VARIANTS: &'static [(&'static ::core::primitive::str, ::core::primitive::u32)] = &[
                 #(#variants_const_entries),*
             ];

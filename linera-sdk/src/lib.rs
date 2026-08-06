@@ -72,6 +72,75 @@ pub use self::{
     views::{KeyValueStore, ViewStorageContext},
 };
 
+/// Declares a token marker type implementing [`Token`](linera_base_types::Token), for use as
+/// the brand of a [`TokenAmount`](linera_base_types::TokenAmount).
+///
+/// Two forms are supported:
+///
+/// - **Runtime precision** — the number of decimals is set once, from the application
+///   parameters, via the generated `configure_decimals` associated function. Call it in
+///   `Contract::load` and `Service::new`. Reading the precision before it is configured panics.
+///
+///   ```ignore
+///   linera_sdk::branded_token!(pub struct MyToken = "MyToken");
+///   // in load()/new():
+///   MyToken::configure_decimals(runtime.application_parameters().decimals);
+///   ```
+///
+/// - **Fixed precision** — the number of decimals is known at compile time; no global is used.
+///
+///   ```ignore
+///   linera_sdk::branded_token!(pub struct MyToken = "MyToken", decimals = 6);
+///   ```
+///
+/// The string literal is the token's [`Token::NAME`](linera_base_types::Token::NAME), used as
+/// the serde/GraphQL container name.
+#[macro_export]
+macro_rules! branded_token {
+    ($(#[$meta:meta])* $vis:vis struct $name:ident = $wire:literal $(,)?) => {
+        $(#[$meta])*
+        #[derive(Debug, Default)]
+        $vis struct $name;
+
+        const _: () = {
+            static DECIMALS: ::std::sync::OnceLock<u8> = ::std::sync::OnceLock::new();
+
+            impl $crate::linera_base_types::Token for $name {
+                const NAME: &'static str = $wire;
+
+                fn decimals() -> u8 {
+                    *DECIMALS.get().expect(::core::concat!(
+                        ::core::stringify!($name),
+                        "::decimals() called before configure_decimals()"
+                    ))
+                }
+            }
+
+            impl $name {
+                /// Sets this token's precision. Call exactly once, in `Contract::load` and
+                /// `Service::new`, from the application parameters. Subsequent calls are ignored.
+                $vis fn configure_decimals(decimals: u8) {
+                    DECIMALS.get_or_init(|| decimals);
+                }
+            }
+        };
+    };
+
+    ($(#[$meta:meta])* $vis:vis struct $name:ident = $wire:literal, decimals = $decimals:expr $(,)?) => {
+        $(#[$meta])*
+        #[derive(Debug, Default)]
+        $vis struct $name;
+
+        impl $crate::linera_base_types::Token for $name {
+            const NAME: &'static str = $wire;
+
+            fn decimals() -> u8 {
+                $decimals
+            }
+        }
+    };
+}
+
 /// The contract interface of a Linera application.
 ///
 /// As opposed to the [`Service`] interface of an application, contract entry points
@@ -170,4 +239,43 @@ pub trait Service: WithServiceAbi + ServiceAbi + Sized {
 
     /// Executes a read-only query on the state of this application.
     async fn handle_query(&self, query: Self::Query) -> Self::QueryResponse;
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(dead_code)]
+
+    use crate::linera_base_types::{Token, TokenAmount};
+
+    branded_token!(struct FixedToken = "FixedToken", decimals = 6);
+    branded_token!(struct RuntimeToken = "RuntimeToken");
+
+    #[test]
+    fn fixed_precision_token() {
+        assert_eq!(6, FixedToken::decimals());
+        assert_eq!(
+            "1.5",
+            TokenAmount::<FixedToken>::from_inner(1_500_000).to_string()
+        );
+    }
+
+    #[test]
+    fn runtime_precision_token_configures_once() {
+        RuntimeToken::configure_decimals(2);
+        assert_eq!(2, RuntimeToken::decimals());
+        // Subsequent calls are ignored (first wins).
+        RuntimeToken::configure_decimals(9);
+        assert_eq!(2, RuntimeToken::decimals());
+        assert_eq!(
+            "1.5",
+            TokenAmount::<RuntimeToken>::from_inner(150).to_string()
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "configure_decimals")]
+    fn runtime_precision_panics_before_configuration() {
+        branded_token!(struct UnconfiguredToken = "UnconfiguredToken");
+        UnconfiguredToken::decimals();
+    }
 }

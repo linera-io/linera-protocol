@@ -5,14 +5,29 @@
 
 pub mod state;
 
-pub use linera_sdk::abis::fungible::*;
-use linera_sdk::linera_base_types::{Account, AccountOwner, Amount};
+use linera_sdk::linera_base_types::{Account, AccountOwner};
 use serde::{Deserialize, Serialize};
+
+// The brand for this application's token amounts. Its precision is set at runtime from the
+// `decimals` application parameter, in `Contract::load` and `Service::new`.
+linera_sdk::branded_token!(pub struct Fungible = "FungibleAmount");
+
+/// A branded, decimal-aware token amount used internally by the application (state, messages, and
+/// contract logic).
+pub type FungibleAmount = linera_sdk::linera_base_types::TokenAmount<Fungible>;
+
+/// The shared fungible ABI, generic over the token's brand. External users instantiate it with
+/// their own brand — typically a fixed-precision one, so they need not configure decimals — while
+/// this application instantiates it internally with [`Fungible`] (see `contract` and `service`).
+pub use linera_sdk::abis::fungible::{
+    FungibleOperation, FungibleResponse, FungibleTokenAbi, InitialState, InitialStateBuilder,
+    Parameters,
+};
 #[cfg(all(any(test, feature = "test"), not(target_arch = "wasm32")))]
 use {
     futures::{stream, StreamExt},
     linera_sdk::{
-        linera_base_types::{ApplicationId, ModuleId},
+        linera_base_types::{Amount, ApplicationId, ModuleId},
         test::{ActiveChain, TestValidator},
     },
 };
@@ -27,7 +42,7 @@ pub enum Message {
         /// Target account to credit amount to
         target: AccountOwner,
         /// Amount to be credited
-        amount: Amount,
+        amount: FungibleAmount,
         /// Source account to remove amount from
         source: AccountOwner,
     },
@@ -37,7 +52,7 @@ pub enum Message {
         /// Account to withdraw from
         owner: AccountOwner,
         /// Amount to be withdrawn
-        amount: Amount,
+        amount: FungibleAmount,
         /// Target account to transfer amount to
         target_account: Account,
     },
@@ -52,15 +67,15 @@ pub mod formats {
     use serde_reflection::{Samples, Tracer, TracerConfig};
 
     use super::{
-        Account, FungibleOperation, FungibleResponse, FungibleTokenAbi, InitialState, Message,
-        Parameters,
+        Account, Fungible, FungibleOperation, FungibleResponse, FungibleTokenAbi, InitialState,
+        Message, Parameters,
     };
 
     /// The Fungible Token application.
     pub struct FungibleApplication;
 
     impl BcsApplication for FungibleApplication {
-        type Abi = FungibleTokenAbi;
+        type Abi = FungibleTokenAbi<Fungible>;
 
         fn formats() -> serde_reflection::Result<Formats> {
             let mut tracer = Tracer::new(
@@ -71,14 +86,15 @@ pub mod formats {
             let samples = Samples::new();
 
             // Trace the ABI types
-            let operation = tracer.trace_stable_enum_type::<FungibleOperation>(&samples)?;
-            let response = tracer.trace_stable_enum_type::<FungibleResponse>(&samples)?;
+            let operation =
+                tracer.trace_stable_enum_type::<FungibleOperation<Fungible>>(&samples)?;
+            let response = tracer.trace_stable_enum_type::<FungibleResponse<Fungible>>(&samples)?;
             let (message, _) = tracer.trace_type::<Message>(&samples)?;
             let (event_value, _) = tracer.trace_type::<()>(&samples)?;
 
             // Trace additional supporting types (notably all enums) to populate the registry
             tracer.trace_type::<Parameters>(&samples)?;
-            tracer.trace_type::<InitialState>(&samples)?;
+            tracer.trace_type::<InitialState<Fungible>>(&samples)?;
             tracer.trace_type::<Account>(&samples)?;
             tracer.trace_type::<AccountOwner>(&samples)?;
 
