@@ -65,11 +65,11 @@ use crate::{
 pub struct ByteMapView<C, V> {
     /// The view context.
     #[allocative(skip)]
-    context: C,
+    pub(crate) context: C,
     /// Tracks deleted key prefixes.
-    deletion_set: DeletionSet,
+    pub(crate) deletion_set: DeletionSet,
     /// Pending changes not yet persisted to storage.
-    updates: BTreeMap<Vec<u8>, Update<V>>,
+    pub(crate) updates: BTreeMap<Vec<u8>, Update<V>>,
 }
 
 impl<C: Context, C2: Context, V> ReplaceContext<C2> for ByteMapView<C, V>
@@ -124,6 +124,76 @@ where
     }
 }
 
+impl<C, V> ByteMapView<C, V> {
+    /// Shared implementation of `rollback`.
+    pub(crate) fn base_rollback(&mut self) {
+        self.updates.clear();
+        self.deletion_set.rollback();
+    }
+
+    /// Shared implementation of `has_pending_changes`.
+    pub(crate) fn base_has_pending_changes(&self) -> bool {
+        self.deletion_set.has_pending_changes() || !self.updates.is_empty()
+    }
+
+    /// Shared implementation of `post_save`.
+    pub(crate) fn base_post_save(&mut self) {
+        self.updates.clear();
+        self.deletion_set.delete_storage_first = false;
+        self.deletion_set.deleted_prefixes.clear();
+    }
+
+    /// Shared implementation of `clear`.
+    pub(crate) fn base_clear(&mut self) {
+        self.updates.clear();
+        self.deletion_set.clear();
+    }
+
+    /// Shared implementation of `post_load`.
+    pub(crate) fn base_post_load(context: C) -> Self {
+        Self {
+            context,
+            updates: BTreeMap::new(),
+            deletion_set: DeletionSet::new(),
+        }
+    }
+}
+
+impl<C, V: Serialize> ByteMapView<C, V> {
+    /// Shared implementation of `pre_save`.
+    pub(crate) fn base_pre_save(
+        &self,
+        batch: &mut Batch,
+        base_key: &BaseKey,
+    ) -> Result<bool, ViewError> {
+        let mut delete_view = false;
+        if self.deletion_set.delete_storage_first {
+            delete_view = true;
+            batch.delete_key_prefix(base_key.bytes.clone());
+            for (index, update) in &self.updates {
+                if let Update::Set(value) = update {
+                    let key = base_key.base_index(index);
+                    batch.put_key_value(key, value)?;
+                    delete_view = false;
+                }
+            }
+        } else {
+            for index in &self.deletion_set.deleted_prefixes {
+                let key = base_key.base_index(index);
+                batch.delete_key_prefix(key);
+            }
+            for (index, update) in &self.updates {
+                let key = base_key.base_index(index);
+                match update {
+                    Update::Removed => batch.delete_key(key),
+                    Update::Set(value) => batch.put_key_value(key, value)?,
+                }
+            }
+        }
+        Ok(delete_view)
+    }
+}
+
 impl<C, V> View for ByteMapView<C, V>
 where
     C: Context,
@@ -142,59 +212,27 @@ where
     }
 
     fn post_load(context: C, _values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
-        Ok(Self {
-            context,
-            updates: BTreeMap::new(),
-            deletion_set: DeletionSet::new(),
-        })
+        Ok(Self::base_post_load(context))
     }
 
     fn rollback(&mut self) {
-        self.updates.clear();
-        self.deletion_set.rollback();
+        self.base_rollback();
     }
 
     async fn has_pending_changes(&self) -> bool {
-        self.deletion_set.has_pending_changes() || !self.updates.is_empty()
+        self.base_has_pending_changes()
     }
 
     fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
-        let mut delete_view = false;
-        if self.deletion_set.delete_storage_first {
-            delete_view = true;
-            batch.delete_key_prefix(self.context.base_key().bytes.clone());
-            for (index, update) in &self.updates {
-                if let Update::Set(value) = update {
-                    let key = self.context.base_key().base_index(index);
-                    batch.put_key_value(key, value)?;
-                    delete_view = false;
-                }
-            }
-        } else {
-            for index in &self.deletion_set.deleted_prefixes {
-                let key = self.context.base_key().base_index(index);
-                batch.delete_key_prefix(key);
-            }
-            for (index, update) in &self.updates {
-                let key = self.context.base_key().base_index(index);
-                match update {
-                    Update::Removed => batch.delete_key(key),
-                    Update::Set(value) => batch.put_key_value(key, value)?,
-                }
-            }
-        }
-        Ok(delete_view)
+        self.base_pre_save(batch, self.context.base_key())
     }
 
     fn post_save(&mut self) {
-        self.updates.clear();
-        self.deletion_set.delete_storage_first = false;
-        self.deletion_set.deleted_prefixes.clear();
+        self.base_post_save();
     }
 
     fn clear(&mut self) {
-        self.updates.clear();
-        self.deletion_set.clear();
+        self.base_clear();
     }
 }
 
@@ -211,10 +249,7 @@ where
     }
 }
 
-impl<C, V> ByteMapView<C, V>
-where
-    C: Context,
-{
+impl<C, V> ByteMapView<C, V> {
     /// Inserts or resets the value of a key of the map.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -245,7 +280,6 @@ where
     /// ```
     pub fn remove(&mut self, short_key: Vec<u8>) {
         if self.deletion_set.contains_prefix_of(&short_key) {
-            // Optimization: No need to mark `short_key` for deletion as we are going to remove a range of keys containing it.
             self.updates.remove(&short_key);
         } else {
             self.updates.insert(short_key, Update::Removed);
@@ -277,7 +311,12 @@ where
         }
         self.deletion_set.insert_key_prefix(key_prefix);
     }
+}
 
+impl<C, V> ByteMapView<C, V>
+where
+    C: Context,
+{
     /// Obtains the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
