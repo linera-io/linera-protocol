@@ -98,6 +98,43 @@ mod metrics {
                 &[],
             )
         });
+
+    /// The total number of `Put` operations reaching the underlying store.
+    pub static WRITE_BATCH_PUT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "num_write_batch_puts",
+            "Number of put operations written through the LRU caching store",
+            &[],
+        )
+    });
+
+    /// The total value bytes of `Put` operations reaching the underlying store.
+    pub static WRITE_BATCH_PUT_BYTES: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "write_batch_put_bytes",
+            "Value bytes of put operations written through the LRU caching store",
+            &[],
+        )
+    });
+
+    /// The number of `Put` operations whose value is already known to be in the
+    /// underlying store, and which are therefore safe to elide.
+    pub static WRITE_BATCH_REDUNDANT_PUT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "num_write_batch_redundant_puts",
+            "Number of put operations whose value already matches the cached value",
+            &[],
+        )
+    });
+
+    /// The value bytes of `Put` operations that are safe to elide.
+    pub static WRITE_BATCH_REDUNDANT_PUT_BYTES: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "write_batch_redundant_put_bytes",
+            "Value bytes of put operations whose value already matches the cached value",
+            &[],
+        )
+    });
 }
 
 /// The maximum number of entries in the cache.
@@ -113,6 +150,80 @@ pub const DEFAULT_STORAGE_CACHE_CONFIG: StorageCacheConfig = StorageCacheConfig 
     max_cache_find_keys_size: 10000000,
     max_cache_find_key_values_size: 10000000,
 };
+
+/// How many `Put` operations a batch carried, and how many of those the cache already knows
+/// are in the underlying store.
+#[cfg(with_metrics)]
+#[derive(Debug, Default, PartialEq, Eq)]
+struct RedundantPutStats {
+    put_count: u64,
+    put_bytes: u64,
+    redundant_count: u64,
+    redundant_bytes: u64,
+}
+
+#[cfg(with_metrics)]
+fn observe_redundant_puts(cache: &mut LruPrefixCache, batch: &Batch) {
+    let stats = count_redundant_puts(cache, batch);
+    metrics::WRITE_BATCH_PUT_COUNT
+        .with_label_values(&[])
+        .inc_by(stats.put_count);
+    metrics::WRITE_BATCH_PUT_BYTES
+        .with_label_values(&[])
+        .inc_by(stats.put_bytes);
+    metrics::WRITE_BATCH_REDUNDANT_PUT_COUNT
+        .with_label_values(&[])
+        .inc_by(stats.redundant_count);
+    metrics::WRITE_BATCH_REDUNDANT_PUT_BYTES
+        .with_label_values(&[])
+        .inc_by(stats.redundant_bytes);
+}
+
+/// Counts the `Put` operations of `batch` whose value the cache already knows to be in the
+/// underlying store, and which could therefore be elided.
+///
+/// A `Put` only counts when nothing earlier in the same batch shadows its key: an earlier
+/// `Delete`, an earlier `DeletePrefix` covering it, or an earlier `Put` to the same key (whose
+/// value the cache does not yet reflect). Ambiguous cases are left uncounted, so the result is
+/// a lower bound on what a write-eliding implementation could skip.
+#[cfg(with_metrics)]
+fn count_redundant_puts(cache: &mut LruPrefixCache, batch: &Batch) -> RedundantPutStats {
+    let mut put_count = 0u64;
+    let mut put_bytes = 0u64;
+    let mut redundant_count = 0u64;
+    let mut redundant_bytes = 0u64;
+    let mut deleted_prefixes: Vec<&[u8]> = Vec::new();
+    let mut shadowed_keys: std::collections::BTreeSet<&[u8]> = std::collections::BTreeSet::new();
+    for operation in &batch.operations {
+        match operation {
+            WriteOperation::Put { key, value } => {
+                put_count += 1;
+                put_bytes += value.len() as u64;
+                let shadowed = shadowed_keys.contains(key.as_slice())
+                    || deleted_prefixes
+                        .iter()
+                        .any(|prefix| key.starts_with(prefix));
+                if !shadowed && cache.value_matches(key, value) {
+                    redundant_count += 1;
+                    redundant_bytes += value.len() as u64;
+                }
+                shadowed_keys.insert(key.as_slice());
+            }
+            WriteOperation::Delete { key } => {
+                shadowed_keys.insert(key.as_slice());
+            }
+            WriteOperation::DeletePrefix { key_prefix } => {
+                deleted_prefixes.push(key_prefix.as_slice());
+            }
+        }
+    }
+    RedundantPutStats {
+        put_count,
+        put_bytes,
+        redundant_count,
+        redundant_bytes,
+    }
+}
 
 /// A key-value database with added LRU caching.
 #[derive(Clone)]
@@ -349,6 +460,10 @@ where
     const MAX_VALUE_SIZE: usize = K::MAX_VALUE_SIZE;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), Self::Error> {
+        #[cfg(with_metrics)]
+        if let Some(cache) = &self.cache {
+            observe_redundant_puts(&mut cache.lock().unwrap(), &batch);
+        }
         self.store.write_batch(batch.clone()).await?;
         if let Some(cache) = &self.cache {
             let mut cache = cache.lock().unwrap();
@@ -500,5 +615,79 @@ where
 impl<D: crate::backends::DatabaseBackup> crate::backends::DatabaseBackup for LruCachingDatabase<D> {
     fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()> {
         self.database.backup_to(dir)
+    }
+}
+
+#[cfg(all(test, with_metrics))]
+mod tests {
+    use super::{count_redundant_puts, RedundantPutStats, DEFAULT_STORAGE_CACHE_CONFIG};
+    use crate::{batch::Batch, lru_prefix_cache::LruPrefixCache};
+
+    fn cache_holding(key: &[u8], value: &[u8]) -> LruPrefixCache {
+        let mut cache = LruPrefixCache::new(DEFAULT_STORAGE_CACHE_CONFIG, true);
+        cache.put_key_value(key, value);
+        cache
+    }
+
+    #[test]
+    fn identical_put_is_counted_as_redundant() {
+        let mut cache = cache_holding(&[1, 2], &[7, 7, 7]);
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(vec![1, 2], vec![7, 7, 7]);
+        assert_eq!(
+            count_redundant_puts(&mut cache, &batch),
+            RedundantPutStats {
+                put_count: 1,
+                put_bytes: 3,
+                redundant_count: 1,
+                redundant_bytes: 3,
+            }
+        );
+    }
+
+    #[test]
+    fn differing_put_is_not_counted_as_redundant() {
+        let mut cache = cache_holding(&[1, 2], &[7, 7, 7]);
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(vec![1, 2], vec![7, 7, 8]);
+        let stats = count_redundant_puts(&mut cache, &batch);
+        assert_eq!(stats.put_count, 1);
+        assert_eq!(stats.redundant_count, 0);
+        assert_eq!(stats.redundant_bytes, 0);
+    }
+
+    #[test]
+    fn uncached_put_is_not_counted_as_redundant() {
+        let mut cache = LruPrefixCache::new(DEFAULT_STORAGE_CACHE_CONFIG, true);
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(vec![1, 2], vec![7, 7, 7]);
+        assert_eq!(count_redundant_puts(&mut cache, &batch).redundant_count, 0);
+    }
+
+    #[test]
+    fn put_shadowed_by_earlier_delete_prefix_is_not_counted() {
+        let mut cache = cache_holding(&[1, 2], &[7, 7, 7]);
+        let mut batch = Batch::new();
+        batch.delete_key_prefix(vec![1]);
+        batch.put_key_value_bytes(vec![1, 2], vec![7, 7, 7]);
+        assert_eq!(count_redundant_puts(&mut cache, &batch).redundant_count, 0);
+    }
+
+    #[test]
+    fn put_shadowed_by_earlier_delete_is_not_counted() {
+        let mut cache = cache_holding(&[1, 2], &[7, 7, 7]);
+        let mut batch = Batch::new();
+        batch.delete_key(vec![1, 2]);
+        batch.put_key_value_bytes(vec![1, 2], vec![7, 7, 7]);
+        assert_eq!(count_redundant_puts(&mut cache, &batch).redundant_count, 0);
+    }
+
+    #[test]
+    fn delete_prefix_after_the_put_does_not_shadow_it() {
+        let mut cache = cache_holding(&[1, 2], &[7, 7, 7]);
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(vec![1, 2], vec![7, 7, 7]);
+        batch.delete_key_prefix(vec![9]);
+        assert_eq!(count_redundant_puts(&mut cache, &batch).redundant_count, 1);
     }
 }

@@ -855,6 +855,28 @@ impl LruPrefixCache {
         }
     }
 
+    /// Returns whether the cache knows that `key` already holds exactly `value` in the
+    /// underlying store. A `false` result means either a mismatch or no knowledge, so the
+    /// caller must treat it as "cannot tell" rather than "differs".
+    ///
+    /// The `value_map` hit is handled without cloning the cached value; the prefix-entry
+    /// path defers to [`Self::query_read_value`].
+    #[cfg(with_metrics)]
+    pub(crate) fn value_matches(&mut self, key: &[u8], value: &[u8]) -> bool {
+        if let Some(entry) = self.value_map.get(key) {
+            if let ValueEntry::Value(cached) = entry {
+                let matches = cached.as_slice() == value;
+                let cache_key = CacheKey::Value(key.to_vec());
+                self.move_cache_key_on_top(cache_key);
+                return matches;
+            }
+            if matches!(entry, ValueEntry::DoesNotExist) {
+                return false;
+            }
+        }
+        matches!(self.query_read_value(key), Some(Some(cached)) if cached == value)
+    }
+
     /// Returns `Some(true)` or `Some(false)` if we know that the entry does or does not
     /// exist in the database. Returns `None` if that information is not in the cache.
     pub(crate) fn query_contains_key(&mut self, key: &[u8]) -> Option<bool> {
