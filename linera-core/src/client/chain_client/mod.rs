@@ -2077,17 +2077,19 @@ impl<Env: Environment> ChainClient<Env> {
                 return Err(err);
             };
             if current == snapshot {
-                // The lazy per-validator pull on rejection (`Updater::send_block_proposal`) can be
-                // raced out: `communicate_with_quorum` breaks as soon as a quorum is impossible and
-                // drops the still-in-flight `synchronize_chain_state_from` calls, so a locking block
-                // held only by the slower-to-respond validators is never absorbed. Fall back once to
-                // an explicit quorum sync — guaranteed to reach a lock-holder — and retry if it
-                // absorbed anything; otherwise the rejection was genuine, so propagate it.
+                // The post-quorum pull on rejection (`Client::process_lag_reports`) only covers
+                // validators whose rejection was actually received: `communicate_with_quorum`
+                // breaks as soon as a quorum is impossible and drops still-in-flight requests, so
+                // a locking block held only by the slower-to-respond validators is never even
+                // reported. Fall back once to an explicit quorum sync — guaranteed to reach a
+                // lock-holder — and retry if it absorbed anything; otherwise the rejection was
+                // genuine, so propagate it.
                 //
-                // TODO(#6453): this fallback path has no deterministic regression test yet — forcing
-                // the lazy pull to miss needs a clock-driven per-validator response delay in the test
-                // harness (building on #6448); until then it is only covered indirectly by the (now
-                // non-flaky) `test_lazy_pull_absorbs_locking_block_on_proposal_rejection`.
+                // TODO(#6453): this fallback path has no deterministic regression test yet —
+                // forcing a lock-holder's response to be dropped needs a clock-driven
+                // per-validator response delay in the test harness (building on #6448); until
+                // then it is only covered indirectly by the (now non-flaky)
+                // `test_lazy_pull_absorbs_locking_block_on_proposal_rejection`.
                 if did_fallback_sync {
                     return Err(err);
                 }
