@@ -796,19 +796,69 @@ where
         }
     }
 
-    /// Pushes a block the caller already holds to the validator, preceded by whichever earlier
-    /// blocks of the same chain it is still missing, and returns its next block height afterwards.
+    /// Sends the validator the blocks of `chain_id` it is missing below `target_next_height`,
+    /// at most `max_blocks` of them, and returns the height it reports afterwards.
+    ///
+    /// Bounded on purpose. A validator that has just joined the committee knows nothing of a chain
+    /// and reports height 0, so an unbounded catch-up on a chain with a long history would occupy
+    /// the caller for as long as it takes to replay all of it — during which every other
+    /// destination, and every later block of this chain, waits. Sending a bounded chunk lets the
+    /// caller come back to it, so a far-behind validator converges over several rounds instead of
+    /// blocking everything once.
+    ///
+    /// `destination_next_height` is what we believe the validator holds. `None`, or a value that
+    /// disagrees with reality, costs one [`ChainInfoQuery`] to establish the truth — which is also
+    /// what discovers that a new validator is at 0.
+    pub async fn send_missing_blocks(
+        &mut self,
+        chain_id: ChainId,
+        target_next_height: BlockHeight,
+        destination_next_height: Option<BlockHeight>,
+        max_blocks: u64,
+    ) -> Result<BlockHeight, chain_client::Error> {
+        let delivery = CrossChainMessageDelivery::NonBlocking;
+        let mut next_height = match destination_next_height {
+            Some(height) => height,
+            None => {
+                let query = ChainInfoQuery::new(chain_id);
+                self.remote_node
+                    .handle_chain_info_query(query)
+                    .await?
+                    .next_block_height
+            }
+        };
+
+        let last = target_next_height
+            .0
+            .min(next_height.0.saturating_add(max_blocks));
+        let heights = (next_height.0..last).map(BlockHeight).collect::<Vec<_>>();
+        let batch_size = self.certificate_upload_batch_size as usize;
+        for chunk in heights.chunks(batch_size) {
+            let certificates = self
+                .read_certificates_for_heights(chain_id, chunk.to_vec())
+                .await?;
+            for certificate in certificates {
+                let info = self
+                    .send_confirmed_certificate(&certificate, &[], delivery)
+                    .await?;
+                next_height = info.next_block_height;
+            }
+        }
+        Ok(next_height)
+    }
+
+    /// Pushes a block the caller already holds to the validator, first closing up to `max_catch_up`
+    /// of any gap below it, and returns the height the validator reports afterwards.
     ///
     /// `certificate` and `blobs` are a block the caller holds in memory — the block a chain worker
-    /// has just executed — so the common case costs a single request and no read from storage.
+    /// has just executed — so when the validator is already contiguous this costs a single request
+    /// and no read from storage.
     ///
     /// `destination_next_height` is the height we believe the validator to be at. When it is
     /// exactly this block's height the block is contiguous there and is sent with no preceding
-    /// query. Otherwise — a gap, a first send, or a send that previously failed — the validator is
-    /// queried first and the missing earlier blocks are read from storage and sent before it.
-    /// Guessing "contiguous" wrongly is what must be avoided: a block landing above a gap is
-    /// silently preprocessed and never advances the tip, whereas re-sending a block the validator
-    /// already has costs it an integer comparison.
+    /// query. Otherwise the validator is queried and the gap is closed, up to `max_catch_up`
+    /// blocks; the held block is sent only once the gap is gone, since a block landing above a gap
+    /// is silently preprocessed and never advances the tip.
     ///
     /// The returned height is the validator's own, rather than an assumed `height + 1`, so a
     /// validator that could not close its gap reports the truth and is queried again next time.
@@ -817,31 +867,26 @@ where
         certificate: &CacheArc<GenericCertificate<ConfirmedBlock>>,
         blobs: &[CacheArc<Blob>],
         destination_next_height: Option<BlockHeight>,
+        max_catch_up: u64,
     ) -> Result<BlockHeight, chain_client::Error> {
         let block = certificate.block();
         let (chain_id, height) = (block.header.chain_id, block.header.height);
-        let delivery = CrossChainMessageDelivery::NonBlocking;
 
-        if destination_next_height != Some(height) {
-            let query = ChainInfoQuery::new(chain_id);
-            let info = self.remote_node.handle_chain_info_query(query).await?;
-            let heights = (info.next_block_height.0..height.0)
-                .map(BlockHeight)
-                .collect::<Vec<_>>();
-            let batch_size = self.certificate_upload_batch_size as usize;
-            for chunk in heights.chunks(batch_size) {
-                let certificates = self
-                    .read_certificates_for_heights(chain_id, chunk.to_vec())
-                    .await?;
-                for certificate in certificates {
-                    self.send_confirmed_certificate(&certificate, &[], delivery)
-                        .await?;
-                }
-            }
+        let next_height = if destination_next_height == Some(height) {
+            height
+        } else {
+            self.send_missing_blocks(chain_id, height, destination_next_height, max_catch_up)
+                .await?
+        };
+
+        // Still below this block: the gap was larger than one chunk, so leave the rest for the
+        // next round rather than sending a block that would only be preprocessed.
+        if next_height < height {
+            return Ok(next_height);
         }
 
         let info = self
-            .send_confirmed_certificate(certificate, blobs, delivery)
+            .send_confirmed_certificate(certificate, blobs, CrossChainMessageDelivery::NonBlocking)
             .await?;
         Ok(info.next_block_height)
     }

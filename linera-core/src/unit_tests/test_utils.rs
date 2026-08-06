@@ -969,7 +969,13 @@ where
                     crate::spawn_chain_exporter(
                         setup,
                         node_provider.clone(),
-                        crate::BlockExportConfig::default(),
+                        // Production backoff is measured in seconds, which would make every
+                        // test that exercises a failing destination wait it out.
+                        crate::BlockExportConfig {
+                            retry_delay: Duration::from_millis(20),
+                            max_retry_delay: Duration::from_millis(200),
+                            ..crate::BlockExportConfig::default()
+                        },
                         Some(validator_public_key),
                     )
                 }));

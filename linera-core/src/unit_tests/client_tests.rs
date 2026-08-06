@@ -4594,3 +4594,120 @@ where
     );
     Ok(())
 }
+
+/// A validator that missed blocks is caught up by export alone, while the chain is idle.
+///
+/// This isolates the mechanism deliberately. One validator is offline while the chain produces
+/// blocks, then comes back — and then *nothing else happens*: no further blocks, and the client is
+/// never asked to do anything, so it has no reason to talk to that validator. The only thing that
+/// can close the gap is the export tasks noticing a lagging destination with an empty queue. That
+/// is the same path a validator joining a long-lived chain takes, where it reports height 0 and
+/// has to be replayed the whole history.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_export_catches_a_lagging_validator_up_while_idle<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new_with_block_export(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = sender.chain_id();
+
+    // Validator 3 misses everything below. The other three still form a quorum, so the chain
+    // advances without it.
+    builder.set_fault_type([3], FaultType::Offline);
+    for _ in 0..5 {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+    let tip = sender.chain_info().await?.next_block_height;
+    assert!(tip >= BlockHeight(5));
+
+    // Bring it back and then do nothing at all: no new blocks, no client activity. Anything that
+    // happens from here is export catching up on its own. (Its height can only be read once it is
+    // reachable again — an offline validator answers no queries.)
+    builder.set_fault_type([3], FaultType::Honest);
+    assert!(
+        builder.next_block_height(3, chain_id).await < tip,
+        "the validator that was offline should start out behind",
+    );
+    for _ in 0..60 {
+        if builder.next_block_height(3, chain_id).await == tip {
+            return Ok(());
+        }
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(100)).await;
+    }
+    panic!(
+        "export did not catch the lagging validator up to {tip} while idle; it is at {}",
+        builder.next_block_height(3, chain_id).await,
+    );
+}
+
+/// A destination that is unreachable must not stall export to the rest of the committee.
+///
+/// The failing validator is the one this asserts *around*: the others still receive every block,
+/// and the exporter records progress only for them, so one dead peer degrades to a gap in
+/// `exported_heights` rather than to a stalled chain.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_export_survives_an_unreachable_destination<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new_with_block_export(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = sender.chain_id();
+
+    // Take one validator away. Its own exporter stops too, which is why the assertions below are
+    // all made from validator 0's point of view.
+    builder.set_fault_type([3], FaultType::Offline);
+
+    for _ in 0..6 {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+
+    // Validator 0 has three peers and one of them is down, so exactly two should ever be
+    // recorded: export keeps flowing to the reachable ones, and the dead one is simply absent
+    // rather than taking the chain's export down with it. Identifying *which* peer is down is
+    // deliberately avoided — `set_fault_type` indexes creation order while the committee map is
+    // ordered by public key, and the count is the property that matters anyway.
+    let mut exported = BTreeMap::new();
+    for _ in 0..40 {
+        exported = builder.exported_heights(0, chain_id).await;
+        if exported.len() >= 2 {
+            break;
+        }
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(100)).await;
+    }
+    assert_eq!(
+        exported.len(),
+        2,
+        "expected the two reachable peers to be exported to, and only those; got {exported:?}",
+    );
+    assert!(
+        exported.values().all(|height| *height >= BlockHeight(1)),
+        "reachable peers should have acknowledged real progress; got {exported:?}",
+    );
+    Ok(())
+}

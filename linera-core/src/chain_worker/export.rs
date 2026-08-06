@@ -29,7 +29,7 @@ use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{Blob, BlockHeight},
     identifiers::ChainId,
-    time::{Duration, Instant},
+    time::{timer::timeout, Duration, Instant},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_execution::committee::Committee;
@@ -118,6 +118,20 @@ pub struct BlockExportConfig {
     pub retry_delay: Duration,
     /// The longest a failing destination is skipped for.
     pub max_retry_delay: Duration,
+    /// How long the task waits for a new block before spending a round on catching up whichever
+    /// destinations are behind.
+    ///
+    /// Live blocks always win: catching up only happens when nothing has arrived for this long,
+    /// and only one round per interval, so it can never crowd out export or spin.
+    pub idle_catch_up_interval: Duration,
+    /// How many missing blocks are pushed to one destination in a single round.
+    ///
+    /// A validator that has just joined the committee knows nothing of a chain and reports height
+    /// 0, so on a chain with a long history the catch-up is arbitrarily large. Doing it in bounded
+    /// rounds keeps one far-behind destination from holding up every other destination and every
+    /// later block of the chain; the remainder is picked up on subsequent rounds, including while
+    /// the chain is idle.
+    pub max_catch_up_blocks: u64,
 }
 
 impl Default for BlockExportConfig {
@@ -126,6 +140,8 @@ impl Default for BlockExportConfig {
             certificate_upload_batch_size: crate::client::DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
             retry_delay: Duration::from_secs(1),
             max_retry_delay: Duration::from_secs(60),
+            idle_catch_up_interval: Duration::from_secs(1),
+            max_catch_up_blocks: 1_000,
         }
     }
 }
@@ -250,6 +266,7 @@ where
         config,
         own_public_key,
         destinations: HashMap::new(),
+        chain_next_height: BlockHeight::ZERO,
         progress: progress.clone(),
     };
     linera_base::Task::spawn(task.run(receiver)).forget();
@@ -294,6 +311,10 @@ where
     config: BlockExportConfig,
     own_public_key: Option<ValidatorPublicKey>,
     destinations: HashMap<ValidatorPublicKey, Destination<S, P::Node>>,
+    /// The height after the last block handed to this task: how far a destination must reach to
+    /// be considered caught up. Used to keep catching a lagging destination up while the chain is
+    /// idle, so that convergence does not depend on the chain producing more blocks.
+    chain_next_height: BlockHeight,
     /// The highest height each validator has acknowledged. Seeded from what the worker had
     /// persisted, so a destination we meet for the first time — after a restart, or after the
     /// chain worker was dropped and reloaded — starts from there instead of being queried.
@@ -309,18 +330,92 @@ where
     /// Exports each block in turn, and returns when the chain worker has dropped its end.
     #[instrument(level = "debug", skip_all, fields(chain_id = %self.chain_id))]
     async fn run(mut self, mut receiver: mpsc::UnboundedReceiver<ExportedBlock>) {
-        while let Some(block) = receiver.recv().await {
-            #[cfg(with_metrics)]
-            metrics::QUEUE_SIZE.dec();
-            #[cfg(with_metrics)]
-            let _latency = metrics::EXPORT_LATENCY.measure_latency();
-            self.export(block).await;
+        loop {
+            match timeout(self.config.idle_catch_up_interval, receiver.recv()).await {
+                Ok(Some(block)) => {
+                    #[cfg(with_metrics)]
+                    metrics::QUEUE_SIZE.dec();
+                    #[cfg(with_metrics)]
+                    let _latency = metrics::EXPORT_LATENCY.measure_latency();
+                    self.export(block).await;
+                }
+                // The chain worker dropped its end.
+                Ok(None) => break,
+                // Nothing arrived for a while. If a destination is still behind — a validator
+                // that joined the committee partway through a long chain, say — close some more
+                // of its gap rather than waiting for the chain to produce another block, which
+                // it may never do. At most one round per interval, so a destination that cannot
+                // be caught up costs a bounded trickle rather than a spin.
+                Err(_) => self.catch_up_round().await,
+            }
         }
         debug!("Chain worker dropped; stopping block export");
     }
 
+    /// Remakes the node of any destination that has failed repeatedly.
+    ///
+    /// The transport may be relaying through one of several proxies and a destination keeps
+    /// whichever it was handed, so one that keeps failing may simply be pointed at a dead proxy.
+    /// Remaking it draws a fresh one. The failure count and backoff are deliberately kept, so a
+    /// validator that is itself down still backs off rather than being retried once per proxy.
+    ///
+    /// Runs before every catch-up round as well as on every new block: a destination that fell
+    /// behind while the chain was idle would otherwise never get a second chance at a connection.
+    fn refresh_stuck_destinations(&mut self) {
+        let stuck = self
+            .destinations
+            .iter()
+            .filter(|(_, destination)| destination.failures >= REBUILD_AFTER_FAILURES)
+            .map(|(validator, destination)| (*validator, destination.address.clone()))
+            .collect::<Vec<_>>();
+        if stuck.is_empty() {
+            return;
+        }
+        let nodes = match self.node_provider.make_nodes_from_list(stuck) {
+            Ok(nodes) => nodes.collect::<Vec<_>>(),
+            Err(error) => {
+                warn!(%error, "Cannot rebuild connections to lagging validators");
+                return;
+            }
+        };
+        for (validator, node) in nodes {
+            if let Some(destination) = self.destinations.get_mut(&validator) {
+                destination.updater.remote_node.node = node;
+            }
+        }
+    }
+
+    /// Pushes one bounded chunk of missing blocks to every destination that is behind.
+    ///
+    /// Runs only when nothing is queued, so live blocks always take priority over backfill.
+    async fn catch_up_round(&mut self) {
+        self.refresh_stuck_destinations();
+        let now = Instant::now();
+        let (config, chain_id, target) = (&self.config, self.chain_id, self.chain_next_height);
+        let results = future::join_all(
+            self.destinations
+                .iter_mut()
+                .filter(|(_, destination)| destination.is_behind(target) && destination.is_due(now))
+                .map(|(validator, destination)| async move {
+                    (
+                        *validator,
+                        destination.catch_up(chain_id, target, now, config).await,
+                    )
+                }),
+        )
+        .await;
+        self.record_progress(results);
+    }
+
     /// Pushes one block to every destination, concurrently, and records how far each got.
     async fn export(&mut self, block: ExportedBlock) {
+        self.chain_next_height = block
+            .certificate
+            .block()
+            .header
+            .height
+            .try_add_one()
+            .unwrap_or(BlockHeight::MAX);
         self.sync_destinations(&block);
 
         // Push to every destination concurrently, but only move on to the next block once they
@@ -335,9 +430,15 @@ where
         ))
         .await;
 
-        // `next_height` is what the validator itself reported, so the recorded height is a fact
-        // rather than an assumption: a validator that could not close its gap reports the truth
-        // and keeps a low cursor here, and is queried again on the next block.
+        self.record_progress(results);
+    }
+
+    /// Records how far each destination acknowledged, for the worker to persist on its next save.
+    ///
+    /// The heights are what the validators themselves reported, so they are facts rather than
+    /// assumptions: one that could not close its gap keeps a low cursor here and is picked up
+    /// again next round.
+    fn record_progress(&self, results: Vec<(ValidatorPublicKey, Option<BlockHeight>)>) {
         let mut progress = self
             .progress
             .lock()
@@ -460,11 +561,85 @@ where
             .with_label_values(&[&self.address])
             .observe(self.lag(block) as f64);
 
-        match self
+        let height = block.certificate.block().header.height;
+        let result = self
             .updater
-            .send_block(&block.certificate, &block.blobs, self.next_height)
-            .await
-        {
+            .send_block(
+                &block.certificate,
+                &block.blobs,
+                self.next_height,
+                config.max_catch_up_blocks,
+            )
+            .await;
+        self.record_outcome(result, height, now, config)
+    }
+
+    /// Whether this destination is, as far as we know, below `target`.
+    ///
+    /// An unknown height counts as behind: it is what a failed send leaves behind, and assuming
+    /// such a destination is up to date is how one silently stops being exported to.
+    fn is_behind(&self, target: BlockHeight) -> bool {
+        self.next_height.is_none_or(|next| next < target)
+    }
+
+    /// Whether this destination's backoff, if any, has expired.
+    fn is_due(&self, now: Instant) -> bool {
+        self.retry_at.is_none_or(|retry_at| retry_at <= now)
+    }
+
+    /// Pushes one bounded chunk of the blocks this validator is missing below `target`.
+    ///
+    /// Used while nothing is queued, so that a validator which joined partway through a long chain
+    /// converges without waiting for the chain to produce more blocks.
+    async fn catch_up(
+        &mut self,
+        chain_id: ChainId,
+        target: BlockHeight,
+        now: Instant,
+        config: &BlockExportConfig,
+    ) -> Option<BlockHeight> {
+        #[cfg(with_metrics)]
+        let send_latency = metrics::SEND_LATENCY.with_label_values(&[&self.address]);
+        #[cfg(with_metrics)]
+        let _latency = send_latency.measure_latency();
+
+        let previous = self.next_height;
+        let result = self
+            .updater
+            .send_missing_blocks(
+                chain_id,
+                target,
+                self.next_height,
+                config.max_catch_up_blocks,
+            )
+            .await;
+        let outcome = self.record_outcome(result, target, now, config);
+
+        // A round can succeed and still advance nothing: storage need not hold the missing
+        // heights, since a chain we merely *receive* from is stored only at its message-bearing
+        // blocks. Without backing off here the caller would call straight back in, and a
+        // destination we can never finish catching up would spin the task at full tilt.
+        let advanced = match (previous, self.next_height) {
+            (Some(before), Some(after)) => after > before,
+            // We at least learned where it is, which is progress the first time round.
+            (None, Some(_)) => true,
+            _ => false,
+        };
+        if !advanced {
+            self.back_off(now, config);
+        }
+        outcome
+    }
+
+    /// Folds the outcome of a push into this destination's cursor and backoff.
+    fn record_outcome(
+        &mut self,
+        result: Result<BlockHeight, crate::client::chain_client::Error>,
+        height: BlockHeight,
+        now: Instant,
+        config: &BlockExportConfig,
+    ) -> Option<BlockHeight> {
+        match result {
             Ok(next_height) => {
                 self.next_height = Some(next_height);
                 self.retry_at = None;
@@ -472,23 +647,27 @@ where
                 Some(next_height)
             }
             Err(error) => {
-                let backoff = config
-                    .retry_delay
-                    .saturating_mul(1u32.checked_shl(self.failures).unwrap_or(u32::MAX))
-                    .min(config.max_retry_delay);
-                let height = block.certificate.block().header.height;
                 warn!(
-                    validator = %self.address, %height, %error, ?backoff,
+                    validator = %self.address, %height, %error,
                     "Failed to export block; will query the validator before the next push",
                 );
                 // Forget the cursor: the next push must ask what this validator actually has
                 // rather than assume the block we just failed to send arrived.
                 self.next_height = None;
-                self.retry_at = Some(now + backoff);
-                self.failures = self.failures.saturating_add(1);
+                self.back_off(now, config);
                 None
             }
         }
+    }
+
+    /// Holds this destination off for a growing interval, capped by the configured maximum.
+    fn back_off(&mut self, now: Instant, config: &BlockExportConfig) {
+        let backoff = config
+            .retry_delay
+            .saturating_mul(1u32.checked_shl(self.failures).unwrap_or(u32::MAX))
+            .min(config.max_retry_delay);
+        self.retry_at = Some(now + backoff);
+        self.failures = self.failures.saturating_add(1);
     }
 
     /// How many blocks this validator is believed to be missing before the block being pushed.
