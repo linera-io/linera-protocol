@@ -80,6 +80,7 @@ jobs:
         with:
           context: .
           file: ./docker/Dockerfile
+          target: tests
           tags: linera-test
           load: true
           build-args: |
