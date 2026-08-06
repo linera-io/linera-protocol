@@ -17,7 +17,14 @@
 //! per destination, and a second layer of retries underneath it would multiply the delays it is
 //! trying to control.
 
-use std::{collections::BTreeMap, str::FromStr as _};
+use std::{
+    collections::BTreeMap,
+    str::FromStr as _,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+};
 
 use linera_base::{
     crypto::CryptoHash,
@@ -288,22 +295,43 @@ impl ValidatorNode for RelayClient {
     }
 }
 
-/// A node provider that reaches every validator through this validator's own proxy.
+/// A node provider that reaches every validator through this validator's own proxies.
 #[derive(Clone)]
 pub struct RelayNodeProvider {
-    /// The internal address of this validator's proxy — the same one shards already send
-    /// notifications to.
-    relay_address: String,
+    /// The internal addresses of this validator's proxies — the same ones the shards already
+    /// send notifications to.
+    relay_addresses: Vec<String>,
+    /// Round-robin cursor over `relay_addresses`.
+    ///
+    /// Each request goes through exactly one proxy — relaying a block through more than one
+    /// would only duplicate it — but successive nodes are handed different proxies, so export
+    /// egress is spread rather than landing entirely on one. Shared across clones so that every
+    /// chain worker in the process draws from the same rotation.
+    next: Arc<AtomicUsize>,
     pool: GrpcConnectionPool,
 }
 
 impl RelayNodeProvider {
-    /// Creates a provider that relays through the proxy listening at `relay_address`.
-    pub fn new(relay_address: String, options: NodeOptions) -> Self {
+    /// Creates a provider that relays through the given proxies, in rotation.
+    ///
+    /// Panics if `relay_addresses` is empty: with no proxy to relay through there is no way to
+    /// reach another validator, and a shard must not open the connection itself.
+    pub fn new(relay_addresses: Vec<String>, options: NodeOptions) -> Self {
+        assert!(
+            !relay_addresses.is_empty(),
+            "relaying to other validators needs at least one proxy",
+        );
         Self {
-            relay_address,
+            relay_addresses,
+            next: Arc::new(AtomicUsize::new(0)),
             pool: GrpcConnectionPool::new(transport::Options::from(&options)),
         }
+    }
+
+    /// Returns the next proxy in the rotation.
+    fn next_relay(&self) -> &str {
+        let index = self.next.fetch_add(1, Ordering::Relaxed) % self.relay_addresses.len();
+        &self.relay_addresses[index]
     }
 }
 
@@ -318,12 +346,13 @@ impl ValidatorNodeProvider for RelayNodeProvider {
                 address: address.to_string(),
             }
         })?;
-        let channel =
-            self.pool
-                .channel(self.relay_address.clone())
-                .map_err(|error: GrpcError| NodeError::GrpcError {
-                    error: format!("error creating channel to the relay: {error}"),
-                })?;
+        let relay = self.next_relay();
+        let channel = self
+            .pool
+            .channel(relay.to_owned())
+            .map_err(|error: GrpcError| NodeError::GrpcError {
+                error: format!("error creating channel to the relay {relay}: {error}"),
+            })?;
         Ok(RelayClient {
             destination: address.to_owned(),
             address: network.http_address(),

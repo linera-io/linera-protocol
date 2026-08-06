@@ -257,6 +257,15 @@ where
     ChainExporter { blocks, progress }
 }
 
+/// Consecutive failed pushes after which a destination's connection is rebuilt.
+///
+/// The transport may be relaying through one of several proxies, and a destination keeps whichever
+/// it was given. If that proxy dies, this destination would otherwise keep failing against it
+/// forever while the others stay healthy, so after a few failures the node is remade — which draws
+/// a fresh proxy from the rotation. The failure count and backoff are deliberately *not* reset, so
+/// a destination that is genuinely down still backs off rather than being hammered once per proxy.
+const REBUILD_AFTER_FAILURES: u32 = 3;
+
 /// One destination validator, and what we believe it holds of this chain.
 struct Destination<S: Storage, N> {
     updater: RemoteNodeUpdater<S, N>,
@@ -351,11 +360,20 @@ where
                 .is_some_and(|state| state.network_address == destination.address)
         });
 
+        // A destination that has failed repeatedly may be stuck behind a dead proxy, so rebuild
+        // its node alongside any validator we do not have yet.
+        let stuck = self
+            .destinations
+            .iter()
+            .filter(|(_, destination)| destination.failures >= REBUILD_AFTER_FAILURES)
+            .map(|(validator, _)| *validator)
+            .collect::<Vec<_>>();
+
         let missing = committee
             .validator_addresses()
             .filter(|(validator, _)| {
                 Some(*validator) != self.own_public_key
-                    && !self.destinations.contains_key(validator)
+                    && (!self.destinations.contains_key(validator) || stuck.contains(validator))
             })
             .map(|(validator, address)| (validator, address.to_owned()))
             .collect::<Vec<_>>();
@@ -395,6 +413,9 @@ where
                 admin_chain_id: block.admin_chain_id,
                 certificate_upload_batch_size: self.config.certificate_upload_batch_size,
             };
+            // Rebuilding a stuck destination keeps its failure count and retry time: only the
+            // connection is replaced, so a validator that is itself down keeps backing off.
+            let previous = self.destinations.remove(&validator);
             self.destinations.insert(
                 validator,
                 Destination {
@@ -405,8 +426,8 @@ where
                     next_height: acknowledged
                         .get(&validator)
                         .map(|height| BlockHeight(height.0.saturating_add(1))),
-                    retry_at: None,
-                    failures: 0,
+                    retry_at: previous.as_ref().and_then(|d| d.retry_at),
+                    failures: previous.map_or(0, |d| d.failures),
                 },
             );
         }

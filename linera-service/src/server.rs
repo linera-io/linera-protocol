@@ -134,16 +134,24 @@ impl ServerContext {
         S: Storage + Clone + Send + Sync + 'static,
     {
         let internal_network = &self.server_config.internal_network;
-        let relay_address = internal_network
+        // All of this validator's proxies, rotated over by the provider: each export leaves
+        // through exactly one of them, but successive destinations draw different ones so the
+        // egress is spread rather than landing entirely on the first.
+        let relay_addresses = internal_network
             .proxies
-            .first()
-            .expect("a validator always has at least one proxy")
-            .internal_address(&internal_network.protocol);
+            .iter()
+            .map(|proxy| proxy.internal_address(&internal_network.protocol))
+            .collect::<Vec<_>>();
+        assert!(
+            !relay_addresses.is_empty(),
+            "exporting blocks to the committee needs at least one proxy to relay through, but \
+             this validator's internal network configures none",
+        );
         // `NodeOptions::default()` leaves every timeout at zero, which the transport turns into
         // a deadline that has already passed; these are the values the block exporter used for
         // the same validator-to-validator traffic.
         let node_provider = Arc::new(grpc::RelayNodeProvider::new(
-            relay_address,
+            relay_addresses,
             linera_rpc::NodeOptions {
                 send_timeout: linera_base::time::Duration::from_secs(4),
                 recv_timeout: linera_base::time::Duration::from_secs(4),
