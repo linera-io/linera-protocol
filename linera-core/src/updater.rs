@@ -575,7 +575,11 @@ where
         clock_skew_sender: mpsc::UnboundedSender<ClockSkewReport>,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let chain_id = proposal.content.block.chain_id;
+        // `sent_cross_chain_updates` tracks per-origin progress for the
+        // `MissingCrossChainUpdate` path; `synced_round_and_height` is the one-shot guard
+        // for the round/height mismatch path.
         let mut sent_cross_chain_updates = BTreeMap::new();
+        let mut synced_round_and_height = false;
         let mut publisher_chain_ids_sent = BTreeSet::new();
         let storage = self.local_node.storage_client();
         loop {
@@ -586,39 +590,26 @@ where
                 .await
             {
                 Ok(info) => return Ok(info),
-                Err(NodeError::WrongRound(_round)) => {
-                    // The proposal is for a different round, so we need to update the validator.
-                    // TODO: this should probably be more specific as to which rounds are retried.
-                    tracing::debug!(
-                        remote_node = self.remote_node.address(),
-                        %chain_id,
-                        "wrong round; sending chain to validator",
-                    );
-                    self.send_chain_information(
-                        chain_id,
-                        proposal.content.block.height,
-                        CrossChainMessageDelivery::NonBlocking,
-                        None,
-                    )
-                    .await?;
-                }
-                Err(NodeError::UnexpectedBlockHeight {
-                    expected_block_height,
-                    found_block_height,
-                }) if expected_block_height < found_block_height
-                    && found_block_height == proposal.content.block.height =>
+                Err(err @ (NodeError::WrongRound(_) | NodeError::UnexpectedBlockHeight { .. }))
+                    if !synced_round_and_height =>
                 {
+                    // The validator disagrees with the proposal's round or height. If it is
+                    // behind, `sync_remote_if_needed` pushes the chain and we retry; if it is
+                    // ahead, the `LocalNodeLagging` signal propagates so the caller can pull
+                    // its state and rebuild the proposal. One-shot: if the validator still
+                    // disagrees after a sync, retrying would not make progress.
+                    synced_round_and_height = true;
                     tracing::debug!(
                         remote_node = self.remote_node.address(),
                         %chain_id,
-                        "wrong height; sending chain to validator",
+                        %err,
+                        "validator disagrees on round or height; synchronizing",
                     );
-                    // The proposal is for a later block height, so we need to update the validator.
-                    self.send_chain_information(
+                    self.sync_remote_if_needed(
                         chain_id,
-                        found_block_height,
-                        CrossChainMessageDelivery::NonBlocking,
-                        None,
+                        proposal.content.round,
+                        proposal.content.block.height,
+                        &err,
                     )
                     .await?;
                 }
