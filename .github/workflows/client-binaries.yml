@@ -12,24 +12,19 @@ name: Client Binaries
 #
 # Windows is deliberately absent — we do not support it.
 
+# Same triggers as the Docker Image workflow, so a commit that gets images also
+# gets binaries.
 on:
-  # Deliberately NOT `push: tags:`. Releases here are created by hand after the
-  # tag lands (v0.15.20: tag 01:38Z, release published 04:19Z, prerelease=true),
-  # so a tag-triggered upload would find no release and CREATE one, overriding
-  # the prerelease flag and title. Reacting to `published` means the release
-  # already exists and we only ever add assets to it.
-  release:
-    types: [published]
-  # Build the binaries for any ref on demand — this is how to get a build for an
-  # arbitrary commit without putting four ~1h native builds on every merge.
+  push:
+    branches: [ main, 'devnet_*', 'testnet_*' ]
   workflow_dispatch:
 
 concurrency:
-  group: "${{ github.workflow }} @ ${{ github.event.release.tag_name || github.ref }}"
+  group: "${{ github.workflow }} @ ${{ github.ref }}"
   cancel-in-progress: true
 
 permissions:
-  contents: write # required to attach assets to a release
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -70,10 +65,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6.0.2
-        with:
-          # On a release event the default ref is the default branch, not the
-          # tag — build the code that was actually released.
-          ref: ${{ github.event.release.tag_name || github.ref }}
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
@@ -120,7 +111,7 @@ jobs:
           shasum -a 256 "${NAME}.tar.gz" > "${NAME}.tar.gz.sha256"
           echo "name=${NAME}" >> "$GITHUB_OUTPUT"
 
-      # Always available per-commit via `gh run download`, independent of releases.
+      # One downloadable artifact per commit, per platform.
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.package.outputs.name }}
@@ -128,13 +119,3 @@ jobs:
             ${{ steps.package.outputs.name }}.tar.gz
             ${{ steps.package.outputs.name }}.tar.gz.sha256
           retention-days: 30
-
-      # `gh release upload` only ever adds assets. Creating the release, and
-      # choosing its title and prerelease flag, stays with whoever cuts it.
-      - name: Attach to the release
-        if: github.event_name == 'release'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.event.release.tag_name }}
-          NAME: ${{ steps.package.outputs.name }}
-        run: gh release upload "${TAG}" "${NAME}.tar.gz" "${NAME}.tar.gz.sha256" --clobber
