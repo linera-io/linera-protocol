@@ -201,17 +201,18 @@ jobs:
   # stitches them into a manifest list under the real tags, so the tags people
   # actually pull are never transiently single-platform.
   #
-  # ubuntu-24.04-arm is a STANDARD GitHub-hosted runner, and standard runners are
-  # free and unlimited on public repositories. Do NOT move this to a larger
-  # runner: those are billed even on public repos.
+  # Both legs use STANDARD GitHub-hosted runners, which are free and unlimited on
+  # public repositories. Do NOT move either to a larger runner: those are billed
+  # even on public repos. Deliberately NOT the self-hosted builder — it is busy
+  # with build-and-push, and an amd64 client build that queues behind it holds up
+  # the merge below. Without debuginfo this builds in ~22 min on a hosted runner.
   build-client-image:
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: amd64
-            # The self-hosted builder keeps warm BuildKit cache mounts.
-            runner: linera-io-self-hosted-builder
+            runner: ubuntu-latest
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
@@ -275,11 +276,11 @@ jobs:
           docker push "${IMAGE}"
 
   merge-client-image:
-    # Runs even when a leg failed so a single-platform outage degrades to a
-    # single-platform image rather than to no linera-client tag at all, which
-    # would break every consumer pinning this commit.
+    # Plain `needs`, no `if`: this must run only when BOTH legs succeeded.
+    # Publishing whatever happened to be ready is worse than publishing nothing —
+    # a missing tag fails loudly at deploy time, while a tag that silently lacks
+    # amd64 fails at runtime on every machine we actually run on.
     needs: build-client-image
-    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -303,26 +304,18 @@ jobs:
           BRANCH_TAG="${BRANCH_NAME//\//-}"
           REPO="us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client"
 
-          # Ask the registry which arches actually landed rather than trusting
-          # job results: that is the state the manifest list is built from.
           SOURCES=()
           for ARCH in amd64 arm64; do
             SRC="${REPO}:${GITHUB_SHA:0:7}-${ARCH}"
-            if docker buildx imagetools inspect "${SRC}" >/dev/null 2>&1; then
-              echo "found ${SRC}"
-              SOURCES+=("${SRC}")
-            else
-              echo "::warning::${SRC} is missing — its build leg failed"
+            # Both legs succeeded for this job to run at all, so a missing tag
+            # here means something else went wrong — never paper over it.
+            if ! docker buildx imagetools inspect "${SRC}" >/dev/null 2>&1; then
+              echo "::error::${SRC} is missing despite its build leg succeeding"
+              exit 1
             fi
+            echo "found ${SRC}"
+            SOURCES+=("${SRC}")
           done
-
-          if [ ${#SOURCES[@]} -eq 0 ]; then
-            echo "::error::no linera-client image was built for any architecture"
-            exit 1
-          fi
-          if [ ${#SOURCES[@]} -lt 2 ]; then
-            echo "::warning::publishing linera-client with only ${#SOURCES[@]} architecture(s)"
-          fi
 
           docker buildx imagetools create \
             -t "${REPO}:${BRANCH_TAG}" \
