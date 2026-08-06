@@ -1120,7 +1120,7 @@ where
         Ok(())
     }
 
-    fn cache_certificate(
+    fn intern_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,
     ) -> CacheArc<ConfirmedBlockCertificate> {
@@ -1129,11 +1129,11 @@ where
             .insert(&certificate.hash(), certificate)
     }
 
-    fn cache_blob(&self, blob: Blob) -> CacheArc<Blob> {
+    fn intern_blob(&self, blob: Blob) -> CacheArc<Blob> {
         self.caches.blob.insert(&blob.id(), blob)
     }
 
-    fn cache_confirmed_block(&self, block: ConfirmedBlock) -> CacheArc<ConfirmedBlock> {
+    fn intern_confirmed_block(&self, block: ConfirmedBlock) -> CacheArc<ConfirmedBlock> {
         self.caches.confirmed_block.insert(&block.hash(), block)
     }
 
