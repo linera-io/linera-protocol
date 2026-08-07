@@ -532,7 +532,8 @@ impl LocalNet {
         test_offset_port() + validator * self.num_shards + shard + 1
     }
 
-    fn proxy_internal_port(&self, validator: usize, proxy_id: usize) -> usize {
+    /// Returns the internal port of the given proxy, which its own shards use to reach it.
+    pub fn proxy_internal_port(&self, validator: usize, proxy_id: usize) -> usize {
         test_offset_port() + 1000 + validator * self.num_proxies + proxy_id + 1
     }
 

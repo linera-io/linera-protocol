@@ -57,7 +57,7 @@ use linera_storage::Storage;
 use serde::Deserialize;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 struct ServerContext {
     server_config: ValidatorServerConfig,
@@ -766,12 +766,27 @@ async fn run(options: ServerOptions) {
                 reset_on_corrupted_chain_state_mins,
                 recovery_whitelist: recovery_whitelist.map(HashSet::from_iter),
                 block_export_config: export_blocks_to_committee.then(|| {
+                    // A chain's export task lives inside its chain worker, so it is dropped when
+                    // the worker expires. A backoff longer than that TTL would never elapse: the
+                    // task would be gone before the destination came up for retry, and that
+                    // destination would then only be reconsidered if the chain produced another
+                    // block — exactly what the idle catch-up exists to avoid depending on.
+                    let max_retry_delay = block_export_max_retry_delay.min(chain_worker_ttl);
+                    if max_retry_delay != block_export_max_retry_delay {
+                        warn!(
+                            ?block_export_max_retry_delay,
+                            ?chain_worker_ttl,
+                            ?max_retry_delay,
+                            "capping the block-export retry ceiling at the chain worker TTL, \
+                             beyond which the export task no longer exists to retry",
+                        );
+                    }
                     let config = BlockExportConfig {
                         certificate_upload_batch_size: block_export_batch_size,
                         max_catch_up_blocks: block_export_max_catch_up_blocks,
                         idle_catch_up_interval: block_export_idle_interval,
                         retry_delay: block_export_retry_delay,
-                        max_retry_delay: block_export_max_retry_delay,
+                        max_retry_delay,
                     };
                     config.check().expect("invalid block export configuration");
                     config

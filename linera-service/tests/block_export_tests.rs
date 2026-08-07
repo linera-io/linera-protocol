@@ -22,6 +22,7 @@
 use anyhow::Result;
 use linera_base::time::Duration;
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
+use linera_rpc::grpc::api::{self, validator_relay_client::ValidatorRelayClient};
 use linera_service::{
     cli_wrappers::{
         local_net::{Database, LocalNet, LocalNetConfig},
@@ -245,4 +246,58 @@ async fn test_export_survives_a_dead_proxy(database: Database, network: Network)
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
     panic!("export did not recover after one of the proxies was killed");
+}
+
+/// The proxy refuses to relay to a host that is not in any committee.
+///
+/// Relaying exists so that shards — which hold the validator secret key — never open outbound
+/// connections. That only buys anything if the proxy will not dial wherever it is told, so this
+/// asserts the refusal directly rather than inferring it from export working.
+#[ignore]
+#[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_relay_refuses_a_non_committee_destination(
+    database: Database,
+    network: Network,
+) -> Result<()> {
+    tracing::info!("Starting test {}", test_name!());
+
+    let config = LocalNetConfig {
+        num_initial_validators: 4,
+        num_shards: 1,
+        export_blocks_to_committee: true,
+        ..LocalNetConfig::new_test(database, network)
+    };
+    let (mut net, client) = config.instantiate().await?;
+    let chain = client.default_chain().expect("client has no default chain");
+
+    // Produce a block so the proxy has certainly served some legitimate relay traffic; whatever
+    // rejection follows is therefore about the destination, not about the relay being unavailable.
+    client
+        .transfer_with_silent_logs(1.into(), chain, chain)
+        .await?;
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    // Speak to validator 0's relay port directly, as one of its own shards would, but name a host
+    // that is in no committee.
+    let relay = format!("http://127.0.0.1:{}", net.proxy_internal_port(0, 0));
+    let channel = tonic::transport::Channel::from_shared(relay)?
+        .connect()
+        .await?;
+    let mut relay_client = ValidatorRelayClient::new(channel);
+    let status = relay_client
+        .relay_chain_info_query(api::RelayChainInfoQueryRequest {
+            destination: "grpc:198.51.100.7:443".to_string(),
+            inner: Some(ChainInfoQuery::new(chain).try_into()?),
+        })
+        .await
+        .expect_err("the proxy should refuse a destination that is in no committee");
+    assert_eq!(
+        status.code(),
+        tonic::Code::PermissionDenied,
+        "expected a refusal, got: {status:?}",
+    );
+
+    net.terminate().await?;
+    Ok(())
 }

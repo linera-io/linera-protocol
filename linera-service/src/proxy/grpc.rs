@@ -5,6 +5,7 @@
 #![allow(unknown_lints)]
 
 use std::{
+    collections::HashSet,
     fmt::Debug,
     marker::PhantomData,
     net::SocketAddr,
@@ -17,7 +18,10 @@ use std::{
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt as _};
-use linera_base::{data_types::BlockHeight, identifiers::ChainId};
+use linera_base::{
+    data_types::{BlockHeight, Epoch},
+    identifiers::ChainId,
+};
 use linera_chain::types::{ConfirmedBlock, LiteCertificate as ChainLiteCertificate};
 use linera_core::{
     data_types::{CertificatesByHeightRequest, ChainInfo, ChainInfoQuery},
@@ -227,6 +231,22 @@ struct GrpcProxyInner<S> {
     tls: TlsConfig,
     storage: S,
     id: usize,
+    /// The validator addresses this proxy is willing to relay to, and the next epoch it has yet
+    /// to learn about.
+    ///
+    /// Relaying exists so that shards — which hold the validator secret key — never open outbound
+    /// connections themselves. That is only worth anything if the proxy will not dial wherever it
+    /// is told: without this, anything able to reach the internal port could use the proxy to
+    /// reach an arbitrary host. Membership of some committee is the right test, because those are
+    /// exactly the validators block export has any business talking to.
+    relay_destinations: Arc<tokio::sync::RwLock<RelayDestinations>>,
+}
+
+/// Committee members seen so far, and how far the epochs have been scanned.
+#[derive(Default)]
+struct RelayDestinations {
+    addresses: HashSet<String>,
+    next_epoch: u32,
 }
 
 impl<S> GrpcProxy<S>
@@ -253,6 +273,7 @@ where
             tls,
             storage,
             id,
+            relay_destinations: Arc::default(),
         }))
     }
 
@@ -280,22 +301,65 @@ where
             .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE)
     }
 
+    /// Whether this proxy will relay to `address`, i.e. whether it belongs to a validator in any
+    /// committee this proxy can see.
+    ///
+    /// Epochs are scanned forward from wherever the last scan stopped, so a validator admitted
+    /// after startup is picked up on the first request naming it, and the scan is not repeated for
+    /// addresses already known.
+    async fn is_relay_destination(&self, address: &str) -> bool {
+        if self
+            .0
+            .relay_destinations
+            .read()
+            .await
+            .addresses
+            .contains(address)
+        {
+            return true;
+        }
+        let mut destinations = self.0.relay_destinations.write().await;
+        // Another task may have refreshed while we waited for the lock.
+        if destinations.addresses.contains(address) {
+            return true;
+        }
+        while let Ok(Some(committee)) = self
+            .0
+            .storage
+            .get_or_load_committee(Epoch(destinations.next_epoch))
+            .await
+        {
+            for (_, validator_address) in committee.validator_addresses() {
+                destinations.addresses.insert(validator_address.to_owned());
+            }
+            destinations.next_epoch += 1;
+        }
+        destinations.addresses.contains(address)
+    }
+
     /// Returns a client for the validator a relayed request names.
     ///
     /// Relayed requests are forwarded as they arrived, without being decoded into their Rust
     /// types and re-encoded: the proxy is carrying the shard's request, not making its own.
-    fn peer(
+    async fn peer(
         &self,
         destination: &str,
         #[cfg_attr(not(with_metrics), allow(unused_variables))] method: &str,
     ) -> Result<ValidatorNodeClient<Channel>, Status> {
+        let network = ValidatorPublicNetworkConfig::from_str(destination).map_err(|_| {
+            Status::invalid_argument(format!("invalid destination validator: {destination}"))
+        })?;
+        if !self.is_relay_destination(destination).await {
+            return Err(Status::permission_denied(format!(
+                "refusing to relay to {destination}: not a member of any known committee"
+            )));
+        }
+        // Counted only once the destination is accepted, so the metric measures relayed traffic
+        // rather than rejected attempts.
         #[cfg(with_metrics)]
         metrics::RELAYED_REQUEST_COUNT
             .with_label_values(&[method])
             .inc();
-        let network = ValidatorPublicNetworkConfig::from_str(destination).map_err(|_| {
-            Status::invalid_argument(format!("invalid destination validator: {destination}"))
-        })?;
         let channel = self
             .0
             .peer_connection_pool
@@ -1041,7 +1105,8 @@ where
         let inner = request
             .inner
             .ok_or_else(|| Status::invalid_argument("missing lite certificate"))?;
-        self.peer(&request.destination, "relay_lite_certificate")?
+        self.peer(&request.destination, "relay_lite_certificate")
+            .await?
             .handle_lite_certificate(Request::new(inner))
             .await
     }
@@ -1055,7 +1120,8 @@ where
         let inner = request
             .inner
             .ok_or_else(|| Status::invalid_argument("missing confirmed certificate"))?;
-        self.peer(&request.destination, "relay_confirmed_certificate")?
+        self.peer(&request.destination, "relay_confirmed_certificate")
+            .await?
             .handle_confirmed_certificate(Request::new(inner))
             .await
     }
@@ -1069,7 +1135,8 @@ where
         let inner = request
             .inner
             .ok_or_else(|| Status::invalid_argument("missing chain info query"))?;
-        self.peer(&request.destination, "relay_chain_info_query")?
+        self.peer(&request.destination, "relay_chain_info_query")
+            .await?
             .handle_chain_info_query(Request::new(inner))
             .await
     }
@@ -1083,7 +1150,8 @@ where
         let inner = request
             .inner
             .ok_or_else(|| Status::invalid_argument("missing blob"))?;
-        self.peer(&request.destination, "relay_upload_blob")?
+        self.peer(&request.destination, "relay_upload_blob")
+            .await?
             .upload_blob(Request::new(inner))
             .await
     }
