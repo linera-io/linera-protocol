@@ -385,7 +385,7 @@ jobs:
         cargo test -p linera-service --test exporter_tests --features storage-service -- --ignored --nocapture
     - name: Run the block export integration test
       run: |
-        cargo test -p linera-service --test block_export_tests --features storage-service,metrics -- --ignored --nocapture
+        cargo test -p linera-service --test block_export_tests --features storage-service,metrics -- --ignored --nocapture --test-threads=1
 
   check-wit-files:
     needs: changed-files

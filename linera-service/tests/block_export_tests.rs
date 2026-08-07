@@ -8,14 +8,18 @@
 //! shards, real proxies, real gRPC, and — the point of the whole arrangement — shards that reach
 //! the other validators only by going through their own proxy.
 //!
-//! Must be run with the `metrics` feature, because the assertion reads the proxies' metrics
-//! endpoint, and because `cargo test` rebuilds the binaries the harness spawns using whatever
-//! features the test command names:
+//! Run these one at a time, with the `metrics` feature:
 //!
 //! ```text
 //! cargo test -p linera-service --test block_export_tests --features storage-service,metrics \
-//!     -- --ignored
+//!     -- --ignored --test-threads=1
 //! ```
+//!
+//! `metrics` because the assertions read the proxies' metrics endpoint, and because `cargo test`
+//! rebuilds the binaries the harness spawns using whatever features the test command names.
+//! `--test-threads=1` because every network here derives its ports from the same
+//! `test_offset_port()` base, so two of them running at once collide and the metrics server
+//! panics on `bind`.
 
 #![cfg(any(feature = "scylladb", feature = "storage-service"))]
 
