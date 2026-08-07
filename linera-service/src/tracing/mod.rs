@@ -81,6 +81,11 @@ impl EnvConfig {
 /// The `LINERA_LOG_DIR` environment variable can be used to configure a directory to
 /// store log files. If it is set, a file named `log_name` with the `log` extension is
 /// created in the directory.
+///
+/// This also installs the panic hook from [`linera_base::panic_hook`], so that panics are
+/// reported through the subscriber set up here rather than to standard error alone. Every
+/// binary reaches this function, which is why the hook is installed from it rather than
+/// from each `main`.
 pub fn init(log_name: &str) {
     let config = get_env_config(log_name);
     let maybe_log_file_layer = config.maybe_log_file_layer();
@@ -91,6 +96,8 @@ pub fn init(log_name: &str) {
         .with(maybe_log_file_layer)
         .with(stderr_layer)
         .init();
+
+    linera_base::panic_hook::init();
 }
 
 pub(crate) fn get_env_config(log_name: &str) -> EnvConfig {
