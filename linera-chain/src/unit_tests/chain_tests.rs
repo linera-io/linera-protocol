@@ -31,9 +31,10 @@ use linera_execution::{
     SystemOperation, TestExecutionRuntimeContext,
 };
 use linera_views::{
+    batch::Batch,
     context::{Context as _, MemoryContext, ViewContext},
     memory::MemoryStore,
-    views::View,
+    views::{RootView as _, View},
 };
 use test_case::test_case;
 
@@ -1191,5 +1192,33 @@ async fn test_reconcile_outbox_index_full_mode_reindexes_all() -> anyhow::Result
 
     // A second full-mode reconciliation is now a no-op.
     assert!(!chain.reconcile_outbox_index(None).await?);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_insert_block_hash_leaves_unchanged_preprocess_height_clean() -> anyhow::Result<()> {
+    let chain_id = ChainId(CryptoHash::test_hash("chain"));
+    let mut chain = ChainStateView::new(chain_id).await;
+
+    chain.insert_block_hash(BlockHeight(0), CryptoHash::test_hash("block0"))?;
+    chain.save().await?;
+    assert_eq!(*chain.next_height_to_preprocess.get(), BlockHeight(1));
+
+    chain.insert_block_hash(BlockHeight(0), CryptoHash::test_hash("block0"))?;
+    let mut batch = Batch::new();
+    chain.next_height_to_preprocess.pre_save(&mut batch)?;
+    assert!(
+        batch.is_empty(),
+        "re-inserting a height below `next_height_to_preprocess` must not write the register"
+    );
+
+    chain.insert_block_hash(BlockHeight(1), CryptoHash::test_hash("block1"))?;
+    let mut batch = Batch::new();
+    chain.next_height_to_preprocess.pre_save(&mut batch)?;
+    assert!(
+        !batch.is_empty(),
+        "advancing `next_height_to_preprocess` must still write the register"
+    );
+    assert_eq!(*chain.next_height_to_preprocess.get(), BlockHeight(2));
     Ok(())
 }
