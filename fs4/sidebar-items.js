@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["allocation_granularity","available_space","free_space","lock_contended_error","statvfs","total_space"],"struct":["FsStats"],"trait":["FileExt"]};

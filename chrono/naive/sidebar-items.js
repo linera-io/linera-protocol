@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_DATE","MAX_DATETIME","MIN_DATE","MIN_DATETIME"],"mod":["serde"],"struct":["Days","IsoWeek","NaiveDate","NaiveDateDaysIterator","NaiveDateTime","NaiveDateWeeksIterator","NaiveTime","NaiveWeek"]};

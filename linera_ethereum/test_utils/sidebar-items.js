@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_anvil"],"mod":["EventNumericsContract","SimpleTokenContract"],"struct":["AnvilTest","EthereumClient","EventNumericsContractFunction","SimpleTokenContractFunction"]};

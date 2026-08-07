@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["INITCODE_TX_TYPE","MAX_INITCODE_COUNT"],"fn":["new_eof_address"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["debug_fn","format","json"],"struct":["Compact","DefaultFields","DefaultVisitor","FieldFn","FieldFnVisitor","FmtSpan","Format","Full","Json","JsonFields","JsonVisitor","Pretty","PrettyFields","PrettyVisitor","Writer"],"trait":["FormatEvent","FormatFields"]};

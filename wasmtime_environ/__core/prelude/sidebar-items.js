@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["rust_2015","rust_2018","rust_2021","rust_2024","v1"]};

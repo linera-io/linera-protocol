@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ErrorKind","Grouping","Locale"],"mod":["parsing","utils"],"struct":["Buffer","CustomFormat","CustomFormatBuilder","Error"],"trait":["Format","ToFormattedStr","ToFormattedString","WriteFormatted"]};

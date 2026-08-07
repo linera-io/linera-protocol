@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CodeGeneratorResponse_Feature"],"fn":["file_descriptor_proto"],"struct":["CodeGeneratorRequest","CodeGeneratorResponse","CodeGeneratorResponse_File","Version"]};

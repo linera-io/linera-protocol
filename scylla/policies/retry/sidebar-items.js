@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["RetryDecision"],"struct":["DefaultRetryPolicy","DefaultRetrySession","DowngradingConsistencyRetryPolicy","DowngradingConsistencyRetrySession","FallthroughRetryPolicy","FallthroughRetrySession","RequestInfo"],"trait":["RetryPolicy","RetrySession"]};

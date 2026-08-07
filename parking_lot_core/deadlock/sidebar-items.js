@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["acquire_resource","release_resource"]};
