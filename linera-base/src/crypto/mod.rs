@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 pub use signer::*;
 use thiserror::Error;
 
-use crate::{bcs_scalar, hex_debug, identifiers::AccountOwner, visit_allocative_simple};
+use crate::{doc_scalar, hex_debug, identifiers::AccountOwner, visit_allocative_simple};
 
 /// The public key of a validator.
 pub type ValidatorPublicKey = secp256k1::Secp256k1PublicKey;
@@ -474,9 +474,9 @@ pub fn u64_array_to_be_bytes(integers: [u64; 4]) -> [u8; 32] {
     bytes
 }
 
-// The hex-of-BCS representation this defines is exactly hex of
-// [`AccountSignature::to_bytes`], which `AccountSignature::from_slice` parses back.
-bcs_scalar!(AccountSignature, "A signature by the owner of an account");
+// Serde-based, like the underlying per-scheme signature scalars: clients deserialize
+// GraphQL responses with serde, so the scalar representation must be the serde one.
+doc_scalar!(AccountSignature, "A signature by the owner of an account");
 
 #[cfg(test)]
 mod tests {
@@ -552,15 +552,21 @@ mod tests {
     }
 
     #[test]
-    fn roundtrip_display_from_str_signature() {
+    fn account_signature_graphql_scalar_matches_serde() {
+        use crate::async_graphql::ScalarType;
+
         fn test(secret: &AccountSecretKey) {
             let signature = secret.sign(&TestString::new("test"));
-            let display = signature.to_string();
-            // The GraphQL scalar and `Display` representation is hex of the signature's own
-            // canonical byte encoding.
-            assert_eq!(display, hex::encode(signature.to_bytes()));
-            let parsed = AccountSignature::from_str(&display).unwrap();
-            assert_eq!(signature, parsed);
+            // Clients deserialize GraphQL responses with serde (the indexer does), so the
+            // scalar representation has to be the serde one, not a separate encoding.
+            assert_eq!(
+                signature.to_value(),
+                crate::async_graphql::to_value(signature).unwrap()
+            );
+            assert_eq!(
+                AccountSignature::parse(signature.to_value()).unwrap(),
+                signature
+            );
         }
         test(&AccountSecretKey::Ed25519(Ed25519SecretKey::generate()));
         test(&AccountSecretKey::Secp256k1(
