@@ -764,10 +764,25 @@ where
     }
 
     async fn update_admin_chain(&mut self) -> Result<(), chain_client::Error> {
-        let local_admin_info = self.local_node.chain_info(self.admin_chain_id).await?;
+        // The preprocess frontier, not the executed tip: we learn about a new epoch
+        // through `download_certificates_for_events`, which fetches only the
+        // event-bearing block and does not download its ancestors. That leaves a gap,
+        // and `ProcessConfirmedBlockMode::Auto` over a gap preprocesses rather than
+        // executes — so the very block carrying the committee the validator is missing
+        // sits *above* the executed tip and would be left out of the range.
+        //
+        // Preprocessed certificates are ordinary confirmed certificates: already
+        // signature-checked and written to storage before the frontier advances. The
+        // validator preprocesses anything above its own gap and writes the events
+        // either way, which is what resolves the missing committee. This mirrors the
+        // publisher-chain repair above, which uses the same height for the same reason.
+        let height = self
+            .local_node
+            .get_next_height_to_preprocess(self.admin_chain_id)
+            .await?;
         Box::pin(self.send_chain_information(
             self.admin_chain_id,
-            local_admin_info.next_block_height,
+            height,
             CrossChainMessageDelivery::NonBlocking,
             None,
         ))
