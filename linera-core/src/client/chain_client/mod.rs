@@ -79,6 +79,15 @@ use crate::{
     worker::{Notification, Reason, WorkerError},
 };
 
+/// Number of received-log entries above which `find_received_certificates` reports its
+/// start, progress, and completion at `info` level. Smaller syncs stay quiet outside
+/// `debug`/`trace` logging.
+const LARGE_RECEIVED_CERTIFICATE_SYNC_THRESHOLD: usize = 50_000;
+
+/// Number of certificates processed between two `info`-level progress messages during a
+/// large sync of received certificates.
+const RECEIVED_CERTIFICATE_SYNC_PROGRESS_INTERVAL: usize = 100_000;
+
 /// Options that configure the behavior of a [`ChainClient`].
 #[derive(Debug, Clone)]
 pub struct Options {
@@ -1011,6 +1020,7 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "debug", skip(self), fields(chain_id = %self.chain_id))]
     pub async fn find_received_certificates(&self) -> Result<(), Error> {
         debug!("starting find_received_certificates");
+        let sync_start = Instant::now();
         #[cfg(with_metrics)]
         let _latency = super::metrics::FIND_RECEIVED_CERTIFICATES_LATENCY.measure_latency();
         // Use network information from the local chain.
@@ -1080,18 +1090,51 @@ impl<Env: Environment> ChainClient<Env> {
             "find_received_certificates: total number of chains and certificates to sync",
         );
 
+        let num_certs = received_logs.num_certs();
+        let is_large_sync = num_certs >= LARGE_RECEIVED_CERTIFICATE_SYNC_THRESHOLD;
+        if is_large_sync {
+            info!(
+                %chain_id,
+                num_chains = %received_logs.num_chains(),
+                %num_certs,
+                "starting a large sync of received certificates",
+            );
+        }
         let max_blocks_per_chain =
             self.options.sender_certificate_download_batch_size / self.options.max_joined_tasks * 2;
+        let mut num_synced_certs = 0;
+        let mut next_progress_message = RECEIVED_CERTIFICATE_SYNC_PROGRESS_INTERVAL;
         for received_log in received_logs.into_batches(
             self.options.sender_certificate_download_batch_size,
             max_blocks_per_chain,
         ) {
+            num_synced_certs += received_log.num_certs();
             validator_trackers = self
                 .receive_sender_certificates(received_log, validator_trackers, &nodes)
                 .await?;
 
             self.update_received_certificate_trackers(&validator_trackers)
                 .await;
+
+            if is_large_sync && num_synced_certs >= next_progress_message {
+                info!(
+                    %chain_id,
+                    %num_synced_certs,
+                    %num_certs,
+                    "received-certificate sync in progress",
+                );
+                next_progress_message =
+                    num_synced_certs + RECEIVED_CERTIFICATE_SYNC_PROGRESS_INTERVAL;
+            }
+        }
+
+        if is_large_sync {
+            info!(
+                %chain_id,
+                %num_certs,
+                elapsed_secs = %sync_start.elapsed().as_secs(),
+                "finished a large sync of received certificates",
+            );
         }
 
         trace!("find_received_certificates finished");
