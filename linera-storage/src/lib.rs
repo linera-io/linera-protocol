@@ -124,6 +124,9 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     ) -> Result<Vec<Option<BlobState>>, ViewError>;
 
     /// Writes the given blob.
+    ///
+    /// Blobs already known to be in storage are not rewritten: a blob ID is the hash of its
+    /// content, so a value recorded as stored under that ID is byte-identical to this one.
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError>;
 
     /// Writes blobs and certificate
@@ -145,6 +148,8 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     ) -> Result<(), ViewError>;
 
     /// Writes several blobs.
+    ///
+    /// Carries the same elision as [`Storage::write_blob`].
     async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError>;
 
     /// Tests whether this node has the certificate with the given hash available.
@@ -765,6 +770,26 @@ mod tests {
         // Test single blob write
         storage.write_blob(&test_blob1).await?;
         assert!(storage.contains_blob(blob_id1).await?);
+
+        // Rewriting an already-stored blob is elided but must remain readable.
+        storage.write_blob(&test_blob1).await?;
+        assert_eq!(
+            storage.read_blob(blob_id1).await?.map(|blob| blob.id()),
+            Some(blob_id1)
+        );
+
+        // Interning does not mark a blob as stored, so a later write must not be elided.
+        let interned_blob = Blob::new_data(vec![70, 80, 90]);
+        let interned_blob_id = interned_blob.id();
+        storage.intern_blob(interned_blob.clone());
+        storage.write_blob(&interned_blob).await?;
+        assert_eq!(
+            storage
+                .read_blob(interned_blob_id)
+                .await?
+                .map(|blob| blob.id()),
+            Some(interned_blob_id)
+        );
 
         // Test multiple blob write (write_blobs)
         storage

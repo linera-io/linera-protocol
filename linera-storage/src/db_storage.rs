@@ -150,6 +150,16 @@ pub mod metrics {
         )
     });
 
+    /// The metric counting blob writes elided because the blob is already in storage.
+    #[doc(hidden)]
+    pub(super) static WRITE_BLOB_SKIPPED_COUNTER: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "write_blob_skipped",
+            "The metric counting how often writing a blob was skipped because the blob \
+             is already known to be in storage",
+        )
+    });
+
     /// The metric counting how often a certificate is read from storage.
     #[doc(hidden)]
     pub static READ_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
@@ -1015,10 +1025,7 @@ where
 
     #[instrument(skip_all, fields(blob_id = %blob.id()))]
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError> {
-        let mut batch = MultiPartitionBatch::new();
-        batch.add_blob(blob);
-        self.write_batch(batch).await?;
-        Ok(())
+        self.write_blobs(std::slice::from_ref(blob)).await
     }
 
     #[instrument(skip_all, fields(blob_ids_len = %blob_ids.len()))]
@@ -1064,16 +1071,19 @@ where
         }
         let mut batch = MultiPartitionBatch::new();
         let mut blob_states = Vec::new();
+        let mut to_write = Vec::new();
         for blob in blobs {
             let root_key = RootKey::BlobId(blob.id()).bytes();
             let store = self.database.open_shared(&root_key)?;
             let has_state = store.contains_key(BLOB_STATE_KEY).await?;
             blob_states.push(has_state);
             if has_state {
-                batch.add_blob(blob);
+                to_write.push(blob);
             }
         }
+        let unstored = self.add_unstored_blobs(&mut batch, to_write);
         self.write_batch(batch).await?;
+        self.record_blobs_as_stored(unstored);
         Ok(blob_states)
     }
 
@@ -1083,10 +1093,10 @@ where
             return Ok(());
         }
         let mut batch = MultiPartitionBatch::new();
-        for blob in blobs {
-            batch.add_blob(blob);
-        }
-        self.write_batch(batch).await
+        let unstored = self.add_unstored_blobs(&mut batch, blobs);
+        self.write_batch(batch).await?;
+        self.record_blobs_as_stored(unstored);
+        Ok(())
     }
 
     #[instrument(skip_all, fields(blobs_len = %blobs.len()))]
@@ -1096,11 +1106,10 @@ where
         certificate: &ConfirmedBlockCertificate,
     ) -> Result<(), ViewError> {
         let mut batch = MultiPartitionBatch::new();
-        for blob in blobs {
-            batch.add_blob(blob);
-        }
+        let unstored = self.add_unstored_blobs(&mut batch, blobs);
         batch.add_certificate(certificate)?;
         self.write_batch(batch).await?;
+        self.record_blobs_as_stored(unstored);
         // Populate immutable-data caches so subsequent reads are served from memory.
         let block = certificate.value().block();
         let chain_id = block.header.chain_id;
@@ -1126,15 +1135,15 @@ where
     ) -> CacheArc<ConfirmedBlockCertificate> {
         self.caches
             .certificate
-            .insert(&certificate.hash(), certificate)
+            .intern(&certificate.hash(), certificate)
     }
 
     fn intern_blob(&self, blob: Blob) -> CacheArc<Blob> {
-        self.caches.blob.insert(&blob.id(), blob)
+        self.caches.blob.intern(&blob.id(), blob)
     }
 
     fn intern_confirmed_block(&self, block: ConfirmedBlock) -> CacheArc<ConfirmedBlock> {
-        self.caches.confirmed_block.insert(&block.hash(), block)
+        self.caches.confirmed_block.intern(&block.hash(), block)
     }
 
     #[instrument(skip_all, fields(%hash))]
@@ -1689,6 +1698,39 @@ where
             .ok_or(ViewError::InconsistentEntries)?;
         let arc = self.caches.certificate.insert(&hash, certificate);
         Ok(Some(arc))
+    }
+
+    /// Adds to `batch` every blob that is not already known to be in storage, and returns
+    /// those blobs so they can be recorded once the write is confirmed.
+    ///
+    /// A blob ID is the hash of its content, so a hit in the blob cache's stored set means
+    /// this exact content is already persisted under this exact key and rewriting it would
+    /// be a no-op. ScyllaDB does not detect that: it has no read-before-write, so the write
+    /// would cost a full round trip and leave a duplicate cell for compaction to merge.
+    fn add_unstored_blobs<'a>(
+        &self,
+        batch: &mut MultiPartitionBatch,
+        blobs: impl IntoIterator<Item = &'a Blob>,
+    ) -> Vec<&'a Blob> {
+        let mut unstored = Vec::new();
+        for blob in blobs {
+            if self.caches.blob.is_stored(&blob.id()) {
+                #[cfg(with_metrics)]
+                metrics::WRITE_BLOB_SKIPPED_COUNTER.inc();
+                continue;
+            }
+            batch.add_blob(blob);
+            unstored.push(blob);
+        }
+        unstored
+    }
+
+    /// Records blobs as present in storage. Must only be called after the write that
+    /// persisted them has been confirmed.
+    fn record_blobs_as_stored(&self, blobs: Vec<&Blob>) {
+        for blob in blobs {
+            self.caches.blob.insert(&blob.id(), blob.clone());
+        }
     }
 
     #[instrument(skip_all)]
