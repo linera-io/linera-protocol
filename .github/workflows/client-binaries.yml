@@ -1,0 +1,121 @@
+name: Client Binaries
+
+# Prebuilt `linera` client binaries so nobody has to compile the client to use
+# it. Each target is built NATIVELY on its own runner — no cross-compilation and
+# no QEMU, both of which are painful here because the client pulls in rocksdb
+# (C++), wasmer and protobuf.
+#
+# Every runner label below is a STANDARD GitHub-hosted runner, and standard
+# runners are free and unlimited on public repositories (linera-protocol is
+# public). Do NOT switch any of these to a larger runner: larger runners are
+# billed even for public repos.
+#
+# Windows is deliberately absent — we do not support it.
+
+# Same triggers as the Docker Image workflow, so a commit that gets images also
+# gets binaries.
+on:
+  push:
+    branches: [ main, 'devnet_*', 'testnet_*' ]
+  workflow_dispatch:
+
+concurrency:
+  group: "${{ github.workflow }} @ ${{ github.ref }}"
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: short
+  RUSTUP_MAX_RETRIES: 10
+  # The root Cargo.toml sets `[profile.release] debug = true` so production
+  # binaries can be profiled. For something people download it is the difference
+  # between a 368 MB and a 42 MB tarball (1693 MB vs 123 MB on disk), and it
+  # keeps ~212k symbols either way, so panic backtraces still symbolicate.
+  #
+  # This has to be a CARGO_PROFILE_* override rather than RUSTFLAGS: setting
+  # RUSTFLAGS in the environment REPLACES the per-target rustflags in
+  # .cargo/config.toml, which would silently drop `-fuse-ld=lld` and
+  # `force-frame-pointers` from the x86_64-linux build.
+  CARGO_PROFILE_RELEASE_DEBUG: "false"
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    # The smallest leg here is macos-latest at 3 cores / 7 GB, building the whole
+    # dependency graph in release mode from a cold cache.
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: ${{ matrix.target }}
+          # Cache per target so the four jobs don't fight over one key.
+          cache-key: client-${{ matrix.target }}
+
+      - name: Install Protoc
+        uses: ./.github/actions/install-protoc
+
+      # .cargo/config.toml pins `linker = "aarch64-linux-gnu-gcc"` for this
+      # target. Nothing in this repo builds on arm64 today, so do not assume the
+      # runner image ships that exact name — a missing linker only surfaces at
+      # the very end of an hour-long build.
+      - name: Ensure the pinned aarch64 linker exists
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          set -euo pipefail
+          if ! command -v aarch64-linux-gnu-gcc >/dev/null; then
+            echo "aarch64-linux-gnu-gcc not found; installing it"
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu
+          fi
+          aarch64-linux-gnu-gcc --version | head -1
+
+      - name: Build the client
+        run: cargo build --locked --release --bin linera --target ${{ matrix.target }}
+
+      # Sanity-check the artifact actually runs on the machine that built it.
+      # `--version` is enough to catch a bad link or a missing shared library,
+      # which is the whole failure mode this workflow exists to prevent.
+      - name: Smoke-test the binary
+        run: ./target/${{ matrix.target }}/release/linera --version
+
+      - name: Package
+        id: package
+        run: |
+          set -euo pipefail
+          NAME="linera-${{ matrix.target }}"
+          mkdir -p "dist/${NAME}"
+          cp "target/${{ matrix.target }}/release/linera" "dist/${NAME}/linera"
+          tar -C dist -czf "${NAME}.tar.gz" "${NAME}"
+          # Checksums so a download can be verified without trusting the transport.
+          shasum -a 256 "${NAME}.tar.gz" > "${NAME}.tar.gz.sha256"
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+
+      # One downloadable artifact per commit, per platform.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.name }}
+          path: |
+            ${{ steps.package.outputs.name }}.tar.gz
+            ${{ steps.package.outputs.name }}.tar.gz.sha256
+          retention-days: 30

@@ -65,7 +65,7 @@ jobs:
 
           REGISTRY_BASE="us-docker.pkg.dev/linera-io-dev/linera-public-registry"
 
-          for IMAGE_VAR in LINERA_VALIDATOR:linera-validator LINERA_CLIENT:linera-client LINERA_TESTS:linera-tests INDEXER:linera-indexer EXPLORER:linera-explorer EXPORTER:linera-exporter PLAYGROUND:linera-playground; do
+          for IMAGE_VAR in LINERA_VALIDATOR:linera-validator LINERA_TESTS:linera-tests INDEXER:linera-indexer EXPLORER:linera-explorer EXPORTER:linera-exporter PLAYGROUND:linera-playground; do
             VAR="${IMAGE_VAR%%:*}"
             NAME="${IMAGE_VAR##*:}"
             echo "${VAR}_IMAGE_BRANCH=${REGISTRY_BASE}/${NAME}:${BRANCH_TAG}" >> "$GITHUB_ENV"
@@ -131,14 +131,6 @@ jobs:
             "${LINERA_VALIDATOR_IMAGE_BRANCH}" "${LINERA_VALIDATOR_IMAGE_SHORT}" "${LINERA_VALIDATOR_IMAGE_LONG}" "LineraValidator" "validator" &
           PID_LINERA_VALIDATOR=$!
 
-          # linera-client: the client binary only. Also what the validator
-          # chart's *-initializer init containers need (they run
-          # `linera storage check-existence`), so they can stop pulling the
-          # all-three image.
-          build_and_push "docker/Dockerfile" \
-            "${LINERA_CLIENT_IMAGE_BRANCH}" "${LINERA_CLIENT_IMAGE_SHORT}" "${LINERA_CLIENT_IMAGE_LONG}" "LineraClient" "client" &
-          PID_LINERA_CLIENT=$!
-
           # linera-tests shares the Dockerfile and chef cache mounts with
           # linera; --target tests builds the overlay stage that bundles
           # the remote-net integration test binary on top of the runtime.
@@ -168,7 +160,7 @@ jobs:
 
           SUCCESS_NAMES=""
           FAILED_NAMES=""
-          for NAME_PID in LineraValidator:$PID_LINERA_VALIDATOR LineraClient:$PID_LINERA_CLIENT LineraTests:$PID_LINERA_TESTS Indexer:$PID_INDEXER Explorer:$PID_EXPLORER Exporter:$PID_EXPORTER Playground:$PID_PLAYGROUND; do
+          for NAME_PID in LineraValidator:$PID_LINERA_VALIDATOR LineraTests:$PID_LINERA_TESTS Indexer:$PID_INDEXER Explorer:$PID_EXPLORER Exporter:$PID_EXPORTER Playground:$PID_PLAYGROUND; do
             NAME="${NAME_PID%%:*}"
             PID="${NAME_PID##*:}"
             if wait "$PID"; then
@@ -198,3 +190,137 @@ jobs:
           fi
 
           echo "All image builds completed successfully!"
+
+  # ── linera-client: multi-platform ──
+  # linera-client is the one image end users pull directly, so it ships for both
+  # linux/amd64 and linux/arm64 (Apple Silicon, Graviton). Each platform builds
+  # NATIVELY on a runner of its own architecture — cross-building this workspace
+  # under QEMU turns a ~1h Rust build into a multi-hour one.
+  #
+  # Each leg publishes only an arch-suffixed tag; merge-client-image below
+  # stitches them into a manifest list under the real tags, so the tags people
+  # actually pull are never transiently single-platform.
+  #
+  # Both legs use STANDARD GitHub-hosted runners, which are free and unlimited on
+  # public repositories. Do NOT move either to a larger runner: those are billed
+  # even on public repos. Deliberately NOT the self-hosted builder — it is busy
+  # with build-and-push, and an amd64 client build that queues behind it holds up
+  # the merge below. Without debuginfo this builds in ~22 min on a hosted runner.
+  build-client-image:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    # No warm cache on the hosted arm runner: this is a from-scratch release
+    # build of the whole dependency graph on 4 cores.
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/gcp-auth
+        with:
+          service_account: actions-runner@linera-io-dev.iam.gserviceaccount.com
+          configure_docker_for: us-docker.pkg.dev
+
+      - name: Wait for docker daemon
+        run: |
+          for i in $(seq 1 60); do
+            if docker info >/dev/null 2>&1; then
+              echo "Docker ready after ${i} attempt(s)"
+              exit 0
+            fi
+            echo "Waiting for docker daemon ($i/60)..."
+            sleep 2
+          done
+          echo "Docker daemon did not become ready in 120s"
+          exit 1
+
+      # A build that dies from exhausted disk or memory looks nothing like a
+      # compile error in the log, so record both up front. (The hosted arm64
+      # runner reports 145 GB free, not the 14 GB the docs table lists — disk is
+      # not the constraint here, memory during the final link is.)
+      - name: Log available resources
+        run: |
+          df -h /
+          free -h
+
+      - name: Build and push the arch-specific image
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          IMAGE="us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client:${GITHUB_SHA:0:7}-${ARCH}"
+
+          DOCKER_BUILDKIT=1 docker build \
+            -t "${IMAGE}" \
+            -f docker/Dockerfile \
+            --target client \
+            --build-arg "git_commit=${GITHUB_SHA}" \
+            --build-arg "build_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+            --build-arg "build_flag=--release" \
+            --build-arg "build_folder=release" \
+            .
+
+          # A binary that cannot start is worse than a missing image, and this is
+          # the first arm64 build we ship — check it actually runs.
+          docker run --rm "${IMAGE}" /linera --version
+
+          docker push "${IMAGE}"
+
+  merge-client-image:
+    # Plain `needs`, no `if`: this must run only when BOTH legs succeeded.
+    # Publishing whatever happened to be ready is worse than publishing nothing —
+    # a missing tag fails loudly at deploy time, while a tag that silently lacks
+    # amd64 fails at runtime on every machine we actually run on.
+    needs: build-client-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - uses: ./.github/actions/gcp-auth
+        with:
+          service_account: actions-runner@linera-io-dev.iam.gserviceaccount.com
+          configure_docker_for: us-docker.pkg.dev
+
+      - name: Merge the per-arch images into one manifest list
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          BRANCH_NAME="${HEAD_REF:-${REF_NAME}}"
+          # Docker tags forbid '/'; same substitution as the build-and-push job.
+          BRANCH_TAG="${BRANCH_NAME//\//-}"
+          REPO="us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client"
+
+          SOURCES=()
+          for ARCH in amd64 arm64; do
+            SRC="${REPO}:${GITHUB_SHA:0:7}-${ARCH}"
+            # Both legs succeeded for this job to run at all, so a missing tag
+            # here means something else went wrong — never paper over it.
+            if ! docker buildx imagetools inspect "${SRC}" >/dev/null 2>&1; then
+              echo "::error::${SRC} is missing despite its build leg succeeding"
+              exit 1
+            fi
+            echo "found ${SRC}"
+            SOURCES+=("${SRC}")
+          done
+
+          docker buildx imagetools create \
+            -t "${REPO}:${BRANCH_TAG}" \
+            -t "${REPO}:${GITHUB_SHA:0:7}" \
+            -t "${REPO}:${GITHUB_SHA}" \
+            "${SOURCES[@]}"
+
+          docker buildx imagetools inspect "${REPO}:${GITHUB_SHA:0:7}"
