@@ -87,11 +87,15 @@ impl RelayClient {
                     error: format!("failed to unmarshal response: {error}"),
                 })?)
             }
-            api::chain_info_result::Inner::Error(error) => Err(bcs::from_bytes(&error).map_err(
-                |error| NodeError::GrpcError {
+            // bincode, matching the encoding the validator used and this field's own note in
+            // the proto. Decoding it correctly is load-bearing rather than cosmetic: the
+            // recovery paths dispatch on the *variant* — `EventsNotFound` pushes the admin
+            // chain, `BlobsNotFound` uploads blobs — so a mangled error silently disables them
+            // and leaves the destination stuck forever.
+            api::chain_info_result::Inner::Error(error) => Err(bincode::deserialize(&error)
+                .map_err(|error| NodeError::GrpcError {
                     error: format!("failed to unmarshal error message: {error}"),
-                },
-            )?),
+                })?),
         }
     }
 }

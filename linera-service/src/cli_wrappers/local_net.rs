@@ -322,6 +322,20 @@ impl Validator {
         self.proxies.push(proxy)
     }
 
+    /// Kills one of this validator's proxies, leaving the rest running.
+    #[cfg(with_testing)]
+    async fn kill_proxy(&mut self, proxy_id: usize) -> Result<()> {
+        ensure!(
+            proxy_id < self.proxies.len(),
+            "no proxy {proxy_id} to kill; this validator runs {}",
+            self.proxies.len()
+        );
+        self.proxies[proxy_id]
+            .kill()
+            .await
+            .context("killing validator proxy")
+    }
+
     fn add_server(&mut self, server: Child) {
         self.servers.push(server)
     }
@@ -1054,6 +1068,18 @@ impl LocalNet {
 
 #[cfg(with_testing)]
 impl LocalNet {
+    /// Kills one proxy of the given validator, leaving its other proxies and shards running.
+    ///
+    /// Used to check that traffic which was relayed through that proxy moves to another one
+    /// rather than being stranded.
+    pub async fn kill_proxy(&mut self, validator: usize, proxy_id: usize) -> Result<()> {
+        self.running_validators
+            .get_mut(&validator)
+            .context("no such validator")?
+            .kill_proxy(proxy_id)
+            .await
+    }
+
     /// Returns the validating key and an account key of the validator.
     pub fn validator_keys(&self, validator: usize) -> Option<&(String, String)> {
         self.validator_keys.get(&validator)

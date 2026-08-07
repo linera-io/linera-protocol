@@ -38,6 +38,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, instrument, warn};
 
 use crate::{
+    data_types::ChainInfoQuery,
     local_node::LocalNodeClient,
     node::{ValidatorNode, ValidatorNodeProvider},
     remote_node::RemoteNode,
@@ -138,6 +139,33 @@ pub struct BlockExportConfig {
     /// The bound is what a live block may have to wait behind, so it is deliberately small: the
     /// backfill rate is set by how often rounds happen, not by how much each one does.
     pub max_catch_up_blocks: u64,
+}
+
+impl BlockExportConfig {
+    /// Rejects values that would make export misbehave rather than merely perform badly.
+    ///
+    /// Checked once at startup so a typo fails the validator immediately, instead of surfacing
+    /// later as a panic mid-export, a task spinning a core, or gaps that are silently never
+    /// repaired.
+    pub fn check(&self) -> Result<(), String> {
+        if self.certificate_upload_batch_size == 0 {
+            // `slice::chunks(0)` panics.
+            return Err("block export batch size must be greater than zero".into());
+        }
+        if self.max_catch_up_blocks == 0 {
+            // Every gap would stay open forever, silently.
+            return Err("block export catch-up bound must be greater than zero".into());
+        }
+        if self.idle_catch_up_interval.is_zero() {
+            // The idle timer would fire continuously, turning the task into a busy loop.
+            return Err("block export idle interval must be greater than zero".into());
+        }
+        if self.retry_delay.is_zero() {
+            // A failing destination would be retried without pause.
+            return Err("block export retry delay must be greater than zero".into());
+        }
+        Ok(())
+    }
 }
 
 impl Default for BlockExportConfig {
@@ -273,21 +301,13 @@ where
         own_public_key,
         destinations: HashMap::new(),
         chain_next_height: BlockHeight::ZERO,
+        admin_chain_id: None,
         progress: progress.clone(),
     };
     linera_base::Task::spawn(task.run(receiver)).forget();
 
     ChainExporter { blocks, progress }
 }
-
-/// Consecutive failed pushes after which a destination's connection is rebuilt.
-///
-/// The transport may be relaying through one of several proxies, and a destination keeps whichever
-/// it was given. If that proxy dies, this destination would otherwise keep failing against it
-/// forever while the others stay healthy, so after a few failures the node is remade — which draws
-/// a fresh proxy from the rotation. The failure count and backoff are deliberately *not* reset, so
-/// a destination that is genuinely down still backs off rather than being hammered once per proxy.
-const REBUILD_AFTER_FAILURES: u32 = 3;
 
 /// One destination validator, and what we believe it holds of this chain.
 struct Destination<S: Storage, N> {
@@ -321,6 +341,9 @@ where
     /// be considered caught up. Used to keep catching a lagging destination up while the chain is
     /// idle, so that convergence does not depend on the chain producing more blocks.
     chain_next_height: BlockHeight,
+    /// The chain carrying the epoch events, learned from the first block exported. `None` until
+    /// then, which is also when there is nothing to catch anyone up on.
+    admin_chain_id: Option<ChainId>,
     /// The highest height each validator has acknowledged. Seeded from what the worker had
     /// persisted, so a destination we meet for the first time — after a restart, or after the
     /// chain worker was dropped and reloaded — starts from there instead of being queried.
@@ -358,12 +381,41 @@ where
         debug!("Chain worker dropped; stopping block export");
     }
 
-    /// Remakes the node of any destination that has failed repeatedly.
+    /// Brings the destination set in line with the chain's committee as the local worker sees it
+    /// right now, rather than as of the last block exported.
+    ///
+    /// Asked of the worker rather than read from the chain view directly: the worker owns that
+    /// view while it is running, and loading it here would race with it.
+    async fn sync_destinations_from_local_node(&mut self) {
+        let query = ChainInfoQuery::new(self.chain_id).with_committees();
+        let info = match self.local_node.handle_chain_info_query(query).await {
+            Ok(response) => response.info,
+            Err(error) => {
+                debug!(%error, "Cannot read the committee while catching up");
+                return;
+            }
+        };
+        let Some(committee) = info
+            .requested_committees
+            .and_then(|committees| committees.into_iter().next_back().map(|(_, c)| c))
+        else {
+            return;
+        };
+        let Some(admin_chain_id) = self.admin_chain_id else {
+            return;
+        };
+        self.sync_destinations_with(&committee, admin_chain_id);
+    }
+
+    /// Remakes the node of every destination whose last push failed.
     ///
     /// The transport may be relaying through one of several proxies and a destination keeps
-    /// whichever it was handed, so one that keeps failing may simply be pointed at a dead proxy.
-    /// Remaking it draws a fresh one. The failure count and backoff are deliberately kept, so a
-    /// validator that is itself down still backs off rather than being retried once per proxy.
+    /// whichever it was handed, so a failure may mean nothing worse than a dead proxy. Remaking
+    /// the node draws the next one from the rotation, so a bad proxy is stepped over on the very
+    /// next attempt instead of being retried; if the destination itself is down, the fresh proxy
+    /// fails too and the backoff below still applies. The failure count and backoff are kept
+    /// across the rebuild for exactly that reason — rotating proxies must not become a way to
+    /// hammer a validator that is simply offline.
     ///
     /// Runs before every catch-up round as well as on every new block: a destination that fell
     /// behind while the chain was idle would otherwise never get a second chance at a connection.
@@ -371,7 +423,7 @@ where
         let stuck = self
             .destinations
             .iter()
-            .filter(|(_, destination)| destination.failures >= REBUILD_AFTER_FAILURES)
+            .filter(|(_, destination)| destination.failures > 0)
             .map(|(validator, destination)| (*validator, destination.address.clone()))
             .collect::<Vec<_>>();
         if stuck.is_empty() {
@@ -395,6 +447,10 @@ where
     ///
     /// Runs only when nothing is queued, so live blocks always take priority over backfill.
     async fn catch_up_round(&mut self) {
+        // Pick up committee changes too. A validator admitted while this chain happens to be idle
+        // would otherwise never become a destination at all — `sync_destinations` runs off an
+        // exported block, and there is no next block to carry the new committee.
+        self.sync_destinations_from_local_node().await;
         self.refresh_stuck_destinations();
         let now = Instant::now();
         let (config, chain_id, target) = (&self.config, self.chain_id, self.chain_next_height);
@@ -459,7 +515,13 @@ where
     /// Brings the destination set in line with the block's committee: adds validators that joined,
     /// drops those that left, and re-creates a node whose address changed.
     fn sync_destinations(&mut self, block: &ExportedBlock) {
-        let committee = &block.committee;
+        self.admin_chain_id = Some(block.admin_chain_id);
+        self.sync_destinations_with(&block.committee, block.admin_chain_id);
+    }
+
+    /// Adds destinations for validators in `committee` we do not have, and drops those that have
+    /// left it or changed address.
+    fn sync_destinations_with(&mut self, committee: &Committee, admin_chain_id: ChainId) {
         self.destinations.retain(|validator, destination| {
             committee
                 .validators()
@@ -467,12 +529,12 @@ where
                 .is_some_and(|state| state.network_address == destination.address)
         });
 
-        // A destination that has failed repeatedly may be stuck behind a dead proxy, so rebuild
-        // its node alongside any validator we do not have yet.
+        // A destination whose last push failed may be stuck behind a dead proxy, so rebuild its
+        // node alongside any validator we do not have yet.
         let stuck = self
             .destinations
             .iter()
-            .filter(|(_, destination)| destination.failures >= REBUILD_AFTER_FAILURES)
+            .filter(|(_, destination)| destination.failures > 0)
             .map(|(validator, _)| *validator)
             .collect::<Vec<_>>();
 
@@ -517,8 +579,11 @@ where
                     node,
                 },
                 local_node: self.local_node.clone(),
-                admin_chain_id: block.admin_chain_id,
+                admin_chain_id,
                 certificate_upload_batch_size: self.config.certificate_upload_batch_size,
+                // Export replicates blocks; it does not take part in the destination's consensus.
+                sync_consensus_rounds: false,
+                max_admin_catch_up_blocks: Some(self.config.max_catch_up_blocks),
             };
             // Rebuilding a stuck destination keeps its failure count and retry time: only the
             // connection is replaced, so a validator that is itself down keeps backing off.
@@ -621,18 +686,19 @@ where
             .await;
         let outcome = self.record_outcome(result, target, now, config);
 
-        // A round can succeed and still advance nothing: storage need not hold the missing
+        // A round can *succeed* and still advance nothing: storage need not hold the missing
         // heights, since a chain we merely *receive* from is stored only at its message-bearing
         // blocks. Without backing off here the caller would call straight back in, and a
         // destination we can never finish catching up would spin the task at full tilt.
-        let advanced = match (previous, self.next_height) {
-            (Some(before), Some(after)) => after > before,
-            // We at least learned where it is, which is progress the first time round.
-            (None, Some(_)) => true,
-            _ => false,
-        };
-        if !advanced {
-            self.back_off(now, config);
+        //
+        // Only the success path needs this. A failed round has already been backed off inside
+        // `record_outcome`, and doing it again here would double-count the failure and escalate
+        // the delay twice as fast as configured.
+        if let Some(reached) = outcome {
+            let advanced = previous.is_none_or(|before| reached > before);
+            if !advanced {
+                self.back_off(now, config);
+            }
         }
         outcome
     }

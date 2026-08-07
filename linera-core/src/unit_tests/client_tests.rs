@@ -2596,7 +2596,6 @@ where
     use crate::{
         local_node::LocalNodeClient,
         remote_node::RemoteNode,
-        test_utils::NodeProvider,
         updater::{CommunicateAction, RemoteNodeUpdater},
         worker::WorkerState,
         ChainWorkerConfig,
@@ -2644,16 +2643,17 @@ where
         None,
     );
     let node = builder.node(1);
-    let mut updater =
-        RemoteNodeUpdater::<crate::environment::Impl<B::Storage, NodeProvider<B::Storage>>> {
-            remote_node: RemoteNode {
-                public_key: node.name(),
-                node,
-            },
-            local_node: LocalNodeClient::new(state),
-            admin_chain_id: builder.admin_chain_id(),
-            certificate_upload_batch_size: 100,
-        };
+    let mut updater = RemoteNodeUpdater {
+        remote_node: RemoteNode {
+            public_key: node.name(),
+            node,
+        },
+        local_node: LocalNodeClient::new(state),
+        admin_chain_id: builder.admin_chain_id(),
+        certificate_upload_batch_size: 100,
+        sync_consensus_rounds: true,
+        max_admin_catch_up_blocks: None,
+    };
     let submit = |proposal| {
         let (clock_skew_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         CommunicateAction::SubmitBlock {

@@ -765,12 +765,16 @@ async fn run(options: ServerOptions) {
                 allow_revert_confirm,
                 reset_on_corrupted_chain_state_mins,
                 recovery_whitelist: recovery_whitelist.map(HashSet::from_iter),
-                block_export_config: export_blocks_to_committee.then(|| BlockExportConfig {
-                    certificate_upload_batch_size: block_export_batch_size,
-                    max_catch_up_blocks: block_export_max_catch_up_blocks,
-                    idle_catch_up_interval: block_export_idle_interval,
-                    retry_delay: block_export_retry_delay,
-                    max_retry_delay: block_export_max_retry_delay,
+                block_export_config: export_blocks_to_committee.then(|| {
+                    let config = BlockExportConfig {
+                        certificate_upload_batch_size: block_export_batch_size,
+                        max_catch_up_blocks: block_export_max_catch_up_blocks,
+                        idle_catch_up_interval: block_export_idle_interval,
+                        retry_delay: block_export_retry_delay,
+                        max_retry_delay: block_export_max_retry_delay,
+                    };
+                    config.check().expect("invalid block export configuration");
+                    config
                 }),
                 #[cfg(with_metrics)]
                 enable_memory_profiling,

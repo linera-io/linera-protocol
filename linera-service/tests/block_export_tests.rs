@@ -107,3 +107,142 @@ async fn test_block_export_through_the_proxy(database: Database, network: Networ
     net.terminate().await?;
     Ok(())
 }
+
+/// A validator admitted to the committee after a chain already has history is brought up to date
+/// by export alone.
+///
+/// This is the case the cursor cannot short-circuit: the newcomer has never heard of the chain, so
+/// it answers a height query with 0 rather than an error, and every block has to be replayed to it
+/// through the relay. Catch-up is bounded per round on purpose, so what this asserts is that it
+/// *converges*, not that it happens in one shot.
+#[ignore]
+#[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_export_catches_up_a_newly_added_validator(
+    database: Database,
+    network: Network,
+) -> Result<()> {
+    tracing::info!("Starting test {}", test_name!());
+
+    let config = LocalNetConfig {
+        num_initial_validators: 4,
+        num_shards: 1,
+        export_blocks_to_committee: true,
+        ..LocalNetConfig::new_test(database, network)
+    };
+    let (mut net, client) = config.instantiate().await?;
+    let chain = client.default_chain().expect("client has no default chain");
+
+    // History the newcomer will have to be told about in full.
+    for _ in 0..3 {
+        client
+            .transfer_with_silent_logs(1.into(), chain, chain)
+            .await?;
+    }
+
+    // Bring up a fifth validator and admit it. It starts knowing nothing of this chain.
+    net.generate_validator_config(4).await?;
+    net.start_validator(4).await?;
+    client
+        .set_validator(
+            net.validator_keys(4).unwrap(),
+            net.proxy_public_port(4, 0),
+            100,
+        )
+        .await?;
+
+    // Nothing below drives the chain forward, so any progress the newcomer makes on it is export
+    // replaying the history to it.
+    let target = net
+        .validator_client(0)?
+        .handle_chain_info_query(ChainInfoQuery::new(chain))
+        .await?
+        .info
+        .next_block_height;
+
+    for _ in 0..60 {
+        let info = net
+            .validator_client(4)?
+            .handle_chain_info_query(ChainInfoQuery::new(chain))
+            .await?;
+        if info.info.next_block_height >= target {
+            net.terminate().await?;
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    let info = net
+        .validator_client(4)?
+        .handle_chain_info_query(ChainInfoQuery::new(chain))
+        .await?;
+    panic!(
+        "the newly added validator did not catch up to {target}; it is at {}",
+        info.info.next_block_height,
+    );
+}
+
+/// Export keeps flowing when one of this validator's proxies dies.
+///
+/// A destination is handed one proxy from the rotation and keeps it, so without the rebuild-on-
+/// failure path a dead proxy would strand every destination assigned to it — silently, since the
+/// other proxies would carry on and the chain would still look healthy from most angles.
+#[ignore]
+#[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_export_survives_a_dead_proxy(database: Database, network: Network) -> Result<()> {
+    tracing::info!("Starting test {}", test_name!());
+
+    let config = LocalNetConfig {
+        num_initial_validators: 4,
+        num_shards: 1,
+        num_proxies: 2,
+        export_blocks_to_committee: true,
+        ..LocalNetConfig::new_test(database, network)
+    };
+    let (mut net, client) = config.instantiate().await?;
+    let chain = client.default_chain().expect("client has no default chain");
+
+    client
+        .transfer_with_silent_logs(1.into(), chain, chain)
+        .await?;
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    let before = relayed_requests(&net, 0).await?;
+    assert!(
+        before > 0,
+        "export should be relaying before the proxy is killed"
+    );
+
+    // Kill one of validator 0's two proxies. Destinations pinned to it must move to the other.
+    net.kill_proxy(0, 1).await?;
+
+    for _ in 0..4 {
+        client
+            .transfer_with_silent_logs(1.into(), chain, chain)
+            .await?;
+    }
+
+    // Every validator still converges, which can only happen if the destinations that were using
+    // the dead proxy were re-pointed at the surviving one.
+    let target = net
+        .validator_client(0)?
+        .handle_chain_info_query(ChainInfoQuery::new(chain))
+        .await?
+        .info
+        .next_block_height;
+    for _ in 0..60 {
+        let mut all = true;
+        for validator in 1..4 {
+            let info = net
+                .validator_client(validator)?
+                .handle_chain_info_query(ChainInfoQuery::new(chain))
+                .await?;
+            all &= info.info.next_block_height >= target;
+        }
+        if all {
+            net.terminate().await?;
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    panic!("export did not recover after one of the proxies was killed");
+}

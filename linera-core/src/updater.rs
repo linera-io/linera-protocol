@@ -144,6 +144,25 @@ where
     pub local_node: LocalNodeClient<S>,
     pub admin_chain_id: ChainId,
     pub certificate_upload_batch_size: u64,
+    /// Whether to also bring the remote node's *consensus round* up to ours once its height
+    /// matches, by pushing the proposal, locking certificate or timeout certificate that
+    /// justifies the later round.
+    ///
+    /// The client wants this: it is trying to drive a chain forward. Block export does not — its
+    /// job is to make another validator hold the blocks we hold, and pushing consensus evidence
+    /// on top of that is participation in consensus rather than replication of it. Export
+    /// therefore leaves this off and only ever moves heights.
+    pub sync_consensus_rounds: bool,
+    /// Caps how many admin-chain blocks are replayed in one go when a destination turns out not
+    /// to know the committee that signed a certificate.
+    ///
+    /// `None` replays as far as needed, which is what the client wants: it is trying to get one
+    /// certificate accepted and will wait. Block export sets a bound, because that replay happens
+    /// inside a single export round — a validator admitted to a network with a long admin-chain
+    /// history would otherwise hold up every other destination, and every later block of the
+    /// chain being exported, for as long as the whole replay takes. Bounded, it converges over
+    /// rounds instead, exactly like the per-chain catch-up.
+    pub max_admin_catch_up_blocks: Option<u64>,
 }
 
 impl<S: Storage + Clone, N: Clone> Clone for RemoteNodeUpdater<S, N> {
@@ -153,6 +172,8 @@ impl<S: Storage + Clone, N: Clone> Clone for RemoteNodeUpdater<S, N> {
             local_node: self.local_node.clone(),
             admin_chain_id: self.admin_chain_id,
             certificate_upload_batch_size: self.certificate_upload_batch_size,
+            sync_consensus_rounds: self.sync_consensus_rounds,
+            max_admin_catch_up_blocks: self.max_admin_catch_up_blocks,
         }
     }
 }
@@ -919,9 +940,18 @@ where
 
     async fn update_admin_chain(&mut self) -> Result<(), chain_client::Error> {
         let local_admin_info = self.local_node.chain_info(self.admin_chain_id).await?;
+        let admin_chain_id = self.admin_chain_id;
+        let target = local_admin_info.next_block_height;
+        // Bounded for block export: this runs inside one export round, so replaying an entire
+        // admin chain here would stall that chain's whole export. Unbounded for the client, which
+        // is waiting on this one certificate being accepted.
+        if let Some(max_blocks) = self.max_admin_catch_up_blocks {
+            Box::pin(self.send_missing_blocks(admin_chain_id, target, None, max_blocks)).await?;
+            return Ok(());
+        }
         Box::pin(self.send_chain_information(
-            self.admin_chain_id,
-            local_admin_info.next_block_height,
+            admin_chain_id,
+            target,
             CrossChainMessageDelivery::NonBlocking,
             None,
         ))
@@ -991,7 +1021,12 @@ where
 
         // Phase 2: Round synchronization (if needed)
         // Height synchronization is complete. Now check if we need to synchronize
-        // the consensus round at this height.
+        // the consensus round at this height. Consumers that only replicate blocks — block
+        // export — stop here: everything above this point moves heights, everything below it
+        // takes part in consensus.
+        if !self.sync_consensus_rounds {
+            return Ok(());
+        }
         let (remote_height, remote_round) = (info.next_block_height, info.manager.current_round);
         let query = ChainInfoQuery::new(chain_id).with_manager_values();
         let local_info = match self.local_node.handle_chain_info_query(query).await {
