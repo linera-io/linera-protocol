@@ -4,7 +4,7 @@
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::Debug,
-    sync::{Arc, OnceLock},
+    sync::{Arc, LazyLock, OnceLock},
 };
 
 use async_trait::async_trait;
@@ -14,7 +14,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight, NetworkDescription, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use linera_cache::{Arc as CacheArc, ValueCache};
 use linera_chain::{
@@ -632,6 +632,10 @@ impl Clock for WallClock {
         Timestamp::now()
     }
 
+    fn instant(&self) -> Instant {
+        Instant::now()
+    }
+
     async fn sleep_until(&self, timestamp: Timestamp) {
         let delta = timestamp.delta_since(Timestamp::now());
         if delta > TimeDelta::ZERO {
@@ -698,6 +702,18 @@ pub struct TestClock(Arc<std::sync::Mutex<TestClockInner>>);
 impl Clock for TestClock {
     fn current_time(&self) -> Timestamp {
         self.lock().time
+    }
+
+    fn instant(&self) -> Instant {
+        // Derived from the same simulated time as `current_time`, so the two cannot
+        // disagree. All test clocks share one baseline, so equal simulated times map to
+        // equal instants. Saturating keeps this total for absurdly distant times; it is
+        // monotonic as long as the test does not rewind the clock, exactly like
+        // `current_time`.
+        static BASELINE: LazyLock<Instant> = LazyLock::new(Instant::now);
+        BASELINE
+            .checked_add(Duration::from_micros(self.lock().time.micros()))
+            .unwrap_or(*BASELINE)
     }
 
     async fn sleep_until(&self, timestamp: Timestamp) {
@@ -2191,6 +2207,48 @@ mod tests {
         assert_eq!(
             cert_by_hash.value().block().header,
             cert_by_height.value().block().header
+        );
+    }
+}
+
+#[cfg(test)]
+mod clock_tests {
+    use linera_base::{data_types::TimeDelta, time::Duration};
+
+    use super::*;
+
+    /// The two readings must never disagree: code that measures a duration with `instant`
+    /// and code that waits on `sleep_for` have to see the same simulated time pass.
+    #[test]
+    fn test_test_clock_readings_advance_together() {
+        let clock = TestClock::new();
+        let start_instant = clock.instant();
+        let start_time = clock.current_time();
+
+        clock.add(TimeDelta::from_secs(90));
+
+        assert_eq!(
+            clock.current_time().duration_since(start_time),
+            Duration::from_secs(90),
+        );
+        assert_eq!(
+            clock.instant().saturating_duration_since(start_instant),
+            Duration::from_secs(90),
+        );
+    }
+
+    /// A monotonic reading is exactly what a wall-clock timestamp is not: it must not move
+    /// when only the simulated wall clock is rewound.
+    #[test]
+    fn test_test_clock_instant_does_not_run_backwards_on_its_own() {
+        let clock = TestClock::new();
+        clock.add(TimeDelta::from_secs(60));
+        let instant = clock.instant();
+
+        assert_eq!(
+            clock.instant(),
+            instant,
+            "reading twice gives the same time"
         );
     }
 }

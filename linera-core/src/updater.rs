@@ -12,9 +12,10 @@ use std::{
 use futures::{future, Future, FutureExt as _, StreamExt};
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{BlockHeight, Round, TimeDelta, Timestamp},
+    data_types::{BlockHeight, Round, TimeDelta},
     ensure,
     identifiers::{BlobId, BlobType, ChainId, StreamId},
+    time::Instant,
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
@@ -183,7 +184,8 @@ pub enum CommunicationError<E: fmt::Debug> {
 ///
 /// All timing is taken from `clock`, both the measurement of how long the quorum took and the
 /// wait that follows it, so that the grace period means the same thing under a simulated clock
-/// as it does in production.
+/// as it does in production. The measurement uses the clock's monotonic reading, so that a
+/// step of the system clock cannot turn the grace period into a nonsense duration.
 pub async fn communicate_with_quorum<'a, A, V, K, F, R, G, C>(
     validator_clients: &'a [RemoteNode<A>],
     committee: &Committee,
@@ -200,7 +202,7 @@ where
     G: Fn(&V) -> K,
     K: Hash + PartialEq + Eq + Clone + 'static,
     V: 'static,
-    C: Clock,
+    C: Clock + Sync,
 {
     let mut responses: futures::stream::FuturesUnordered<_> = validator_clients
         .iter()
@@ -221,15 +223,15 @@ where
                 #[cfg(with_metrics)]
                 let address = remote_node.address();
                 #[cfg(with_metrics)]
-                let request_start = clock.current_time();
+                let request_start = clock.instant();
                 let result = execute(remote_node).await;
                 #[cfg(with_metrics)]
                 metrics::QUORUM_RESPONSE_TIME
                     .with_label_values(&[&public_key.to_string(), &address])
                     .observe(
                         clock
-                            .current_time()
-                            .duration_since(request_start)
+                            .instant()
+                            .saturating_duration_since(request_start)
                             .as_secs_f64()
                             * 1000.0,
                     );
@@ -238,8 +240,8 @@ where
         })
         .collect();
 
-    let start_time = clock.current_time();
-    let mut end_time: Option<Timestamp> = None;
+    let start_time = clock.instant();
+    let mut deadline: Option<Instant> = None;
     let mut remaining_votes = committee.total_votes();
     let mut highest_key_score = 0;
     let mut value_scores: HashMap<K, (u64, Vec<(ValidatorPublicKey, V)>)> = HashMap::new();
@@ -252,12 +254,15 @@ where
 
     'vote_wait: loop {
         // Before a quorum there is no deadline; after one, stop when the grace period ends.
-        let next = match end_time {
+        let next = match deadline {
             None => responses.next().await,
-            Some(deadline) => futures::select! {
-                response = responses.next() => response,
-                () = clock.sleep_until(deadline).fuse() => None,
-            },
+            Some(deadline) => {
+                let remaining = deadline.saturating_duration_since(clock.instant());
+                futures::select! {
+                    response = responses.next() => response,
+                    () = clock.sleep_for(remaining).fuse() => None,
+                }
+            }
         };
         let Some((name, result)) = next else {
             break 'vote_wait;
@@ -268,7 +273,7 @@ where
             .with_label_values(&[
                 &name.to_string(),
                 addresses.get(&name).map_or("", String::as_str),
-                if end_time.is_none() {
+                if deadline.is_none() {
                     "before_quorum"
                 } else {
                     "after_quorum"
@@ -302,10 +307,12 @@ where
 
         // If a key reaches a quorum, wait for the grace period to collect more values
         // or error information and then stop.
-        if end_time.is_none() && highest_key_score >= committee.quorum_threshold() {
-            let now = clock.current_time();
-            let grace = now.duration_since(start_time).mul_f64(quorum_grace_period);
-            end_time = Some(now.saturating_add(TimeDelta::from_duration(grace)));
+        if deadline.is_none() && highest_key_score >= committee.quorum_threshold() {
+            let now = clock.instant();
+            let grace = now
+                .saturating_duration_since(start_time)
+                .mul_f64(quorum_grace_period);
+            deadline = Some(now + grace);
         }
     }
 

@@ -18,7 +18,7 @@ use linera_base::{
         NetworkDescription, TimeDelta, Timestamp,
     },
     identifiers::{ApplicationId, BlobId, BlobType, ChainId, EventId, IndexAndEvent, StreamId},
-    time::Duration,
+    time::{Duration, Instant},
     vm::VmRuntime,
 };
 pub use linera_cache::{Arc, DEFAULT_CLEANUP_INTERVAL_SECS};
@@ -648,11 +648,30 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
 }
 
 /// A clock that can be used to get the current `Timestamp`.
+///
+/// It reports time two ways, because the two are needed for different things and only one of
+/// them can be both.
+///
+/// [`Clock::current_time`] is absolute and shared: block timestamps and round timeouts are
+/// written into chain state and compared across validators, so they have to be wall-clock
+/// times that everyone agrees on. That also makes them liable to jump, since the system clock
+/// can be stepped.
+///
+/// [`Clock::instant`] is monotonic and purely local: it has no epoch and cannot be compared
+/// between machines, but it never goes backwards. Use it to measure how long something took
+/// — a grace period, a backoff, an idle timeout — where a clock step would otherwise produce
+/// a nonsense duration.
 #[cfg_attr(not(web), async_trait)]
 #[cfg_attr(web, async_trait(?Send))]
 pub trait Clock {
-    /// Returns the current time.
+    /// Returns the current time, on a wall clock shared with other validators.
     fn current_time(&self) -> Timestamp;
+
+    /// Returns the current reading of a monotonic clock, for measuring durations.
+    ///
+    /// This advances in step with [`Clock::current_time`] and with the waits in
+    /// [`Clock::sleep_until`] and [`Clock::sleep_for`], including when the clock is simulated.
+    fn instant(&self) -> Instant;
 
     /// Waits until the given timestamp is reached.
     async fn sleep_until(&self, timestamp: Timestamp);
