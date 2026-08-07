@@ -877,7 +877,7 @@ where
         let (epoch, committee) = self.chain.current_committee().await?;
         check_block_epoch(epoch, header.chain_id, header.epoch)?;
         certificate.check(&committee)?;
-        OwnerAuthorization::check_block_authorization(certificate.owner_authorization(), block)?;
+        OwnerAuthorization::check_block_authorization(block)?;
         let already_committed_block = self.chain.tip_state.get().already_validated_block(height)?;
         let should_skip_validated_block = || {
             self.chain
@@ -977,7 +977,7 @@ where
         // We haven't processed the block - verify the certificate first.
         let committee = self.committee_for_epoch(block.header.epoch).await?;
         certificate.check(&committee)?;
-        OwnerAuthorization::check_block_authorization(certificate.owner_authorization(), block)?;
+        OwnerAuthorization::check_block_authorization(block)?;
 
         // Certificate check passed - which means the blobs the block requires are legitimate and
         // we can take note of it, so that if any are missing, we will accept them when the client
@@ -1320,7 +1320,9 @@ where
                 .await;
             certificate.into_value()
         } else {
-            let (proposed_block, outcome) = certificate.into_value().into_block().into_proposal();
+            let block = certificate.into_value().into_block();
+            let owner_authorization = block.owner_authorization;
+            let (proposed_block, outcome) = block.into_proposal();
             let oracle_responses = Some(outcome.oracle_responses.clone());
             let (proposed_block, verified, _resource_tracker, _) = chain
                 .execute_block(
@@ -1342,7 +1344,9 @@ where
                 ))
                 .into());
             }
-            ConfirmedBlock::new(Block::new(proposed_block, verified))
+            ConfirmedBlock::new(
+                Block::new(proposed_block, verified).with_owner_authorization(owner_authorization),
+            )
         };
 
         let updated_streams = chain
@@ -2549,6 +2553,9 @@ where
             .await?;
             executed_block
         };
+        // Retain the owner's signature on the block we are about to vote for, so that it
+        // survives into the certificates built from this vote. It was verified above.
+        let block = block.with_owner_authorization(proposal.owner_authorization());
 
         ensure!(
             !round.is_fast() || !block.has_oracle_responses(),

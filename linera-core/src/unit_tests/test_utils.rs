@@ -1232,7 +1232,7 @@ where
         let query = ChainInfoQuery::new(chain_id)
             .with_sent_certificate_hashes_by_heights(vec![block_height]);
         let mut count = 0;
-        let mut certificate = None;
+        let mut certificate: Option<ConfirmedBlockCertificate> = None;
         for validator in self.node_provider.all_nodes() {
             if let Ok(response) = validator.handle_chain_info_query(query.clone()).await {
                 if response.check(validator.public_key).is_ok() {
@@ -1247,6 +1247,17 @@ where
                                 && cert.inner().block().header.height == block_height
                             {
                                 cert.check(&self.initial_committee).unwrap();
+                                if let Some(previous) = &certificate {
+                                    // The owner authorization is covered by neither the block
+                                    // hash nor the validator signatures, so certificate equality
+                                    // does not compare it. Check explicitly that every validator
+                                    // retained the same evidence.
+                                    assert_eq!(
+                                        previous.block().owner_authorization,
+                                        cert.block().owner_authorization,
+                                        "validators disagree on the retained owner authorization"
+                                    );
+                                }
                                 count += 1;
                                 certificate = Some(cert);
                             }

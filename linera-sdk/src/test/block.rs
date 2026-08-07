@@ -262,7 +262,6 @@ impl BlockBuilder {
             )
             .await?;
 
-        let value = ConfirmedBlock::new(block);
         // Confirm in the chain's first round so the votes can carry the first-round attestation
         // and the certificate needs no justification chain. The chain's current ownership (the
         // parent's, since this block isn't committed yet) is the one that governs this block's
@@ -270,14 +269,14 @@ impl BlockBuilder {
         let info = self
             .validator
             .worker()
-            .handle_chain_info_query(ChainInfoQuery::new(value.chain_id()))
+            .handle_chain_info_query(ChainInfoQuery::new(block.header.chain_id))
             .await
             .expect("Failed to query chain ownership")
             .info;
         let round = info.manager.ownership.first_round();
-        let owner_authorization = value.block().header.authenticated_owner.map(|_| {
+        let owner_authorization = block.header.authenticated_owner.map(|_| {
             let content = ProposalContent {
-                block: value.block().to_proposed(),
+                block: block.to_proposed(),
                 round,
                 outcome: None,
             };
@@ -286,6 +285,7 @@ impl BlockBuilder {
                 signature: owner_key_pair.sign(&content),
             }
         });
+        let value = ConfirmedBlock::new(block.with_owner_authorization(owner_authorization));
         let public_key = self.validator.key_pair().public();
         // A first-round confirmation attests that no lower round exists, so it commits to no
         // justifying quorum.
@@ -293,8 +293,7 @@ impl BlockBuilder {
             Vote::new_with_first_round(value, round, true, None, self.validator.key_pair())
                 .into_certificate(public_key);
         let certificate =
-            ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default())
-                .with_owner_authorization(owner_authorization);
+            ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default());
 
         Ok((certificate, resource_tracker))
     }

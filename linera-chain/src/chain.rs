@@ -231,7 +231,7 @@ pub(crate) mod metrics {
 }
 
 /// The BCS-serialized size of an empty [`Block`].
-pub(crate) const EMPTY_BLOCK_SIZE: usize = 94;
+pub(crate) const EMPTY_BLOCK_SIZE: usize = 95;
 
 /// A set of fully-tracked chains. Wrapped in [`Hashed`] (as `Hashed<ChainIdSet>`) so the hash that
 /// identifies the set — stored in [`ChainStateView::outbox_index_tracked_hash`] to detect when the

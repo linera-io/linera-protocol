@@ -370,15 +370,24 @@ fn owner_authorization_verifies_against_block() {
 
     // A block with an authenticated owner is invalid without the authorization.
     assert_matches::assert_matches!(
-        OwnerAuthorization::check_block_authorization(None, &block),
+        OwnerAuthorization::check_block_authorization(&block),
         Err(ChainError::MissingOwnerAuthorization)
     );
-    assert!(OwnerAuthorization::check_block_authorization(Some(&authorization), &block).is_ok());
+    block.owner_authorization = Some(authorization);
+    assert!(OwnerAuthorization::check_block_authorization(&block).is_ok());
+
+    // The authorization is not covered by the block hash: attaching it leaves the block's
+    // identity, and its equality with the unauthorized block, unchanged.
+    let mut unauthorized = block.clone();
+    unauthorized.owner_authorization = None;
+    assert_eq!(block.hash(), unauthorized.hash());
+    assert_eq!(block, unauthorized);
 
     // Without an authenticated owner, the authorization is optional, and any owner's
     // valid signature is accepted.
     block.header.authenticated_owner = None;
-    assert!(OwnerAuthorization::check_block_authorization(None, &block).is_ok());
+    block.owner_authorization = None;
+    assert!(OwnerAuthorization::check_block_authorization(&block).is_ok());
     let content = ProposalContent {
         block: block.to_proposed(),
         round,

@@ -27,9 +27,7 @@ use linera_cache::{Arc as CacheArc, UniqueValueCache, ValueCache, DEFAULT_CLEANU
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
 use linera_chain::{
-    data_types::{
-        BlockProposal, BundleExecutionPolicy, MessageBundle, OwnerAuthorization, ProposedBlock,
-    },
+    data_types::{BlockProposal, BundleExecutionPolicy, MessageBundle, ProposedBlock},
     types::{
         Block, CertificateValue, Certified, ConfirmedBlock, ConfirmedBlockCertificate,
         GenericCertificate, LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock,
@@ -826,13 +824,11 @@ pub trait ProcessableCertificate: CertificateValue + Sized + 'static {
     /// justification chain).
     type Certificate: Certified<Value = Self> + Clone + Send + Sync + 'static;
 
-    /// Builds the concrete certificate from a signed quorum, a justification chain and a
-    /// retained owner authorization. The chain and the authorization are ignored for values
-    /// (such as `Timeout`) that carry neither.
+    /// Builds the concrete certificate from a signed quorum and a justification chain. The
+    /// chain is ignored for values (such as `Timeout`) that do not carry one.
     fn make_certificate(
         quorum: GenericCertificate<Self>,
         justification: linera_chain::justification::JustificationChain,
-        owner_authorization: Option<OwnerAuthorization>,
     ) -> Self::Certificate;
 
     /// Processes a certificate carrying this value on the given worker.
@@ -848,10 +844,8 @@ impl ProcessableCertificate for ConfirmedBlock {
     fn make_certificate(
         quorum: GenericCertificate<Self>,
         justification: linera_chain::justification::JustificationChain,
-        owner_authorization: Option<OwnerAuthorization>,
     ) -> Self::Certificate {
         ConfirmedBlockCertificate::from_parts(quorum, justification)
-            .with_owner_authorization(owner_authorization)
     }
 
     async fn process_certificate<S: Storage + Clone + 'static>(
@@ -873,10 +867,8 @@ impl ProcessableCertificate for ValidatedBlock {
     fn make_certificate(
         quorum: GenericCertificate<Self>,
         justification: linera_chain::justification::JustificationChain,
-        owner_authorization: Option<OwnerAuthorization>,
     ) -> Self::Certificate {
         ValidatedBlockCertificate::from_parts(quorum, justification)
-            .with_owner_authorization(owner_authorization)
     }
 
     async fn process_certificate<S: Storage + Clone + 'static>(
@@ -893,7 +885,6 @@ impl ProcessableCertificate for Timeout {
     fn make_certificate(
         quorum: GenericCertificate<Self>,
         _justification: linera_chain::justification::JustificationChain,
-        _owner_authorization: Option<OwnerAuthorization>,
     ) -> Self::Certificate {
         quorum
     }

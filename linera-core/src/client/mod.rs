@@ -1292,8 +1292,6 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<ConfirmedBlockCertificate, chain_client::Error> {
         debug!(round = %certificate.round(), "Submitting block for confirmation");
         let hashed_value = ConfirmedBlock::new(certificate.block().clone());
-        // Carry the retained owner authorization over from the validated certificate.
-        let owner_authorization = certificate.owner_authorization().copied();
         // The full chain of validated quorums for the block: this validated certificate's own
         // quorum as the top link, then the chain below it. Whether the confirmed certificate
         // actually carries it is decided *after* the quorum forms, from the attestation the
@@ -1325,8 +1323,7 @@ impl<Env: Environment> Client<Env> {
                  validated certificate's justification chain",
             )
         );
-        let certificate = ConfirmedBlockCertificate::from_parts(quorum, justification)
-            .with_owner_authorization(owner_authorization);
+        let certificate = ConfirmedBlockCertificate::from_parts(quorum, justification);
         self.receive_certificate_with_checked_signatures(
             certificate.clone(),
             ProcessConfirmedBlockMode::Execute,
@@ -1347,8 +1344,6 @@ impl<Env: Environment> Client<Env> {
             round = %proposal.content.round,
             "Submitting block proposal to validators"
         );
-        let owner_authorization = proposal.owner_authorization();
-
         // The certificate's justification chain comes from the proposal: a retry is justified
         // by the validated certificate it carries (the new top link plus that certificate's own
         // chain); a proposal without one has no justification.
@@ -1431,7 +1426,7 @@ impl<Env: Environment> Client<Env> {
                  proposal's justification chain",
             )
         );
-        let certificate = T::make_certificate(quorum, justification, owner_authorization);
+        let certificate = T::make_certificate(quorum, justification);
         self.handle_certificate::<T>(certificate.clone()).await?;
         Ok(certificate)
     }

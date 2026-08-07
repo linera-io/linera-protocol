@@ -430,16 +430,18 @@ pub struct MessageBundle {
 /// Every block is first proposed without an execution outcome — an outcome appears in
 /// a proposal only when re-proposing an already validated block — so such a signature
 /// always exists, and it is the one validators checked against the block's
-/// `authenticated_owner`. Retaining it alongside the certificate lets anyone verify
-/// that a chain owner really authorized the block without trusting the validator
-/// quorum. A certified block with an `authenticated_owner` is *not valid* without
-/// this signature (see [`OwnerAuthorization::check_block_authorization`]); for other
-/// blocks it is optional provenance.
+/// `authenticated_owner`. Retaining it on the block lets anyone verify that a chain
+/// owner really authorized the block without trusting the validator quorum. A certified
+/// block with an `authenticated_owner` is *not valid* without this signature (see
+/// [`OwnerAuthorization::check_block_authorization`]); for other blocks it is optional
+/// provenance.
 ///
-/// This value is not covered by the certified block's hash or by the validator
-/// signatures. Given the block, anyone can reconstruct the signed proposal content
-/// and check the signature, so it cannot be forged — only withheld, which
-/// [`OwnerAuthorization::check_block_authorization`] rejects for blocks with an
+/// This value is carried by [`Block::owner_authorization`] but is not covered by
+/// [`Block::hash`] or by the validator signatures: the same block can be authorized by
+/// proposals in different rounds, and a block's identity must not depend on which of
+/// those signatures accompanies it. Given the block, anyone can reconstruct the signed
+/// proposal content and check the signature, so it cannot be forged — only withheld,
+/// which [`OwnerAuthorization::check_block_authorization`] rejects for blocks with an
 /// authenticated owner.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Allocative)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
@@ -473,11 +475,8 @@ impl OwnerAuthorization {
     /// `authenticated_owner` is only valid together with that owner's signature over
     /// the block's proposal content. For blocks without an authenticated owner the
     /// signature is optional, but must be valid if present.
-    pub fn check_block_authorization(
-        authorization: Option<&OwnerAuthorization>,
-        block: &Block,
-    ) -> Result<(), ChainError> {
-        match authorization {
+    pub fn check_block_authorization(block: &Block) -> Result<(), ChainError> {
+        match &block.owner_authorization {
             Some(authorization) => {
                 authorization.verify(block)?;
             }
@@ -996,6 +995,9 @@ impl BlockProposal {
     ) -> Result<Self, S::Error> {
         let certificate = validated_block_certificate.lite_certificate().cloned();
         let block = validated_block_certificate.into_inner().into_inner();
+        // The retried block's own authorization: the signed content of this proposal carries
+        // an outcome, so the proposer's signature cannot double as one.
+        let owner_authorization = block.owner_authorization;
         let (block, outcome) = block.into_proposal();
         let content = ProposalContent {
             block,
@@ -1007,7 +1009,7 @@ impl BlockProposal {
         Ok(Self {
             content,
             signature,
-            owner_authorization: None,
+            owner_authorization,
             validated_certificate: Some(certificate),
         })
     }
@@ -1023,20 +1025,15 @@ impl BlockProposal {
         (&self.signature).into()
     }
 
-    /// Returns the authorization backing the block's `authenticated_owner`, if any:
-    /// the explicit one, the one retained by the validated certificate, or the
-    /// proposer's own signature when the signed content has no execution outcome.
+    /// Returns the authorization backing the block's `authenticated_owner`, if any: the
+    /// explicit one, or the proposer's own signature when the signed content has no
+    /// execution outcome.
     ///
     /// Whether the returned candidate is actually valid for the block is checked by
     /// [`OwnerAuthorization::verify_proposed_block`].
     pub fn owner_authorization(&self) -> Option<OwnerAuthorization> {
         if let Some(authorization) = self.owner_authorization {
             return Some(authorization);
-        }
-        if let Some(certificate) = &self.validated_certificate {
-            if let Some(authorization) = certificate.owner_authorization {
-                return Some(authorization);
-            }
         }
         self.content
             .outcome

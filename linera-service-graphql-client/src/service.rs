@@ -723,6 +723,9 @@ mod from {
             Ok(Block {
                 header: block_header,
                 body: block_body,
+                // The owner authorization is not exposed over GraphQL, so a block read back
+                // from the service carries none. This does not affect the block's hash.
+                owner_authorization: None,
             })
         }
     }

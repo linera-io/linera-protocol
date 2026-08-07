@@ -2292,7 +2292,10 @@ impl<Env: Environment> ChainClient<Env> {
         // network calls below.
         *snapshot = Some(self.consensus_state_snapshot().await?);
         let committee = self.local_committee().await?;
-        let block = Block::new(proposed_block, outcome);
+        // The block the validators will vote for retains the owner's signature, exactly as
+        // their own worker attaches it when handling the proposal.
+        let block = Block::new(proposed_block, outcome)
+            .with_owner_authorization(proposal.owner_authorization());
         // Send the query to validators.
         let submit_block_proposal_start = linera_base::time::Instant::now();
         let certificate = if round.is_fast() {

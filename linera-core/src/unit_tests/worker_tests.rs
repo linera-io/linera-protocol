@@ -57,7 +57,8 @@ use linera_chain::{
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
         Block, CertificateKind, CertificateValue, Certified, ConfirmedBlock,
-        ConfirmedBlockCertificate, Timeout, ValidatedBlock, ValidatedBlockCertificate,
+        ConfirmedBlockCertificate, GenericCertificate, Timeout, ValidatedBlock,
+        ValidatedBlockCertificate,
     },
     ChainError, ChainExecutionContext, ChainStateView,
 };
@@ -376,24 +377,29 @@ where
         self.make_certificate_with_round(value, Round::MultiLeader(0))
     }
 
-    /// Like [`Self::make_certificate`], but also attaches the owner authorization
-    /// required for blocks with an `authenticated_owner`.
-    fn make_confirmed_certificate(&self, value: ConfirmedBlock) -> ConfirmedBlockCertificate {
-        let authorization = self.owner_authorization_for(value.block());
-        self.make_certificate(value)
-            .with_owner_authorization(authorization)
+    /// Attaches the owner authorization required for blocks with an `authenticated_owner`.
+    fn authorize(&self, block: Block) -> Block {
+        let authorization = self.owner_authorization_for(&block);
+        block.with_owner_authorization(authorization)
     }
 
-    /// Like [`Self::make_certificate`], but also attaches the owner authorization
-    /// required for blocks with an `authenticated_owner`.
+    /// Like [`Self::make_certificate`], but the certified block carries the owner
+    /// authorization required for blocks with an `authenticated_owner`.
+    fn make_confirmed_certificate(&self, value: ConfirmedBlock) -> ConfirmedBlockCertificate {
+        self.make_certificate(ConfirmedBlock::new(self.authorize(value.into_block())))
+    }
+
+    /// Like [`Self::make_certificate`], but the certified block carries the owner
+    /// authorization required for blocks with an `authenticated_owner`.
     fn make_validated_certificate_with_round(
         &self,
         value: ValidatedBlock,
         round: Round,
     ) -> ValidatedBlockCertificate {
-        let authorization = self.owner_authorization_for(value.block());
-        self.make_certificate_with_round(value, round)
-            .with_owner_authorization(authorization)
+        self.make_certificate_with_round(
+            ValidatedBlock::new(self.authorize(value.into_inner())),
+            round,
+        )
     }
 
     fn make_certificate_with_round<T>(&self, value: T, round: Round) -> T::Certificate
@@ -439,7 +445,7 @@ where
             key_pair,
         )
         .into_certificate(public_key);
-        T::make_certificate(quorum, justification, None)
+        T::make_certificate(quorum, justification)
     }
 
     async fn make_simple_transfer_certificate(
@@ -641,9 +647,7 @@ where
             }
             .with(block),
         );
-        let authorization = self.owner_authorization_for(value.block());
-        self.make_certificate(value)
-            .with_owner_authorization(authorization)
+        self.make_confirmed_certificate(value)
     }
 
     pub fn system_execution_state(&self, chain_id: &ChainId) -> SystemExecutionState {
@@ -676,10 +680,7 @@ where
             .executing_worker
             .stage_block_execution(proposal, None, blobs, BundleExecutionPolicy::committed())
             .await?;
-        let authorization = self.owner_authorization_for(&block);
-        let certificate = self
-            .make_certificate(ConfirmedBlock::new(block))
-            .with_owner_authorization(authorization);
+        let certificate = self.make_confirmed_certificate(ConfirmedBlock::new(block));
         self.executing_worker
             .fully_handle_certificate_with_notifications(certificate.clone(), &())
             .await?;
@@ -1890,6 +1891,82 @@ where
         CryptoHash::new(&*response.info),
         CryptoHash::new(&*replay_response.info)
     );
+    Ok(())
+}
+
+/// Rebuilds a confirmed certificate with the owner authorization stripped from its block.
+/// The block's hash, and therefore the validator signatures, are unaffected.
+fn without_owner_authorization(
+    certificate: ConfirmedBlockCertificate,
+) -> ConfirmedBlockCertificate {
+    let round = certificate.round();
+    let first_round = certificate.quorum().first_round();
+    let justification_commitment = certificate.quorum().justification_commitment();
+    let signatures = certificate.signatures().clone();
+    let (quorum, justification) = certificate.into_parts();
+    let mut block = quorum.into_value().into_block();
+    block.owner_authorization = None;
+    let quorum = GenericCertificate::new_with_payload(
+        ConfirmedBlock::new(block),
+        round,
+        None,
+        first_round,
+        justification_commitment,
+        signatures,
+    );
+    ConfirmedBlockCertificate::from_parts(quorum, justification)
+}
+
+/// A block that declares an authenticated owner is only valid together with that owner's
+/// signature, which the certified block carries but its hash does not cover.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_handle_certificate_without_owner_authorization<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let key_pair = AccountSecretKey::generate();
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_owner(&key_pair);
+    let chain_1 = env
+        .add_root_chain(1, key_pair.public().into(), Amount::from_tokens(5))
+        .await
+        .id();
+    let chain_2 = env
+        .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ZERO)
+        .await
+        .id();
+    let certificate = env
+        .make_simple_transfer_certificate(
+            chain_1,
+            key_pair.public(),
+            chain_2,
+            Amount::ONE,
+            vec![],
+            None,
+        )
+        .await;
+    assert!(certificate.block().owner_authorization.is_some());
+
+    // Stripping the authorization leaves the certificate's signatures valid, but the block
+    // is no longer authorized, so the worker rejects it.
+    let stripped = without_owner_authorization(certificate.clone());
+    assert_eq!(stripped.hash(), certificate.hash());
+    stripped.check(env.committee())?;
+    assert_matches!(
+        env.worker()
+            .fully_handle_certificate_with_notifications(stripped, &())
+            .await,
+        Err(WorkerError::ChainError(error))
+            if matches!(*error, ChainError::MissingOwnerAuthorization)
+    );
+
+    // The same certificate with the authorization retained is accepted.
+    env.worker()
+        .fully_handle_certificate_with_notifications(certificate, &())
+        .await?;
     Ok(())
 }
 
@@ -3743,7 +3820,7 @@ where
         .handle_block_proposal(proposal1)
         .await
         .0?;
-    let value1 = ValidatedBlock::new(block1.clone());
+    let value1 = ValidatedBlock::new(env.authorize(block1.clone()));
 
     // If we send the validated block certificate to the worker, it votes to confirm.
     let vote = response.info.manager.pending.clone().unwrap();
@@ -3752,8 +3829,7 @@ where
         .unwrap()
         .into_certificate(env.executing_worker().public_key());
     let certificate1 =
-        ValidatedBlockCertificate::from_parts(quorum1, JustificationChain::default())
-            .with_owner_authorization(env.owner_authorization_for(value1.block()));
+        ValidatedBlockCertificate::from_parts(quorum1, JustificationChain::default());
     let (response, _) = env
         .executing_worker()
         .handle_validated_certificate(certificate1.clone())
@@ -5623,9 +5699,7 @@ where
             None,
         )
         .await;
-    let lying = env
-        .make_certificate_with_round(honest.value().clone(), Round::Fast)
-        .with_owner_authorization(env.owner_authorization_for(honest.value().block()));
+    let lying = env.make_certificate_with_round(honest.value().clone(), Round::Fast);
 
     let result = env
         .worker()

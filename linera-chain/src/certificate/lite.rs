@@ -18,7 +18,7 @@ use super::{
 };
 use crate::{
     block::{ConfirmedBlock, ValidatedBlock},
-    data_types::{check_signatures, LiteValue, LiteVote, OwnerAuthorization, VoteValue},
+    data_types::{check_signatures, LiteValue, LiteVote, VoteValue},
     justification::{CommittedQuorum, JustificationChain},
     types::CertificateKind,
     ChainError,
@@ -56,10 +56,6 @@ pub struct LiteCertificate<'a> {
     pub justification: Cow<'a, JustificationChain>,
     /// Signatures on the value.
     pub signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
-    /// The retained chain owner's signature over the certified block's proposal
-    /// content, if available. Carried here so that reconstructing a full certificate
-    /// from a cached value does not lose it.
-    pub owner_authorization: Option<OwnerAuthorization>,
 }
 
 impl Allocative for LiteCertificate<'_> {
@@ -104,7 +100,6 @@ impl LiteCertificate<'_> {
             justification_commitment,
             justification: Cow::Owned(JustificationChain::default()),
             signatures: Cow::Owned(signatures),
-            owner_authorization: None,
         }
     }
 
@@ -268,12 +263,8 @@ impl LiteCertificate<'_> {
         self,
         value: ConfirmedBlock,
     ) -> Option<ConfirmedBlockCertificate> {
-        let owner_authorization = self.owner_authorization;
         let (quorum, justification) = self.into_quorum_and_chain(value)?;
-        Some(
-            ConfirmedBlockCertificate::from_parts(quorum, justification)
-                .with_owner_authorization(owner_authorization),
-        )
+        Some(ConfirmedBlockCertificate::from_parts(quorum, justification))
     }
 
     /// Consumes this lite certificate into the full [`ValidatedBlockCertificate`] for `value`,
@@ -283,12 +274,8 @@ impl LiteCertificate<'_> {
         self,
         value: ValidatedBlock,
     ) -> Option<ValidatedBlockCertificate> {
-        let owner_authorization = self.owner_authorization;
         let (quorum, justification) = self.into_quorum_and_chain(value)?;
-        Some(
-            ValidatedBlockCertificate::from_parts(quorum, justification)
-                .with_owner_authorization(owner_authorization),
-        )
+        Some(ValidatedBlockCertificate::from_parts(quorum, justification))
     }
 
     /// Splits this lite certificate into the signed quorum for `value` and its justification
@@ -321,7 +308,6 @@ impl LiteCertificate<'_> {
             justification_commitment: self.justification_commitment,
             justification: Cow::Owned(self.justification.as_ref().clone()),
             signatures: Cow::Owned(self.signatures.clone().into_owned()),
-            owner_authorization: self.owner_authorization,
         }
     }
 }

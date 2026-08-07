@@ -144,6 +144,9 @@ Block:
         TYPENAME: BlockHeader
     - body:
         TYPENAME: BlockBody
+    - owner_authorization:
+        OPTION:
+          TYPENAME: OwnerAuthorization
 BlockBody:
   STRUCT:
     - transactions:
@@ -464,9 +467,6 @@ ConfirmedBlockCertificate:
             - TYPENAME: Secp256k1Signature
     - justification:
         TYPENAME: JustificationChain
-    - owner_authorization:
-        OPTION:
-          TYPENAME: OwnerAuthorization
 CrateVersion:
   STRUCT:
     - major: U32
@@ -634,9 +634,6 @@ LiteCertificate:
           TUPLE:
             - TYPENAME: Secp256k1PublicKey
             - TYPENAME: Secp256k1Signature
-    - owner_authorization:
-        OPTION:
-          TYPENAME: OwnerAuthorization
 LiteValue:
   STRUCT:
     - value_hash:
@@ -1456,9 +1453,6 @@ ValidatedBlockCertificate:
             - TYPENAME: Secp256k1Signature
     - justification:
         TYPENAME: JustificationChain
-    - owner_authorization:
-        OPTION:
-          TYPENAME: OwnerAuthorization
 VersionInfo:
   STRUCT:
     - crate_version:
