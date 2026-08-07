@@ -443,7 +443,7 @@ pub struct MessageBundle {
 /// proposal content and check the signature, so it cannot be forged — only withheld,
 /// which [`OwnerAuthorization::check_block_authorization`] rejects for blocks with an
 /// authenticated owner.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, Allocative)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, SimpleObject, Allocative)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct OwnerAuthorization {
     /// The round of the proposal whose signature was retained.

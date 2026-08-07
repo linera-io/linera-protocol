@@ -295,7 +295,6 @@ pub struct Block {
     /// A block with an `authenticated_owner` is only valid together with a valid
     /// authorization by that owner (see
     /// [`OwnerAuthorization::check_block_authorization`]).
-    #[graphql(skip)]
     pub owner_authorization: Option<OwnerAuthorization>,
 }
 
