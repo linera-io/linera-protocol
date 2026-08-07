@@ -16,7 +16,7 @@ name: Client Binaries
 # gets binaries.
 on:
   push:
-    branches: [ main, 'devnet_*', 'testnet_*' ]
+    branches: [ 'devnet_*', 'testnet_*' ]
   workflow_dispatch:
 
 concurrency:

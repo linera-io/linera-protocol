@@ -227,10 +227,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: ./.github/actions/gcp-auth
+      - name: Auth service account
+        uses: google-github-actions/auth@v1
         with:
-          service_account: actions-runner@linera-io-dev.iam.gserviceaccount.com
-          configure_docker_for: us-docker.pkg.dev
+          credentials_json: ${{ secrets.GCP_SA_ACTIONS_RUNNER_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Configure Docker to push to Artifact Registry
+        run: gcloud auth configure-docker us-docker.pkg.dev --quiet
 
       - name: Wait for docker daemon
         run: |
@@ -289,10 +295,16 @@ jobs:
     steps:
       - uses: actions/checkout@v6.0.2
 
-      - uses: ./.github/actions/gcp-auth
+      - name: Auth service account
+        uses: google-github-actions/auth@v1
         with:
-          service_account: actions-runner@linera-io-dev.iam.gserviceaccount.com
-          configure_docker_for: us-docker.pkg.dev
+          credentials_json: ${{ secrets.GCP_SA_ACTIONS_RUNNER_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Configure Docker to push to Artifact Registry
+        run: gcloud auth configure-docker us-docker.pkg.dev --quiet
 
       - name: Merge the per-arch images into one manifest list
         env:
