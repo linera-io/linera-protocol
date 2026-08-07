@@ -196,6 +196,7 @@ where
         service_runtime_task: Option<web_thread_pool::Task<()>>,
     ) -> Result<Self, WorkerError> {
         let chain = storage.load_chain(chain_id).await?;
+        let now = storage.clock().current_time();
 
         Ok(ChainWorkerState {
             config,
@@ -203,7 +204,7 @@ where
             chain,
             service_runtime_endpoint,
             service_runtime_task,
-            last_access: Arc::new(AtomicTimestamp::now()),
+            last_access: Arc::new(AtomicTimestamp::new(now)),
             block_values,
             execution_state_cache,
             chain_modes,
@@ -345,9 +346,14 @@ where
         Ok(())
     }
 
-    /// Updates the last-access timestamp to the current time.
+    /// Updates the last-access timestamp to the storage clock's current time.
     pub(crate) fn touch(&self) {
-        self.last_access.store_now();
+        self.last_access.store(self.storage.clock().current_time());
+    }
+
+    /// Returns the storage clock, which also drives the keep-alive task's idle timing.
+    pub(crate) fn clock(&self) -> &StorageClient::Clock {
+        self.storage.clock()
     }
 
     /// Returns a clone of the last-access `Arc`, for use by the keep-alive task.

@@ -5502,3 +5502,79 @@ where
     }
     Ok(())
 }
+
+/// A chain worker's idle timeout is measured and slept on the storage clock, so a test
+/// evicts a worker by advancing that clock rather than by taking long enough in real time.
+///
+/// Before this, `sender_chain_ttl` defaulted to one second of *wall* clock, so whether a
+/// worker survived a test depended on how long the test happened to run.
+#[test_log::test(tokio::test)]
+async fn test_chain_worker_is_evicted_on_the_storage_clock() -> anyhow::Result<()> {
+    let mut storage_builder = MemoryStorageBuilder::default();
+    let clock = storage_builder.clock().clone();
+    let storage = storage_builder.build().await?;
+
+    let description = dummy_chain_description(1);
+    let chain_id = description.id();
+    let committee = Committee::make_simple(vec![(
+        ValidatorKeypair::generate().public_key,
+        AccountSecretKey::generate().public(),
+    )]);
+    let committee_blob = Blob::new_committee(bcs::to_bytes(&committee)?);
+    storage.write_blob(&committee_blob).await?;
+    storage
+        .write_blob(&Blob::new_chain_description(&description))
+        .await?;
+    storage
+        .write_network_description(&NetworkDescription {
+            admin_chain_id: chain_id,
+            genesis_config_hash: CryptoHash::test_hash("genesis config"),
+            genesis_timestamp: Timestamp::from(0),
+            genesis_committee_blob_hash: committee_blob.id().hash,
+            name: "test network".to_string(),
+        })
+        .await?;
+    storage.create_chain(description.clone()).await?;
+
+    let ttl = Duration::from_secs(30);
+    let worker = WorkerState::new(
+        storage,
+        ChainWorkerConfig {
+            ttl: Some(ttl),
+            sender_chain_ttl: Some(ttl),
+            allow_inactive_chains: true,
+            ..ChainWorkerConfig::default()
+        },
+        None,
+    );
+
+    worker
+        .handle_chain_info_query(ChainInfoQuery::new(chain_id))
+        .await?;
+    assert_eq!(worker.loaded_chain_worker_count(), 1);
+
+    // The clock has not moved, so the worker is not idle yet however long we wait.
+    for _ in 0..100 {
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(
+        worker.loaded_chain_worker_count(),
+        1,
+        "the worker is kept alive while the clock stands still",
+    );
+
+    clock.add(TimeDelta::from_duration(ttl * 2));
+    for _ in 0..1000 {
+        if worker.loaded_chain_worker_count() == 0 {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(
+        worker.loaded_chain_worker_count(),
+        0,
+        "advancing the clock past the TTL evicted the worker",
+    );
+
+    Ok(())
+}

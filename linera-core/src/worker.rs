@@ -661,6 +661,7 @@ type ChainBatchMap = Arc<papaya::HashMap<ChainId, ChainBatchRequestProcessor>>;
 fn start_sweep<S: Storage + Clone + 'static>(
     chain_workers: &ChainWorkerMap<S>,
     config: &ChainWorkerConfig,
+    clock: S::Clock,
 ) {
     // Sweep at the smaller of the two TTLs. If both are None, workers
     // live forever so there's nothing to sweep.
@@ -672,7 +673,7 @@ fn start_sweep<S: Storage + Clone + 'static>(
     let weak_map = Arc::downgrade(chain_workers);
     linera_base::Task::spawn(async move {
         loop {
-            linera_base::time::timer::sleep(interval).await;
+            clock.sleep_for(interval).await;
             let Some(map) = weak_map.upgrade() else {
                 break;
             };
@@ -763,6 +764,28 @@ where
     pub fn with_allow_revert_confirm(mut self, value: bool) -> Self {
         self.chain_worker_config.allow_revert_confirm = value;
         self
+    }
+
+    /// Returns how many chain workers are currently loaded in memory.
+    ///
+    /// Entries whose worker has been dropped by its keep-alive task do not count, even
+    /// before the sweep removes them from the map.
+    ///
+    /// This polls each entry rather than using `peek`: the task that loads a worker sends
+    /// the `Weak` and returns the worker directly, without ever polling the shared future,
+    /// so `peek` reports `None` for a worker that is very much loaded.
+    #[cfg(with_testing)]
+    pub fn loaded_chain_worker_count(&self) -> usize {
+        self.chain_workers
+            .pin()
+            .values()
+            .filter(|entry| {
+                matches!(
+                    (*entry).clone().now_or_never(),
+                    Some(Ok(weak)) if weak.strong_count() > 0
+                )
+            })
+            .count()
     }
 
     /// Returns the worker's nickname.
@@ -912,7 +935,11 @@ where
         chain_modes: Option<Arc<RwLock<ChainModes>>>,
     ) -> Self {
         let chain_workers = Arc::new(papaya::HashMap::new());
-        start_sweep(&chain_workers, &chain_worker_config);
+        start_sweep(
+            &chain_workers,
+            &chain_worker_config,
+            storage.clock().clone(),
+        );
         let block_cache_size = chain_worker_config.block_cache_size;
         let execution_state_cache_size = chain_worker_config.execution_state_cache_size;
         WorkerState {
