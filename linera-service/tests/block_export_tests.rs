@@ -8,22 +8,23 @@
 //! shards, real proxies, real gRPC, and — the point of the whole arrangement — shards that reach
 //! the other validators only by going through their own proxy.
 //!
-//! Run these one at a time, with the `metrics` feature:
-//!
 //! ```text
 //! cargo test -p linera-service --test block_export_tests --features storage-service,metrics \
-//!     -- --ignored --test-threads=1
+//!     -- --ignored
 //! ```
 //!
-//! `metrics` because the assertions read the proxies' metrics endpoint, and because `cargo test`
-//! rebuilds the binaries the harness spawns using whatever features the test command names.
-//! `--test-threads=1` because every network here derives its ports from the same
-//! `test_offset_port()` base, so two of them running at once collide and the metrics server
-//! panics on `bind`.
+//! The `metrics` feature is required: the assertions read the proxies' metrics endpoint, and
+//! `cargo test` rebuilds the binaries the harness spawns using whatever features the test command
+//! names. Like the other integration suites, each test takes `INTEGRATION_TEST_GUARD`, because
+//! every network derives its ports from the same `test_offset_port()` base and two of them at once
+//! collide.
 
 #![cfg(any(feature = "scylladb", feature = "storage-service"))]
 
+mod guard;
+
 use anyhow::Result;
+use guard::INTEGRATION_TEST_GUARD;
 use linera_base::time::Duration;
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
 use linera_rpc::grpc::api::{self, validator_relay_client::ValidatorRelayClient};
@@ -66,6 +67,7 @@ async fn relayed_requests(net: &LocalNet, validator: usize) -> Result<u64> {
 #[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_block_export_through_the_proxy(database: Database, network: Network) -> Result<()> {
+    let _guard: tokio::sync::MutexGuard<'_, ()> = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let config = LocalNetConfig {
@@ -127,6 +129,7 @@ async fn test_export_catches_up_a_newly_added_validator(
     database: Database,
     network: Network,
 ) -> Result<()> {
+    let _guard: tokio::sync::MutexGuard<'_, ()> = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let config = LocalNetConfig {
@@ -195,6 +198,7 @@ async fn test_export_catches_up_a_newly_added_validator(
 #[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_export_survives_a_dead_proxy(database: Database, network: Network) -> Result<()> {
+    let _guard: tokio::sync::MutexGuard<'_, ()> = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let config = LocalNetConfig {
@@ -264,6 +268,7 @@ async fn test_relay_refuses_a_non_committee_destination(
     database: Database,
     network: Network,
 ) -> Result<()> {
+    let _guard: tokio::sync::MutexGuard<'_, ()> = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
     let config = LocalNetConfig {
