@@ -323,7 +323,7 @@ where
             }
         }
 
-        self.join_set.await_all_tasks().await;
+        self.join_set.await_all_tasks_logging_panics().await;
     }
 }
 
@@ -410,7 +410,7 @@ where
         loop {
             tokio::select! { biased;
                 _ = shutdown_signal.cancelled() => {
-                    join_set.await_all_tasks().await;
+                    join_set.await_all_tasks_logging_panics().await;
                     return Ok(());
                 }
                 maybe_socket = accept_stream.next() => match maybe_socket {
@@ -424,7 +424,7 @@ where
                         reap_countdown -= 1;
                     }
                     Some(Err(error)) => {
-                        join_set.await_all_tasks().await;
+                        join_set.await_all_tasks_logging_panics().await;
                         return Err(error);
                     }
                     None => unreachable!(
