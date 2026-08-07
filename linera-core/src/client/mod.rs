@@ -945,7 +945,7 @@ impl<Env: Environment> Client<Env> {
                     for certificate in certificates {
                         let mode = ReceiveCertificateMode::AlreadyChecked;
                         self.receive_sender_certificate(
-                            self.storage_client().cache_certificate(certificate),
+                            self.storage_client().intern_certificate(certificate),
                             mode,
                             None,
                         )
@@ -1830,7 +1830,7 @@ impl<Env: Environment> Client<Env> {
                 let mode = ReceiveCertificateMode::AlreadyChecked;
                 if let Err(error) = self
                     .receive_sender_certificate(
-                        self.storage_client().cache_certificate(certificate),
+                        self.storage_client().intern_certificate(certificate),
                         mode,
                         None,
                     )
@@ -1946,7 +1946,7 @@ impl<Env: Environment> Client<Env> {
                         height: current_height,
                     });
                 };
-                self.storage_client().cache_certificate(certificate)
+                self.storage_client().intern_certificate(certificate)
             };
 
             // Validate the certificate.
@@ -2045,7 +2045,7 @@ impl<Env: Environment> Client<Env> {
 
                 self.check_certificate(&certificate).await?.into_result()?;
 
-                self.storage_client().cache_certificate(certificate)
+                self.storage_client().intern_certificate(certificate)
             };
 
             let block = certificate.block();
@@ -2461,7 +2461,7 @@ impl<Env: Environment> Client<Env> {
                         .download_certificate_for_blob(&remote_node, blob_id)
                         .await?;
                     self.receive_sender_certificate(
-                        self.storage_client().cache_certificate(certificate),
+                        self.storage_client().intern_certificate(certificate),
                         ReceiveCertificateMode::NeedsCheck,
                         Some(vec![remote_node.clone()]),
                     )

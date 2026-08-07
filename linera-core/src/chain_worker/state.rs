@@ -424,7 +424,7 @@ where
         blob_id: BlobId,
     ) -> Result<CacheArc<Blob>, WorkerError> {
         if let Some(blob) = self.chain.manager.pending_blob(&blob_id).await? {
-            return Ok(self.storage.cache_blob(blob));
+            return Ok(self.storage.intern_blob(blob));
         }
         self.storage
             .read_blob(blob_id)
