@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    cmp::Ordering,
+    cmp::{Ordering, Reverse},
     collections::{BTreeMap, BTreeSet, HashSet},
     slice,
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex, RwLock},
 };
 
 use custom_debug_derive::Debug;
@@ -1441,45 +1441,34 @@ impl<Env: Environment> Client<Env> {
         }
     }
 
-    /// Handles a [`chain_client::Error::LocalNodeLagging`] signal from a [`RemoteNodeUpdater`]:
-    /// pulls the missing chain state from the validator that turned out to be ahead of us, then
-    /// either retries the action once (when finalizing a block) or surfaces the validator's
-    /// original error so the outer logic can rebuild on top of the refreshed local state.
-    async fn sync_and_retry_chain_update(
-        self: &Arc<Self>,
-        mut updater: RemoteNodeUpdater<Env>,
-        action: CommunicateAction,
-        chain_id: ChainId,
-        error: NodeError,
-    ) -> Result<LiteVote, chain_client::Error> {
-        match &action {
-            CommunicateAction::SubmitBlock { .. } => {
-                // Pull the manager state that justified the proposal's rejection (signatures
-                // are checked locally, so the source can't fool us), best-effort, and surface
-                // the rejection either way. If our local state actually advanced,
-                // `execute_operations` will rebuild and re-propose.
-                if let Err(sync_err) = self
-                    .synchronize_chain_state_from(&updater.remote_node, chain_id)
+    /// Pulls the chain state that validators reported being ahead of the local node on,
+    /// during a failed quorum round.
+    ///
+    /// Reports are processed here, after `communicate_with_quorum` returns, rather than inside
+    /// the per-validator tasks: this keeps those tasks read-only for the local node — mutually
+    /// independent and fair to each validator — and means a pull can no longer be cancelled by
+    /// the quorum's early exit. Processing is best-effort: failures are only logged, and the
+    /// quorum outcome is surfaced unchanged either way, so the outer logic reacts on top of
+    /// whatever state was absorbed (e.g. `execute_operations` rebuilds and re-proposes).
+    ///
+    /// Validators that are further ahead are pulled from first, which makes later pulls cheap,
+    /// but every reporter is visited: a proposal rejection justified by a locking block can
+    /// only be absorbed from a validator that holds that block.
+    async fn process_lag_reports(&self, mut reports: Vec<LagReport<Env::ValidatorNode>>) {
+        reports.sort_by_key(|report| Reverse(report.remote_progress()));
+        for report in reports {
+            // Boxed to keep this future small: the synchronization future is large, and it
+            // would otherwise be inlined into every caller of the quorum communication.
+            if let Err(error) =
+                Box::pin(self.synchronize_chain_state_from(&report.remote_node, report.chain_id))
                     .await
-                {
-                    debug!(%sync_err, "failed to pull manager state from validator");
-                }
-                Err(error.into())
-            }
-            CommunicateAction::RequestTimeout { .. } => {
-                self.synchronize_chain_state_from(&updater.remote_node, chain_id)
-                    .await?;
-                Err(error.into())
-            }
-            CommunicateAction::FinalizeBlock { .. } => {
-                self.synchronize_chain_state_from(&updater.remote_node, chain_id)
-                    .await?;
-                match updater.send_chain_update(action).await {
-                    Err(chain_client::Error::LocalNodeLagging { error, .. }) => {
-                        Err((*error).into())
-                    }
-                    result => result,
-                }
+            {
+                debug!(
+                    remote_node = report.remote_node.address(),
+                    chain_id = %report.chain_id,
+                    %error,
+                    "failed to pull chain state from a validator that reported being ahead",
+                );
             }
         }
     }
@@ -1526,12 +1515,17 @@ impl<Env: Environment> Client<Env> {
         action: CommunicateAction,
         value: T,
     ) -> Result<GenericCertificate<T>, chain_client::Error> {
+        // Validators that turn out to be ahead of the local node are recorded here and pulled
+        // from after the quorum round, so that each per-validator task stays read-only for the
+        // local node. The updater's original validator error re-enters the quorum aggregation
+        // below, keeping the round's error classification unchanged.
+        let lag_reports = Mutex::new(Vec::new());
         let nodes = self.make_nodes(committee)?;
         // Group votes by their full signed payload: signatures only aggregate into a
         // certificate if they are unanimous on all signed fields, so a vote that diverges in
         // the unlocking round, first-round attestation or justification commitment belongs to
         // a separate candidate quorum.
-        let ((votes_hash, votes_round, _, _, _), votes) = communicate_with_quorum(
+        let result = communicate_with_quorum(
             &nodes,
             committee,
             |vote: &LiteVote| {
@@ -1544,13 +1538,18 @@ impl<Env: Environment> Client<Env> {
                 )
             },
             |remote_node| {
-                let mut updater = self.remote_node_updater(remote_node);
+                let mut updater = self.remote_node_updater(remote_node.clone());
                 let action = action.clone();
+                let lag_reports = &lag_reports;
                 Box::pin(async move {
-                    match updater.send_chain_update(action.clone()).await {
+                    match updater.send_chain_update(action).await {
                         Err(chain_client::Error::LocalNodeLagging { chain_id, error }) => {
-                            self.sync_and_retry_chain_update(updater, action, chain_id, *error)
-                                .await
+                            lag_reports.lock().unwrap().push(LagReport {
+                                remote_node,
+                                chain_id,
+                                error: (*error).clone(),
+                            });
+                            Err((*error).into())
                         }
                         result => result,
                     }
@@ -1558,7 +1557,17 @@ impl<Env: Environment> Client<Env> {
             },
             self.options.quorum_grace_period,
         )
-        .await?;
+        .await;
+        let ((votes_hash, votes_round, _, _, _), votes) = match result {
+            Ok(quorum) => quorum,
+            Err(err) => {
+                // The round failed; absorb whatever the more advanced validators hold before
+                // surfacing the outcome, so the caller retries on top of a synchronized state.
+                self.process_lag_reports(lag_reports.into_inner().unwrap())
+                    .await;
+                return Err(err.into());
+            }
+        };
         ensure!(
             (votes_hash, votes_round) == (value.hash(), action.round()),
             chain_client::Error::UnexpectedQuorum {
@@ -2757,6 +2766,29 @@ pub struct PendingProposal {
     /// The round in which this proposal was first submitted, if any.
     #[serde(default)]
     pub round: Option<Round>,
+}
+
+/// A validator's report, collected during a quorum round, that it is ahead of the local node
+/// on a chain (a [`chain_client::Error::LocalNodeLagging`] signal from the updater).
+struct LagReport<N> {
+    remote_node: RemoteNode<N>,
+    chain_id: ChainId,
+    error: NodeError,
+}
+
+impl<N> LagReport<N> {
+    /// The height and round the validator reported being at, as far as the error reveals them.
+    /// Used to pull from the most advanced validators first.
+    fn remote_progress(&self) -> (Option<BlockHeight>, Option<Round>) {
+        match &self.error {
+            NodeError::UnexpectedBlockHeight {
+                expected_block_height,
+                ..
+            } => (Some(*expected_block_height), None),
+            NodeError::WrongRound(round) => (None, Some(*round)),
+            _ => (None, None),
+        }
+    }
 }
 
 enum ReceiveCertificateMode {
