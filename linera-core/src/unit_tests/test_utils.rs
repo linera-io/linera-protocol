@@ -356,6 +356,12 @@ where
         self.fault_type
     }
 
+    /// Returns a clone of the validator's worker state, for tests that inspect or drive
+    /// the validator's chain workers directly.
+    pub async fn worker(&self) -> WorkerState<S> {
+        self.client.lock().await.state.clone()
+    }
+
     fn set_fault_type(&mut self, fault_type: FaultType) {
         self.fault_type = fault_type;
     }
@@ -654,43 +660,22 @@ where
         heights: Vec<BlockHeight>,
         sender: oneshot::Sender<Result<Vec<ConfirmedBlockCertificate>, NodeError>>,
     ) -> Result<(), Result<Vec<ConfirmedBlockCertificate>, NodeError>> {
-        // First, use do_handle_chain_info_query to get the certificate hashes
-        let (query_sender, query_receiver) = oneshot::channel();
-        let query = ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_by_heights(heights);
-
-        let self_clone = self.clone();
-        self.do_handle_chain_info_query(query, query_sender)
+        let validator = self.client.lock().await;
+        let certificates = validator
+            .state
+            .storage_client()
+            .read_certificates_by_heights(chain_id, &heights)
             .await
-            .expect("Failed to handle chain info query");
-
-        // Get the response from the chain info query
-        let chain_info_response = query_receiver.await.map_err(|_| {
-            Err(NodeError::ClientIoError {
-                error: "Failed to receive chain info response".to_string(),
+            .map(|certificates| {
+                certificates
+                    .into_iter()
+                    .flatten()
+                    .map(CacheArc::unwrap_or_clone)
+                    .collect()
             })
-        })?;
+            .map_err(Into::into);
 
-        let hashes = match chain_info_response {
-            Ok(response) => response.info.requested_sent_certificate_hashes,
-            Err(e) => {
-                return sender.send(Err(e));
-            }
-        };
-
-        // Now use do_download_certificates to get the actual certificates
-        let (cert_sender, cert_receiver) = oneshot::channel();
-        self_clone
-            .do_download_certificates(hashes, cert_sender)
-            .await?;
-
-        // Forward the result to the original sender
-        let result = cert_receiver.await.map_err(|_| {
-            Err(NodeError::ClientIoError {
-                error: "Failed to receive certificates".to_string(),
-            })
-        })?;
-
-        sender.send(result)
+        sender.send(certificates)
     }
 
     async fn do_blob_last_used_by(

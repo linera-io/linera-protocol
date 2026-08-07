@@ -47,6 +47,7 @@ use crate::{
         chain_client::{self, ChainClient},
         ClientOutcome, ListeningMode,
     },
+    data_types::CrossChainRequest,
     local_node::LocalNodeError,
     node::{
         NodeError::{self, ClientIoError},
@@ -4251,6 +4252,22 @@ where
     // Producer.1: checkpoint #1. unfinalized_message_blocks[recipient] = {(0, 0)}.
     producer.checkpoint().await.unwrap().unwrap();
 
+    // The transfer is unacknowledged, so checkpoint #1 vouches for its block and must keep
+    // it in `block_hashes` — that is the block a node bootstrapping from the checkpoint is
+    // handed, and the one the recipient's `previous_message_blocks` anchor points at.
+    {
+        let producer_state = producer
+            .client
+            .local_node
+            .chain_state_view(producer_id)
+            .await?;
+        assert!(producer_state
+            .block_hashes
+            .get(&BlockHeight::ZERO)
+            .await?
+            .is_some());
+    }
+
     // Recipient.0: consume the transfer. Now the inbox's `next_cursor_to_remove[producer]`
     // is past the transfer's cursor and `pending_checkpoint_ack_targets` contains the
     // producer.
@@ -4337,6 +4354,317 @@ where
             .any(|msg| msg.destination == recipient_id),
         "cycle should terminate: producer's next checkpoint must not notify the recipient",
     );
+
+    // Checkpoint #2 vouches for nothing, so it prunes the blocks below it from
+    // `block_hashes` — checkpoint #1 at height 1 and the ack-consuming block at height 2.
+    //
+    // The transfer at height 0 stays, because this client's outbox still queues it: the
+    // recipient's acknowledgement came back as a message, whereas an outbox is only drained
+    // by a delivery confirmation from the recipient's validators, which this client has not
+    // seen. Pruning height 0 would leave the outbox unable to build its cross-chain request,
+    // and hence unable to ever drain.
+    {
+        let producer_state = producer
+            .client
+            .local_node
+            .chain_state_view(producer_id)
+            .await?;
+        let outbox = producer_state
+            .outboxes
+            .try_load_entry(&recipient_id)
+            .await?
+            .expect("the producer has an outbox for the recipient");
+        assert_eq!(outbox.queue.elements().await?, vec![BlockHeight::ZERO]);
+        assert_eq!(
+            producer_state.block_hashes.indices().await?,
+            vec![BlockHeight::ZERO, checkpoint_2.block().header.height],
+        );
+    }
+
+    // The producer→recipient lane must stay usable after the completed cycle, even for a
+    // node that bootstrapped from checkpoint #2 and therefore holds no pre-checkpoint
+    // blocks. Simulate one by resetting the producer to its latest checkpoint. Checkpoint
+    // #2 dropped the recipient's `previous_message_blocks` anchor (everything sent to it
+    // was acknowledged), so the new block carries no predecessor: the reset producer can
+    // execute it without the height-0 entry of `block_hashes`, and the checkpointed
+    // recipient accepts the bundle.
+    producer
+        .client
+        .local_node
+        .reset_and_reexecute_chain(producer_id)
+        .await?;
+    producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+    recipient.synchronize_from_validators().await?;
+    recipient.process_inbox().await?;
+    assert_eq!(
+        recipient.local_balance().await?,
+        Amount::from_tokens(2),
+        "the post-cycle transfer must reach the checkpointed recipient",
+    );
+
+    Ok(())
+}
+
+/// Verifies that a `RevertConfirm` walk survives checkpoint pruning. With a partially
+/// acknowledged lane, the `previous_message_blocks` anchor points at the latest,
+/// unacknowledged message block, but the link in that block's body leads down into the
+/// acknowledged prefix, which a checkpoint prunes from `block_hashes` once delivery is
+/// confirmed — as it is on a validator, which hosts both chains. The walk must stop
+/// there — those bundles are covered by the recipient's own checkpoint — and still
+/// resend the blocks collected above it, so a reset recipient recovers its wiped
+/// in-flight bundles.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[test_log::test(tokio::test)]
+async fn test_revert_confirm_stops_at_pruned_heights<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let producer_id = producer.chain_id();
+    let recipient_id = recipient.chain_id();
+
+    // Producer.0: a transfer that the recipient consumes and acknowledges by
+    // checkpointing.
+    producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+    recipient.synchronize_from_validators().await?;
+    recipient.process_inbox().await?;
+    recipient.checkpoint().await.unwrap().unwrap();
+
+    // Producer.1: consume the ack. Producer.2: a second transfer, which stays
+    // unacknowledged; its body's `previous_message_blocks` link points down at the
+    // acknowledged transfer.
+    producer.synchronize_from_validators().await?;
+    producer.process_inbox().await?;
+    let transfer_2 = producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(2),
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+    let transfer_2_height = transfer_2.block().header.height;
+
+    // Producer.3: checkpoint. It vouches only for the unacknowledged second transfer.
+    producer.checkpoint().await.unwrap().unwrap();
+
+    // On a validator the first transfer's block is pruned from `block_hashes`: it is
+    // acknowledged, and the validator hosts the recipient chain too, so it has seen the
+    // delivery confirmation that drains the outbox. The second transfer's block
+    // survives because the checkpoint vouches for it, and the recipient's anchor points
+    // at it.
+    let worker = builder.node(0).worker().await;
+    {
+        let chain = worker.chain_state_view(producer_id).await?;
+        assert!(
+            chain.block_hashes.get(&BlockHeight::ZERO).await?.is_none(),
+            "the acknowledged, delivered transfer should be pruned on the validator",
+        );
+        assert!(chain.block_hashes.get(&transfer_2_height).await?.is_some());
+        assert_eq!(
+            chain
+                .execution_state
+                .previous_message_blocks
+                .get(&recipient_id)
+                .await?,
+            Some(transfer_2_height),
+        );
+    }
+
+    // A recipient that reset to its own checkpoint asks every sender to resend from the
+    // bottom. The walk starts at the anchor, re-adds the second transfer, and then hits
+    // the pruned height: it must stop there and resend what it collected rather than
+    // fail without resending anything.
+    let actions = worker
+        .handle_cross_chain_request(CrossChainRequest::RevertConfirm {
+            sender: producer_id,
+            recipient: recipient_id,
+            retransmit_from: BlockHeight::ZERO,
+        })
+        .await?;
+    let resent_heights = actions
+        .cross_chain_requests
+        .iter()
+        .filter_map(|request| match request {
+            CrossChainRequest::UpdateRecipient {
+                recipient, bundles, ..
+            } if *recipient == recipient_id => Some(bundles),
+            _ => None,
+        })
+        .flatten()
+        .map(|(_, bundle)| bundle.height)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        resent_heights,
+        vec![transfer_2_height],
+        "the revert must resend the unacknowledged transfer",
+    );
+
+    Ok(())
+}
+
+/// A block that consumes a `CheckpointAck` must not use the fast round: the ack's
+/// bundle has no availability guarantee — no anchor tracks it, no checkpoint vouches
+/// for its block — so validators can legitimately disagree on whether they hold it,
+/// and a fast proposal cannot be re-proposed without it once it has collected confirm
+/// votes. The client proposes such blocks in a slower round instead.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[test_log::test(tokio::test)]
+async fn test_checkpoint_ack_skips_fast_round<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let mut producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let recipient_id = recipient.chain_id();
+
+    // The producer is a super owner proposing in the fast round.
+    producer.options_mut().allow_fast_blocks = true;
+    let owner = producer.identity().await?;
+    producer
+        .change_ownership(ChainOwnership::single_super(owner))
+        .await
+        .unwrap();
+    let certificate = producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(certificate.round, Round::Fast);
+
+    // The recipient consumes the transfer and checkpoints, acknowledging it.
+    recipient.synchronize_from_validators().await?;
+    recipient.process_inbox().await?;
+    recipient.checkpoint().await.unwrap().unwrap();
+
+    // Consuming the ack lands in the first multi-leader round, not the fast round.
+    producer.synchronize_from_validators().await?;
+    let (certificates, _) = producer.process_inbox().await?;
+    let certificate = certificates
+        .first()
+        .expect("the ack-consuming block is committed");
+    assert!(certificate.block().consumes_checkpoint_ack());
+    assert_eq!(certificate.round, Round::MultiLeader(0));
+
+    Ok(())
+}
+
+/// A proposal consuming a `CheckpointAck` bundle that some validator can never hold
+/// must be retried without it. Validator 0 misses the recipient's ack-sending
+/// checkpoint and is later bootstrapped from the recipient's *next* checkpoint, so the
+/// ack block stays below its tip: pushing certificates cannot heal it, and it rejects
+/// every ack-consuming proposal with `MissingCrossChainUpdate`. With a second validator
+/// offline, such a proposal cannot reach quorum — the client must drop the skippable
+/// ack bundle and move on instead of wedging.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[test_log::test(tokio::test)]
+async fn test_unavailable_checkpoint_ack_is_skipped<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    // Validator 0 sees nothing of what follows: not the transfer, and crucially not the
+    // recipient's checkpoints.
+    builder.set_fault_type([0], FaultType::NoChains);
+    let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let recipient_id = recipient.chain_id();
+
+    // The recipient consumes a transfer and checkpoints, acknowledging it; then burns
+    // and checkpoints again, so its latest checkpoint sits above the ack-sending block.
+    producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(2),
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+    recipient.synchronize_from_validators().await?;
+    recipient.process_inbox().await?;
+    recipient.checkpoint().await.unwrap().unwrap();
+    recipient
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    recipient.checkpoint().await.unwrap().unwrap();
+
+    // Validator 0 comes back and validator 1 goes offline. The recipient's next block
+    // bootstraps validator 0 from the latest checkpoint — past the ack-sending block,
+    // which nothing can deliver to it anymore.
+    builder.set_fault_type([0], FaultType::Honest);
+    builder.set_fault_type([1], FaultType::Offline);
+    recipient
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+
+    // The producer's inbox holds only the unavailable ack. Consuming it can never be
+    // certified (validator 0 rejects it, validator 1 is offline), so the client skips
+    // the bundle; with nothing else to include, no block is proposed at all.
+    producer.synchronize_from_validators().await?;
+    let (certificates, _) = producer.process_inbox().await?;
+    assert!(
+        certificates.is_empty(),
+        "the unconsumable ack must be skipped, not wedge the client",
+    );
+
+    // The skip is durable: the ack was settled in the local inbox, so a fresh
+    // `process_inbox` — e.g. after a client restart — has nothing to retry.
+    {
+        let chain = producer
+            .client
+            .local_node
+            .chain_state_view(producer.chain_id())
+            .await?;
+        let inbox = chain
+            .inboxes
+            .try_load_entry(&recipient_id)
+            .await?
+            .expect("the producer has an inbox for the recipient");
+        assert_eq!(
+            inbox.added_bundles.count(),
+            0,
+            "the settled ack must be gone from the local inbox",
+        );
+    }
+
+    // The chain stays fully usable: a new transfer commits — without the ack.
+    let certificate = producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+    assert!(!certificate.block().consumes_checkpoint_ack());
 
     Ok(())
 }
