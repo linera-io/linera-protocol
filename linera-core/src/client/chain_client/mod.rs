@@ -36,7 +36,7 @@ use linera_base::{data_types::Bytecode, vm::VmRuntime};
 use linera_chain::{
     data_types::{
         BlockProposal, BundleExecutionPolicy, BundleFailurePolicy, ChainAndHeight, IncomingBundle,
-        ProposedBlock, Transaction,
+        OwnerAuthorization, ProposedBlock, Transaction,
     },
     manager::LockingBlock,
     types::{
@@ -2258,14 +2258,21 @@ impl<Env: Environment> ChainClient<Env> {
         let proposal = if let Some(locking) = info.manager.requested_locking {
             Box::new(match *locking {
                 LockingBlock::Regular(cert) => {
+                    // The owner authorization is carried by the validated certificate.
                     BlockProposal::new_retry_regular(owner, round, cert, self.signer())
                         .await
                         .map_err(Error::signer_failure)?
                 }
-                LockingBlock::Fast(proposal) => {
-                    BlockProposal::new_retry_fast(owner, round, proposal, self.signer())
+                LockingBlock::Fast(fast_proposal) => {
+                    // The fast proposal's signature authorizes the block.
+                    let authorization = OwnerAuthorization {
+                        round: fast_proposal.content.round,
+                        signature: fast_proposal.signature,
+                    };
+                    BlockProposal::new_initial(owner, round, proposed_block.clone(), self.signer())
                         .await
                         .map_err(Error::signer_failure)?
+                        .with_owner_authorization(Some(authorization))
                 }
             })
         } else {
@@ -2295,7 +2302,10 @@ impl<Env: Environment> ChainClient<Env> {
         // network calls below.
         *snapshot = Some(self.consensus_state_snapshot().await?);
         let committee = self.local_committee().await?;
-        let block = Block::new(proposed_block, outcome);
+        // The block the validators will vote for retains the owner's signature, exactly as
+        // their own worker attaches it when handling the proposal.
+        let block = Block::new(proposed_block, outcome)
+            .with_owner_authorization(proposal.owner_authorization());
         // Send the query to validators.
         let submit_block_proposal_start = linera_base::time::Instant::now();
         let certificate = if round.is_fast() {

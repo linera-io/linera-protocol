@@ -14,7 +14,7 @@
 
 use graphql_client::GraphQLQuery;
 use linera_base::{
-    crypto::CryptoHash,
+    crypto::{AccountSignature, CryptoHash},
     data_types::{Amount, Blob, BlockHeight, ChainDescription, OracleResponse, Round, Timestamp},
     identifiers::{AccountOwner, BlobId, ChainId, GenericApplicationId, StreamName},
 };
@@ -181,6 +181,7 @@ mod from {
     };
     use linera_chain::{
         block::{Block, BlockBody, BlockHeader},
+        data_types::OwnerAuthorization,
         types::ConfirmedBlock,
     };
     use linera_execution::{
@@ -617,6 +618,13 @@ mod from {
         }
     }
 
+    impl From<block::BlockBlockBlockOwnerAuthorization> for OwnerAuthorization {
+        fn from(val: block::BlockBlockBlockOwnerAuthorization) -> Self {
+            let block::BlockBlockBlockOwnerAuthorization { round, signature } = val;
+            OwnerAuthorization { round, signature }
+        }
+    }
+
     impl From<block::BlockBlockBlockBodyMessages> for OutgoingMessage {
         fn from(val: block::BlockBlockBlockBodyMessages) -> Self {
             let block::BlockBlockBlockBodyMessages {
@@ -645,7 +653,11 @@ mod from {
         type Error = ConversionError;
 
         fn try_from(val: block::BlockBlockBlock) -> Result<Self, Self::Error> {
-            let block::BlockBlockBlock { header, body } = val;
+            let block::BlockBlockBlock {
+                header,
+                body,
+                owner_authorization,
+            } = val;
             let block::BlockBlockBlockHeader {
                 chain_id,
                 epoch,
@@ -723,6 +735,7 @@ mod from {
             Ok(Block {
                 header: block_header,
                 body: block_body,
+                owner_authorization: owner_authorization.map(Into::into),
             })
         }
     }

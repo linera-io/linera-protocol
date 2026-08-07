@@ -120,6 +120,13 @@ where
             sender.local_balance().await.unwrap(),
             Amount::from_millis(1000)
         );
+        // The chain owner's proposal signature is retained on the certified block and
+        // verifies against it.
+        let authorization = certificate
+            .block()
+            .owner_authorization
+            .expect("owner authorization should be retained");
+        authorization.verify(certificate.block())?;
         assert_eq!(
             builder
                 .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::ZERO, 3)
@@ -1833,6 +1840,14 @@ where
         certificate.block().body.operations().collect::<Vec<_>>(),
         blob_0_1_operations.iter().collect::<Vec<_>>(),
     );
+
+    // Although client 2B finalized the block, the confirmed block retains owner 2A's
+    // original proposal signature, carried over from the validated certificate.
+    let authorization = certificate
+        .block()
+        .owner_authorization
+        .expect("owner authorization should be retained across the retry");
+    assert_eq!(authorization.verify(certificate.block())?, owner_2a);
 
     Ok(())
 }

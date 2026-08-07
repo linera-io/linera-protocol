@@ -94,7 +94,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     block::{Block, ConfirmedBlock, Timeout, ValidatedBlock},
-    data_types::{BlockProposal, LiteVote, OriginalProposal, ProposedBlock, Vote},
+    data_types::{BlockProposal, LiteVote, ProposalContent, ProposedBlock, Vote},
     types::{TimeoutCertificate, ValidatedBlockCertificate},
     ChainError,
 };
@@ -348,19 +348,19 @@ where
         // and turn the claim into a lie we could be slashed for. Our confirmed vote sits in the
         // highest round we ever confirmed in, so `vote.round <= certificate.round` guarantees no
         // different-block confirmation lies in the unlocking window `[certificate.round, round)`.
+        //
+        // Without a certificate, only a retry of the very block we confirmed in the fast round
+        // is acceptable.
         if let Some(vote) = self.confirmed_vote() {
             ensure!(
-                match proposal.original_proposal.as_ref() {
-                    None => false,
-                    Some(OriginalProposal::Regular { certificate }) =>
+                match proposal.validated_certificate.as_ref() {
+                    Some(certificate) =>
                         if vote.value().matches_proposed_block(new_block) {
                             vote.round <= certificate.round
                         } else {
                             vote.round < certificate.round
                         },
-                    Some(OriginalProposal::Fast(_)) => {
-                        vote.round.is_fast() && vote.value().matches_proposed_block(new_block)
-                    }
+                    None => vote.round.is_fast() && vote.value().matches_proposed_block(new_block),
                 },
                 ChainError::HasIncompatibleConfirmedVote(new_block.height, vote.round)
             );
@@ -466,40 +466,41 @@ where
     ) -> Result<Option<ValidatedOrConfirmedVote<'_>>, ChainError> {
         let round = proposal.content.round;
 
-        match &proposal.original_proposal {
+        if let Some(certificate) = &proposal.validated_certificate {
             // If the validated block certificate is more recent, update our locking block.
-            Some(OriginalProposal::Regular { certificate }) => {
-                if self
-                    .locking_block
-                    .get()
-                    .as_ref()
-                    .is_none_or(|locking| locking.round() < certificate.round)
-                {
-                    let value = ValidatedBlock::new(block.clone());
-                    if let Some(certificate) = certificate.clone().into_validated_certificate(value)
-                    {
-                        self.update_locking(LockingBlock::Regular(certificate), blobs.clone())?;
-                    }
+            if self
+                .locking_block
+                .get()
+                .as_ref()
+                .is_none_or(|locking| locking.round() < certificate.round)
+            {
+                let value = ValidatedBlock::new(block.clone());
+                if let Some(certificate) = certificate.clone().into_validated_certificate(value) {
+                    self.update_locking(LockingBlock::Regular(certificate), blobs.clone())?;
                 }
             }
-            // If this contains a proposal from the fast round, we consider that a locking block.
-            // It is useful for clients synchronizing with us, so they can re-propose it.
-            Some(OriginalProposal::Fast(signature)) => {
-                if self.locking_block.get().is_none() {
-                    let original_proposal = BlockProposal {
-                        signature: *signature,
-                        ..proposal.clone()
-                    };
-                    self.update_locking(LockingBlock::Fast(original_proposal), blobs.clone())?;
-                }
-            }
-            // If this proposal itself is from the fast round, it is also a locking block: We
+        } else if round.is_fast() {
+            // If this proposal itself is from the fast round, it is a locking block: We
             // will vote to confirm it, so it is locked.
-            None => {
-                if round.is_fast() && self.locking_block.get().is_none() {
-                    // The fast block also counts as locking.
-                    self.update_locking(LockingBlock::Fast(proposal.clone()), blobs.clone())?;
-                }
+            if self.locking_block.get().is_none() {
+                self.update_locking(LockingBlock::Fast(proposal.clone()), blobs.clone())?;
+            }
+        } else if let Some(authorization) = proposal.owner_authorization() {
+            // If the block carries an authorization from the fast round, the fast-round
+            // proposal it stems from is a locking block. Reconstructing and storing it
+            // lets clients synchronizing with us re-propose it.
+            if authorization.round.is_fast() && self.locking_block.get().is_none() {
+                let fast_proposal = BlockProposal {
+                    content: ProposalContent {
+                        block: proposal.content.block.clone(),
+                        round: Round::Fast,
+                        outcome: None,
+                    },
+                    signature: authorization.signature,
+                    owner_authorization: None,
+                    validated_certificate: None,
+                };
+                self.update_locking(LockingBlock::Fast(fast_proposal), blobs.clone())?;
             }
         }
 
@@ -531,12 +532,13 @@ where
             // check the signatures built on top of it. A fresh proposal or one retrying a fast
             // block has no justifying validated certificate, so both are `None`; a regular retry
             // is justified by its certificate.
-            let (unlocking_round, justification_commitment) = match &proposal.original_proposal {
-                Some(OriginalProposal::Regular { certificate }) => (
+            let (unlocking_round, justification_commitment) = match &proposal.validated_certificate
+            {
+                Some(certificate) => (
                     Some(certificate.round),
                     Some(certificate.full_justification_commitment()),
                 ),
-                Some(OriginalProposal::Fast(_)) | None => (None, None),
+                None => (None, None),
             };
             let value = ValidatedBlock::new(block);
             let vote = Vote::new_with_unlocking_round(

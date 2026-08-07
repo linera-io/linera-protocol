@@ -455,6 +455,10 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
           }
         }
       }
+      ownerAuthorization {
+        round
+        signature
+      }
     }
   }
 }

@@ -7,13 +7,15 @@
 
 use linera_base::{
     abi::ContractAbi,
+    crypto::AccountSecretKey,
     data_types::{Amount, ApplicationPermissions, Blob, Epoch, Timestamp},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
     ownership::TimeoutConfig,
 };
 use linera_chain::{
     data_types::{
-        BundleExecutionPolicy, IncomingBundle, MessageAction, ProposedBlock, Transaction, Vote,
+        BundleExecutionPolicy, IncomingBundle, MessageAction, OwnerAuthorization, ProposalContent,
+        ProposedBlock, Transaction, Vote,
     },
     justification::JustificationChain,
     test::VoteTestExt,
@@ -235,6 +237,7 @@ impl BlockBuilder {
     pub(crate) async fn try_sign(
         self,
         blobs: &[Blob],
+        owner_key_pair: &AccountSecretKey,
     ) -> Result<(ConfirmedBlockCertificate, ResourceTracker), WorkerError> {
         let published_blobs = self
             .block
@@ -259,7 +262,6 @@ impl BlockBuilder {
             )
             .await?;
 
-        let value = ConfirmedBlock::new(block);
         // Confirm in the chain's first round so the votes can carry the first-round attestation
         // and the certificate needs no justification chain. The chain's current ownership (the
         // parent's, since this block isn't committed yet) is the one that governs this block's
@@ -267,11 +269,23 @@ impl BlockBuilder {
         let info = self
             .validator
             .worker()
-            .handle_chain_info_query(ChainInfoQuery::new(value.chain_id()))
+            .handle_chain_info_query(ChainInfoQuery::new(block.header.chain_id))
             .await
             .expect("Failed to query chain ownership")
             .info;
         let round = info.manager.ownership.first_round();
+        let owner_authorization = block.header.authenticated_owner.map(|_| {
+            let content = ProposalContent {
+                block: block.to_proposed(),
+                round,
+                outcome: None,
+            };
+            OwnerAuthorization {
+                round,
+                signature: owner_key_pair.sign(&content),
+            }
+        });
+        let value = ConfirmedBlock::new(block.with_owner_authorization(owner_authorization));
         let public_key = self.validator.key_pair().public();
         // A first-round confirmation attests that no lower round exists, so it commits to no
         // justifying quorum.
