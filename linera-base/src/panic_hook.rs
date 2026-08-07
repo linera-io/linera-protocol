@@ -55,6 +55,19 @@ pub fn init() {
     });
 }
 
+/// The panic message, for the two payload types `panic!` produces.
+///
+/// `PanicHookInfo::payload_as_str` does the same thing, but is not yet stable in the
+/// toolchain the release branches pin, and this code is backported to them.
+fn payload_message<'a>(info: &'a PanicHookInfo<'_>) -> &'a str {
+    let payload = info.payload();
+    payload
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("<non-string payload>")
+}
+
 fn report_panic(info: &PanicHookInfo<'_>) {
     #[cfg(with_metrics)]
     metrics::PANICS.inc();
@@ -63,7 +76,7 @@ fn report_panic(info: &PanicHookInfo<'_>) {
     tracing::error!(
         thread = thread.name().unwrap_or("<unnamed>"),
         location = info.location().map(tracing::field::display),
-        message = info.payload_as_str().unwrap_or("<non-string payload>"),
+        message = payload_message(info),
         "Panic",
     );
 
