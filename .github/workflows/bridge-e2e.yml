@@ -27,7 +27,11 @@ permissions:
 jobs:
   bridge-e2e:
     runs-on: linera-io-self-hosted-ci
-    timeout-minutes: 60
+    # 90, matching main. The old 60 was sized for the pull-the-image path that
+    # this workflow no longer takes: building linera-test locally costs ~23 min,
+    # which pushed a run to 60m50s and got it killed. main does the same work
+    # without a pull and lands at ~81 min.
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v6.0.2
@@ -72,24 +76,7 @@ jobs:
       - name: Configure Docker for GCP
         run: gcloud auth configure-docker us-docker.pkg.dev
 
-      - name: Pull linera & exporter images
-        id: pull-images
-        continue-on-error: true
-        run: |
-          BRANCH="${{ github.base_ref || github.ref_name }}"
-          # linera-tests, not linera: this wants the all-three-binaries image
-          # that `linera net up` needs, which is now published under that name.
-          # Pulling `linera` would keep SUCCEEDING against the tag frozen at the
-          # last pre-split build — and since this step is continue-on-error and
-          # only a failed pull falls through to building, that would silently
-          # test stale code forever instead of failing.
-          docker pull "${GCP_REGISTRY}/linera-tests:${BRANCH}"
-          docker pull "${GCP_REGISTRY}/linera-exporter:${BRANCH}"
-          docker tag "${GCP_REGISTRY}/linera-tests:${BRANCH}" linera-test
-          docker tag "${GCP_REGISTRY}/linera-exporter:${BRANCH}" linera-exporter
-
       - name: Build linera image
-        if: steps.pull-images.outcome == 'failure'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -102,7 +89,6 @@ jobs:
             build_folder=debug
 
       - name: Build exporter image
-        if: steps.pull-images.outcome == 'failure'
         uses: docker/build-push-action@v6
         with:
           context: .
