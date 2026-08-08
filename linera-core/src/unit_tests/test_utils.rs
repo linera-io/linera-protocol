@@ -905,14 +905,7 @@ where
         with_faulty_validators: usize,
         signer: TestSigner,
     ) -> Result<Self, anyhow::Error> {
-        Self::build(
-            storage_builder,
-            count,
-            with_faulty_validators,
-            signer,
-            false,
-        )
-        .await
+        Self::build(storage_builder, count, with_faulty_validators, signer, None).await
     }
 
     /// Creates a test setup like [`TestBuilder::new`], in which every validator also pushes the
@@ -923,7 +916,44 @@ where
         with_faulty_validators: usize,
         signer: TestSigner,
     ) -> Result<Self, anyhow::Error> {
-        Self::build(storage_builder, count, with_faulty_validators, signer, true).await
+        Self::build(
+            storage_builder,
+            count,
+            with_faulty_validators,
+            signer,
+            Some(Self::test_block_export_config()),
+        )
+        .await
+    }
+
+    /// Creates a test setup like [`TestBuilder::new_with_block_export`], with the export tuned by
+    /// the caller. Used to shrink `max_catch_up_blocks` far below its default so that a backlog a
+    /// test can actually produce still takes several rounds to drain.
+    pub async fn new_with_block_export_config(
+        storage_builder: B,
+        count: usize,
+        with_faulty_validators: usize,
+        signer: TestSigner,
+        config: crate::BlockExportConfig,
+    ) -> Result<Self, anyhow::Error> {
+        Self::build(
+            storage_builder,
+            count,
+            with_faulty_validators,
+            signer,
+            Some(config),
+        )
+        .await
+    }
+
+    /// The export settings the block-export tests run with: production backoff is measured in
+    /// seconds, which would make every test that exercises a failing destination wait it out.
+    pub fn test_block_export_config() -> crate::BlockExportConfig {
+        crate::BlockExportConfig {
+            retry_delay: Duration::from_millis(20),
+            max_retry_delay: Duration::from_millis(200),
+            ..crate::BlockExportConfig::default()
+        }
     }
 
     async fn build(
@@ -931,7 +961,7 @@ where
         count: usize,
         with_faulty_validators: usize,
         mut signer: TestSigner,
-        block_export: bool,
+        block_export: Option<crate::BlockExportConfig>,
     ) -> Result<Self, anyhow::Error> {
         let mut validators = Vec::new();
         for _ in 0..count {
@@ -958,24 +988,18 @@ where
                 // the task to accumulate anything. Without a TTL no keep-alive task is spawned
                 // and the worker — and its export task — is dropped as soon as the request that
                 // loaded it returns.
-                ttl: block_export.then(|| Duration::from_secs(60)),
+                ttl: block_export.is_some().then(|| Duration::from_secs(60)),
                 ..ChainWorkerConfig::default()
             }
             .with_key_pair(Some(validator_keypair.secret_key));
             let mut state = WorkerState::new(storage.clone(), config, None);
-            if block_export {
+            if let Some(export_config) = block_export.clone() {
                 let node_provider = Arc::new(node_provider.clone());
                 state = state.with_chain_exporter_factory(Arc::new(move |setup| {
                     crate::spawn_chain_exporter(
                         setup,
                         node_provider.clone(),
-                        // Production backoff is measured in seconds, which would make every
-                        // test that exercises a failing destination wait it out.
-                        crate::BlockExportConfig {
-                            retry_delay: Duration::from_millis(20),
-                            max_retry_delay: Duration::from_millis(200),
-                            ..crate::BlockExportConfig::default()
-                        },
+                        export_config.clone(),
                         Some(validator_public_key),
                     )
                 }));
@@ -1149,6 +1173,13 @@ where
     /// Returns a clone of the node provider backing this test setup.
     pub fn make_node_provider(&self) -> NodeProvider<B::Storage> {
         self.node_provider.clone()
+    }
+
+    /// Returns the storage of the validator at `index`, which holds every block that validator
+    /// has processed.
+    pub fn validator_storage(&mut self, index: usize) -> B::Storage {
+        let public_key = self.node(index).public_key;
+        self.validator_storages.get(&public_key).unwrap().clone()
     }
 
     /// Returns a clone of the validator client at the given index.

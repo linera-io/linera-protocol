@@ -46,7 +46,7 @@ use linera_rpc::{
         ShardConfig, ShardId, TlsConfig, ValidatorInternalNetworkConfig,
         ValidatorPublicNetworkConfig,
     },
-    grpc, simple,
+    grpc, simple, NodeOptions,
 };
 use linera_sdk::linera_base_types::{AccountSecretKey, ValidatorKeypair};
 use linera_service::{
@@ -76,6 +76,8 @@ struct ServerContext {
     recovery_whitelist: Option<HashSet<ChainId>>,
     /// How to push executed blocks to the other committee validators, or `None` to not push them.
     block_export_config: Option<BlockExportConfig>,
+    /// The transport options for the connections block export makes to this validator's proxies.
+    block_export_node_options: NodeOptions,
     #[cfg(with_metrics)]
     enable_memory_profiling: bool,
 }
@@ -117,7 +119,9 @@ impl ServerContext {
         };
         let mut state = WorkerState::new(storage, config, None);
         if let Some(export_config) = self.block_export_config.clone() {
-            state = state.with_chain_exporter_factory(self.chain_exporter_factory(export_config));
+            state = state.with_chain_exporter_factory(
+                self.chain_exporter_factory(export_config, self.block_export_node_options),
+            );
         }
         (state, shard_id, shard.clone())
     }
@@ -129,7 +133,11 @@ impl ServerContext {
     /// addressed at the same internal endpoint the shards already send their notifications to,
     /// and the provider is shared across chain workers so a peer costs one pooled connection
     /// rather than one per chain.
-    fn chain_exporter_factory<S>(&self, export_config: BlockExportConfig) -> ChainExporterFactory<S>
+    fn chain_exporter_factory<S>(
+        &self,
+        export_config: BlockExportConfig,
+        node_options: NodeOptions,
+    ) -> ChainExporterFactory<S>
     where
         S: Storage + Clone + Send + Sync + 'static,
     {
@@ -147,19 +155,11 @@ impl ServerContext {
             "exporting blocks to the committee needs at least one proxy to relay through, but \
              this validator's internal network configures none",
         );
-        // `NodeOptions::default()` leaves every timeout at zero, which the transport turns into
-        // a deadline that has already passed; these are the values the block exporter used for
-        // the same validator-to-validator traffic.
-        let node_provider = Arc::new(grpc::RelayNodeProvider::new(
-            relay_addresses,
-            linera_rpc::NodeOptions {
-                send_timeout: linera_base::time::Duration::from_secs(4),
-                recv_timeout: linera_base::time::Duration::from_secs(4),
-                retry_delay: linera_base::time::Duration::from_secs(1),
-                max_retries: 10,
-                ..linera_rpc::NodeOptions::default()
-            },
-        ));
+        // Only the two timeouts in `node_options` reach the wire: the relay pool is built from
+        // `transport::Options`, which drops the retry fields. That is deliberate — retrying is the
+        // export task's job, and it backs off per destination, so a second retry loop underneath
+        // would multiply the delay before a failing validator is set aside.
+        let node_provider = Arc::new(grpc::RelayNodeProvider::new(relay_addresses, node_options));
         let own_public_key = self.server_config.validator_secret.public();
         Arc::new(move |setup| {
             spawn_chain_exporter(
@@ -601,6 +601,22 @@ enum ServerCommand {
         )]
         block_export_max_retry_delay: Duration,
 
+        /// How long block export waits to open a connection to one of this validator's proxies.
+        #[arg(
+            long = "block-export-send-timeout-ms",
+            default_value = "4000",
+            value_parser = util::parse_millis
+        )]
+        block_export_send_timeout: Duration,
+
+        /// How long block export waits for a proxy to answer a relayed request.
+        #[arg(
+            long = "block-export-recv-timeout-ms",
+            default_value = "4000",
+            value_parser = util::parse_millis
+        )]
+        block_export_recv_timeout: Duration,
+
         /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
         #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
         otlp_exporter_endpoint: Option<String>,
@@ -743,6 +759,8 @@ async fn run(options: ServerOptions) {
             block_export_idle_interval,
             block_export_retry_delay,
             block_export_max_retry_delay,
+            block_export_send_timeout,
+            block_export_recv_timeout,
             otlp_exporter_endpoint: _,
         } => {
             linera_version::VERSION_INFO.log();
@@ -791,6 +809,11 @@ async fn run(options: ServerOptions) {
                     config.check().expect("invalid block export configuration");
                     config
                 }),
+                block_export_node_options: NodeOptions {
+                    send_timeout: block_export_send_timeout,
+                    recv_timeout: block_export_recv_timeout,
+                    ..NodeOptions::default()
+                },
                 #[cfg(with_metrics)]
                 enable_memory_profiling,
             };
