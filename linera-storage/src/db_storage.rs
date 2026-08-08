@@ -14,6 +14,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight, NetworkDescription, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
+    time::Duration,
 };
 use linera_cache::{Arc as CacheArc, ValueCache};
 use linera_chain::{
@@ -636,6 +637,10 @@ impl Clock for WallClock {
         if delta > TimeDelta::ZERO {
             linera_base::time::timer::sleep(delta.as_duration()).await
         }
+    }
+
+    async fn sleep_for(&self, duration: Duration) {
+        linera_base::time::timer::sleep(duration).await
     }
 }
 
@@ -1680,7 +1685,7 @@ where
         let hash = block.hash();
         self.caches.confirmed_block.insert(&hash, block.clone());
         let certificate = lite
-            .with_value(block)
+            .into_confirmed_certificate(block)
             .ok_or(ViewError::InconsistentEntries)?;
         let arc = self.caches.certificate.insert(&hash, certificate);
         Ok(Some(arc))

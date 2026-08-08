@@ -1,6 +1,6 @@
 ---
 source: ethereum-tracker/tests/format.rs
-expression: "EthereumTrackerApplication::formats().unwrap()"
+expression: "EthereumTrackerApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
   InstantiationArgument:

@@ -20,7 +20,7 @@ use linera_base::{crypto::ValidatorPublicKey, identifiers::ChainId};
 /// warns when a chain is not held.
 #[derive(Debug, Clone, clap::Parser, serde::Serialize)]
 pub struct Benchmark {
-    /// Network address of the candidate validator (e.g. `grpcs://host:port`).
+    /// Network address of the candidate validator (e.g. `grpcs:host:port`).
     pub address: String,
 
     /// Expected public key of the validator (identity verification).

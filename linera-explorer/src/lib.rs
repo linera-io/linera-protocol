@@ -7,6 +7,7 @@
 // UI-facing crate; floating-point/UI casts are intentional and not
 // protocol-relevant.
 #![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#![deny(missing_docs)]
 
 mod entrypoint;
 mod formats;
@@ -14,7 +15,7 @@ mod graphql;
 mod input_type;
 mod js_utils;
 
-use std::str::FromStr;
+use std::{cell::RefCell, collections::HashMap, str::FromStr};
 
 use anyhow::{anyhow, Context as _, Result};
 use futures::prelude::*;
@@ -51,6 +52,22 @@ use wasm_bindgen_futures::spawn_local;
 use ws_stream_wasm::*;
 
 static WEBSOCKET: OnceCell<WsMeta> = OnceCell::new();
+
+thread_local! {
+    /// Memoizes the `Formats` resolved for each `application_id` so a block with many
+    /// operations from the same application only pays the two node round-trips
+    /// (blob-hash resolution + formats fetch) once per page session. An
+    /// `application_id` is globally unique and its formats are immutable, so the
+    /// chain it is observed on is irrelevant to the key.
+    ///
+    /// Both outcomes are cached: `Some(formats)` (positive) and `None` (negative —
+    /// the app has no formats blob, or the node has none). Formats are immutable, so
+    /// neither can change without a reload. Transient `Err` outcomes are *not*
+    /// cached so they get retried. Wasm runs single-threaded, so a `thread_local`
+    /// `RefCell` is the whole story and reloading the page clears the cache.
+    static FORMATS_CACHE: RefCell<HashMap<String, Option<formats::Formats>>> =
+        RefCell::new(HashMap::new());
+}
 
 pub(crate) fn reqwest_client() -> reqwest::Client {
     // timeouts cannot be enforced when compiling to wasm-js.
@@ -158,13 +175,19 @@ pub struct GQuery<T> {
     payload: Option<T>,
 }
 
+/// The network protocol used to reach a service.
 pub enum Protocol {
+    /// Plain HTTP(S).
     Http,
+    /// A WebSocket connection.
     Websocket,
 }
 
+/// The kind of endpoint to connect to.
 pub enum AddressKind {
+    /// A Linera node service.
     Node,
+    /// A Linera indexer.
     Indexer,
 }
 
@@ -749,6 +772,7 @@ async fn route_aux(
     }
 }
 
+/// Routes a request from the JavaScript UI to the appropriate handler and updates the app state.
 #[wasm_bindgen]
 pub async fn route(app: JsValue, path: JsValue, args: JsValue) {
     let path = path.as_string();
@@ -759,12 +783,14 @@ pub async fn route(app: JsValue, path: JsValue, args: JsValue) {
     route_aux(&app, &data, &path, &args, false).await
 }
 
+/// Returns a shortened, debug-formatted representation of a crypto hash string.
 #[wasm_bindgen]
 pub fn short_crypto_hash(s: &str) -> String {
     let hash = CryptoHash::from_str(s).expect("not a crypto hash");
     format!("{hash:?}")
 }
 
+/// Returns a shortened representation of an application ID string.
 #[wasm_bindgen]
 pub fn short_app_id(s: &str) -> String {
     if s.len() <= 12 {
@@ -954,6 +980,19 @@ async fn fetch_user_app_formats(
             return None;
         }
     };
+    let cache_key = application_id.to_string();
+    if let Some(cached) = FORMATS_CACHE.with(|c| c.borrow().get(&cache_key).cloned()) {
+        log_str(&format!(
+            "{op}: formats cache hit for app {application_id} ({})",
+            if cached.is_some() {
+                "formats"
+            } else {
+                "no formats"
+            }
+        ));
+        return cached;
+    }
+
     let node = url(&data.config, &Protocol::Http, &AddressKind::Node);
     log_str(&format!(
         "{op}: looking up formats blob hash for app {application_id} on chain {} (node={node})",
@@ -966,17 +1005,26 @@ async fn fetch_user_app_formats(
                 hash
             }
             Ok(None) => {
+                // App genuinely has no formats blob hash: a definitive negative, cache it.
                 log_str(&format!(
                     "{op}: application {application_id} has no formats blob hash"
                 ));
+                FORMATS_CACHE.with(|c| c.borrow_mut().insert(cache_key, None));
                 return None;
             }
             Err(e) => {
+                // Transient lookup failure: do not cache, let the next call retry.
                 log_str(&format!("{op}: failed to resolve formats_blob_hash: {e}"));
                 return None;
             }
         };
-    match formats::fetch_formats(&node, &data.chain.to_string(), &formats_blob_hash_hex).await {
+    let result = match formats::fetch_formats(
+        &node,
+        &data.chain.to_string(),
+        &formats_blob_hash_hex,
+    )
+    .await
+    {
         Ok(Some(f)) => {
             log_str(&format!("{op}: node returned formats"));
             Some(f)
@@ -988,10 +1036,13 @@ async fn fetch_user_app_formats(
             None
         }
         Err(e) => {
+            // Transient formats query failure: do not cache, let the next call retry.
             log_str(&format!("{op}: formats query failed: {e}"));
-            None
+            return None;
         }
-    }
+    };
+    FORMATS_CACHE.with(|c| c.borrow_mut().insert(cache_key, result.clone()));
+    result
 }
 
 /// Run a `Formats::decode_*` method against `bytes_hex`, returning a JS value or

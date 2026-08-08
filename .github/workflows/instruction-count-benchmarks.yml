@@ -2,17 +2,13 @@
 # If you rename it, update the workflow_run trigger there too.
 name: Instruction Count Benchmarks
 
+# DEACTIVATED: automatic runs are disabled because the PR regression warnings proved
+# unreliable — the baseline selector compares against a commit older than the merge base
+# (author-date vs artifact-creation-date mismatch), the bench harness spawns a
+# multi-threaded tokio runtime so instruction counts vary run to run, and the paths
+# filter misses linera-base, a dependency compiled into the benchmarks. Manual runs via
+# workflow_dispatch still work. Fix the above before restoring push/pull_request triggers.
 on:
-  push:
-    branches: [main, 'devnet_*', 'testnet_*']
-  pull_request:
-    branches:
-      - "**"
-    paths:
-      - 'linera-views/**'
-      - 'linera-views-derive/**'
-      - '.github/workflows/instruction-count-benchmarks.yml'
-      - '.github/scripts/format-bench-results.sh'
   workflow_dispatch:
 
 concurrency:

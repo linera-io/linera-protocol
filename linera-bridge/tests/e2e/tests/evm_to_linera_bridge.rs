@@ -58,7 +58,6 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     let genesis_config = faucet.genesis_config().await?;
 
     let config = MemoryStoreConfig {
-        max_stream_queries: 10,
         kill_on_drop: true,
     };
     let mut storage = DbStorage::<MemoryDatabase, _>::maybe_create_and_connect(

@@ -43,6 +43,7 @@ pub struct BurnEvent {
 
 /// Initial accounts and balances for the wrapped fungible token application.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[allow(missing_docs)]
 pub struct InitialState {
     pub accounts: BTreeMap<AccountOwner, U128>,
 }
@@ -54,11 +55,13 @@ pub struct InitialStateBuilder {
 }
 
 impl InitialStateBuilder {
+    /// Adds an account with the given initial balance.
     pub fn with_account(mut self, account: AccountOwner, balance: U128) -> Self {
         self.account_balances.insert(account, balance);
         self
     }
 
+    /// Builds the [`InitialState`] from the configured accounts.
     pub fn build(&self) -> InitialState {
         InitialState {
             accounts: self.account_balances.clone(),
@@ -68,6 +71,7 @@ impl InitialStateBuilder {
 
 /// Response variants returned by the wrapped fungible token application.
 #[derive(Debug, StableEnumInCrate, Default)]
+#[allow(missing_docs)]
 pub enum FungibleResponse {
     #[default]
     Ok,
@@ -77,6 +81,7 @@ pub enum FungibleResponse {
 
 /// Operations for the wrapped fungible token application.
 #[derive(Debug, StableEnumInCrate, GraphQLMutationRootInCrate)]
+#[allow(missing_docs)]
 pub enum WrappedFungibleOperation {
     /// Requests an account balance.
     Balance { owner: AccountOwner },
@@ -129,6 +134,7 @@ pub enum WrappedFungibleOperation {
 /// Cross-chain message used by the wrapped fungible token application.
 /// Amounts are [`U128`] in the source ERC-20's decimal scale.
 #[derive(Debug, Deserialize, Serialize)]
+#[allow(missing_docs)]
 pub enum Message {
     /// Credits the given `target` account, unless the message is bouncing, in which case
     /// `source` is credited instead.

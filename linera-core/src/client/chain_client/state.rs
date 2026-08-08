@@ -26,6 +26,7 @@ pub struct State {
 }
 
 impl State {
+    /// Creates a new chain client [`State`] with the given pending proposal and follow-only mode.
     pub fn new(pending_proposal: Option<PendingProposal>, follow_only: bool) -> State {
         State {
             proposal_mutex: Arc::new(Mutex::new(pending_proposal)),

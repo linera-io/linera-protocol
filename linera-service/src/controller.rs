@@ -33,6 +33,7 @@ use crate::task_processor::{OperatorMap, TaskProcessor};
 /// An update message sent to a TaskProcessor to change its set of applications.
 #[derive(Debug)]
 pub struct Update {
+    /// The new set of applications the processor should handle.
     pub application_ids: Vec<ApplicationId>,
 }
 
@@ -40,6 +41,7 @@ struct ProcessorHandle {
     update_sender: mpsc::UnboundedSender<Update>,
 }
 
+/// Watches a controller chain and spawns task processors for its managed services.
 pub struct Controller<Ctx: ClientContext> {
     chain_id: ChainId,
     controller_id: ApplicationId,
@@ -68,6 +70,7 @@ where
     Ctx::Environment: 'static,
     <Ctx::Environment as linera_core::Environment>::Storage: Clone,
 {
+    /// Creates a new controller for the given controller chain.
     #[expect(clippy::too_many_arguments)]
     pub fn new(
         chain_id: ChainId,
@@ -97,6 +100,7 @@ where
         }
     }
 
+    /// Runs the controller, watching for notifications until cancelled.
     pub async fn run(mut self) {
         info!(
             "Watching for notifications for controller chain {}",

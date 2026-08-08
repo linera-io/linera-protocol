@@ -169,10 +169,6 @@ where
 {
     const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE;
 
-    fn max_stream_queries(&self) -> usize {
-        self.store.max_stream_queries()
-    }
-
     fn root_key(&self) -> Result<Vec<u8>, Self::Error> {
         Ok(self.store.root_key()?)
     }

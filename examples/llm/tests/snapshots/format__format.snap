@@ -1,6 +1,6 @@
 ---
 source: llm/tests/format.rs
-expression: "LlmApplication::formats().unwrap()"
+expression: "LlmApplication::pruned_formats().unwrap()"
 ---
 REGISTRY: {}
 OPERATION: UNIT

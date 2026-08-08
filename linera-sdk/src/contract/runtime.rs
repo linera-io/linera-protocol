@@ -440,7 +440,7 @@ where
     }
 
     /// Publishes a module with contract and service bytecode and an optional
-    /// JSON-encoded `Formats` description, returning the module ID.
+    /// BCS-encoded `Formats` description, returning the module ID.
     pub fn publish_module(
         &mut self,
         contract: Bytecode,

@@ -180,6 +180,20 @@ The constructor takes `(address[], uint64[], bytes32, uint32)` — the genesis c
 
 - **No `previous_block_hash` chain-linking in Microchain**: The `Microchain` contract enforces chain ID and sequential heights but does not verify `previous_block_hash` to link blocks into a hash chain. This is safe because a `ConfirmedBlockCertificate` implies BFT-finalized canonicality — a quorum of validators signed this specific block at this height, so no conflicting block can exist for the same chain and height. The contract relies on this protocol-layer guarantee rather than redundantly re-checking hash linking. If the finality semantics of `ConfirmedBlockCertificate` ever change (e.g., to allow rollbacks or forks), a `previous_block_hash` check should be added.
 
+## Deployment
+
+A bridge spans both chains and its pieces must be created in a specific order
+(committee → `LightClient` → token → Linera chain/apps → `FungibleBridge` →
+cross-registration). Two paths exist:
+
+- **Local demo** (Docker + Anvil + a local validator + frontend):
+  `make demo` from this directory — see [`examples/bridge-demo/README.md`](../examples/bridge-demo/README.md).
+- **Real networks** (Base, Ethereum, … against a real Linera network):
+  the Docker-based deployment runbook in [`deploy/`](deploy/README.md) — a
+  sequence of copy-pasteable commands run inside the project's pre-built images.
+  It provisions both sides and emits a relayer env file. Operating the relayer
+  afterwards is covered by the [testnet runbook](../docker/README.testnet.md).
+
 ## Testing
 
 Tests use [revm](https://github.com/bluealloy/revm) (Rust EVM) to execute the Solidity contracts in-process, with `solc` for compilation. No external EVM node is required. The test suite covers:

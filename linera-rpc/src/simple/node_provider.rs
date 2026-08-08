@@ -13,6 +13,7 @@ use crate::{config::ValidatorPublicNetworkPreConfig, node_provider::NodeOptions}
 pub struct SimpleNodeProvider(NodeOptions);
 
 impl SimpleNodeProvider {
+    /// Creates a new [`SimpleNodeProvider`] with the given node options.
     pub fn new(options: NodeOptions) -> Self {
         Self(options)
     }

@@ -118,6 +118,8 @@ services:
         echo "Querying committee data from faucet..."
         exec linera-bridge init-light-client \
           --faucet-url http://linera-network:${FAUCET_PORT:-8080} \
+          --pause-guardian "${LIGHT_CLIENT_PAUSE_GUARDIAN:-0x000000000000000000000000000000000000dEaD}" \
+          --proposer "${LIGHT_CLIENT_PROPOSER:-0x000000000000000000000000000000000000bEEF}" \
           --output /shared/light-client-args.json
     volumes:
       - bridge-shared:/shared

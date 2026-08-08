@@ -11,31 +11,92 @@ mod validated;
 use std::collections::BTreeSet;
 
 use allocative::Allocative;
+pub use confirmed::ConfirmedBlockCertificate;
 pub use generic::GenericCertificate;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey, ValidatorSignature},
     data_types::{BlockHeight, Epoch, Round},
     identifiers::{BlobId, ChainId},
 };
+use linera_execution::committee::Committee;
 pub use lite::LiteCertificate;
 use serde::{Deserialize, Serialize};
+pub use validated::ValidatedBlockCertificate;
 
-use crate::types::{ConfirmedBlock, Timeout, ValidatedBlock};
-
-/// Certificate for a [`ValidatedBlock`] instance.
-/// A validated block certificate means the block is valid (but not necessarily finalized yet).
-/// Since only one block per round is validated,
-/// there can be at most one such certificate in every round.
-pub type ValidatedBlockCertificate = GenericCertificate<ValidatedBlock>;
-
-/// Certificate for a [`ConfirmedBlock`] instance.
-/// A confirmed block certificate means that the block is finalized:
-/// It is the agreed block at that height on that chain.
-pub type ConfirmedBlockCertificate = GenericCertificate<ConfirmedBlock>;
+use crate::{
+    types::{ConfirmedBlock, Timeout, ValidatedBlock},
+    ChainError,
+};
 
 /// Certificate for a [`Timeout`] instance.
 /// A timeout certificate means that the next consensus round has begun.
 pub type TimeoutCertificate = GenericCertificate<Timeout>;
+
+/// The common read interface shared by all certificate types: the signed value, the round and
+/// unlocking round it was certified under, its signatures, and verification.
+pub trait Certified {
+    /// The kind of value this certificate certifies.
+    type Value: CertificateValue;
+
+    /// Returns a reference to the certified value.
+    fn value(&self) -> &Self::Value;
+
+    /// Returns the round in which the value was certified.
+    fn round(&self) -> Round;
+
+    /// Returns the unlocking round the `ValidatedBlock` voters signed, if any.
+    fn unlocking_round(&self) -> Option<Round>;
+
+    /// Returns the validator signatures certifying this value.
+    fn signatures(&self) -> &Vec<(ValidatorPublicKey, ValidatorSignature)>;
+
+    /// Returns the certified value's hash.
+    fn hash(&self) -> CryptoHash {
+        self.value().hash()
+    }
+
+    /// Returns the [`LiteCertificate`] corresponding to this certificate, without the value but
+    /// with the justification chain.
+    fn lite_certificate(&self) -> LiteCertificate<'_>;
+
+    /// Verifies the certificate, including its justification chain.
+    fn check(&self, committee: &Committee) -> Result<(), ChainError>;
+
+    /// Returns whether the validator is among the signatories of this certificate.
+    fn is_signed_by(&self, validator_name: &ValidatorPublicKey) -> bool {
+        self.signatures()
+            .binary_search_by(|(name, _)| name.cmp(validator_name))
+            .is_ok()
+    }
+}
+
+impl<T: CertificateValue> Certified for GenericCertificate<T> {
+    type Value = T;
+
+    fn value(&self) -> &T {
+        GenericCertificate::value(self)
+    }
+
+    fn round(&self) -> Round {
+        GenericCertificate::round(self)
+    }
+
+    fn unlocking_round(&self) -> Option<Round> {
+        GenericCertificate::unlocking_round(self)
+    }
+
+    fn signatures(&self) -> &Vec<(ValidatorPublicKey, ValidatorSignature)> {
+        GenericCertificate::signatures(self)
+    }
+
+    fn lite_certificate(&self) -> LiteCertificate<'_> {
+        GenericCertificate::lite_certificate_without_justification(self)
+    }
+
+    fn check(&self, committee: &Committee) -> Result<(), ChainError> {
+        GenericCertificate::check(self, committee)
+    }
+}
 
 /// Enum wrapping all types of certificates that can be created.
 /// A certified statement from the committee.
@@ -52,14 +113,16 @@ pub enum Certificate {
 }
 
 impl Certificate {
+    /// Returns the consensus round in which this certificate was created.
     pub fn round(&self) -> Round {
         match self {
-            Certificate::Validated(cert) => cert.round,
-            Certificate::Confirmed(cert) => cert.round,
-            Certificate::Timeout(cert) => cert.round,
+            Certificate::Validated(cert) => cert.round(),
+            Certificate::Confirmed(cert) => cert.round(),
+            Certificate::Timeout(cert) => cert.round(),
         }
     }
 
+    /// Returns the block height this certificate applies to.
     pub fn height(&self) -> BlockHeight {
         match self {
             Certificate::Validated(cert) => cert.value().block().header.height,
@@ -68,6 +131,7 @@ impl Certificate {
         }
     }
 
+    /// Returns the ID of the chain this certificate applies to.
     pub fn chain_id(&self) -> ChainId {
         match self {
             Certificate::Validated(cert) => cert.value().block().header.chain_id,
@@ -76,6 +140,7 @@ impl Certificate {
         }
     }
 
+    /// Returns the validator signatures that certify this value.
     pub fn signatures(&self) -> &Vec<(ValidatorPublicKey, ValidatorSignature)> {
         match self {
             Certificate::Validated(cert) => cert.signatures(),
@@ -85,25 +150,34 @@ impl Certificate {
     }
 }
 
+/// The kind of value a certificate certifies.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Hash, Eq, PartialEq, Allocative)]
 #[repr(u8)]
+#[allow(missing_docs)]
 pub enum CertificateKind {
     Timeout = 0,
     Validated = 1,
     Confirmed = 2,
 }
 
+/// A value that can be certified by a quorum of validators.
 pub trait CertificateValue: Clone {
+    /// The kind of certificate this value produces.
     const KIND: CertificateKind;
 
+    /// Returns the ID of the chain this value applies to.
     fn chain_id(&self) -> ChainId;
 
+    /// Returns the epoch this value belongs to.
     fn epoch(&self) -> Epoch;
 
+    /// Returns the block height this value applies to.
     fn height(&self) -> BlockHeight;
 
+    /// Returns the IDs of all blobs required to validate this value.
     fn required_blob_ids(&self) -> BTreeSet<BlobId>;
 
+    /// Returns the hash that uniquely identifies this value.
     fn hash(&self) -> CryptoHash;
 }
 

@@ -41,6 +41,7 @@ interface contract-entrypoints {
         chain-id: chain-id,
         stream-id: stream-id,
         previous-index: u32,
+        first-index: u32,
         next-index: u32,
     }
 }

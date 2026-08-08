@@ -90,6 +90,7 @@ build-all: build-wasm ## Build Wasm files and all docker images (debug mode)
 		--build-arg build_flag="" \
 		--build-arg build_folder=debug \
 		--build-arg build_features=scylladb \
+		--target runtime \
 		-t linera-test ..
 	cd $(DOCKER_DIR) && docker build -f ./Dockerfile.bridge \
 		--build-arg build_flag="" \
@@ -112,8 +113,8 @@ down: ## Stop the bridge docker compose network and remove volumes
 demo-setup: ## Run the bridge demo setup script (deploy contracts + Linera apps)
 	cd $(DEMO_DIR) && bash setup.sh --compose-file $(CURDIR)/$(COMPOSE_FILE)
 
-demo-frontend: ## Install deps and start the Vite dev server
-	cd $(DEMO_DIR) && pnpm install && pnpm dev
+demo-frontend: ## Install deps, rebuild the web client, and start the Vite dev server
+	cd $(DEMO_DIR) && pnpm install && pnpm --filter @linera/client build && pnpm dev
 
 demo-logs: ## Tail logs from the relay service
 	docker compose -f $(COMPOSE_FILE) -p $(PROJECT) logs -f linera-relay

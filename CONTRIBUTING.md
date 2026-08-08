@@ -60,6 +60,42 @@ Prefer plural names for collections of objects: `let values = vec![1, 2, 3];`.
 Contributions should generally follow the [Rust API guidelines](https://rust-lang.github.io/api-guidelines/checklist.html) whenever possible.
 
 
+## Documenting public items
+
+The library crates enable `#![deny(missing_docs)]`, so every public item needs a `///`
+doc comment. Prefer writing a real, useful one-line doc over silencing the lint. Adding
+`#[allow(missing_docs)]` is only acceptable in the following cases:
+
+1. **Generated or macro-produced items that cannot carry doc comments.** For example code
+   from `tonic::include_proto!` / `#[wit_import]`, the `Error` newtype from
+   `thiserror_context::impl_context!`, or generated GraphQL clients. Put a *module-level*
+   `#![allow(missing_docs)]` (or `#![expect(missing_docs)]`, which additionally warns if
+   the macro ever stops generating undocumented items) on the smallest module wrapping the
+   generated code.
+
+2. **`thiserror`-derived error enums** whose variants are already described by their
+   `#[error("…")]` messages. Put a single type-level `#[allow(missing_docs)]` on the enum.
+
+3. **Large, mechanical, self-descriptive message / request / operation enums** — e.g.
+   actor-message enums, the RPC message enum, or wire/ABI operation enums — where
+   per-variant and per-field docs would only restate the obvious. Put a single type-level
+   `#[allow(missing_docs)]` on the type.
+
+Everything else (config and data structs, traits, methods, free functions, and any type
+that is *not* in one of the cases above) should be documented with real `///` comments.
+
+Two things to keep in mind:
+
+* For a clap subcommand enum whose variants are thin wrappers around documented args
+  structs (e.g. `Command { Add(Add), … }`), giving the *variant* a doc comment shadows the
+  richer `--help` text derived from the inner struct. Use a type-level
+  `#[allow(missing_docs)]` on such an enum rather than duplicating the inner docs.
+
+* For `async-graphql` types (`#[derive(SimpleObject)]`, etc.) a doc comment becomes part of
+  the generated GraphQL schema. Documenting them is encouraged, but remember to regenerate
+  the checked-in schema (`cargo run --bin linera-schema-export > …`) in the same change.
+
+
 ## Additional code style guidelines
 
 * Type annotations (such as `let x : t = ...;`, `Vec::<usize>::new()`) should be present only when required by the compiler.

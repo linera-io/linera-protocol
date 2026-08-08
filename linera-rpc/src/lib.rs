@@ -5,21 +5,28 @@
 //! calls (RPCs) in the Linera protocol.
 
 #![recursion_limit = "256"]
+#![deny(missing_docs)]
 // `tracing::instrument` is not compatible with this nightly Clippy lint
 #![allow(unknown_lints)]
 
+/// Network configuration types for validators, shards, and cross-chain messaging.
 pub mod config;
+/// Construction of validator-node clients from network configuration.
 pub mod node_provider;
 
+/// A network-agnostic client for talking to a validator node.
 pub mod client;
 
 mod cross_chain_message_queue;
 mod message;
+/// The simple custom-TCP/UDP network transport.
 #[cfg(with_simple_network)]
 pub mod simple;
 
+/// The gRPC network transport.
 pub mod grpc;
 
+/// Propagation of OpenTelemetry trace context across RPC boundaries.
 #[cfg(feature = "opentelemetry")]
 pub mod propagation;
 
@@ -27,36 +34,49 @@ pub use client::Client;
 pub use message::{RpcMessage, ShardInfo};
 pub use node_provider::{NodeOptions, NodeProvider, DEFAULT_MAX_BACKOFF};
 
+/// A request to handle a lite certificate.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct HandleLiteCertRequest<'a> {
+    /// The lite certificate to handle.
     pub certificate: linera_chain::types::LiteCertificate<'a>,
+    /// Whether to wait for the resulting cross-chain messages to be delivered.
     pub wait_for_outgoing_messages: bool,
 }
 
+/// A request to handle a confirmed-block certificate.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct HandleConfirmedCertificateRequest {
+    /// The confirmed-block certificate to handle.
     pub certificate: linera_chain::types::ConfirmedBlockCertificate,
+    /// Whether to wait for the resulting cross-chain messages to be delivered.
     pub wait_for_outgoing_messages: bool,
 }
 
+/// A request to handle a validated-block certificate.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct HandleValidatedCertificateRequest {
+    /// The validated-block certificate to handle.
     pub certificate: linera_chain::types::ValidatedBlockCertificate,
 }
 
+/// A request to handle a timeout certificate.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct HandleTimeoutCertificateRequest {
+    /// The timeout certificate to handle.
     pub certificate: linera_chain::types::TimeoutCertificate,
 }
 
+/// The protobuf file descriptor set for the RPC service, used for gRPC reflection.
 pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("file_descriptor_set");
 
+/// A self-signed TLS certificate (PEM), generated at build time for local testing.
 #[cfg(not(target_arch = "wasm32"))]
 pub const CERT_PEM: &str = include_str!(concat!(env!("OUT_DIR"), "/self_signed_cert.pem"));
+/// The private key (PEM) matching [`CERT_PEM`], generated at build time for local testing.
 #[cfg(not(target_arch = "wasm32"))]
 pub const KEY_PEM: &str = include_str!(concat!(env!("OUT_DIR"), "/private_key.pem"));
 

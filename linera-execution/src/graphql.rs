@@ -102,6 +102,6 @@ impl<C: Send + Sync + Context> SystemExecutionStateView<C> {
 
     #[graphql(derived(name = "timestamp"))]
     async fn _timestamp(&self) -> &Timestamp {
-        self.timestamp.get()
+        &self.progress.get().timestamp
     }
 }

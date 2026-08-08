@@ -53,7 +53,7 @@ sol! {
             external
             view
             returns (bytes32 eventsHash, uint64 height, bytes32 chainId, uint32 epoch);
-        function proveEventsCommitted(
+        function assertEventsCommitted(
             bytes32 eventsHash,
             bytes[] calldata eventBcs,
             uint32 txIndex,
