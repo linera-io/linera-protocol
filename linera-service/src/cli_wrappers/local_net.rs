@@ -16,6 +16,7 @@ use anyhow::{anyhow, bail, ensure, Context, Result};
 #[cfg(with_testing)]
 use async_lock::RwLock;
 use async_trait::async_trait;
+use clap::ValueEnum as _;
 use linera_base::{
     command::{resolve_binary, CommandExt},
     data_types::Amount,
@@ -42,6 +43,7 @@ use crate::{
     cli_wrappers::{
         ClientWrapper, LineraNet, LineraNetConfig, Network, NetworkConfig, OnClientDrop,
     },
+    config::BlockExportTransport,
     storage::{InnerStorageConfig, StorageConfig},
     util::ChildExt,
 };
@@ -227,6 +229,9 @@ pub struct LocalNetConfig {
     /// Whether the validators push each block they execute to the rest of the committee,
     /// through their own proxies.
     pub export_blocks_to_committee: bool,
+    /// How exporting validators reach the others: through their own proxy, or straight from the
+    /// shards.
+    pub block_export_transport: BlockExportTransport,
 }
 
 /// The setup for the block exporters.
@@ -272,6 +277,7 @@ pub struct LocalNet {
     path_provider: PathProvider,
     block_exporters: ExportersSetup,
     export_blocks_to_committee: bool,
+    block_export_transport: BlockExportTransport,
 }
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -397,6 +403,7 @@ impl LocalNetConfig {
             block_exporters: ExportersSetup::Local(vec![]),
             http_request_allow_list: Some(vec!["localhost".to_string()]),
             export_blocks_to_committee: false,
+            block_export_transport: BlockExportTransport::Relay,
         }
     }
 }
@@ -419,6 +426,7 @@ impl LineraNetConfig for LocalNetConfig {
             self.path_provider,
             self.block_exporters,
             self.export_blocks_to_committee,
+            self.block_export_transport,
         );
         let client = net.make_client().await;
         ensure!(
@@ -494,6 +502,7 @@ impl LocalNet {
         path_provider: PathProvider,
         block_exporters: ExportersSetup,
         export_blocks_to_committee: bool,
+        block_export_transport: BlockExportTransport,
     ) -> Self {
         Self {
             network,
@@ -511,6 +520,7 @@ impl LocalNet {
             path_provider,
             block_exporters,
             export_blocks_to_committee,
+            block_export_transport,
         }
     }
 
@@ -975,6 +985,13 @@ impl LocalNet {
             .args(self.cross_chain_config.to_args());
         if self.export_blocks_to_committee {
             command.arg("--export-blocks-to-committee");
+            command.args([
+                "--block-export-transport",
+                self.block_export_transport
+                    .to_possible_value()
+                    .expect("every transport is a selectable value")
+                    .get_name(),
+            ]);
         }
         let child = command.spawn_into()?;
 

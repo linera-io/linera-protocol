@@ -50,6 +50,7 @@ use linera_rpc::{
 };
 use linera_sdk::linera_base_types::{AccountSecretKey, ValidatorKeypair};
 use linera_service::{
+    config::BlockExportTransport,
     storage::{AssertStorageV1, CommonStorageOptions, Runnable, StorageConfig},
     util,
 };
@@ -76,8 +77,10 @@ struct ServerContext {
     recovery_whitelist: Option<HashSet<ChainId>>,
     /// How to push executed blocks to the other committee validators, or `None` to not push them.
     block_export_config: Option<BlockExportConfig>,
-    /// The transport options for the connections block export makes to this validator's proxies.
+    /// The transport options for the connections block export makes.
     block_export_node_options: NodeOptions,
+    /// How block export reaches the other validators.
+    block_export_transport: BlockExportTransport,
     #[cfg(with_metrics)]
     enable_memory_profiling: bool,
 }
@@ -119,56 +122,77 @@ impl ServerContext {
         };
         let mut state = WorkerState::new(storage, config, None);
         if let Some(export_config) = self.block_export_config.clone() {
-            state = state.with_chain_exporter_factory(
-                self.chain_exporter_factory(export_config, self.block_export_node_options),
-            );
+            state = state.with_chain_exporter_factory(self.chain_exporter_factory(
+                export_config,
+                self.block_export_node_options,
+                self.block_export_transport,
+            ));
         }
         (state, shard_id, shard.clone())
     }
 
     /// Builds the factory that gives each chain worker its export task.
     ///
-    /// Every validator is reached through this validator's own proxy: a shard holds the validator
-    /// secret key, so it must not be able to open outbound connections itself. The proxy is
-    /// addressed at the same internal endpoint the shards already send their notifications to,
-    /// and the provider is shared across chain workers so a peer costs one pooled connection
-    /// rather than one per chain.
+    /// The provider is built once and shared across chain workers, so a peer costs one pooled
+    /// connection rather than one per chain. Which provider depends on
+    /// [`BlockExportTransport`]; see there for the trade-off.
     fn chain_exporter_factory<S>(
         &self,
         export_config: BlockExportConfig,
         node_options: NodeOptions,
+        transport: BlockExportTransport,
     ) -> ChainExporterFactory<S>
     where
         S: Storage + Clone + Send + Sync + 'static,
     {
-        let internal_network = &self.server_config.internal_network;
-        // All of this validator's proxies, rotated over by the provider: each export leaves
-        // through exactly one of them, but successive destinations draw different ones so the
-        // egress is spread rather than landing entirely on the first.
-        let relay_addresses = internal_network
-            .proxies
-            .iter()
-            .map(|proxy| proxy.internal_address(&internal_network.protocol))
-            .collect::<Vec<_>>();
-        assert!(
-            !relay_addresses.is_empty(),
-            "exporting blocks to the committee needs at least one proxy to relay through, but \
-             this validator's internal network configures none",
-        );
-        // Only the two timeouts in `node_options` reach the wire: the relay pool is built from
-        // `transport::Options`, which drops the retry fields. That is deliberate — retrying is the
-        // export task's job, and it backs off per destination, so a second retry loop underneath
-        // would multiply the delay before a failing validator is set aside.
-        let node_provider = Arc::new(grpc::RelayNodeProvider::new(relay_addresses, node_options));
         let own_public_key = self.server_config.validator_secret.public();
-        Arc::new(move |setup| {
-            spawn_chain_exporter(
-                setup,
-                node_provider.clone(),
-                export_config.clone(),
-                Some(own_public_key),
-            )
-        })
+        // Both arms are handed the destination's committee address and differ only in who dials
+        // it, so the export task itself is identical either way.
+        //
+        // In neither arm do the retry fields of `node_options` take effect: the relay pool drops
+        // them, and the direct provider is given them as zero. Retrying is the export task's job,
+        // and it backs off per destination — a second retry loop underneath would multiply the
+        // delay before a failing validator is set aside.
+        match transport {
+            BlockExportTransport::Relay => {
+                let internal_network = &self.server_config.internal_network;
+                // All of this validator's proxies, rotated over by the provider: each export
+                // leaves through exactly one of them, but successive destinations draw different
+                // ones so the egress is spread rather than landing entirely on the first.
+                let relay_addresses = internal_network
+                    .proxies
+                    .iter()
+                    .map(|proxy| proxy.internal_address(&internal_network.protocol))
+                    .collect::<Vec<_>>();
+                assert!(
+                    !relay_addresses.is_empty(),
+                    "relaying exported blocks needs at least one proxy to relay through, but this \
+                     validator's internal network configures none; use \
+                     `--block-export-transport direct` to send without a proxy",
+                );
+                let node_provider =
+                    Arc::new(grpc::RelayNodeProvider::new(relay_addresses, node_options));
+                Arc::new(move |setup| {
+                    spawn_chain_exporter(
+                        setup,
+                        node_provider.clone(),
+                        export_config.clone(),
+                        Some(own_public_key),
+                    )
+                })
+            }
+            BlockExportTransport::Direct => {
+                let node_provider = Arc::new(linera_rpc::NodeProvider::new(node_options));
+                Arc::new(move |setup| {
+                    spawn_chain_exporter(
+                        setup,
+                        node_provider.clone(),
+                        export_config.clone(),
+                        Some(own_public_key),
+                    )
+                })
+            }
+        }
     }
 
     #[cfg_attr(not(with_metrics), allow(unused_variables))]
@@ -565,6 +589,17 @@ enum ServerCommand {
         )]
         export_blocks_to_committee: bool,
 
+        /// How exported blocks reach the other validators: relayed through this validator's own
+        /// proxy, or sent straight from the shards. Relaying keeps shards off the internet;
+        /// sending directly removes the proxy from the path if relaying proves too expensive.
+        #[arg(
+            long,
+            value_enum,
+            default_value_t = BlockExportTransport::Relay,
+            env = "LINERA_BLOCK_EXPORT_TRANSPORT"
+        )]
+        block_export_transport: BlockExportTransport,
+
         /// How many certificates are read from storage and pushed per batch when a block export
         /// has to catch a lagging validator up. Only used with `--export-blocks-to-committee`.
         #[arg(long, default_value_t = BlockExportConfig::default().certificate_upload_batch_size)]
@@ -754,6 +789,7 @@ async fn run(options: ServerOptions) {
             reset_on_corrupted_chain_state_mins,
             recovery_whitelist,
             export_blocks_to_committee,
+            block_export_transport,
             block_export_batch_size,
             block_export_max_catch_up_blocks,
             block_export_idle_interval,
@@ -809,6 +845,7 @@ async fn run(options: ServerOptions) {
                     config.check().expect("invalid block export configuration");
                     config
                 }),
+                block_export_transport,
                 block_export_node_options: NodeOptions {
                     send_timeout: block_export_send_timeout,
                     recv_timeout: block_export_recv_timeout,

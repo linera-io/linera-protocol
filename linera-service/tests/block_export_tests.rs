@@ -33,6 +33,7 @@ use linera_service::{
         local_net::{Database, LocalNet, LocalNetConfig},
         LineraNet, LineraNetConfig, Network,
     },
+    config::BlockExportTransport,
     test_name,
 };
 use test_case::test_case;
@@ -306,6 +307,67 @@ async fn test_relay_refuses_a_non_committee_destination(
         tonic::Code::PermissionDenied,
         "expected a refusal, got: {status:?}",
     );
+
+    net.terminate().await?;
+    Ok(())
+}
+
+/// With `--block-export-transport direct`, shards reach the other validators themselves and the
+/// proxy carries nothing.
+///
+/// This is the escape hatch for the case we cannot predict from the code: relaying every exported
+/// block puts load on this validator's own proxy, and if that turns out to be too expensive an
+/// operator needs a way to take the proxy out of the path. The assertion is the exact mirror of
+/// `test_block_export_through_the_proxy` — same blocks arriving everywhere, but the relay counters
+/// stay at zero — so the two together pin down which path each setting actually takes.
+///
+/// Note the trade-off this buys: shards hold the validator secret key, so sending directly means
+/// giving them outbound access to the other validators.
+#[ignore]
+#[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_block_export_direct_bypasses_the_proxy(
+    database: Database,
+    network: Network,
+) -> Result<()> {
+    let _guard: tokio::sync::MutexGuard<'_, ()> = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let config = LocalNetConfig {
+        num_initial_validators: 4,
+        num_shards: 1,
+        export_blocks_to_committee: true,
+        block_export_transport: BlockExportTransport::Direct,
+        ..LocalNetConfig::new_test(database, network)
+    };
+    let (mut net, client) = config.instantiate().await?;
+    let chain = client.default_chain().expect("client has no default chain");
+
+    for _ in 0..3 {
+        client
+            .transfer_with_silent_logs(1.into(), chain, chain)
+            .await?;
+    }
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    // The blocks still reach every validator...
+    for validator in 0..4 {
+        let info = net
+            .validator_client(validator)?
+            .handle_chain_info_query(ChainInfoQuery::new(chain))
+            .await?;
+        assert_eq!(info.info.next_block_height, 3.into());
+    }
+
+    // ...without a single one of them going through a proxy's relay.
+    for validator in 0..4 {
+        let relayed = relayed_requests(&net, validator).await?;
+        assert_eq!(
+            relayed, 0,
+            "validator {validator} relayed {relayed} requests through its proxy despite \
+             --block-export-transport direct",
+        );
+    }
 
     net.terminate().await?;
     Ok(())
