@@ -24,6 +24,7 @@ pub async fn get_storage(namespace: &str) -> Result<Storage, linera_views::ViewE
             certificate_raw_cache_size: 1000,
             event_cache_size: 1000,
             block_hash_by_height_cache_size: 1000,
+            event_block_height_cache_size: 1000,
             cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
         },
     )
