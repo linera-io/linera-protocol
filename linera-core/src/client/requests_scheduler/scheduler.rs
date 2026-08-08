@@ -467,7 +467,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
                 .inc();
             if is_success {
                 metrics::VALIDATOR_REQUEST_SUCCESS
-                    .with_label_values(&[&validator_name])
+                    .with_label_values(&[&validator_name, &address])
                     .inc();
             }
         }
