@@ -41,7 +41,6 @@ use wrapped_fungible::{
     InitialState, WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters,
 };
 
-
 #[tokio::test]
 #[ignore] // Requires pre-built docker images and Wasm: `make -C linera-bridge build-all`
 async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
@@ -59,7 +58,6 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     let genesis_config = faucet.genesis_config().await?;
 
     let config = MemoryStoreConfig {
-        max_stream_queries: 10,
         kill_on_drop: true,
     };
     let mut storage = DbStorage::<MemoryDatabase, _>::maybe_create_and_connect(
@@ -352,7 +350,14 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         .wallet(evm_wallet)
         .connect_http(rpc_url);
 
-    let evm_client = EvmClient::new(provider.clone(), bridge_addr, relayer_addr, None);
+    let evm_client = EvmClient::new(
+        provider.clone(),
+        bridge_addr,
+        relayer_addr,
+        None,
+        2000,
+        Duration::from_secs(4),
+    );
     let mut settled_burns = 0usize;
     for cert in &inbox_a_certs {
         let by_tx = burn_positions_by_tx(cert, bridge_app_id);
@@ -368,8 +373,14 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
             settled_burns += positions.len();
         }
     }
-    tracing::info!(settled_burns, "Burns settled via registerBlock + processBurns");
-    assert!(settled_burns > 0, "expected at least one BurnEvent to settle");
+    tracing::info!(
+        settled_burns,
+        "Burns settled via registerBlock + processBurns"
+    );
+    assert!(
+        settled_burns > 0,
+        "expected at least one BurnEvent to settle"
+    );
 
     // ── 14. Verify ERC20 balance ──
     let evm_recipient_addr: Address = format!("0x{evm_recipient}").parse()?;

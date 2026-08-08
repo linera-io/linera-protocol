@@ -93,6 +93,7 @@ pub struct ExtractedOtelContext(pub Context);
 /// This trait abstracts over `http::Request` and `tonic::Request` to allow
 /// generic functions that work with either request type.
 pub trait HasOtelContext {
+    /// Returns the extracted OpenTelemetry context, if present.
     fn get_otel_context(&self) -> Option<&ExtractedOtelContext>;
 }
 

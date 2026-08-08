@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 import "BridgeTypes.sol";
 
-library WrappedFungibleTypes {
+library WrappedFungibleTypesV1 {
     function bcs_serialize_uleb128(uint256 x) internal pure returns (bytes memory) {
         bytes memory result;
         bytes1 entry;
@@ -987,4 +987,4 @@ library WrappedFungibleTypes {
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
-} // end of library WrappedFungibleTypes
+} // end of library WrappedFungibleTypesV1

@@ -4,9 +4,11 @@
 mod client;
 mod conversions;
 mod node_provider;
+/// A pool of reusable gRPC transport channels.
 pub mod pool;
 #[cfg(with_server)]
 mod server;
+/// Transport-level configuration and channel construction for gRPC.
 pub mod transport;
 
 pub use client::*;
@@ -15,11 +17,15 @@ pub use node_provider::*;
 #[cfg(with_server)]
 pub use server::*;
 
+/// The gRPC service and message types generated from `proto/rpc.proto`.
 pub mod api {
+    // Generated gRPC bindings; the generated items cannot carry doc comments.
+    #![allow(missing_docs)]
     tonic::include_proto!("rpc.v1");
 }
 
 #[derive(thiserror::Error, Debug)]
+#[allow(missing_docs)]
 pub enum GrpcError {
     #[error("failed to connect to address: {0}")]
     ConnectionFailed(#[from] transport::Error),
@@ -36,6 +42,7 @@ pub enum GrpcError {
 }
 
 const MEBIBYTE: usize = 1024 * 1024;
+/// The maximum gRPC message size, in bytes.
 pub const GRPC_MAX_MESSAGE_SIZE: usize = 16 * MEBIBYTE;
 
 /// Limit of gRPC message size up to which we will try to populate with data when estimating.

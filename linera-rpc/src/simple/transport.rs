@@ -39,10 +39,12 @@ pub const DEFAULT_MAX_DATAGRAM_SIZE: &str = "65507";
 /// Number of tasks to spawn before attempting to reap some finished tasks to prevent memory leaks.
 const REAP_TASKS_THRESHOLD: usize = 100;
 
-// Supported transport protocols.
+/// The transport protocols supported by the simple network.
 #[derive(clap::ValueEnum, Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TransportProtocol {
+    /// The UDP transport protocol.
     Udp,
+    /// The TCP transport protocol.
     Tcp,
 }
 
@@ -61,6 +63,7 @@ impl std::fmt::Display for TransportProtocol {
 }
 
 impl TransportProtocol {
+    /// Returns the URL scheme name for this transport protocol.
     pub fn scheme(&self) -> &'static str {
         match self {
             TransportProtocol::Udp => "udp",
@@ -71,6 +74,7 @@ impl TransportProtocol {
 
 /// A pool of (outgoing) data streams.
 pub trait ConnectionPool: Send {
+    /// Sends a message to the given address, opening a connection if necessary.
     fn send_message_to<'a>(
         &'a mut self,
         message: RpcMessage,
@@ -85,6 +89,7 @@ pub trait ConnectionPool: Send {
 /// may exist at the same time and handle separate requests concurrently.
 #[async_trait]
 pub trait MessageHandler: Clone {
+    /// Handles a single request message, returning an optional response.
     async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage>;
 
     /// Handle a notification subscription request. Returns a stream of notification
@@ -110,10 +115,12 @@ pub trait MessageHandler: Clone {
 /// The result of spawning a server is oneshot channel to track completion, and the set of
 /// executing tasks.
 pub struct ServerHandle {
+    /// The handle tracking completion of the server task.
     pub handle: TaskHandle<Result<(), std::io::Error>>,
 }
 
 impl ServerHandle {
+    /// Waits for the server task to finish.
     pub async fn join(self) -> Result<(), std::io::Error> {
         self.handle.await.map_err(|_| {
             std::io::Error::new(

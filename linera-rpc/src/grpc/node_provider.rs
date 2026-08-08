@@ -13,6 +13,7 @@ use crate::{
     node_provider::NodeOptions,
 };
 
+/// A node provider that creates gRPC clients backed by a shared connection pool.
 #[derive(Clone)]
 pub struct GrpcNodeProvider {
     pool: GrpcConnectionPool,
@@ -26,6 +27,7 @@ pub struct GrpcNodeProvider {
 }
 
 impl GrpcNodeProvider {
+    /// Creates a new [`GrpcNodeProvider`] with the given node options.
     pub fn new(options: NodeOptions) -> Self {
         let transport_options = transport::Options::from(&options);
         let retry_delay = options.retry_delay;

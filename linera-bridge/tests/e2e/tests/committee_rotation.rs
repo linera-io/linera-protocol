@@ -61,7 +61,6 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
     let relay_genesis_config = genesis_config.clone();
 
     let config = MemoryStoreConfig {
-        max_stream_queries: 10,
         kill_on_drop: true,
     };
     let mut storage = DbStorage::<MemoryDatabase, _>::maybe_create_and_connect(
@@ -178,6 +177,7 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
             5,                                 // max_retries
             None,
             None,
+            2000, // max_log_block_range
         ))
         .await
     });

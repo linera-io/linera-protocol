@@ -50,7 +50,7 @@ pub struct DestinationConfig {
     pub committee_destination: bool,
 }
 
-// Each destination has an ID and a configuration.
+/// A unique identifier for an export destination, combining its address and kind.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DestinationId {
     address: String,
@@ -63,6 +63,7 @@ impl DestinationId {
         Self { address, kind }
     }
 
+    /// Creates a new validator destination ID from the address.
     pub fn validator(address: String) -> Self {
         Self {
             address,
@@ -84,6 +85,7 @@ impl DestinationId {
 /// The uri to provide export services to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Destination {
+    /// An indexer destination served over gRPC.
     Indexer {
         /// The gRPC network protocol.
         tls: TlsConfig,
@@ -92,12 +94,14 @@ pub enum Destination {
         /// The port number of the target destination.
         port: u16,
     },
+    /// A validator destination served over gRPC.
     Validator {
         /// The host name of the target destination (IP or hostname).
         endpoint: String,
         /// The port number of the target destination.
         port: u16,
     },
+    /// A logging destination that writes to a file.
     Logging {
         /// The log file path.
         file_name: String,
@@ -286,6 +290,7 @@ impl Default for LimitsConfig {
 }
 
 impl Destination {
+    /// Returns the address string for this destination.
     pub fn address(&self) -> String {
         match &self {
             Destination::Indexer {
@@ -309,6 +314,7 @@ impl Destination {
         }
     }
 
+    /// Returns the [`DestinationId`] identifying this destination.
     pub fn id(&self) -> DestinationId {
         let kind = match self {
             Destination::Indexer { .. } => DestinationKind::Indexer,

@@ -68,6 +68,7 @@ pub struct SyncRuntime<UserInstance: WithContext>(Option<SyncRuntimeHandle<UserI
 
 pub type ContractSyncRuntime = SyncRuntime<UserContractInstance>;
 
+/// The synchronous runtime used to execute service queries.
 pub struct ServiceSyncRuntime {
     runtime: SyncRuntime<UserServiceInstance>,
     current_context: QueryContext,
@@ -78,7 +79,9 @@ pub struct SyncRuntimeHandle<UserInstance: WithContext>(
     Arc<Mutex<SyncRuntimeInternal<UserInstance>>>,
 );
 
+/// A handle to the synchronous runtime used when executing contracts.
 pub type ContractSyncRuntimeHandle = SyncRuntimeHandle<UserContractInstance>;
+/// A handle to the synchronous runtime used when executing services.
 pub type ServiceSyncRuntimeHandle = SyncRuntimeHandle<UserServiceInstance>;
 
 /// Runtime data tracked during the execution of a transaction on the synchronous thread.
@@ -1919,6 +1922,7 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
 }
 
 /// A request to the service runtime actor.
+#[allow(missing_docs)]
 pub enum ServiceRuntimeRequest {
     Query {
         application_id: ApplicationId,
@@ -1947,7 +1951,7 @@ impl From<&MessageContext> for ExecutingMessage {
 }
 
 /// Creates a compressed contract and service bytecode synchronously, plus an
-/// optional `ApplicationFormats` blob built from the JSON-encoded `Formats`
+/// optional `ApplicationFormats` blob built from the BCS-encoded `Formats`
 /// description bytes.
 pub fn create_bytecode_blobs_sync(
     contract: &Bytecode,

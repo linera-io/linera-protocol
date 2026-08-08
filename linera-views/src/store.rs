@@ -52,9 +52,6 @@ pub trait ReadableKeyValueStore: WithError {
     /// The maximal size of keys that can be stored.
     const MAX_KEY_SIZE: usize;
 
-    /// Retrieve the number of stream queries.
-    fn max_stream_queries(&self) -> usize;
-
     /// Gets the root key of the store.
     fn root_key(&self) -> Result<Vec<u8>, Self::Error>;
 
@@ -299,10 +296,6 @@ pub mod inactive_store {
 
     impl ReadableKeyValueStore for InactiveStore {
         const MAX_KEY_SIZE: usize = 0;
-
-        fn max_stream_queries(&self) -> usize {
-            0
-        }
 
         fn root_key(&self) -> Result<Vec<u8>, Self::Error> {
             panic!("attempt to read from an inactive store!")

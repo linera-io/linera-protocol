@@ -49,8 +49,11 @@ use crate::{
 /// Maximum allowed number of shards over all validators.
 const MAX_NUMBER_SHARDS: usize = 1000;
 
+/// Whether to process the inbox automatically before an operation.
 pub enum ProcessInbox {
+    /// Leaves the inbox untouched before the operation.
     Skip,
+    /// Processes the inbox automatically before the operation.
     Automatic,
 }
 
@@ -118,15 +121,20 @@ async fn make_testing_config(database: Database) -> Result<InnerStorageConfig> {
     }
 }
 
+/// A way to obtain the storage configuration for a local network.
 pub enum InnerStorageConfigBuilder {
+    /// Builds a fresh test configuration for the selected database engine.
     #[cfg(with_testing)]
     TestConfig,
+    /// Uses a storage configuration that has already been built.
     ExistingConfig {
+        /// The pre-built storage configuration to use.
         storage_config: InnerStorageConfig,
     },
 }
 
 impl InnerStorageConfigBuilder {
+    /// Builds the storage configuration for the given database engine.
     #[cfg_attr(not(with_testing), expect(unused_variables))]
     pub async fn build(self, database: Database) -> Result<InnerStorageConfig> {
         match self {
@@ -141,11 +149,20 @@ impl InnerStorageConfigBuilder {
 /// by an external user or as a temporary directory
 #[derive(Clone)]
 pub enum PathProvider {
-    ExternalPath { path_buf: PathBuf },
-    TemporaryDirectory { tmp_dir: Arc<TempDir> },
+    /// A path whose lifetime is managed by an external caller.
+    ExternalPath {
+        /// The externally managed path.
+        path_buf: PathBuf,
+    },
+    /// A temporary directory whose lifetime is managed by this provider.
+    TemporaryDirectory {
+        /// The temporary directory, removed when the last reference is dropped.
+        tmp_dir: Arc<TempDir>,
+    },
 }
 
 impl PathProvider {
+    /// Returns the path managed by this provider.
     pub fn path(&self) -> &Path {
         match self {
             PathProvider::ExternalPath { path_buf } => path_buf.as_path(),
@@ -153,11 +170,13 @@ impl PathProvider {
         }
     }
 
+    /// Creates a provider backed by a freshly created temporary directory.
     pub fn create_temporary_directory() -> Result<Self> {
         let tmp_dir = Arc::new(tempdir()?);
         Ok(PathProvider::TemporaryDirectory { tmp_dir })
     }
 
+    /// Creates a provider from the given path, or a temporary directory if `None`.
     pub fn from_path_option(path: &Option<String>) -> anyhow::Result<Self> {
         Ok(match path {
             None => {
@@ -175,20 +194,35 @@ impl PathProvider {
 
 /// The information needed to start a [`LocalNet`].
 pub struct LocalNetConfig {
+    /// The storage backend used by the validators.
     pub database: Database,
+    /// The network protocols used for the validators' internal and external endpoints.
     pub network: NetworkConfig,
+    /// The seed used to make key generation deterministic in tests, if any.
     pub testing_prng_seed: Option<u64>,
+    /// The namespace used for the validators' storage.
     pub namespace: String,
+    /// The number of additional chains to create in the genesis configuration.
     pub num_other_initial_chains: u32,
+    /// The initial balance assigned to each chain in the genesis configuration.
     pub initial_amount: Amount,
+    /// The number of validators to start initially.
     pub num_initial_validators: usize,
+    /// The number of shards to run per validator.
     pub num_shards: usize,
+    /// The number of proxies to run per validator.
     pub num_proxies: usize,
+    /// The resource control policy applied to the network.
     pub policy_config: ResourceControlPolicyConfig,
+    /// The list of hosts that applications are allowed to make HTTP requests to, if restricted.
     pub http_request_allow_list: Option<Vec<String>>,
+    /// The configuration for cross-chain message queuing between validators.
     pub cross_chain_config: CrossChainConfig,
+    /// The builder that produces the storage configuration for the network.
     pub storage_config_builder: InnerStorageConfigBuilder,
+    /// The provider for the working directory of the network.
     pub path_provider: PathProvider,
+    /// The setup describing how block exporters are started or connected to.
     pub block_exporters: ExportersSetup,
     /// Optional directory where the `linera`, `linera-proxy`, and `linera-server` binaries
     /// are located. If `None`, binaries are resolved from the current binary's directory.
@@ -198,13 +232,14 @@ pub struct LocalNetConfig {
 /// The setup for the block exporters.
 #[derive(Clone, PartialEq)]
 pub enum ExportersSetup {
-    // Block exporters are meant to be started and managed by the testing framework.
+    /// Block exporters are meant to be started and managed by the testing framework.
     Local(Vec<BlockExporterConfig>),
-    // Block exporters are already started and we just need to connect to them.
+    /// Block exporters are already started and we just need to connect to them.
     Remote(Vec<ExporterServiceConfig>),
 }
 
 impl ExportersSetup {
+    /// Creates an exporter setup, connecting to a remote exporter if requested.
     pub fn new(
         with_block_exporter: bool,
         block_exporter_address: String,
@@ -246,8 +281,11 @@ const SERVER_ENV: &str = "LINERA_SERVER_PARAMS";
 /// Description of the database engine to use inside a local Linera network.
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum Database {
+    /// The storage service backend.
     Service,
+    /// The ScyllaDB backend.
     ScyllaDb,
+    /// The dual backend combining RocksDB and ScyllaDB.
     DualRocksDbScyllaDb,
 }
 
@@ -318,6 +356,7 @@ impl Validator {
 
 #[cfg(with_testing)]
 impl LocalNetConfig {
+    /// Creates a configuration for a local test network with default test parameters.
     pub fn new_test(database: Database, network: Network) -> Self {
         let num_shards = 4;
         let num_proxies = 1;
@@ -475,6 +514,7 @@ impl LocalNet {
     }
 
     #[cfg(with_testing)]
+    /// Reads the genesis configuration of the local network.
     pub fn genesis_config(&self) -> Result<linera_client::config::GenesisConfig> {
         let path = self.path_provider.path();
         crate::util::read_json(path.join("genesis.json"))
@@ -500,10 +540,12 @@ impl LocalNet {
         test_offset_port() + 3000 + validator * self.num_shards + exporter_id + 1
     }
 
+    /// Returns the public port of the given proxy of the given validator.
     pub fn proxy_public_port(&self, validator: usize, proxy_id: usize) -> usize {
         test_offset_port() + 4000 + validator * self.num_proxies + proxy_id + 1
     }
 
+    /// Returns the public port of the first proxy of the first validator.
     pub fn first_public_port() -> usize {
         test_offset_port() + 4000 + 1
     }
@@ -813,6 +855,7 @@ impl LocalNet {
         Ok(child)
     }
 
+    /// Waits until the gRPC server at the given port responds as healthy.
     pub async fn ensure_grpc_server_has_started(
         nickname: &str,
         port: usize,
@@ -1027,6 +1070,7 @@ impl LocalNet {
         self.validator_keys.get(&validator)
     }
 
+    /// Generates the configuration and keys for the given validator.
     pub async fn generate_validator_config(&mut self, validator: usize) -> Result<()> {
         let stdout = self
             .command_for_binary("linera-server")
@@ -1046,6 +1090,7 @@ impl LocalNet {
         Ok(())
     }
 
+    /// Terminates the server for the given shard of the given validator.
     pub async fn terminate_server(&mut self, validator: usize, shard: usize) -> Result<()> {
         self.running_validators
             .get_mut(&validator)
@@ -1055,6 +1100,7 @@ impl LocalNet {
         Ok(())
     }
 
+    /// Removes the given validator from the set of running validators.
     pub fn remove_validator(&mut self, validator: usize) -> Result<()> {
         self.running_validators
             .remove(&validator)
@@ -1062,6 +1108,7 @@ impl LocalNet {
         Ok(())
     }
 
+    /// Starts the server for the given shard of the given validator.
     pub async fn start_server(&mut self, validator: usize, shard: usize) -> Result<()> {
         let server = self.run_server(validator, shard).await?;
         self.running_validators

@@ -10,5 +10,5 @@ use rfq::formats::RfqApplication;
 
 #[test]
 fn test_format() {
-    insta::assert_yaml_snapshot!("format", RfqApplication::formats().unwrap());
+    insta::assert_yaml_snapshot!("format", RfqApplication::pruned_formats().unwrap());
 }

@@ -15,9 +15,10 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{
         ApplicationDescription, Blob, BlockHeight, ChainDescription, CompressedBytecode, Epoch,
-        NetworkDescription, Timestamp,
+        NetworkDescription, TimeDelta, Timestamp,
     },
     identifiers::{ApplicationId, BlobId, BlobType, ChainId, EventId, IndexAndEvent, StreamId},
+    time::Duration,
     vm::VmRuntime,
 };
 pub use linera_cache::{Arc, DEFAULT_CLEANUP_INTERVAL_SECS};
@@ -655,6 +656,18 @@ pub trait Clock {
 
     /// Waits until the given timestamp is reached.
     async fn sleep_until(&self, timestamp: Timestamp);
+
+    /// Waits for the given duration, measured against this clock.
+    ///
+    /// Unlike [`linera_base::time::timer::sleep`], this honors a simulated clock (e.g. a test
+    /// clock), so callers that sleep through it can be driven deterministically in virtual time.
+    async fn sleep_for(&self, duration: Duration) {
+        self.sleep_until(
+            self.current_time()
+                .saturating_add(TimeDelta::from_duration(duration)),
+        )
+        .await
+    }
 }
 
 #[cfg(test)]

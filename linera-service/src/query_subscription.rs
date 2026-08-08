@@ -19,7 +19,9 @@ use tracing::{debug, warn};
 /// A named GraphQL query string registered at startup via `--allow-subscription`.
 #[derive(Clone, Debug)]
 pub struct RegisteredQuery {
+    /// The operation name used to refer to the query.
     pub name: String,
+    /// The full GraphQL query string.
     pub query: String,
 }
 
@@ -64,8 +66,11 @@ pub fn parse_subscription_ttl(s: &str) -> Result<(String, u64), String> {
 /// Identifies a unique subscription target: a named query for a specific chain and application.
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct SubscriptionKey {
+    /// The name of the registered query.
     pub name: String,
+    /// The chain the query runs against.
     pub chain_id: ChainId,
+    /// The application the query targets.
     pub application_id: ApplicationId,
 }
 

@@ -306,7 +306,7 @@ where
             }
 
             SystemTimestamp { callback } => {
-                let timestamp = *self.state.system.timestamp.get();
+                let timestamp = self.state.system.progress.get().timestamp;
                 callback.respond(timestamp);
             }
 
@@ -677,10 +677,13 @@ where
                     }
                     std::collections::btree_map::Entry::Occupied(entry) => *entry.get(),
                 };
+                // The publisher's floor isn't available on the subscriber at subscribe time;
+                // later `UpdateStream` operations carry the real one.
                 self.txn_tracker.add_stream_to_process(
                     subscriber_app_id,
                     chain_id,
                     stream_id,
+                    0,
                     0,
                     next_index,
                 );
@@ -932,7 +935,8 @@ where
                 .await?
                 .unwrap_or(0);
             // A summary is an absolute-state snapshot, so the application is not handed an
-            // incremental range to fold in; `previous_index` is left at 0.
+            // incremental range to fold in; `previous_index` is left at 0. The summary the
+            // application emits lands at `next_index`, which becomes the stream's readable floor.
             updates_by_app
                 .entry(application_id)
                 .or_default()
@@ -940,6 +944,7 @@ where
                     chain_id: context.chain_id,
                     stream_id,
                     previous_index: 0,
+                    first_index: next_index,
                     next_index,
                 });
         }
@@ -1117,6 +1122,7 @@ where
         block_height = %context.height,
         operation_type = %operation.as_ref(),
     ))]
+    /// Executes an operation, dispatching to the system or to a user application.
     pub async fn execute_operation(
         &mut self,
         context: OperationContext,
@@ -1179,6 +1185,7 @@ where
         is_bouncing = %context.is_bouncing,
         message_type = %message.as_ref(),
     ))]
+    /// Executes an incoming message, dispatching to the system or to a user application.
     pub async fn execute_message(
         &mut self,
         context: MessageContext,
@@ -1208,6 +1215,7 @@ where
         Ok(())
     }
 
+    /// Bounces a message back to its sender, returning any attached grant.
     pub fn bounce_message(
         &mut self,
         context: MessageContext,
@@ -1226,6 +1234,7 @@ where
         Ok(())
     }
 
+    /// Sends a refund of the given amount to the account designated to receive grant refunds.
     pub fn send_refund(
         &mut self,
         context: MessageContext,
@@ -1314,6 +1323,7 @@ where
 
 /// Requests to the execution state.
 #[derive(Debug, strum::AsRefStr)]
+#[allow(missing_docs)]
 pub enum ExecutionRequest {
     #[cfg(not(web))]
     LoadContract {

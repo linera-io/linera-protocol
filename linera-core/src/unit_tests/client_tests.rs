@@ -1381,20 +1381,37 @@ where
     // Transfer goes through and the previous one as well thanks to block chaining.
     assert_eq!(admin.local_balance().await.unwrap(), Amount::from_tokens(3));
 
+    // The user chain is now two epochs behind. A block may advance the epoch at most
+    // once, so executing an operation only processes the first pending epoch change;
+    // the chain is not fully caught up yet.
+    let committee = Committee::new(validators.clone(), ResourceControlPolicy::only_fuel())?;
+    admin.stage_new_committee(committee.clone()).await.unwrap();
+    admin.stage_new_committee(committee).await.unwrap();
+    assert_eq!(admin.chain_info().await?.epoch, Epoch::from(4));
+    user.synchronize_from_validators().await?;
+    let info = user.chain_info().await?;
+    assert_eq!(info.epoch, Epoch::from(2));
+    let next_height = info.next_block_height;
     user.change_application_permissions(ApplicationPermissions::new_single(ApplicationId::new(
         CryptoHash::test_hash("foo"),
     )))
     .await?;
+    let info = user.chain_info().await?;
+    assert_eq!(info.epoch, Epoch::from(3));
+    assert_eq!(info.next_block_height, BlockHeight(next_height.0 + 1));
 
     let committee = Committee::new(validators, ResourceControlPolicy::default())?;
+    admin.stage_new_committee(committee.clone()).await.unwrap();
     admin.stage_new_committee(committee).await.unwrap();
-    assert_eq!(admin.chain_info().await?.epoch, Epoch::from(3));
+    assert_eq!(admin.chain_info().await?.epoch, Epoch::from(6));
 
     // Despite the restrictive application permissions, some system operations are still allowed,
-    // and the user chain can migrate to the new epoch.
+    // and the user chain can migrate to the new epochs — processing the inbox produces one
+    // block per epoch.
     user.synchronize_from_validators().await?;
-    user.process_inbox().await?;
-    assert_eq!(user.chain_info().await?.epoch, Epoch::from(3));
+    let (certificates, _) = user.process_inbox().await?;
+    assert_eq!(certificates.len(), 3);
+    assert_eq!(user.chain_info().await?.epoch, Epoch::from(6));
 
     Ok(())
 }
@@ -1444,6 +1461,54 @@ where
     // The stale client needs the blob: it is missing locally, so the client downloads
     // the publishing certificate from a validator and must accept it after catching up
     // on the admin chain, rather than choking on the unknown epoch.
+    stale.read_data_blob(blob_id.hash).await.unwrap().unwrap();
+
+    Ok(())
+}
+
+/// Like `test_stale_client_reads_blob_published_in_future_epoch`, but one validator is
+/// offline while the stale client catches up. The admin-chain self-heal races the
+/// reachable validators, so a single unresponsive one must not prevent recovery.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_stale_client_reads_future_epoch_blob_with_offline_validator<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let admin = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+    let publisher = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let stale = builder.add_root_chain(2, Amount::from_tokens(3)).await?;
+    let validators = builder.initial_committee.validators().clone();
+
+    // Move the network to epoch 1 (the three remaining validators still form a quorum).
+    // The publisher catches up; `stale` does not.
+    let committee = Committee::new(validators, ResourceControlPolicy::default())?;
+    admin.stage_new_committee(committee).await?;
+    publisher.synchronize_from_validators().await?;
+    publisher.process_inbox().await?;
+    assert_eq!(publisher.chain_info().await?.epoch, Epoch::from(1));
+    assert_eq!(stale.chain_info().await?.epoch, Epoch::ZERO);
+
+    // Publish a data blob under the epoch-1 committee.
+    let blob_bytes = b"future-epoch blob".to_vec();
+    let blob_id = Blob::new(BlobContent::new_data(blob_bytes.clone())).id();
+    let certificate = publisher
+        .publish_data_blob(blob_bytes)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(certificate.block().header.epoch, Epoch::from(1));
+
+    // Take one validator offline. The stale client's admin-chain catch-up still succeeds
+    // against the reachable ones.
+    builder.set_fault_type([3], FaultType::Offline);
+
     stale.read_data_blob(blob_id.hash).await.unwrap().unwrap();
 
     Ok(())
@@ -2451,6 +2516,135 @@ where
             );
         }
     }
+
+    Ok(())
+}
+
+/// The updater must signal `LocalNodeLagging` — rather than pushing chain information —
+/// when a validator rejects a proposal because it is *ahead* of the proposal's round or
+/// height.
+///
+/// Drives a `RemoteNodeUpdater` directly. A full client cannot reach this state without
+/// clock skew: whenever validators advanced by timeout, the shared clock has also expired
+/// the client's own round, so the client requests a timeout certificate before ever
+/// proposing at the stale round.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_stale_proposal_signals_local_node_lagging<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use linera_chain::test::{make_first_block, BlockTestExt as _};
+
+    use crate::{
+        local_node::LocalNodeClient,
+        remote_node::RemoteNode,
+        test_utils::NodeProvider,
+        updater::{CommunicateAction, RemoteNodeUpdater},
+        worker::WorkerState,
+        ChainWorkerConfig,
+    };
+
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let client = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let chain_id = client.chain_id();
+    let owner0 = client.identity().await.unwrap();
+    let owner1: AccountOwner = builder.signer.generate_new().into();
+
+    // Set up a multi-owner chain with single-leader rounds only.
+    let owners = [(owner0, 100), (owner1, 100)];
+    let ownership = ChainOwnership::multiple(owners, 0, TimeoutConfig::default());
+    client.change_ownership(ownership).await.unwrap();
+    let info = client.chain_info().await.unwrap();
+
+    // Advance the validators by two rounds, recording each round's leader: proposals must
+    // be signed by their round's leader for the round check to even be reached. The stale
+    // proposal targets the intermediate round rather than `SingleLeader(0)`, whose
+    // obsolete proposals are rejected with `InsufficientRound` instead of `WrongRound`.
+    let client2 = builder
+        .make_client(chain_id, None, BlockHeight::ZERO)
+        .await?;
+    client2.synchronize_from_validators().await?;
+    let manager = client2.chain_info().await.unwrap().manager;
+    clock.set(manager.round_timeout.unwrap());
+    client2.request_leader_timeout().await.unwrap();
+    let manager = client2.chain_info().await.unwrap().manager;
+    let (stale_round, stale_leader) = (manager.current_round, manager.leader.unwrap());
+    assert_matches!(stale_round, Round::SingleLeader(n) if n >= 1);
+    clock.set(manager.round_timeout.unwrap());
+    client2.request_leader_timeout().await.unwrap();
+    let manager = client2.chain_info().await.unwrap().manager;
+    let (validator_round, validator_leader) = (manager.current_round, manager.leader.unwrap());
+
+    // Drive the updater directly against an honest validator (validator 0 is the faulty
+    // one). An empty local node is enough: a validator that is ahead must produce the
+    // signal before anything is read from the local node.
+    let state = WorkerState::new(
+        builder.make_storage().await?,
+        ChainWorkerConfig::default(),
+        None,
+    );
+    let node = builder.node(1);
+    let mut updater =
+        RemoteNodeUpdater::<crate::environment::Impl<B::Storage, NodeProvider<B::Storage>>> {
+            remote_node: RemoteNode {
+                public_key: node.name(),
+                node,
+            },
+            local_node: LocalNodeClient::new(state),
+            admin_chain_id: builder.admin_chain_id(),
+            certificate_upload_batch_size: 100,
+        };
+    let submit = |proposal| {
+        let (clock_skew_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        CommunicateAction::SubmitBlock {
+            proposal: Box::new(proposal),
+            blob_ids: vec![],
+            clock_skew_sender,
+        }
+    };
+
+    // A proposal in an older round than the validator's: `WrongRound`, validator ahead.
+    let mut block = make_first_block(chain_id);
+    block.height = info.next_block_height;
+    block.previous_block_hash = info.block_hash;
+    block.timestamp = clock.current_time();
+    let proposal = block
+        .clone()
+        .into_proposal_with_round(stale_leader, &builder.signer, stale_round)
+        .await?;
+    let result = updater.send_chain_update(submit(proposal)).await;
+    assert_matches!(
+        result,
+        Err(chain_client::Error::LocalNodeLagging { chain_id: id, error })
+            if id == chain_id && matches!(*error, NodeError::WrongRound(round) if round == validator_round)
+    );
+
+    // A proposal at an older height than the validator's: `UnexpectedBlockHeight`,
+    // validator ahead.
+    block.height = BlockHeight::ZERO;
+    block.previous_block_hash = None;
+    let proposal = block
+        .into_proposal_with_round(validator_leader, &builder.signer, validator_round)
+        .await?;
+    let result = updater.send_chain_update(submit(proposal)).await;
+    assert_matches!(
+        result,
+        Err(chain_client::Error::LocalNodeLagging { chain_id: id, error })
+            if id == chain_id
+                && matches!(
+                    *error,
+                    NodeError::UnexpectedBlockHeight {
+                        expected_block_height: BlockHeight(1),
+                        found_block_height: BlockHeight(0),
+                    }
+                )
+    );
 
     Ok(())
 }
@@ -4280,6 +4474,10 @@ where
 /// chain is brought up to speed by the proposing client pushing only the latest
 /// checkpoint plus the pre-checkpoint sender blocks it certifies, not every
 /// pre-checkpoint block. The lagging validator's vote is needed for quorum.
+///
+/// The pre-checkpoint sender block is certified by a superseded epoch's committee
+/// (the chain migrates to a new epoch between the sender block and the checkpoint),
+/// exercising the trust-mark path's acceptance of cross-epoch certificates.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[test_log::test(tokio::test)]
@@ -4297,13 +4495,15 @@ where
     // sees any of the chain's certificates. We'll bring it back honest later.
     builder.set_fault_type([0], FaultType::NoChains);
 
+    let admin = builder.add_root_chain(0, Amount::from_tokens(1000)).await?;
     let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
     let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
     let chain_id = producer.chain_id();
     let validator_0_key = builder.node(0).name();
 
-    // Height 0: cross-chain transfer — becomes a pre-checkpoint sender block that the
-    // checkpoint certifies via `outbox_block_hashes`. The recipient never consumes it.
+    // Height 0 (epoch 0): cross-chain transfer — becomes a pre-checkpoint sender block
+    // that the checkpoint certifies via `outbox_block_hashes`. The recipient never
+    // consumes it. Its certificate is signed by the epoch-0 committee.
     let transfer_0 = producer
         .transfer_to_account(
             AccountOwner::CHAIN,
@@ -4313,18 +4513,42 @@ where
         .await
         .unwrap_ok_committed();
     assert_eq!(transfer_0.block().header.height, BlockHeight::ZERO);
+    assert_eq!(transfer_0.block().header.epoch, Epoch::from(0));
 
-    // Height 1: same-chain burn — no outgoing messages, so it's not referenced by any
-    // subsequent `outbox_block_hashes`. The push path must skip it.
+    // Advance the epoch on the admin chain and migrate the producer to epoch 1. The
+    // migration block (height 1) consumes the admin chain's `ProcessNewEpoch`
+    // message; after it the producer's blocks are certified by the epoch-1
+    // committee. `transfer_0`'s epoch-0 certificate is now from a superseded epoch —
+    // exactly the scenario the trust-mark path must handle when validator 0 is later
+    // brought back online and pushed the checkpoint.
+    admin
+        .stage_new_committee(builder.initial_committee.clone())
+        .await
+        .unwrap();
+    producer.synchronize_from_validators().await?;
+    producer.process_inbox().await?;
+
+    // Revoke epoch 0 so the epoch-0 certificate on `transfer_0` is no longer
+    // verifiable through normal cert verification. This makes the trust-mark path
+    // the *only* way for validator 0 to accept `transfer_0` during the checkpoint
+    // push — a strictly stronger test. If revocation is ever enforced on the
+    // trust-mark path (or on certificate verification for pre-checkpoint blocks),
+    // this test will catch it.
+    admin.revoke_epochs(Epoch::ZERO).await.unwrap();
+
+    // Height 2 (epoch 1): same-chain burn — no outgoing messages, so it's not
+    // referenced by any subsequent `outbox_block_hashes`. The push path must skip it.
     let burn_1 = producer
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
         .unwrap_ok_committed();
-    assert_eq!(burn_1.block().header.height, BlockHeight::from(1));
+    assert_eq!(burn_1.block().header.height, BlockHeight::from(2));
+    assert_eq!(burn_1.block().header.epoch, Epoch::from(1));
 
-    // Height 2: the checkpoint that will be pushed to validator 0.
+    // Height 3 (epoch 1): the checkpoint that will be pushed to validator 0.
     let checkpoint = producer.checkpoint().await.unwrap().unwrap();
-    assert_eq!(checkpoint.block().header.height, BlockHeight::from(2));
+    assert_eq!(checkpoint.block().header.height, BlockHeight::from(3));
+    assert_eq!(checkpoint.block().header.epoch, Epoch::from(1));
     let outbox_block_hashes = match checkpoint
         .block()
         .body
@@ -4340,13 +4564,13 @@ where
     };
     assert_eq!(outbox_block_hashes, vec![transfer_0.hash()]);
 
-    // Height 3: post-checkpoint burn — must be pushed to validator 0 as part of the
-    // post-checkpoint gap fill.
+    // Height 4 (epoch 1): post-checkpoint burn — must be pushed to validator 0 as
+    // part of the post-checkpoint gap fill.
     let burn_3 = producer
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
         .unwrap_ok_committed();
-    assert_eq!(burn_3.block().header.height, BlockHeight::from(3));
+    assert_eq!(burn_3.block().header.height, BlockHeight::from(4));
 
     let validator_0_storage = builder
         .validator_storages
@@ -4369,12 +4593,12 @@ where
     builder.set_fault_type([0], FaultType::Honest);
     builder.set_fault_type([1], FaultType::Offline);
 
-    // Height 4: a new block whose quorum needs validator 0.
+    // Height 5 (epoch 1): a new block whose quorum needs validator 0.
     let burn_4 = producer
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
         .unwrap_ok_committed();
-    assert_eq!(burn_4.block().header.height, BlockHeight::from(4));
+    assert_eq!(burn_4.block().header.height, BlockHeight::from(5));
 
     // Validator 0 received the checkpoint, the pre-checkpoint sender block it
     // certifies, the post-checkpoint burn, and the newly committed proposal.
@@ -4422,6 +4646,17 @@ where
         assert!(
             trusted.is_empty(),
             "validator 0's trust set should be empty after the flow, was {trusted:?}",
+        );
+        // The checkpoint restored the producer's epoch-1 execution state, which
+        // includes the epoch migration. Validator 0's chain is now at epoch 1 —
+        // proving the trust-mark path accepted the epoch-0 sender block
+        // (`transfer_0`) and the checkpoint restore brought the chain to the
+        // correct epoch.
+        let epoch = *chain_view.execution_state.system.epoch.get();
+        assert_eq!(
+            epoch,
+            Epoch::from(1),
+            "validator 0's chain should be at epoch 1 after the checkpoint restore",
         );
     }
 

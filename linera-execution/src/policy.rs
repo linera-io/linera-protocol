@@ -335,6 +335,7 @@ impl ResourceControlPolicy {
         }
     }
 
+    /// Returns the total price to charge for the given resources.
     pub fn total_price(&self, resources: &Resources) -> Result<Amount, ArithmeticError> {
         let mut amount = Amount::ZERO;
         amount.try_add_assign(self.fuel_price(resources.wasm_fuel, VmRuntime::Wasm)?)?;
@@ -439,6 +440,7 @@ impl ResourceControlPolicy {
         u64::try_from(balance.saturating_ratio(fuel_unit)).unwrap_or(u64::MAX)
     }
 
+    /// Checks that the blob's size does not exceed the maximum allowed by this policy.
     pub fn check_blob_size(&self, content: &BlobContent) -> Result<(), ExecutionError> {
         ensure!(
             u64::try_from(content.bytes().len())

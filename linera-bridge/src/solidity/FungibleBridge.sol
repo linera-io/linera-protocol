@@ -2,8 +2,8 @@
 pragma solidity ^0.8.0;
 
 import "BridgeTypes.sol";
-import "WrappedFungibleTypes.sol";
 import "Microchain.sol";
+import "IBurnEventDecoder.sol";
 
 interface IERC20 {
     function transfer(address to, uint256 amount) external returns (bool);
@@ -44,6 +44,15 @@ contract FungibleBridge is Microchain {
     IERC20 public immutable token;
     uint256 public depositNonce;
 
+    // Decodes a burn event's payload (BridgeTypes.Event.value) into
+    // (recipient, amount). Swappable via the timelocked setDecoder flow so a
+    // fungible-app BurnEvent schema change (same applicationId) needs no TVL
+    // migration. Same governance (proposer/canceller/timelockDelay) as the
+    // light-client update flow inherited from Microchain.
+    IBurnEventDecoder public decoder;
+    IBurnEventDecoder public pendingDecoder;
+    uint256 public pendingDecoderReadyAt;
+
     /// Per-burn dedup keyed by
     /// `keccak256(abi.encode(bridgeApplicationId, height, eventIndex))`
     /// where `eventIndex` is the underlying Linera `Event.index` — the
@@ -56,13 +65,20 @@ contract FungibleBridge is Microchain {
         bytes32 _chainId,
         address _token,
         bytes32 _fungibleApplicationId,
-        bytes32 _bridgeApplicationId
-    ) Microchain(_lightClient, _chainId) {
+        bytes32 _bridgeApplicationId,
+        address _initialDecoder,
+        address _pauseGuardian,
+        address _proposer,
+        address _canceller,
+        uint256 _timelockDelay
+    ) Microchain(_lightClient, _chainId, _pauseGuardian, _proposer, _canceller, _timelockDelay) {
         require(_fungibleApplicationId != bytes32(0), "fungibleApplicationId must be non-zero");
         require(_bridgeApplicationId != bytes32(0), "bridgeApplicationId must be non-zero");
+        require(_initialDecoder != address(0), "zero decoder");
         token = IERC20(_token);
         fungibleApplicationId = _fungibleApplicationId;
         bridgeApplicationId = _bridgeApplicationId;
+        decoder = IBurnEventDecoder(_initialDecoder);
     }
 
     /// Returns whether the burn at `(height, eventIndex)` has already been
@@ -82,7 +98,7 @@ contract FungibleBridge is Microchain {
         bytes32 target_application_id,
         bytes32 target_account_owner,
         uint256 amount
-    ) external {
+    ) external whenNotEmergencyPaused {
         require(amount > 0, "amount=0");
         require(target_application_id == fungibleApplicationId, "target application mismatch");
         // The Linera side holds amounts as U128 and mints exactly `amount`, so a
@@ -111,7 +127,7 @@ contract FungibleBridge is Microchain {
 
     /// Releases the burns whose canonical BCS encodings are `eventBcs`, after proving they sit at
     /// `positions` within transaction `txIndex` of the block registered under `blockHash` (see
-    /// `LightClient.proveEventsCommitted`). The off-chain relayer registers the block once, then
+    /// `LightClient.assertEventsCommitted`). The off-chain relayer registers the block once, then
     /// settles burns in chunks, each proving only its own events instead of re-verifying the whole
     /// certificate.
     ///
@@ -134,7 +150,7 @@ contract FungibleBridge is Microchain {
         uint32 numEventsInTx,
         uint32[] calldata positions,
         bytes32[] calldata siblings
-    ) external {
+    ) external whenNotEmergencyPaused {
         require(positions.length > 0, "empty positions");
 
         // The block must have been registered (its signatures were checked once, then); fetch its
@@ -142,7 +158,7 @@ contract FungibleBridge is Microchain {
         (bytes32 eventsHash, uint64 height, bytes32 blockChainId,) = lightClient.registeredBlocks(blockHash);
         require(eventsHash != 0, "block not registered");
         require(blockChainId == chainId, "chain id mismatch");
-        lightClient.proveEventsCommitted(eventsHash, eventBcs, txIndex, numTxs, numEventsInTx, positions, siblings);
+        lightClient.assertEventsCommitted(eventsHash, eventBcs, txIndex, numTxs, numEventsInTx, positions, siblings);
 
         _releaseBurns(eventBcs, height);
     }
@@ -151,6 +167,7 @@ contract FungibleBridge is Microchain {
     /// any already in `processedBurns`.
     function _releaseBurns(bytes[] calldata eventBcs, uint64 height) private {
         bytes32 burnsHash = keccak256("burns");
+        IBurnEventDecoder _decoder = decoder; // single SLOAD for the whole chunk
         for (uint256 k = 0; k < eventBcs.length; k++) {
             BridgeTypes.Event memory evt = BridgeTypes.bcs_deserialize_Event(eventBcs[k]);
             require(_isMatchingBurn(evt, burnsHash), "not a matching burn");
@@ -158,7 +175,7 @@ contract FungibleBridge is Microchain {
             bytes32 key = _burnKey(height, evt.index);
             if (processedBurns[key]) continue;
 
-            _releaseBurn(evt, key, height);
+            _releaseBurn(_decoder, evt, key, height);
         }
     }
 
@@ -184,15 +201,17 @@ contract FungibleBridge is Microchain {
         return true;
     }
 
-    /// Releases the ERC-20 tokens for the burn described by `evt`. Sets
-    /// the dedup flag BEFORE the external `token.transfer` call
-    /// (checks-effects-interactions) so a malicious token that re-enters
-    /// `processBurns` cannot trigger a second release.
-    function _releaseBurn(BridgeTypes.Event memory evt, bytes32 key, uint64 height) private {
-        WrappedFungibleTypes.BurnEvent memory burnEvt = WrappedFungibleTypes.bcs_deserialize_BurnEvent(evt.value);
+    /// Releases the ERC-20 tokens for the burn described by `evt`, decoding its
+    /// payload via the swappable `_decoder`. Sets the dedup flag BEFORE the
+    /// external `token.transfer` call (checks-effects-interactions) so a
+    /// malicious token that re-enters `processBurns` cannot trigger a second
+    /// release. The decoder is `pure`, so the only way execution escapes here is
+    /// the `token.transfer` — no reentrancy via the decoder.
+    function _releaseBurn(IBurnEventDecoder _decoder, BridgeTypes.Event memory evt, bytes32 key, uint64 height)
+        private
+    {
+        (address target, uint256 amount) = _decoder.decodeBurnEvent(evt.value);
         processedBurns[key] = true;
-        address target = address(burnEvt.target);
-        uint256 amount = burnEvt.amount;
         _safeTransfer(target, amount);
         emit BurnReleased(height, evt.index, target, amount);
     }
@@ -209,5 +228,44 @@ contract FungibleBridge is Microchain {
         (bool success, bytes memory data) =
             address(token).call(abi.encodeWithSelector(token.transferFrom.selector, from, to, amount_));
         require(success && (data.length == 0 || abi.decode(data, (bool))), "safeTransferFrom failed");
+    }
+
+    // --- Decoder update (timelocked) ---
+    //
+    // Structurally identical to Microchain's light-client update flow, using the
+    // same proposer/canceller/timelockDelay. Swaps the BurnEvent-payload schema
+    // without migrating TVL.
+
+    event DecoderUpdateProposed(address indexed newDecoder, uint256 readyAt);
+    event DecoderUpdateExecuted(address indexed oldDecoder, address indexed newDecoder);
+    event DecoderUpdateCancelled(address indexed proposed);
+
+    function proposeDecoderUpdate(address newDecoder) external onlyProposer {
+        require(newDecoder != address(0), "zero address");
+        require(newDecoder != address(decoder), "no-op update");
+        require(address(pendingDecoder) == address(0), "update already pending");
+
+        pendingDecoder = IBurnEventDecoder(newDecoder);
+        pendingDecoderReadyAt = block.timestamp + timelockDelay;
+        emit DecoderUpdateProposed(newDecoder, pendingDecoderReadyAt);
+    }
+
+    function executeDecoderUpdate() external {
+        require(address(pendingDecoder) != address(0), "no pending update");
+        require(block.timestamp >= pendingDecoderReadyAt, "delay not elapsed");
+        address old = address(decoder);
+        decoder = pendingDecoder;
+        emit DecoderUpdateExecuted(old, address(pendingDecoder));
+        pendingDecoder = IBurnEventDecoder(address(0));
+        pendingDecoderReadyAt = 0;
+    }
+
+    function cancelDecoderUpdate() external {
+        require(msg.sender == canceller || msg.sender == proposer, "not authorized");
+        require(address(pendingDecoder) != address(0), "no pending update");
+        address proposed = address(pendingDecoder);
+        pendingDecoder = IBurnEventDecoder(address(0));
+        pendingDecoderReadyAt = 0;
+        emit DecoderUpdateCancelled(proposed);
     }
 }

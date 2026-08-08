@@ -140,6 +140,10 @@ CONTRACTS_DIR="${CONTRACTS_DIR:-/contracts}"
 OUTPUT_FILE="${OUTPUT_FILE:-$SCRIPT_DIR/.env.local}"
 FAUCET_URL="${FAUCET_URL:-http://localhost:8080}"
 RELAY_URL="${RELAY_URL:-http://localhost:3001}"
+# Browser-reachable EVM RPC for the frontend's read-only calls (balances, tx
+# receipts). The relay/forge use EVM_RPC_URL (the in-container `anvil` host),
+# which a browser can't resolve; the frontend reads via this localhost URL.
+BROWSER_EVM_RPC_URL="${BROWSER_EVM_RPC_URL:-http://localhost:8545}"
 # Docker container has its own solc; don't force a version download.
 FORGE_USE_SOLC=()
 
@@ -354,6 +358,10 @@ dc_exec foundry-tools env \
     TOKEN_ADDRESS="$TOKEN_ADDRESS" \
     FUNGIBLE_APP_ID="$APP_ID_BYTES32" \
     BRIDGE_APP_ID="$BRIDGE_APP_ID_BYTES32" \
+    PAUSE_GUARDIAN="${BRIDGE_PAUSE_GUARDIAN:-0x000000000000000000000000000000000000dEaD}" \
+    PROPOSER="${BRIDGE_PROPOSER:-0x000000000000000000000000000000000000bEEF}" \
+    CANCELLER="${BRIDGE_CANCELLER:-0x000000000000000000000000000000000000Ca11}" \
+    TIMELOCK_DELAY="${BRIDGE_TIMELOCK_DELAY:-86400}" \
     forge script /contracts/script/DeployFungibleBridge.s.sol \
     --root /contracts \
     --rpc-url "$EVM_RPC_URL" \
@@ -362,8 +370,10 @@ dc_exec foundry-tools env \
     cat /tmp/bridge-deploy.log >&2
     die "FungibleBridge deploy failed"
 }
+# DeployFungibleBridge also deploys the initial decoder, so transactions[0] is
+# the decoder; select the bridge by contract name.
 BRIDGE_ADDRESS=$(dc_exec foundry-tools \
-    jq -r '.transactions[0].contractAddress' \
+    jq -r '[.transactions[] | select(.contractName=="FungibleBridge")] | last | .contractAddress' \
     "/contracts/broadcast/DeployFungibleBridge.s.sol/${EVM_CHAIN_ID_DECIMAL}/run-latest.json" \
     | tr -d '[:space:]')
 validate_eth_address "FungibleBridge address" "$BRIDGE_ADDRESS"
@@ -433,6 +443,7 @@ LINERA_BRIDGE_ADDRESS=$BRIDGE_ADDRESS
 LINERA_TOKEN_ADDRESS=$TOKEN_ADDRESS
 LINERA_BRIDGE_CHAIN_ID=$BRIDGE_CHAIN_ID
 LINERA_EVM_CHAIN_ID=$EVM_CHAIN_ID
+LINERA_EVM_RPC_URL=$BROWSER_EVM_RPC_URL
 EOF
 
 # Write setup-complete marker so the relay knows it's safe to start.

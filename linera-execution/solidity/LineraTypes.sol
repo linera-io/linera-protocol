@@ -1984,6 +1984,7 @@ library LineraTypes {
         ChainId chain_id;
         StreamId stream_id;
         uint32 previous_index;
+        uint32 first_index;
         uint32 next_index;
     }
 
@@ -1995,6 +1996,7 @@ library LineraTypes {
         bytes memory result = bcs_serialize_ChainId(input.chain_id);
         result = abi.encodePacked(result, bcs_serialize_StreamId(input.stream_id));
         result = abi.encodePacked(result, bcs_serialize_uint32(input.previous_index));
+        result = abi.encodePacked(result, bcs_serialize_uint32(input.first_index));
         return abi.encodePacked(result, bcs_serialize_uint32(input.next_index));
     }
 
@@ -2010,9 +2012,11 @@ library LineraTypes {
         (new_pos, stream_id) = bcs_deserialize_offset_StreamId(new_pos, input);
         uint32 previous_index;
         (new_pos, previous_index) = bcs_deserialize_offset_uint32(new_pos, input);
+        uint32 first_index;
+        (new_pos, first_index) = bcs_deserialize_offset_uint32(new_pos, input);
         uint32 next_index;
         (new_pos, next_index) = bcs_deserialize_offset_uint32(new_pos, input);
-        return (new_pos, StreamUpdate(chain_id, stream_id, previous_index, next_index));
+        return (new_pos, StreamUpdate(chain_id, stream_id, previous_index, first_index, next_index));
     }
 
     function bcs_deserialize_StreamUpdate(bytes memory input)

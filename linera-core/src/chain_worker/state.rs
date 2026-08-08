@@ -33,8 +33,8 @@ use linera_chain::{
         Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
         ValidatedBlockCertificate,
     },
-    ChainError, ChainExecutionContext, ChainIdSet, ChainStateView, ChainTipState,
-    ExecutionResultExt as _,
+    BlockExecutionPhase, ChainError, ChainExecutionContext, ChainIdSet, ChainStateView,
+    ChainTipState, ExecutionResultExt as _, StreamCounts,
 };
 use linera_execution::{
     system::{EpochEventData, EventSubscriptions, EPOCH_STREAM_NAME},
@@ -67,9 +67,9 @@ mod metrics {
 
     use linera_base::prometheus_util::{
         exponential_bucket_interval, exponential_bucket_latencies, register_histogram,
-        register_histogram_vec,
+        register_histogram_vec, register_int_counter, register_int_counter_vec,
     };
-    use prometheus::{Histogram, HistogramVec};
+    use prometheus::{Histogram, HistogramVec, IntCounter, IntCounterVec};
 
     pub static CREATE_NETWORK_ACTIONS_LATENCY: LazyLock<Histogram> = LazyLock::new(|| {
         register_histogram(
@@ -85,6 +85,21 @@ mod metrics {
             "Number of inboxes",
             &[],
             exponential_bucket_interval(1.0, 10_000.0),
+        )
+    });
+
+    pub static BLOCK_PROPOSALS_RECEIVED_TOTAL: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "block_proposals_received_total",
+            "Total number of block proposals received by the worker",
+        )
+    });
+
+    pub static BLOCK_PROPOSALS_REJECTED_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "block_proposals_rejected_total",
+            "Total number of block proposals rejected by the worker, labelled by error type",
+            &["error_type"],
         )
     });
 }
@@ -1188,7 +1203,15 @@ where
             .index_values()
             .await?
         {
-            self.chain.next_expected_events.insert(&stream_id, count)?;
+            // Just after restoring, every event predates the checkpoint, so the readable floor
+            // is the count itself.
+            self.chain.next_expected_events.insert(
+                &stream_id,
+                StreamCounts {
+                    first_index: count,
+                    next_index: count,
+                },
+            )?;
         }
         // We reset `execution_state` (via restore), `tip_state`, `block_hashes`
         // (for outbox-referenced pre-checkpoint heights), and the outbox views.
@@ -1198,12 +1221,9 @@ where
         // (`manager`, `block_hashes` for height `height`), or (c) outside the
         // protocol state hash so divergence from the producer is fine
         // (inboxes; subsequent blocks reconcile by anticipation if needed).
-        // The `num_*` counters on `ChainTipState` are write-only in current
-        // code, so leaving them at zero has no functional impact.
         let new_tip = ChainTipState {
             block_hash: previous_block_hash,
             next_block_height: height,
-            ..Default::default()
         };
         self.chain.tip_state.set(new_tip.clone());
         // Installing a snapshot establishes the chain's state from scratch (block 0 is never
@@ -1246,6 +1266,18 @@ where
         self.initialize_and_save_if_needed().await?;
         let (epoch, _) = self.chain.current_committee().await?;
         check_block_epoch(epoch, chain_id, block.header.epoch)?;
+
+        // The chain is initialized and this block has not executed yet, so the current ownership
+        // is the configuration the block was proposed under — even for the chain's first block,
+        // whose ownership comes from the just-applied chain description. This is the point where
+        // the first-round attestation can be checked against the actual first round; blocks that
+        // are only preprocessed skip it and rely on the nodes that execute the chain in order.
+        if certificate.first_round() {
+            ensure!(
+                certificate.round() == self.chain.ownership().await?.first_round(),
+                ChainError::FalseFirstRoundAttestation
+            );
+        }
 
         let published_blobs = block
             .published_blob_ids()
@@ -1295,6 +1327,7 @@ where
                     &published_blobs,
                     oracle_responses,
                     BundleExecutionPolicy::committed(),
+                    BlockExecutionPhase::HandleConfirmed,
                 )
                 .await?;
             // We should always agree on the messages and state hash.
@@ -1983,12 +2016,21 @@ where
             .await?)
     }
 
-    /// Gets the next expected event index for a stream.
-    pub(crate) async fn get_next_expected_event(
+    /// Gets a stream's [`StreamCounts`]: the next expected event index and the lowest readable
+    /// index (the first event published since the most recent checkpoint). Both default to 0 for
+    /// a stream with no events yet. They come from the same `next_expected_events` entry, so they
+    /// are mutually consistent and both reflect every block this node has processed — including
+    /// ones it only preprocessed.
+    pub(crate) async fn get_stream_indices(
         &self,
         stream_id: StreamId,
-    ) -> Result<Option<u32>, WorkerError> {
-        Ok(self.chain.next_expected_events.get(&stream_id).await?)
+    ) -> Result<StreamCounts, WorkerError> {
+        Ok(self
+            .chain
+            .next_expected_events
+            .get(&stream_id)
+            .await?
+            .unwrap_or_default())
     }
 
     /// Gets the `next_expected_events` indices for the given streams.
@@ -2004,7 +2046,7 @@ where
         Ok(stream_ids
             .into_iter()
             .zip(values)
-            .filter_map(|(id, val)| Some((id, val?)))
+            .filter_map(|(id, val)| Some((id, val?.next_index)))
             .collect())
     }
 
@@ -2288,7 +2330,15 @@ where
             .remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())
             .await?;
         let (executed_block, resource_tracker, never_reject_origins) =
-            Box::pin(self.execute_block(block, local_time, round, published_blobs, policy)).await?;
+            Box::pin(self.execute_block(
+                block,
+                local_time,
+                round,
+                published_blobs,
+                policy,
+                BlockExecutionPhase::StageProposal,
+            ))
+            .await?;
 
         // No need to sign: only used internally.
         let info = ChainInfo::from_chain_view(&mut self.chain).await?;
@@ -2327,10 +2377,20 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> (Result<ChainInfoResponse, WorkerError>, NetworkActions) {
+        #[cfg(with_metrics)]
+        metrics::BLOCK_PROPOSALS_RECEIVED_TOTAL.inc();
+        let chain_id = proposal.content.block.chain_id;
+        let height = proposal.content.block.height;
         let old_round = self.chain.manager.current_round();
         match self.try_handle_block_proposal(proposal).await {
             Ok((response, actions)) => (Ok(response), actions),
             Err(err) => {
+                let error_type = err.error_type();
+                #[cfg(with_metrics)]
+                metrics::BLOCK_PROPOSALS_REJECTED_TOTAL
+                    .with_label_values(&[error_type.as_str()])
+                    .inc();
+                debug!(%chain_id, %height, %error_type, "Block proposal rejected");
                 // Even on error, the manager's `current_round` may have advanced
                 // (the `HasIncompatibleConfirmedVote` recovery path calls
                 // `update_signed_proposal`). Surface the resulting `NewRound`
@@ -2484,6 +2544,7 @@ where
                 round.multi_leader(),
                 &published_blobs,
                 BundleExecutionPolicy::committed(),
+                BlockExecutionPhase::HandleProposal,
             ))
             .await?;
             executed_block
@@ -2494,11 +2555,6 @@ where
             WorkerError::FastBlockUsingOracles
         );
         let chain = &mut self.chain;
-        // Check if the counters of tip_state would be valid.
-        chain
-            .tip_state
-            .get_mut()
-            .update_counters(&block.body.transactions, &block.body.messages)?;
         // Don't save the changes since the block is not confirmed yet.
         chain.rollback();
 
@@ -2564,7 +2620,8 @@ where
             metrics::NUM_INBOXES
                 .with_label_values(&[])
                 .observe(nonempty_origins.len() as f64);
-            let action = if *chain.execution_state.system.closed.get() {
+            let is_closed = *chain.execution_state.system.closed.get();
+            let action = if is_closed {
                 MessageAction::Reject
             } else {
                 MessageAction::Accept
@@ -2581,6 +2638,13 @@ where
                         action,
                     });
                 }
+            }
+            if is_closed && !bundles.is_empty() {
+                info!(
+                    chain_id = %chain.chain_id(),
+                    count = bundles.len(),
+                    "Auto-rejecting all incoming message bundles because the chain is closed"
+                );
             }
             info.requested_pending_message_bundles = bundles;
         }
@@ -2645,12 +2709,19 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
         policy: BundleExecutionPolicy,
+        phase: BlockExecutionPhase,
     ) -> Result<(Block, ResourceTracker, HashSet<ChainId>), WorkerError> {
-        let (proposed_block, outcome, resource_tracker, never_reject_origins) = Box::pin(
-            self.chain
-                .execute_block(block, local_time, round, published_blobs, None, policy),
-        )
-        .await?;
+        let (proposed_block, outcome, resource_tracker, never_reject_origins) =
+            Box::pin(self.chain.execute_block(
+                block,
+                local_time,
+                round,
+                published_blobs,
+                None,
+                policy,
+                phase,
+            ))
+            .await?;
         let executed_block = Block::new(proposed_block, outcome);
         let block_hash = executed_block.hash();
         if let Some(cache) = &self.execution_state_cache {

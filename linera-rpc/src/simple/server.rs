@@ -24,6 +24,7 @@ use crate::{
     cross_chain_message_queue, RpcMessage,
 };
 
+/// A server handling RPC requests over a simple (UDP or TCP) transport.
 #[derive(Clone)]
 pub struct Server<S>
 where
@@ -44,6 +45,7 @@ impl<S> Server<S>
 where
     S: Storage,
 {
+    /// Creates a new server with the given network configuration and worker state.
     pub fn new(
         network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
         host: String,
@@ -64,10 +66,12 @@ where
         }
     }
 
+    /// Returns the number of packets processed so far.
     pub fn packets_processed(&self) -> u64 {
         self.packets_processed
     }
 
+    /// Returns the number of user errors encountered so far.
     pub fn user_errors(&self) -> u64 {
         self.user_errors
     }
@@ -123,6 +127,7 @@ where
         .await;
     }
 
+    /// Spawns the server, returning a handle to track its completion.
     pub fn spawn(
         mut self,
         shutdown_signal: CancellationToken,

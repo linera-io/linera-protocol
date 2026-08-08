@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{
-    crypto::{AccountSecretKey, CryptoHash},
+    crypto::AccountSecretKey,
     data_types::{Amount, BlockHeight, Timestamp},
     identifiers::{Account, AccountOwner},
     ownership::ChainOwnership,
@@ -75,7 +75,6 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
     let context = MessageContext {
         chain_id,
         origin: chain_id,
-        origin_certificate_hash: CryptoHash::default(),
         origin_timestamp: Default::default(),
         is_bouncing: false,
         height: BlockHeight(0),

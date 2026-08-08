@@ -102,6 +102,7 @@ where
     C: Context + Clone + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
+    /// Computes the cryptographic hash of the execution state.
     pub async fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError> {
         #[derive(Serialize, Deserialize)]
         struct ExecutionStateViewHash([u8; 32]);
@@ -118,7 +119,7 @@ where
     /// them during transaction execution via [`Self::apply_checkpoint`].
     ///
     /// This is a *pre-block* operation: it must run before the block-level setup mutates
-    /// the chain state (e.g. setting `system.timestamp`), because `dump_content` reads
+    /// the chain state (e.g. setting `system.progress`), because `dump_content` reads
     /// from storage and refuses to run with pending in-memory changes. Splitting the
     /// dump out of the operation handler also guarantees the captured bytes represent
     /// the chain's pre-block state, which is exactly what a bootstrapping node will
@@ -362,6 +363,7 @@ where
     C: Context + Clone + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
+    /// Runs a query against the given application and returns its response.
     pub async fn query_application(
         &mut self,
         context: QueryContext,
@@ -495,6 +497,7 @@ where
         }
     }
 
+    /// Returns the descriptions of all applications registered on this chain.
     pub async fn list_applications(
         &self,
     ) -> Result<Vec<(ApplicationId, ApplicationDescription)>, ExecutionError> {

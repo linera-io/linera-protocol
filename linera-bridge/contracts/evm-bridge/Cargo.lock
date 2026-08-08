@@ -3890,6 +3890,7 @@ dependencies = [
  "serde",
  "sha3 0.10.9",
  "static_assertions",
+ "strum 0.26.3",
  "sysinfo",
  "tempfile",
  "thiserror 1.0.69",

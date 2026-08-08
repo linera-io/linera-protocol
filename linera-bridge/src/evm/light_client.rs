@@ -19,9 +19,9 @@ mod tests {
     use crate::{
         block_proof::ProvenEvents,
         contracts::ILightClient::{
-            addCommitteeCall, committeeHeightCall, committeeTotalWeightCall, currentEpochCall,
-            expireEpochsBelowCall, minAcceptedEpochCall, proveEventsCommittedCall,
-            registerBlockCall, registeredBlocksCall,
+            addCommitteeCall, assertEventsCommittedCall, committeeHeightCall,
+            committeeTotalWeightCall, currentEpochCall, expireEpochsBelowCall,
+            minAcceptedEpochCall, registerBlockCall, registeredBlocksCall,
         },
         test_helpers::*,
     };
@@ -303,6 +303,23 @@ mod tests {
     }
 
     #[test]
+    fn test_light_client_verify_first_round_block() {
+        let mut light_client: TestLightClient = TestLightClient::new();
+
+        // A confirmation attested as being in the chain's first round, so its C-votes sign the
+        // first-round flag. The proof carries the flag and the light client must reproduce it in
+        // the signed `VoteValue`, or `ecrecover` would recover the wrong signer.
+        let certificate =
+            create_signed_certificate_first_round(&light_client.secret, &light_client.public);
+        let bcs_bytes = bcs::to_bytes(&crate::block_proof::BlockProof::from_certificate(
+            &certificate,
+        ))
+        .expect("BCS serialization failed");
+
+        light_client.verify_block(bcs_bytes);
+    }
+
+    #[test]
     fn test_light_client_register_block_records_events_hash() {
         let mut light_client = TestLightClient::new();
         let certificate = create_signed_certificate(&light_client.secret, &light_client.public);
@@ -379,7 +396,7 @@ mod tests {
         let positions = [1u32];
         let proof = EventInclusionProof::new(&events, tx_index, &positions);
         let siblings: Vec<B256> = proof.siblings().iter().map(to_b256).collect();
-        let make_call = |event_bcs: Vec<Bytes>| proveEventsCommittedCall {
+        let make_call = |event_bcs: Vec<Bytes>| assertEventsCommittedCall {
             eventsHash: events_hash,
             eventBcs: event_bcs,
             txIndex: proof.tx_index,
@@ -663,7 +680,7 @@ mod tests {
         // Retire epoch 0.
         call_contract(
             &mut light_client.db,
-            light_client.deployer,
+            test_proposer(),
             light_client.contract,
             &expireEpochsBelowCall { newMinEpoch: 1 },
         );
@@ -714,7 +731,7 @@ mod tests {
         assert!(
             try_call_contract(
                 &mut light_client.db,
-                light_client.deployer,
+                test_proposer(),
                 light_client.contract,
                 &expireEpochsBelowCall { newMinEpoch: 1 },
             )
@@ -744,7 +761,7 @@ mod tests {
         assert!(
             try_call_contract(
                 &mut light_client.db,
-                light_client.deployer,
+                test_proposer(),
                 light_client.contract,
                 &expireEpochsBelowCall { newMinEpoch: 2 },
             )
@@ -755,7 +772,7 @@ mod tests {
         // Retire epoch 0 (floor -> 1) while still at epoch 1.
         call_contract(
             &mut light_client.db,
-            light_client.deployer,
+            test_proposer(),
             light_client.contract,
             &expireEpochsBelowCall { newMinEpoch: 1 },
         );
@@ -764,7 +781,7 @@ mod tests {
         assert!(
             try_call_contract(
                 &mut light_client.db,
-                light_client.deployer,
+                test_proposer(),
                 light_client.contract,
                 &expireEpochsBelowCall { newMinEpoch: 1 },
             )
@@ -774,7 +791,7 @@ mod tests {
         assert!(
             try_call_contract(
                 &mut light_client.db,
-                light_client.deployer,
+                test_proposer(),
                 light_client.contract,
                 &expireEpochsBelowCall { newMinEpoch: 0 },
             )

@@ -1,6 +1,13 @@
 name: Bridge check
 
 on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'mdbook/**'
+      - 'kubernetes/**'
+      - 'docker/dashboards/**'
   pull_request:
     paths-ignore:
       - 'docs/**'
