@@ -1304,12 +1304,14 @@ impl<Env: Environment> Client<Env> {
     fn remote_node_updater(
         &self,
         remote_node: RemoteNode<Env::ValidatorNode>,
-    ) -> RemoteNodeUpdater<Env> {
+    ) -> RemoteNodeUpdater<Env::Storage, Env::ValidatorNode> {
         RemoteNodeUpdater {
             remote_node,
             local_node: self.local_node.clone(),
             admin_chain_id: self.admin_chain_id,
             certificate_upload_batch_size: self.options.certificate_upload_batch_size,
+            sync_consensus_rounds: true,
+            max_admin_catch_up_blocks: None,
         }
     }
 

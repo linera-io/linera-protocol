@@ -5,9 +5,11 @@
 #![allow(unknown_lints)]
 
 use std::{
+    collections::HashSet,
     fmt::Debug,
     marker::PhantomData,
     net::SocketAddr,
+    str::FromStr as _,
     sync::Arc,
     task::{Context, Poll},
     time::Duration,
@@ -16,7 +18,10 @@ use std::{
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt as _};
-use linera_base::{data_types::BlockHeight, identifiers::ChainId};
+use linera_base::{
+    data_types::{BlockHeight, Epoch},
+    identifiers::ChainId,
+};
 use linera_chain::types::{ConfirmedBlock, LiteCertificate as ChainLiteCertificate};
 use linera_core::{
     data_types::{CertificatesByHeightRequest, ChainInfo, ChainInfoQuery},
@@ -31,12 +36,17 @@ use linera_rpc::propagation::get_traffic_type_from_request;
 #[cfg(feature = "opentelemetry")]
 use linera_rpc::propagation::OtelContextLayer;
 use linera_rpc::{
-    config::{ProxyConfig, ShardConfig, TlsConfig, ValidatorInternalNetworkConfig},
+    config::{
+        ProxyConfig, ShardConfig, TlsConfig, ValidatorInternalNetworkConfig,
+        ValidatorPublicNetworkConfig,
+    },
     grpc::{
         api::{
             self,
             notifier_service_server::{NotifierService, NotifierServiceServer},
+            validator_node_client::ValidatorNodeClient,
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
+            validator_relay_server::{ValidatorRelay, ValidatorRelayServer},
             validator_worker_client::ValidatorWorkerClient,
             BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificatesBatchRequest,
             CertificatesBatchResponse, ChainInfoResult, CryptoHash, HandlePendingBlobRequest,
@@ -82,6 +92,18 @@ mod metrics {
             linear_bucket_interval(1.0, 50.0, 5000.0),
         )
     });
+    /// Requests this proxy has carried to another validator on behalf of one of its shards.
+    ///
+    /// Shards have no route to the internet, so this counting up is what shows that
+    /// validator-to-validator traffic is flowing, and through the relay rather than around it.
+    pub static RELAYED_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "proxy_relayed_request_count",
+            "Requests forwarded to another validator on behalf of a shard",
+            &[METHOD_NAME_LABEL],
+        )
+    });
+
     pub static PROXY_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "proxy_request_count",
@@ -201,10 +223,30 @@ pub struct GrpcProxy<S>(Arc<GrpcProxyInner<S>>);
 struct GrpcProxyInner<S> {
     internal_config: ValidatorInternalNetworkConfig,
     worker_connection_pool: GrpcConnectionPool,
+    /// Connections to the other validators, used to carry requests on behalf of this validator's
+    /// shards, which have no route to the internet of their own. Pooled, so a peer costs one
+    /// connection for the whole process rather than one per shard.
+    peer_connection_pool: GrpcConnectionPool,
     notifier: ChannelNotifier<Result<Notification, Status>>,
     tls: TlsConfig,
     storage: S,
     id: usize,
+    /// The validator addresses this proxy is willing to relay to, and the next epoch it has yet
+    /// to learn about.
+    ///
+    /// Relaying exists so that shards — which hold the validator secret key — never open outbound
+    /// connections themselves. That is only worth anything if the proxy will not dial wherever it
+    /// is told: without this, anything able to reach the internal port could use the proxy to
+    /// reach an arbitrary host. Membership of some committee is the right test, because those are
+    /// exactly the validators block export has any business talking to.
+    relay_destinations: Arc<tokio::sync::RwLock<RelayDestinations>>,
+}
+
+/// Committee members seen so far, and how far the epochs have been scanned.
+#[derive(Default)]
+struct RelayDestinations {
+    addresses: HashSet<String>,
+    next_epoch: u32,
 }
 
 impl<S> GrpcProxy<S>
@@ -224,10 +266,14 @@ where
             worker_connection_pool: GrpcConnectionPool::default()
                 .with_connect_timeout(connect_timeout)
                 .with_timeout(timeout),
+            peer_connection_pool: GrpcConnectionPool::default()
+                .with_connect_timeout(connect_timeout)
+                .with_timeout(timeout),
             notifier: ChannelNotifier::default(),
             tls,
             storage,
             id,
+            relay_destinations: Arc::default(),
         }))
     }
 
@@ -247,6 +293,81 @@ where
 
     fn as_notifier_service(&self) -> NotifierServiceServer<Self> {
         NotifierServiceServer::new(self.clone())
+    }
+
+    fn as_validator_relay(&self) -> ValidatorRelayServer<Self> {
+        ValidatorRelayServer::new(self.clone())
+            .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+            .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+    }
+
+    /// Whether this proxy will relay to `address`, i.e. whether it belongs to a validator in any
+    /// committee this proxy can see.
+    ///
+    /// Epochs are scanned forward from wherever the last scan stopped, so a validator admitted
+    /// after startup is picked up on the first request naming it, and the scan is not repeated for
+    /// addresses already known.
+    async fn is_relay_destination(&self, address: &str) -> bool {
+        if self
+            .0
+            .relay_destinations
+            .read()
+            .await
+            .addresses
+            .contains(address)
+        {
+            return true;
+        }
+        let mut destinations = self.0.relay_destinations.write().await;
+        // Another task may have refreshed while we waited for the lock.
+        if destinations.addresses.contains(address) {
+            return true;
+        }
+        while let Ok(Some(committee)) = self
+            .0
+            .storage
+            .get_or_load_committee(Epoch(destinations.next_epoch))
+            .await
+        {
+            for (_, validator_address) in committee.validator_addresses() {
+                destinations.addresses.insert(validator_address.to_owned());
+            }
+            destinations.next_epoch += 1;
+        }
+        destinations.addresses.contains(address)
+    }
+
+    /// Returns a client for the validator a relayed request names.
+    ///
+    /// Relayed requests are forwarded as they arrived, without being decoded into their Rust
+    /// types and re-encoded: the proxy is carrying the shard's request, not making its own.
+    async fn peer(
+        &self,
+        destination: &str,
+        #[cfg_attr(not(with_metrics), allow(unused_variables))] method: &str,
+    ) -> Result<ValidatorNodeClient<Channel>, Status> {
+        let network = ValidatorPublicNetworkConfig::from_str(destination).map_err(|_| {
+            Status::invalid_argument(format!("invalid destination validator: {destination}"))
+        })?;
+        if !self.is_relay_destination(destination).await {
+            return Err(Status::permission_denied(format!(
+                "refusing to relay to {destination}: not a member of any known committee"
+            )));
+        }
+        // Counted only once the destination is accepted, so the metric measures relayed traffic
+        // rather than rejected attempts.
+        #[cfg(with_metrics)]
+        metrics::RELAYED_REQUEST_COUNT
+            .with_label_values(&[method])
+            .inc();
+        let channel = self
+            .0
+            .peer_connection_pool
+            .channel(network.http_address())
+            .map_err(|error| Status::unavailable(format!("cannot reach {destination}: {error}")))?;
+        Ok(ValidatorNodeClient::new(channel)
+            .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+            .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE))
     }
 
     fn public_address(&self) -> SocketAddr {
@@ -319,6 +440,7 @@ where
         let internal_server = join_set.spawn_task(
             Server::builder()
                 .add_service(self.as_notifier_service())
+                .add_service(self.as_validator_relay())
                 .serve(self.internal_address())
                 .in_current_span(),
         );
@@ -955,6 +1077,83 @@ where
         let cert_hash = self.blob_last_used_by(request).await?;
         let request = Request::new(cert_hash.into_inner());
         self.download_certificate(request).await
+    }
+}
+
+/// Performs, on behalf of this validator's shards, the requests they need to send to other
+/// validators.
+///
+/// Shards hold the validator's secret key and so must not be able to open outbound connections;
+/// the proxy is the one component that may. Each method here dials the validator named in the
+/// request and returns its answer verbatim, so that the shard sees exactly what it would have
+/// seen had it made the call itself — including the peer's errors, which the export logic
+/// depends on to decide what to send next.
+///
+/// Served only on the internal listener, and deliberately limited to the four requests block
+/// export makes.
+#[async_trait]
+impl<S> ValidatorRelay for GrpcProxy<S>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+{
+    #[instrument(skip_all, err(Display), fields(method = "relay_lite_certificate"))]
+    async fn relay_lite_certificate(
+        &self,
+        request: Request<api::RelayLiteCertificateRequest>,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        let request = request.into_inner();
+        let inner = request
+            .inner
+            .ok_or_else(|| Status::invalid_argument("missing lite certificate"))?;
+        self.peer(&request.destination, "relay_lite_certificate")
+            .await?
+            .handle_lite_certificate(Request::new(inner))
+            .await
+    }
+
+    #[instrument(skip_all, err(Display), fields(method = "relay_confirmed_certificate"))]
+    async fn relay_confirmed_certificate(
+        &self,
+        request: Request<api::RelayConfirmedCertificateRequest>,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        let request = request.into_inner();
+        let inner = request
+            .inner
+            .ok_or_else(|| Status::invalid_argument("missing confirmed certificate"))?;
+        self.peer(&request.destination, "relay_confirmed_certificate")
+            .await?
+            .handle_confirmed_certificate(Request::new(inner))
+            .await
+    }
+
+    #[instrument(skip_all, err(Display), fields(method = "relay_chain_info_query"))]
+    async fn relay_chain_info_query(
+        &self,
+        request: Request<api::RelayChainInfoQueryRequest>,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        let request = request.into_inner();
+        let inner = request
+            .inner
+            .ok_or_else(|| Status::invalid_argument("missing chain info query"))?;
+        self.peer(&request.destination, "relay_chain_info_query")
+            .await?
+            .handle_chain_info_query(Request::new(inner))
+            .await
+    }
+
+    #[instrument(skip_all, err(Display), fields(method = "relay_upload_blob"))]
+    async fn relay_upload_blob(
+        &self,
+        request: Request<api::RelayUploadBlobRequest>,
+    ) -> Result<Response<api::BlobId>, Status> {
+        let request = request.into_inner();
+        let inner = request
+            .inner
+            .ok_or_else(|| Status::invalid_argument("missing blob"))?;
+        self.peer(&request.destination, "relay_upload_blob")
+            .await?
+            .upload_blob(Request::new(inner))
+            .await
     }
 }
 

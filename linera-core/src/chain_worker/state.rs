@@ -48,9 +48,14 @@ use tokio::sync::oneshot;
 use tracing::{debug, info, instrument, trace, warn};
 
 use crate::{
-    chain_worker::{handle::AtomicTimestamp, ChainWorkerConfig, DeliveryNotifier},
+    chain_worker::{
+        export::{ChainExportSetup, ChainExporter, ChainExporterFactory},
+        handle::AtomicTimestamp,
+        ChainWorkerConfig, DeliveryNotifier,
+    },
     client::{ChainModes, ListeningMode},
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
+    local_node::LocalNodeClient,
     worker::{BatchRequest, NetworkActions, Notification, Reason, WorkerError},
 };
 
@@ -128,6 +133,14 @@ where
     /// Set to `true` if a database `save` failure has left storage potentially
     /// inconsistent.
     poisoned: bool,
+    /// Creates this chain's export task, if the server enabled block export.
+    export_factory: Option<ChainExporterFactory<StorageClient>>,
+    /// Read access to this process's chains, which the export task needs for the few chain-level
+    /// queries it cannot answer from the certificate partitions.
+    local_node: LocalNodeClient<StorageClient>,
+    /// This chain's export task, spawned the first time the chain executes a block so that
+    /// chains we only ever receive from cost nothing.
+    exporter: Option<ChainExporter>,
 }
 
 /// The result of processing a cross-chain update.
@@ -190,6 +203,8 @@ where
         chain_id: ChainId,
         service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
         service_runtime_task: Option<web_thread_pool::Task<()>>,
+        export_factory: Option<ChainExporterFactory<StorageClient>>,
+        local_node: LocalNodeClient<StorageClient>,
     ) -> Result<Self, WorkerError> {
         let chain = storage.load_chain(chain_id).await?;
 
@@ -206,6 +221,9 @@ where
             delivery_notifier,
             knows_chain_is_active: false,
             poisoned: false,
+            export_factory,
+            local_node,
+            exporter: None,
         })
     }
 
@@ -1015,6 +1033,10 @@ where
         tip: ChainTipState,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
+        // Hold the certificate behind the storage cache's shared pointer rather than unwrapping
+        // the block out of it: the export task pushes this very certificate, so it never has to
+        // read the block back from storage.
+        let certificate = self.storage.cache_certificate(certificate);
         let block_hash = certificate.hash();
         let block = certificate.block();
         let chain_id = block.header.chain_id;
@@ -1073,7 +1095,7 @@ where
                         .clone_with_base_key(ctx.base_key().bytes.clone())
                 })
                 .await;
-            certificate.into_value()
+            Cow::Borrowed(certificate.value())
         } else {
             let oracle_responses = Some(block.body.oracle_responses.clone());
             let (proposed_block, outcome) = block.clone().into_proposal();
@@ -1096,7 +1118,7 @@ where
                 ))
                 .into());
             }
-            ConfirmedBlock::new(Block::new(proposed_block, verified))
+            Cow::Owned(ConfirmedBlock::new(Block::new(proposed_block, verified)))
         };
 
         let event_streams = chain
@@ -1106,6 +1128,8 @@ where
                 tracked.as_deref().map(|h| h.inner()),
             )
             .await?;
+        self.export_block(&certificate, published_blobs, blobs)
+            .await;
         let mut actions = self.create_network_actions(None).await?;
         trace!("Processed confirmed block {height}");
         let hash = confirmed_block.inner().hash();
@@ -1129,8 +1153,10 @@ where
         }
         self.save().await?;
 
-        self.block_values
-            .insert_hashed(Cow::Owned(confirmed_block.into_inner()));
+        self.block_values.insert_hashed(match confirmed_block {
+            Cow::Borrowed(block) => Cow::Borrowed(block.inner()),
+            Cow::Owned(block) => Cow::Owned(block.into_inner()),
+        });
 
         self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
             .await;
@@ -1140,6 +1166,73 @@ where
             actions,
             BlockOutcome::Processed,
         ))
+    }
+
+    /// Hands the block just executed to this chain's export task, which pushes it to the other
+    /// validators in the committee, and folds the task's progress into the chain state so that
+    /// the save that follows persists it.
+    ///
+    /// Returns as soon as the block is queued: the pushes themselves happen on the export task,
+    /// off the block-execution path. Does nothing if the server did not enable block export.
+    ///
+    /// Never fails the block. Export is replication, not consensus: a block we cannot export is
+    /// still a block this validator has executed and committed, so a problem here is logged and
+    /// the block stands.
+    async fn export_block(
+        &mut self,
+        certificate: &CacheArc<ConfirmedBlockCertificate>,
+        published_blobs: Vec<Blob>,
+        read_blobs: BTreeMap<BlobId, Blob>,
+    ) {
+        let Some(export_factory) = self.export_factory.clone() else {
+            return;
+        };
+        // The committee *after* applying the block: a validator that this very block admits has to
+        // be exported to from now on, starting with the admin-chain block that admitted it.
+        let committee = match self.chain.current_committee().await {
+            Ok((_, committee)) => committee,
+            Err(error) => {
+                warn!(%error, "Not exporting a block of a chain with no current committee");
+                return;
+            }
+        };
+        let Some(admin_chain_id) = *self.chain.execution_state.system.admin_chain_id.get() else {
+            // An active chain always knows its admin chain, and `current_committee` above has
+            // already established that this one is active.
+            warn!("Not exporting a block of a chain that has no admin chain");
+            return;
+        };
+
+        let exporter = match &self.exporter {
+            Some(exporter) => exporter,
+            None => self.exporter.insert(export_factory(ChainExportSetup {
+                chain_id: self.chain.chain_id(),
+                local_node: self.local_node.clone(),
+                exported_heights: self.chain.exported_heights.get().clone().into(),
+            })),
+        };
+
+        // Through the cache rather than `Arc::new`: these blobs are already in storage's cache
+        // in the common case, and the cache is what keeps one allocation per blob content.
+        let blobs = published_blobs
+            .into_iter()
+            .chain(read_blobs.into_values())
+            .map(|blob| self.storage.cache_blob(blob))
+            .collect();
+        exporter.export(
+            certificate.clone(),
+            blobs,
+            committee.clone(),
+            admin_chain_id,
+        );
+
+        // Record what the task has acknowledged so far — which never includes the block we just
+        // queued, and after a stall may not have moved at all. Only mark the register dirty when
+        // it actually changed, so a stalled export costs no writes.
+        let progress = exporter.progress(&committee);
+        if **self.chain.exported_heights.get() != progress {
+            self.chain.exported_heights.set(progress.into());
+        }
     }
 
     /// Schedules a notification for when cross-chain messages are delivered up to the given

@@ -2596,7 +2596,6 @@ where
     use crate::{
         local_node::LocalNodeClient,
         remote_node::RemoteNode,
-        test_utils::NodeProvider,
         updater::{CommunicateAction, RemoteNodeUpdater},
         worker::WorkerState,
         ChainWorkerConfig,
@@ -2644,16 +2643,17 @@ where
         None,
     );
     let node = builder.node(1);
-    let mut updater =
-        RemoteNodeUpdater::<crate::environment::Impl<B::Storage, NodeProvider<B::Storage>>> {
-            remote_node: RemoteNode {
-                public_key: node.name(),
-                node,
-            },
-            local_node: LocalNodeClient::new(state),
-            admin_chain_id: builder.admin_chain_id(),
-            certificate_upload_batch_size: 100,
-        };
+    let mut updater = RemoteNodeUpdater {
+        remote_node: RemoteNode {
+            public_key: node.name(),
+            node,
+        },
+        local_node: LocalNodeClient::new(state),
+        admin_chain_id: builder.admin_chain_id(),
+        certificate_upload_batch_size: 100,
+        sync_consensus_rounds: true,
+        max_admin_catch_up_blocks: None,
+    };
     let submit = |proposal| {
         let (clock_skew_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         CommunicateAction::SubmitBlock {
@@ -4508,5 +4508,470 @@ where
     );
     assert!(client.pending_proposal().await.is_none());
 
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[test_log::test(tokio::test)]
+async fn test_blocks_are_exported_to_the_committee<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new_with_block_export(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = sender.chain_id();
+
+    // Each save folds in whatever the export task has acknowledged *so far*, so the recorded
+    // heights necessarily trail the tip: the block being saved has only just been queued. Keep
+    // producing blocks until the exports of the earlier ones have been folded in.
+    let mut exported = BTreeMap::new();
+    for _ in 0..10 {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+        exported = builder.exported_heights(0, chain_id).await;
+        if exported.len() == 3 && exported.values().all(|height| *height >= BlockHeight(1)) {
+            break;
+        }
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(50)).await;
+    }
+
+    // One entry per *other* committee member: a validator never exports to itself.
+    assert_eq!(
+        exported.len(),
+        3,
+        "expected the first validator to have exported to the three others, got {exported:?}"
+    );
+    assert!(
+        exported.values().all(|height| *height >= BlockHeight(1)),
+        "expected every destination to have acknowledged at least height 1, got {exported:?}"
+    );
+
+    // The destinations really do hold the chain, and the exporter's cursors agree with them.
+    let tip = sender.chain_info().await?.next_block_height;
+    for index in 0..4 {
+        assert_eq!(builder.next_block_height(index, chain_id).await, tip);
+    }
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_blocks_are_not_exported_by_default<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+
+    for _ in 0..3 {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+
+    assert!(
+        builder
+            .exported_heights(0, sender.chain_id())
+            .await
+            .is_empty(),
+        "block export must stay off unless a chain exporter factory is installed",
+    );
+    Ok(())
+}
+
+/// A validator that missed blocks is caught up by export alone, while the chain is idle.
+///
+/// This isolates the mechanism deliberately. One validator is offline while the chain produces
+/// blocks, then comes back — and then *nothing else happens*: no further blocks, and the client is
+/// never asked to do anything, so it has no reason to talk to that validator. The only thing that
+/// can close the gap is the export tasks noticing a lagging destination with an empty queue. That
+/// is the same path a validator joining a long-lived chain takes, where it reports height 0 and
+/// has to be replayed the whole history.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_export_catches_a_lagging_validator_up_while_idle<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new_with_block_export(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = sender.chain_id();
+
+    // Validator 3 misses everything below. The other three still form a quorum, so the chain
+    // advances without it.
+    builder.set_fault_type([3], FaultType::Offline);
+    for _ in 0..5 {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+    let tip = sender.chain_info().await?.next_block_height;
+    assert!(tip >= BlockHeight(5));
+
+    // Bring it back and then do nothing at all: no new blocks, no client activity. Anything that
+    // happens from here is export catching up on its own. (Its height can only be read once it is
+    // reachable again — an offline validator answers no queries.)
+    builder.set_fault_type([3], FaultType::Honest);
+    assert!(
+        builder.next_block_height(3, chain_id).await < tip,
+        "the validator that was offline should start out behind",
+    );
+    for _ in 0..60 {
+        if builder.next_block_height(3, chain_id).await == tip {
+            return Ok(());
+        }
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(100)).await;
+    }
+    panic!(
+        "export did not catch the lagging validator up to {tip} while idle; it is at {}",
+        builder.next_block_height(3, chain_id).await,
+    );
+}
+
+/// A destination that is unreachable must not stall export to the rest of the committee.
+///
+/// The failing validator is the one this asserts *around*: the others still receive every block,
+/// and the exporter records progress only for them, so one dead peer degrades to a gap in
+/// `exported_heights` rather than to a stalled chain.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_export_survives_an_unreachable_destination<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new_with_block_export(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = sender.chain_id();
+
+    // Take one validator away. Its own exporter stops too, which is why the assertions below are
+    // all made from validator 0's point of view.
+    builder.set_fault_type([3], FaultType::Offline);
+
+    for _ in 0..6 {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+
+    // Validator 0 has three peers and one of them is down, so exactly two should ever be
+    // recorded: export keeps flowing to the reachable ones, and the dead one is simply absent
+    // rather than taking the chain's export down with it. Identifying *which* peer is down is
+    // deliberately avoided — `set_fault_type` indexes creation order while the committee map is
+    // ordered by public key, and the count is the property that matters anyway.
+    let mut exported = BTreeMap::new();
+    for _ in 0..40 {
+        exported = builder.exported_heights(0, chain_id).await;
+        if exported.len() >= 2 {
+            break;
+        }
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(100)).await;
+    }
+    assert_eq!(
+        exported.len(),
+        2,
+        "expected the two reachable peers to be exported to, and only those; got {exported:?}",
+    );
+    assert!(
+        exported.values().all(|height| *height >= BlockHeight(1)),
+        "reachable peers should have acknowledged real progress; got {exported:?}",
+    );
+    Ok(())
+}
+
+/// One catch-up round sends at most `max_catch_up_blocks`, and the next round picks up where it
+/// left off.
+///
+/// This is the arithmetic the bound exists for, asserted directly rather than through the export
+/// loop's timing: a round is capped, and capping it does not lose the remainder. A test that only
+/// checked eventual convergence would pass just as well with the bound ignored entirely, since
+/// ignoring it converges in one round.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_catch_up_sends_at_most_the_bound_per_round<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use crate::{
+        local_node::LocalNodeClient, remote_node::RemoteNode, updater::RemoteNodeUpdater,
+        worker::WorkerState, ChainWorkerConfig,
+    };
+
+    /// Small enough that the backlog below needs several rounds, and not a divisor of it, so a
+    /// final short round is exercised too.
+    const MAX_CATCH_UP_BLOCKS: u64 = 3;
+    const BACKLOG: usize = 11;
+
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = sender.chain_id();
+
+    // Validator 3 misses the whole backlog. The other three still form a quorum.
+    builder.set_fault_type([3], FaultType::Offline);
+    for _ in 0..BACKLOG {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+    let target = sender.chain_info().await?.next_block_height;
+    assert_eq!(target, BlockHeight(BACKLOG as u64));
+    builder.set_fault_type([3], FaultType::Honest);
+    assert_eq!(builder.next_block_height(3, chain_id).await, BlockHeight(0));
+
+    // Drive the updater the way an export round does: at validator 3, reading the blocks out of a
+    // local node that has them (validator 0 stayed online throughout).
+    let node = builder.node(3);
+    let state = WorkerState::new(
+        builder.validator_storage(0),
+        ChainWorkerConfig::default(),
+        None,
+    );
+    let mut updater = RemoteNodeUpdater {
+        remote_node: RemoteNode {
+            public_key: node.name(),
+            node,
+        },
+        local_node: LocalNodeClient::new(state),
+        admin_chain_id: builder.admin_chain_id(),
+        certificate_upload_batch_size: 100,
+        sync_consensus_rounds: false,
+        max_admin_catch_up_blocks: Some(MAX_CATCH_UP_BLOCKS),
+    };
+
+    // Round by round: each one advances by exactly the bound until the last, which sends only the
+    // remainder and stops at the target rather than overshooting.
+    let mut reached = None;
+    let mut rounds = 0;
+    while reached != Some(target) {
+        let before = reached;
+        reached = Some(
+            updater
+                .send_missing_blocks(chain_id, target, reached, MAX_CATCH_UP_BLOCKS)
+                .await?,
+        );
+        rounds += 1;
+        let expected = target.min(BlockHeight(
+            before.unwrap_or(BlockHeight(0)).0 + MAX_CATCH_UP_BLOCKS,
+        ));
+        assert_eq!(
+            reached,
+            Some(expected),
+            "round {rounds} starting at {before:?} should have reached {expected}",
+        );
+        assert_eq!(
+            builder.next_block_height(3, chain_id).await,
+            expected,
+            "the validator itself should be at {expected} after round {rounds}",
+        );
+        assert!(rounds <= BACKLOG, "catch-up is not converging");
+    }
+    // 11 blocks in chunks of 3: three full rounds and a remainder of two.
+    assert_eq!(rounds, 4);
+    Ok(())
+}
+
+/// A validator behind by more blocks than one round may send is still caught up, over several
+/// rounds, by the idle export loop alone.
+///
+/// The bound is what keeps a freshly-joined validator's backfill from monopolising a chain's
+/// export, so the thing that must not happen is for it to also stop the backfill short. Here the
+/// backlog is several times the bound and nothing else is running: no new blocks, no client
+/// traffic. Only the export loop repeating bounded rounds can close the gap.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_export_catches_up_a_backlog_larger_than_the_bound<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    const MAX_CATCH_UP_BLOCKS: u64 = 2;
+    const BACKLOG: usize = 9;
+
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new_with_block_export_config(
+        storage_builder,
+        4,
+        0,
+        signer,
+        crate::BlockExportConfig {
+            max_catch_up_blocks: MAX_CATCH_UP_BLOCKS,
+            ..TestBuilder::<B>::test_block_export_config()
+        },
+    )
+    .await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = sender.chain_id();
+
+    builder.set_fault_type([3], FaultType::Offline);
+    for _ in 0..BACKLOG {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+    let tip = sender.chain_info().await?.next_block_height;
+    assert_eq!(tip, BlockHeight(BACKLOG as u64));
+
+    // Back online, then idle. Everything from here is the export loop's doing.
+    builder.set_fault_type([3], FaultType::Honest);
+    assert!(builder.next_block_height(3, chain_id).await < tip);
+
+    for _ in 0..100 {
+        if builder.next_block_height(3, chain_id).await == tip {
+            return Ok(());
+        }
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(100)).await;
+    }
+    panic!(
+        "export did not drain a backlog of {BACKLOG} in rounds of {MAX_CATCH_UP_BLOCKS}; it \
+         stopped at {} of {tip}",
+        builder.next_block_height(3, chain_id).await,
+    );
+}
+
+/// `max_admin_catch_up_blocks` bounds the admin-chain replay, and leaving it unset does not.
+///
+/// Export sets it because `update_admin_chain` runs *inside* one export round: replaying a long
+/// admin chain there would stall that chain's export behind an unrelated backfill. The client
+/// leaves it unset, because it is blocking on this one certificate being accepted and must not
+/// give up partway. Both branches are asserted here, since the bounded one is a behaviour change
+/// that must not leak into the client's path.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_admin_chain_catch_up_is_bounded_only_for_export<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use crate::{
+        local_node::LocalNodeClient, remote_node::RemoteNode, updater::RemoteNodeUpdater,
+        worker::WorkerState, ChainWorkerConfig,
+    };
+
+    const MAX_ADMIN_CATCH_UP_BLOCKS: u64 = 2;
+    const BACKLOG: usize = 7;
+
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    // Root chain 0 is the admin chain, so these blocks land on the chain the bound governs.
+    let admin = builder.add_root_chain(0, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let admin_chain_id = builder.admin_chain_id();
+    assert_eq!(admin.chain_id(), admin_chain_id);
+
+    builder.set_fault_type([3], FaultType::Offline);
+    for _ in 0..BACKLOG {
+        admin
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+    let tip = admin.chain_info().await?.next_block_height;
+    assert_eq!(tip, BlockHeight(BACKLOG as u64));
+    builder.set_fault_type([3], FaultType::Honest);
+    assert_eq!(
+        builder.next_block_height(3, admin_chain_id).await,
+        BlockHeight(0)
+    );
+
+    let make_updater = |builder: &mut TestBuilder<B>, max_admin_catch_up_blocks, storage| {
+        let node = builder.node(3);
+        RemoteNodeUpdater {
+            remote_node: RemoteNode {
+                public_key: node.name(),
+                node,
+            },
+            local_node: LocalNodeClient::new(WorkerState::new(
+                storage,
+                ChainWorkerConfig::default(),
+                None,
+            )),
+            admin_chain_id,
+            certificate_upload_batch_size: 100,
+            sync_consensus_rounds: false,
+            max_admin_catch_up_blocks,
+        }
+    };
+
+    // Export's path: one call moves the admin chain forward by the bound and no further, so the
+    // export round it runs inside stays short.
+    let storage = builder.validator_storage(0);
+    let mut bounded = make_updater(&mut builder, Some(MAX_ADMIN_CATCH_UP_BLOCKS), storage);
+    bounded.update_admin_chain().await?;
+    assert_eq!(
+        builder.next_block_height(3, admin_chain_id).await,
+        BlockHeight(MAX_ADMIN_CATCH_UP_BLOCKS),
+        "a bounded admin catch-up should send exactly {MAX_ADMIN_CATCH_UP_BLOCKS} blocks",
+    );
+
+    // Repeating it keeps making progress rather than re-sending the same prefix forever.
+    bounded.update_admin_chain().await?;
+    assert_eq!(
+        builder.next_block_height(3, admin_chain_id).await,
+        BlockHeight(2 * MAX_ADMIN_CATCH_UP_BLOCKS),
+    );
+
+    // The client's path, unchanged: one call catches the whole chain up.
+    let storage = builder.validator_storage(0);
+    let mut unbounded = make_updater(&mut builder, None, storage);
+    unbounded.update_admin_chain().await?;
+    assert_eq!(
+        builder.next_block_height(3, admin_chain_id).await,
+        tip,
+        "an unbounded admin catch-up should not stop short",
+    );
     Ok(())
 }
