@@ -27,7 +27,11 @@ permissions:
 jobs:
   bridge-e2e:
     runs-on: linera-io-self-hosted-ci
-    timeout-minutes: 60
+    # 90, matching main. The old 60 was sized for the pull-the-image path that
+    # this workflow no longer takes: building linera-test locally costs ~23 min,
+    # which pushed a run to 60m50s and got it killed. main does the same work
+    # without a pull and lands at ~81 min.
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v6.0.2
