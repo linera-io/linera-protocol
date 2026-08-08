@@ -1498,6 +1498,7 @@ impl<Env: Environment> Client<Env> {
                 })
             },
             self.options.quorum_grace_period,
+            self.storage_client().clock(),
         )
         .await?;
         Ok(())
@@ -1556,6 +1557,7 @@ impl<Env: Environment> Client<Env> {
                 })
             },
             self.options.quorum_grace_period,
+            self.storage_client().clock(),
         )
         .await;
         let ((votes_hash, votes_round, _, _, _), votes) = match result {
@@ -2183,6 +2185,7 @@ impl<Env: Environment> Client<Env> {
                     .await
             },
             self.options.quorum_grace_period,
+            self.storage_client().clock(),
         )
         .await?;
 
