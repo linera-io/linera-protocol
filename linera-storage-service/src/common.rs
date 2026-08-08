@@ -74,6 +74,15 @@ impl From<Status> for StorageServiceStoreError {
 
 impl KeyValueStoreError for StorageServiceStoreError {
     const BACKEND: &'static str = "service";
+
+    fn must_reload_view(&self) -> bool {
+        // A `write_batch` is sent as one or more gRPC calls. If the round-trip fails
+        // (a gRPC status such as `DEADLINE_EXCEEDED`/`UNAVAILABLE`, or a transport-level
+        // error) the server may or may not have applied the batch, so the in-memory view
+        // must be reloaded from storage. These variants can also surface on read RPCs,
+        // where a reload is unnecessary but harmless; we err on the side of reloading.
+        matches!(self, Self::GrpcError(_) | Self::TransportError(_))
+    }
 }
 
 /// Returns the storage service endpoint used for testing, read from the environment.
