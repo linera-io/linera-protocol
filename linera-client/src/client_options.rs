@@ -28,6 +28,7 @@ use crate::client_metrics::TimingConfig;
 use crate::util;
 
 #[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
 pub enum Error {
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
@@ -39,6 +40,7 @@ pub enum Error {
 
 util::impl_from_infallible!(Error);
 
+/// Command-line options controlling the behavior of the chain client.
 #[derive(Clone, clap::Parser, serde::Deserialize, tsify::Tsify)]
 #[tsify(from_wasm_abi)]
 #[group(skip)]
@@ -162,9 +164,9 @@ pub struct Options {
     #[arg(long, default_value_t, value_enum)]
     pub blanket_message_policy: BlanketMessagePolicy,
 
-    /// A set of chains to restrict incoming messages from. By default, messages
-    /// from all chains are accepted. To reject messages from all chains, specify
-    /// an empty string.
+    /// A set of chains to restrict incoming messages and events from. By default, messages and
+    /// events from all chains are accepted. To reject all of them, specify an empty string. The
+    /// admin chain's event stream is always followed regardless of this setting.
     #[arg(long, value_parser = util::parse_chain_set)]
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
 
@@ -178,8 +180,8 @@ pub struct Options {
     #[arg(long, value_parser = util::parse_app_set)]
     pub reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
 
-    /// A set of application IDs. If specified, only events coming from streams created by
-    /// applications from this set will be processed.
+    /// A set of application IDs. If specified, only event streams created by applications from
+    /// this set are processed and followed. The admin chain's event stream is always followed.
     #[arg(long, value_parser = util::parse_app_set)]
     pub process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
 
@@ -211,20 +213,20 @@ pub struct Options {
     /// downloading blobs from a validator, after which we try the next validator, in
     /// milliseconds.
     #[arg(
-        long = "blob-download-timeout-ms",
+        long = "blob-download-hedge-delay-ms",
         default_value = "1000",
         value_parser = util::parse_millis,
     )]
-    pub blob_download_timeout: Duration,
+    pub blob_download_hedge_delay: Duration,
 
     /// The delay when downloading a batch of certificates, after which we try a second validator,
     /// in milliseconds.
     #[arg(
-        long = "cert-batch-download-timeout-ms",
+        long = "cert-batch-download-hedge-delay-ms",
         default_value = "1000",
         value_parser = util::parse_millis
     )]
-    pub certificate_batch_download_timeout: Duration,
+    pub certificate_batch_download_hedge_delay: Duration,
 
     /// Maximum number of certificates that we download at a time from one validator when
     /// synchronizing one of our chains.
@@ -316,6 +318,7 @@ pub struct Options {
     )]
     pub alternative_peers_retry_delay_ms: u64,
 
+    /// Configuration for the chain listener.
     #[serde(flatten)]
     #[clap(flatten)]
     pub chain_listener_config: crate::chain_listener::ChainListenerConfig,
@@ -367,8 +370,8 @@ impl Options {
             message_policy,
             cross_chain_message_delivery,
             quorum_grace_period: self.quorum_grace_period,
-            blob_download_timeout: self.blob_download_timeout,
-            certificate_batch_download_timeout: self.certificate_batch_download_timeout,
+            blob_download_hedge_delay: self.blob_download_hedge_delay,
+            certificate_batch_download_hedge_delay: self.certificate_batch_download_hedge_delay,
             certificate_download_batch_size: self.certificate_download_batch_size,
             certificate_upload_batch_size: self.certificate_upload_batch_size,
             sender_certificate_download_batch_size: self.sender_certificate_download_batch_size,
@@ -407,6 +410,7 @@ impl Options {
     }
 }
 
+/// Command-line options for configuring the ownership of a chain.
 #[derive(Debug, Clone, clap::Args)]
 pub struct ChainOwnershipConfig {
     /// A JSON list of the new super owners. Absence of the option leaves the current
@@ -468,6 +472,7 @@ pub struct ChainOwnershipConfig {
 }
 
 impl ChainOwnershipConfig {
+    /// Applies the configured ownership overrides to the given chain ownership.
     pub fn update(self, chain_ownership: &mut ChainOwnership) -> Result<(), Error> {
         let ChainOwnershipConfig {
             super_owners,
@@ -521,6 +526,7 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
     }
 }
 
+/// Command-line options for configuring application permissions on a chain.
 #[derive(Debug, Clone, clap::Args)]
 pub struct ApplicationPermissionsConfig {
     /// A JSON list of applications allowed to execute operations on this chain. If set to null, all
@@ -560,6 +566,7 @@ pub struct ApplicationPermissionsConfig {
 }
 
 impl ApplicationPermissionsConfig {
+    /// Applies the configured permission overrides to the given application permissions.
     pub fn update(self, application_permissions: &mut ApplicationPermissions) {
         if let Some(execute_operations) = self.execute_operations {
             application_permissions.execute_operations = execute_operations;
@@ -582,17 +589,23 @@ impl ApplicationPermissionsConfig {
     }
 }
 
+/// A named preset selecting which resource control policy the chain should use.
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ResourceControlPolicyConfig {
+    /// Charges nothing for any resource, with no usage limits.
     NoFees,
+    /// Uses the fees and limits that match the public Testnet.
     Testnet,
+    /// Charges only for fuel, leaving all other resources free (for testing).
     #[cfg(with_testing)]
     OnlyFuel,
+    /// Charges a small non-zero amount in every fee category (for testing).
     #[cfg(with_testing)]
     AllCategories,
 }
 
 impl ResourceControlPolicyConfig {
+    /// Converts this config into the corresponding resource control policy.
     pub fn into_policy(self) -> ResourceControlPolicy {
         match self {
             ResourceControlPolicyConfig::NoFees => ResourceControlPolicy::no_fees(),

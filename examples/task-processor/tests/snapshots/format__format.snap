@@ -1,6 +1,6 @@
 ---
 source: task-processor/tests/format.rs
-expression: "TaskProcessorApplication::formats().unwrap()"
+expression: "TaskProcessorApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
   TaskProcessorOperation:

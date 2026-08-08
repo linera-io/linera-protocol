@@ -1,6 +1,6 @@
 ---
 source: counter-no-graphql/tests/format.rs
-expression: "CounterApplication::formats().unwrap()"
+expression: "CounterApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
   CounterOperation:

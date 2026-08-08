@@ -22,6 +22,7 @@ pub struct State {
 }
 
 impl State {
+    /// Creates a new chain client [`State`] with the given pending proposal.
     pub fn new(pending_proposal: Option<PendingProposal>) -> State {
         State {
             proposal_mutex: Arc::new(Mutex::new(pending_proposal)),

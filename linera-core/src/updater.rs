@@ -7,7 +7,6 @@ use std::{
     fmt,
     hash::Hash,
     mem,
-    sync::Arc,
 };
 
 use futures::{future, Future, StreamExt};
@@ -30,9 +29,10 @@ use tokio::sync::mpsc;
 use tracing::{instrument, Level};
 
 use crate::{
-    client::{chain_client, Client},
+    client::chain_client,
     data_types::{ChainInfo, ChainInfoQuery},
     environment::Environment,
+    local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     remote_node::RemoteNode,
     LocalNodeError,
@@ -46,6 +46,59 @@ const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 
 /// A report of clock skew from a validator, sent before retrying due to `InvalidTimestamp`.
 pub type ClockSkewReport = (ValidatorPublicKey, TimeDelta);
+
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{
+        exponential_bucket_latencies, register_histogram_vec, register_int_counter_vec,
+    };
+    use prometheus::{HistogramVec, IntCounterVec};
+
+    /// Requests dispatched to each validator while communicating with a quorum.
+    ///
+    /// Incremented at dispatch rather than on completion, so the series exists even for a
+    /// validator that never answers. Subtracting the responses below from this yields the
+    /// share of requests a validator left unanswered.
+    ///
+    /// The `address` label carries the validator's gRPC URL so that dashboards and alerts can
+    /// name a validator without an out-of-band lookup of its public key. It is functionally
+    /// dependent on `validator`, so it adds no series.
+    pub(super) static QUORUM_REQUESTS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "communicate_with_quorum_requests_total",
+            "Requests dispatched to each validator while communicating with a quorum",
+            &["validator", "address"],
+        )
+    });
+
+    /// Responses received from each validator while communicating with a quorum.
+    ///
+    /// The `outcome` label is `before_quorum` when the response arrived while a quorum was
+    /// still outstanding, and `after_quorum` when it only arrived during the grace period
+    /// that follows a quorum being reached. A validator whose responses are consistently
+    /// `after_quorum` is holding up nothing yet, but it is the one that will stall
+    /// confirmation as soon as any other validator degrades.
+    pub(super) static QUORUM_RESPONSES: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "communicate_with_quorum_responses_total",
+            "Responses from each validator, by whether a quorum had already been reached",
+            &["validator", "address", "outcome"],
+        )
+    });
+
+    /// Time each validator took to respond while communicating with a quorum.
+    pub(super) static QUORUM_RESPONSE_TIME: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "communicate_with_quorum_response_time_ms",
+            "Time taken by each validator to respond while communicating with a quorum, \
+             in milliseconds",
+            &["validator", "address"],
+            exponential_bucket_latencies(60_000.0),
+        )
+    });
+}
 
 /// Used for `communicate_chain_action`
 #[derive(Clone)]
@@ -78,21 +131,29 @@ impl CommunicateAction {
     }
 }
 
-pub struct ValidatorUpdater<Env>
+/// Pushes data to a single validator to bring it up to date with the local node.
+///
+/// This deliberately holds a [`LocalNodeClient`] rather than a full client: updating another
+/// node must not mutate the client's own state. When a validator turns out to be *ahead* of the
+/// local node, the updater signals that with [`chain_client::Error::LocalNodeLagging`] and lets
+/// the caller decide whether to pull the missing state.
+pub struct RemoteNodeUpdater<Env>
 where
     Env: Environment,
 {
     pub remote_node: RemoteNode<Env::ValidatorNode>,
-    pub client: Arc<Client<Env>>,
+    pub local_node: LocalNodeClient<Env::Storage>,
     pub admin_chain_id: ChainId,
+    pub certificate_upload_batch_size: u64,
 }
 
-impl<Env: Environment> Clone for ValidatorUpdater<Env> {
+impl<Env: Environment> Clone for RemoteNodeUpdater<Env> {
     fn clone(&self) -> Self {
-        ValidatorUpdater {
+        RemoteNodeUpdater {
             remote_node: self.remote_node.clone(),
-            client: self.client.clone(),
+            local_node: self.local_node.clone(),
             admin_chain_id: self.admin_chain_id,
+            certificate_upload_batch_size: self.certificate_upload_batch_size,
         }
     }
 }
@@ -148,7 +209,23 @@ where
             }
             let execute = execute.clone();
             let remote_node = remote_node.clone();
-            Some(async move { (remote_node.public_key, execute(remote_node).await) })
+            #[cfg(with_metrics)]
+            metrics::QUORUM_REQUESTS
+                .with_label_values(&[&remote_node.public_key.to_string(), &remote_node.address()])
+                .inc();
+            Some(async move {
+                let public_key = remote_node.public_key;
+                #[cfg(with_metrics)]
+                let address = remote_node.address();
+                #[cfg(with_metrics)]
+                let request_start = Instant::now();
+                let result = execute(remote_node).await;
+                #[cfg(with_metrics)]
+                metrics::QUORUM_RESPONSE_TIME
+                    .with_label_values(&[&public_key.to_string(), &address])
+                    .observe(request_start.elapsed().as_secs_f64() * 1000.0);
+                (public_key, result)
+            })
         })
         .collect();
     let total_validators = responses.len();
@@ -161,6 +238,11 @@ where
     let mut value_scores: HashMap<K, (u64, Vec<(ValidatorPublicKey, V)>)> = HashMap::new();
     let mut error_scores = HashMap::new();
     let mut responses_received = 0;
+    #[cfg(with_metrics)]
+    let addresses: HashMap<ValidatorPublicKey, String> = validator_clients
+        .iter()
+        .map(|remote_node| (remote_node.public_key, remote_node.address()))
+        .collect();
 
     'vote_wait: while let Ok(Some((name, result))) = timeout(
         end_time.map_or(MAX_TIMEOUT, |t| t.saturating_duration_since(Instant::now())),
@@ -170,6 +252,18 @@ where
     {
         responses_received += 1;
         remaining_votes -= committee.weight(&name);
+        #[cfg(with_metrics)]
+        metrics::QUORUM_RESPONSES
+            .with_label_values(&[
+                &name.to_string(),
+                addresses.get(&name).map_or("", String::as_str),
+                if end_time.is_none() {
+                    "before_quorum"
+                } else {
+                    "after_quorum"
+                },
+            ])
+            .inc();
         match result {
             Ok(value) => {
                 let key = group_by(&value);
@@ -241,7 +335,7 @@ where
     })
 }
 
-impl<Env> ValidatorUpdater<Env>
+impl<Env> RemoteNodeUpdater<Env>
 where
     Env: Environment + 'static,
 {
@@ -291,11 +385,7 @@ where
                     self.remote_node
                         .check_blobs_not_found(certificate, &blob_ids)?;
                     // The certificate is confirmed, so the blobs must be in storage.
-                    let maybe_blobs = self
-                        .client
-                        .local_node
-                        .read_blobs_from_storage(&blob_ids)
-                        .await?;
+                    let maybe_blobs = self.local_node.read_blobs_from_storage(&blob_ids).await?;
                     let blobs = maybe_blobs.ok_or(NodeError::BlobsNotFound(blob_ids))?;
                     self.remote_node
                         .node
@@ -335,7 +425,6 @@ where
                 // The certificate is for a validated block, i.e. for our locking block.
                 // Take the missing blobs from our local chain manager.
                 let blobs = self
-                    .client
                     .local_node
                     .get_locking_blobs(blob_ids, chain_id)
                     .await?
@@ -343,7 +432,7 @@ where
                 self.remote_node.send_pending_blobs(chain_id, blobs).await?;
             }
             Err(error) => {
-                self.sync_if_needed(
+                self.sync_remote_if_needed(
                     chain_id,
                     certificate.round,
                     certificate.block().header.height,
@@ -379,14 +468,19 @@ where
             .handle_chain_info_query(query.clone())
             .await;
         if let Err(err) = &result {
-            self.sync_if_needed(chain_id, round, height, err).await?;
+            self.sync_remote_if_needed(chain_id, round, height, err)
+                .await?;
             self.warn_if_unexpected(err);
         }
         Ok(result?)
     }
 
-    /// Synchronizes either the local node or the remote node, if one of them is lagging behind.
-    async fn sync_if_needed(
+    /// Sends chain information to the remote node if it is the one lagging behind.
+    ///
+    /// If the error reveals that the *local* node is behind instead, returns
+    /// [`chain_client::Error::LocalNodeLagging`] carrying the original error: pulling remote
+    /// state is a client-level decision, not something updating another node may do.
+    async fn sync_remote_if_needed(
         &mut self,
         chain_id: ChainId,
         round: Round,
@@ -398,11 +492,12 @@ where
             NodeError::WrongRound(validator_round) if *validator_round > round => {
                 tracing::debug!(
                     address, %chain_id, %validator_round, %round,
-                    "validator is at a higher round; synchronizing",
+                    "validator is at a higher round; local node needs to synchronize",
                 );
-                self.client
-                    .synchronize_chain_state_from(&self.remote_node, chain_id)
-                    .await?;
+                return Err(chain_client::Error::LocalNodeLagging {
+                    chain_id,
+                    error: Box::new(error.clone()),
+                });
             }
             NodeError::UnexpectedBlockHeight {
                 expected_block_height,
@@ -413,11 +508,12 @@ where
                     %chain_id,
                     %expected_block_height,
                     %found_block_height,
-                    "validator is at a higher height; synchronizing",
+                    "validator is at a higher height; local node needs to synchronize",
                 );
-                self.client
-                    .synchronize_chain_state_from(&self.remote_node, chain_id)
-                    .await?;
+                return Err(chain_client::Error::LocalNodeLagging {
+                    chain_id,
+                    error: Box::new(error.clone()),
+                });
             }
             NodeError::WrongRound(validator_round) if *validator_round < round => {
                 tracing::debug!(
@@ -477,9 +573,15 @@ where
         clock_skew_sender: mpsc::UnboundedSender<ClockSkewReport>,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let chain_id = proposal.content.block.chain_id;
+        // `sent_cross_chain_updates` tracks per-origin progress for the legacy per-sender
+        // `MissingCrossChainUpdate` path (a non-upgraded validator); `synced_cross_chain_updates`
+        // is the one-shot guard for the aggregated `MissingCrossChainUpdates` path;
+        // `synced_round_and_height` is the one-shot guard for the round/height mismatch path.
         let mut sent_cross_chain_updates = BTreeMap::new();
+        let mut synced_cross_chain_updates = false;
+        let mut synced_round_and_height = false;
         let mut publisher_chain_ids_sent = BTreeSet::new();
-        let storage = self.client.local_node.storage_client();
+        let storage = self.local_node.storage_client();
         loop {
             let local_time = storage.clock().current_time();
             match self
@@ -516,39 +618,65 @@ where
                         .sleep_until(invalid_ts.block_timestamp.saturating_add(clock_skew))
                         .await;
                 }
-                Err(NodeError::WrongRound(_round)) => {
-                    // The proposal is for a different round, so we need to update the validator.
-                    // TODO: this should probably be more specific as to which rounds are retried.
+                Err(err @ (NodeError::WrongRound(_) | NodeError::UnexpectedBlockHeight { .. }))
+                    if !synced_round_and_height =>
+                {
+                    // The validator disagrees with the proposal's round or height. If it is
+                    // behind, `sync_remote_if_needed` pushes the chain and we retry; if it is
+                    // ahead, the `LocalNodeLagging` signal propagates so the caller can pull
+                    // its state and rebuild the proposal. One-shot: if the validator still
+                    // disagrees after a sync, retrying would not make progress.
+                    synced_round_and_height = true;
                     tracing::debug!(
                         remote_node = self.remote_node.address(),
                         %chain_id,
-                        "wrong round; sending chain to validator",
+                        %err,
+                        "validator disagrees on round or height; synchronizing",
                     );
-                    self.send_chain_information(
+                    self.sync_remote_if_needed(
                         chain_id,
+                        proposal.content.round,
                         proposal.content.block.height,
-                        CrossChainMessageDelivery::NonBlocking,
-                        None,
+                        &err,
                     )
                     .await?;
                 }
-                Err(NodeError::UnexpectedBlockHeight {
-                    expected_block_height,
-                    found_block_height,
-                }) if expected_block_height < found_block_height
-                    && found_block_height == proposal.content.block.height =>
-                {
-                    tracing::debug!(
-                        remote_node = self.remote_node.address(),
-                        %chain_id,
-                        "wrong height; sending chain to validator",
+                // A validator that understands the aggregated error reports *every* missing
+                // cross-chain bundle in a single `MissingCrossChainUpdates`, so we sync all of
+                // them at once and retry. If it still reports missing bundles after we synced the
+                // whole set, retrying would not make progress, so we surface the error instead of
+                // looping.
+                Err(NodeError::MissingCrossChainUpdates {
+                    chain_id: dependencies_chain_id,
+                    bundles,
+                }) if dependencies_chain_id == proposal.content.block.chain_id => {
+                    ensure!(
+                        !synced_cross_chain_updates,
+                        NodeError::ResponseHandlingError {
+                            error: format!(
+                                "validator still reports missing cross-chain updates for chain \
+                                 {dependencies_chain_id} after they were all synced"
+                            ),
+                        }
                     );
-                    // The proposal is for a later block height, so we need to update the validator.
-                    self.send_chain_information(
-                        chain_id,
-                        found_block_height,
-                        CrossChainMessageDelivery::NonBlocking,
-                        None,
+                    synced_cross_chain_updates = true;
+                    tracing::debug!(
+                        remote_node = %self.remote_node.address(),
+                        %chain_id,
+                        bundles = bundles.len(),
+                        "validator reported missing cross-chain updates; syncing them in one batch",
+                    );
+                    // Sync each reported origin chain up to the needed height, collapsing any
+                    // duplicate origins to the highest height.
+                    let mut origin_heights: BTreeMap<ChainId, BlockHeight> = BTreeMap::new();
+                    for (origin, height) in bundles {
+                        let target = height.try_add_one()?;
+                        let entry = origin_heights.entry(origin).or_insert(target);
+                        *entry = (*entry).max(target);
+                    }
+                    self.send_chain_info_up_to_heights(
+                        origin_heights,
+                        CrossChainMessageDelivery::Blocking,
                     )
                     .await?;
                 }
@@ -593,7 +721,6 @@ where
                     ensure!(!chain_ids.is_empty(), NodeError::EventsNotFound(event_ids));
                     for chain_id in chain_ids {
                         let height = self
-                            .client
                             .local_node
                             .get_next_height_to_preprocess(chain_id)
                             .await?;
@@ -609,27 +736,22 @@ where
                 Err(error @ NodeError::ChainError { .. }) => {
                     // The validator rejected the proposal because of its local chain
                     // manager state — most commonly an incompatible confirmed vote tied
-                    // to a locking block we don't yet have. Pull manager values from
-                    // this validator so the local node absorbs whatever justified the
-                    // rejection (signatures are checked locally, so the source can't
-                    // fool us), then surface the error. If our local state actually
-                    // advanced, `execute_operations` will rebuild and re-propose; if
+                    // to a locking block we don't yet have. The caller should pull
+                    // manager values from this validator so the local node absorbs
+                    // whatever justified the rejection; if the local state actually
+                    // advances, `execute_operations` will rebuild and re-propose; if
                     // not, the error propagates as usual.
                     self.warn_if_unexpected(&error);
                     tracing::debug!(
                         remote_node = self.remote_node.address(),
                         %chain_id,
                         %error,
-                        "validator rejected proposal; pulling manager state",
+                        "validator rejected proposal; manager state needs to be pulled",
                     );
-                    if let Err(sync_err) = self
-                        .client
-                        .synchronize_chain_state_from(&self.remote_node, chain_id)
-                        .await
-                    {
-                        tracing::debug!(%sync_err, "failed to pull manager state from validator");
-                    }
-                    return Err(error.into());
+                    return Err(chain_client::Error::LocalNodeLagging {
+                        chain_id,
+                        error: Box::new(error),
+                    });
                 }
                 Err(NodeError::BlobsNotFound(_) | NodeError::InactiveChain(_))
                     if !blob_ids.is_empty() =>
@@ -642,7 +764,6 @@ where
                         BTreeSet::from_iter(proposal.content.block.published_blob_ids());
                     blob_ids.retain(|blob_id| !published_blob_ids.contains(blob_id));
                     let published_blobs = self
-                        .client
                         .local_node
                         .get_proposed_blobs(chain_id, published_blob_ids.into_iter().collect())
                         .await?;
@@ -672,11 +793,7 @@ where
     }
 
     async fn update_admin_chain(&mut self) -> Result<(), chain_client::Error> {
-        let local_admin_info = self
-            .client
-            .local_node
-            .chain_info(self.admin_chain_id)
-            .await?;
+        let local_admin_info = self.local_node.chain_info(self.admin_chain_id).await?;
         Box::pin(self.send_chain_information(
             self.admin_chain_id,
             local_admin_info.next_block_height,
@@ -689,15 +806,31 @@ where
     /// Sends chain information to bring a validator up to date with a specific chain.
     ///
     /// This method performs a two-phase synchronization:
-    /// 1. **Height synchronization**: Ensures the validator has all blocks up to `target_block_height`.
+    /// 1. **Height synchronization**: sends the certificates we hold locally for the range
+    ///    `[validator_next_height, target_block_height)`, in order.
     /// 2. **Round synchronization**: If heights match, ensures the validator has proposals/certificates
     ///    for the current consensus round.
+    ///
+    /// Only certificates that are actually in our local storage are sent; heights we don't have are
+    /// silently skipped (see [`Self::read_certificates_for_heights`]). This is deliberate and is what
+    /// makes the "leave gaps on the validator side" behavior (#4181) work: a chain we merely *receive*
+    /// from is stored only at its message-bearing heights, so we push exactly those. The validator
+    /// executes the contiguous prefix and preprocesses any block that sits above a gap — enough to
+    /// deliver that block's cross-chain bundles without our ever having to send the intervening
+    /// non-message blocks (which we don't have anyway).
+    ///
+    /// Because our local storage is guaranteed to hold every block we needed to build a proposal (a
+    /// bundle can only be consumed after its ordered message-bearing predecessors were downloaded),
+    /// this is the reliable way to catch a validator up. Deriving the set to send from a
+    /// `MissingCrossChainUpdates` error instead is *not* reliable: that error lists only the bundles
+    /// the current proposal is missing and omits already-consumed ancestors, which the validator
+    /// still needs executed before it can schedule a later gap block's bundle.
     ///
     /// # Height Sync Strategy
     /// - For existing chains (target_block_height > 0):
     ///   * Optimistically sends the last certificate first (often that's all that's missing).
-    ///   * Falls back to full chain query if the validator needs more context.
-    ///   * Sends any additional missing certificates in order.
+    ///   * Falls back to a full chain query if the validator needs more context.
+    ///   * Sends any additional locally-held certificates in order.
     /// - For new chains (target_block_height == 0):
     ///   * Sends the chain description and dependencies first.
     ///   * Then queries the validator's state.
@@ -736,7 +869,7 @@ where
         // the consensus round at this height.
         let (remote_height, remote_round) = (info.next_block_height, info.manager.current_round);
         let query = ChainInfoQuery::new(chain_id).with_manager_values();
-        let local_info = match self.client.local_node.handle_chain_info_query(query).await {
+        let local_info = match self.local_node.handle_chain_info_query(query).await {
             Ok(response) => response.info,
             // If we don't have the full chain description locally, we can't help the
             // validator with round synchronization. This is not an error - the validator
@@ -757,9 +890,13 @@ where
         self.sync_consensus_round(remote_round, &manager).await
     }
 
-    /// Synchronizes a validator to a specific block height by sending missing certificates.
+    /// Synchronizes a validator to a specific block height by sending the certificates we hold.
     ///
-    /// Uses an optimistic approach: sends the last certificate first, then fills in any gaps.
+    /// Uses an optimistic approach: sends the last certificate first, then, based on the
+    /// validator's reported height, sends the earlier certificates in the range. Only the heights
+    /// we actually have in local storage are sent — any we're missing are silently skipped rather
+    /// than treated as an error, which is what leaves genuine gaps on the validator (see
+    /// [`Self::send_chain_information`] for why that is both safe and intended).
     ///
     /// Returns the [`ChainInfo`] from the validator after synchronization.
     async fn sync_chain_height(
@@ -811,7 +948,7 @@ where
             return Ok(info);
         }
 
-        let batch_size = self.client.options().certificate_upload_batch_size as usize;
+        let batch_size = self.certificate_upload_batch_size as usize;
         for chunk in heights.chunks(batch_size) {
             let certificates = self
                 .read_certificates_for_heights(chain_id, chunk.to_vec())
@@ -826,7 +963,7 @@ where
         Ok(info)
     }
 
-    /// Reads certificates for the given heights from storage.
+    /// Reads certificates for the given heights from local storage.
     ///
     /// First attempts to use the optimized `read_certificates_by_heights` method.
     /// Falls back to the traditional `get_block_hashes` + `read_certificates` approach
@@ -834,12 +971,17 @@ where
     ///
     /// When using the fallback, writes the discovered height->hash indices back to storage
     /// so subsequent lookups can use the optimized path.
+    ///
+    /// Heights we don't have are silently dropped: the returned vector contains only the
+    /// certificates actually present, so callers naturally skip any block we never downloaded
+    /// (e.g. a sender's non-message-bearing blocks). Callers must not assume the result covers
+    /// every requested height.
     async fn read_certificates_for_heights(
         &self,
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
     ) -> Result<Vec<CacheArc<GenericCertificate<ConfirmedBlock>>>, chain_client::Error> {
-        let storage = self.client.local_node.storage_client();
+        let storage = self.local_node.storage_client();
 
         // First, try the direct height-based lookup
         let certificates_by_height = storage
@@ -856,7 +998,6 @@ where
 
         // Fallback to the traditional approach
         let hashes = self
-            .client
             .local_node
             .get_block_hashes(chain_id, heights.clone())
             .await?;
@@ -1007,7 +1148,6 @@ where
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), chain_client::Error> {
         let blob_states = self
-            .client
             .local_node
             .read_blob_states_from_storage(blob_ids)
             .await?;
@@ -1026,11 +1166,12 @@ where
             .await
     }
 
-    /// Sends chain information for specific heights on multiple chains.
+    /// Sends the blocks at exactly the specified heights on multiple chains.
     ///
-    /// Unlike `send_chain_info_up_to_heights`, this method only sends the blocks at the
-    /// specified heights, not all blocks up to those heights. This is more efficient for
-    /// sparse chains where only specific blocks are needed.
+    /// Unlike [`Self::send_chain_info_up_to_heights`], this sends *only* the blocks at the given
+    /// heights, not the locally-held prefix leading up to them. Use it only when the required
+    /// blocks are fully self-describing to the validator — e.g. bringing over the specific blocks
+    /// that carry a set of blobs.
     async fn send_chain_info_at_heights(
         &self,
         chain_heights: impl IntoIterator<Item = (ChainId, BTreeSet<BlockHeight>)>,
@@ -1042,7 +1183,6 @@ where
                 // Get all block hashes for this chain at the specified heights in one call
                 let heights_vec = heights.into_iter().collect::<Vec<_>>();
                 let certificates = updater
-                    .client
                     .local_node
                     .storage_client()
                     .read_certificates_by_heights(chain_id, &heights_vec)
@@ -1065,6 +1205,8 @@ where
         Ok(())
     }
 
+    /// Brings a validator up to each given `(chain, height)` by pushing the locally-held prefix
+    /// of that chain (via [`Self::send_chain_information`]), for all chains concurrently.
     async fn send_chain_info_up_to_heights(
         &self,
         chain_heights: impl IntoIterator<Item = (ChainId, BlockHeight)>,

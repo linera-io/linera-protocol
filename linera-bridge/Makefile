@@ -90,6 +90,7 @@ build-all: build-wasm ## Build Wasm files and all docker images (debug mode)
 		--build-arg build_flag="" \
 		--build-arg build_folder=debug \
 		--build-arg build_features=scylladb \
+		--target runtime \
 		-t linera-test ..
 	cd $(DOCKER_DIR) && docker build -f ./Dockerfile.bridge \
 		--build-arg build_flag="" \

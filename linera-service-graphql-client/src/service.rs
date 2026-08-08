@@ -146,10 +146,12 @@ pub struct Block;
 )]
 pub struct Notifications;
 
+// Kept in a separate document so that the read-only query/subscription requests
+// do not carry a mutation definition (which a `--read-only` node rejects).
 #[derive(GraphQLQuery)]
 #[graphql(
     schema_path = "gql/service_schema.graphql",
-    query_path = "gql/service_requests.graphql",
+    query_path = "gql/service_mutations.graphql",
     response_derives = "Debug, Serialize, Clone"
 )]
 pub struct Transfer;

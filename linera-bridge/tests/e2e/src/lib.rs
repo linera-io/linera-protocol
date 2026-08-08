@@ -159,13 +159,18 @@ pub async fn parse_broadcast_address(
     project_name: &str,
     compose_file: &std::path::Path,
     script_name: &str,
+    contract_name: &str,
 ) -> anyhow::Result<Address> {
+    // Select by contract name rather than `.transactions[0]`: a script may
+    // deploy more than one contract (e.g. DeployFungibleBridge also deploys the
+    // initial decoder), and the target is not necessarily the first CREATE.
     let output = exec_output(
         compose,
         "foundry-tools",
         &format!(
             "CHAIN_ID=$(cast chain-id --rpc-url http://anvil:8545); \
-             jq -r '.transactions[0].contractAddress' \
+             jq -r --arg name '{contract_name}' \
+             '[.transactions[] | select(.contractName==$name)] | last | .contractAddress' \
              /contracts/broadcast/{script_name}/$CHAIN_ID/run-latest.json"
         ),
         project_name,
@@ -201,6 +206,7 @@ pub async fn deploy_linera_token(
         project_name,
         compose_file,
         "DeployLineraToken.s.sol",
+        "LineraToken",
     )
     .await
 }
@@ -235,6 +241,7 @@ pub async fn deploy_linera_token_with_supply(
         project_name,
         compose_file,
         "DeployLineraToken.s.sol",
+        "LineraToken",
     )
     .await
 }
@@ -268,6 +275,7 @@ pub async fn deploy_linera_token_with_decimals(
         project_name,
         compose_file,
         "DeployLineraToken.s.sol",
+        "LineraToken",
     )
     .await
 }
@@ -293,6 +301,10 @@ pub async fn deploy_fungible_bridge(
                  TOKEN_ADDRESS={token} \
                  FUNGIBLE_APP_ID={fungible_app_id_bytes32} \
                  BRIDGE_APP_ID={bridge_app_id_bytes32} \
+                 PAUSE_GUARDIAN=0x000000000000000000000000000000000000dead \
+                 PROPOSER=0x000000000000000000000000000000000000beef \
+                 CANCELLER=0x000000000000000000000000000000000000ca11 \
+                 TIMELOCK_DELAY=86400 \
              forge script /contracts/script/DeployFungibleBridge.s.sol \
              --root /contracts \
              --rpc-url http://anvil:8545 \
@@ -308,6 +320,7 @@ pub async fn deploy_fungible_bridge(
         project_name,
         compose_file,
         "DeployFungibleBridge.s.sol",
+        "FungibleBridge",
     )
     .await
 }
@@ -549,9 +562,11 @@ where
     E: linera_core::environment::Environment,
 {
     use linera_execution::Operation;
-    let bytes = bcs::to_bytes(&wrapped_fungible::WrappedFungibleOperation::RegisterAuthorizedCaller {
-        app_id: bridge_app_id,
-    })?;
+    let bytes = bcs::to_bytes(
+        &wrapped_fungible::WrappedFungibleOperation::RegisterAuthorizedCaller {
+            app_id: bridge_app_id,
+        },
+    )?;
     chain_client
         .execute_operations(
             vec![Operation::User {
@@ -685,4 +700,17 @@ where
     let info = chain_client.chain_info().await?;
     let hash = info.block_hash.context("chain has no blocks yet")?;
     Ok(chain_client.read_certificate(hash).await?)
+}
+
+/// Storage cache configuration used by the e2e tests.
+pub fn test_storage_cache_config() -> linera_storage::StorageCacheConfig {
+    linera_storage::StorageCacheConfig {
+        blob_cache_size: 1000,
+        confirmed_block_cache_size: 1000,
+        certificate_cache_size: 1000,
+        certificate_raw_cache_size: 1000,
+        event_cache_size: 1000,
+        block_hash_by_height_cache_size: 1000,
+        cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
+    }
 }

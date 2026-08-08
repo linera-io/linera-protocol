@@ -14,32 +14,60 @@ for display.
 
 ## How It Works
 
-The application has a single operation:
+The application's operations all carry the `owner` on whose behalf they run:
 
 ```rust
 enum Operation {
-    Write { module_id: ModuleId, value: Vec<u8> },
+    Write { owner: AccountOwner, module_id: ModuleId, blob_hash: DataBlobHash },
+    SetAdmins { owner: AccountOwner, admins: Option<Vec<AccountOwner>> },
 }
 ```
 
-When `Write` is executed, the contract:
+`Write` is intentionally kept as the first variant with the exact fields of
+[`linera_sdk::abis::formats_registry::Operation::Write`](../../linera-sdk/src/abis/formats_registry.rs),
+so that the operation produced by `linera publish-module-with-formats` decodes
+correctly here. Extra, implementation-specific admin commands (here `SetAdmins`) are
+appended after it.
 
-1. Asserts that no entry exists yet for `module_id` (entries are **immutable** —
-   first-write-wins; a `ModuleId` cannot be overwritten).
-2. Publishes `value` as an immutable [`DataBlob`](../../linera-base/src/data_types.rs)
-   via `runtime.create_data_blob(value)`.
-3. Stores the resulting `DataBlobHash` in a `MapView<ModuleId, DataBlobHash>` keyed by
-   `module_id`.
+### Authorization and remote registration
 
-The state is therefore compact (one hash per `ModuleId`), and every registered value
-benefits from the usual content-addressed deduplication of the blob layer.
+A module can be registered from any chain, but every mutation is ultimately applied on
+the application's **creation chain**, where a single admin policy is enforced:
+
+1. On the chain where the operation is submitted, the contract calls
+   `runtime.check_account_permission(owner)` to verify the declared `owner` really
+   signed (or is the caller of) the operation.
+2. If the current chain is the creation chain, the operation is executed locally.
+   Otherwise it is forwarded to the creation chain as a cross-chain `Message`.
+3. On the creation chain, the security policy is applied before any state change:
+   - if an admin set has been configured, `owner` must be one of the admins;
+   - if no admin set exists yet, the operation is allowed only when it originates
+     locally — remote requests are refused until admins are configured.
+
+This mirrors the policy used by `examples/controller`. To bootstrap, an admin first
+runs `SetAdmins` locally on the creation chain; afterwards, the listed admins can
+register modules remotely from their own chains.
+
+`Write` carries the [`DataBlobHash`](../../linera-base/src/identifiers.rs) of an
+immutable [`DataBlob`](../../linera-base/src/data_types.rs) holding the formats
+description. The caller publishes that data blob (e.g. `linera
+publish-module-with-formats` emits a `PublishDataBlob` operation in the same block);
+the contract `assert`s the blob exists and records its hash in a
+`MapView<ModuleId, DataBlobHash>` keyed by `module_id`, after checking that no entry
+exists yet — entries are **immutable** (first-write-wins; a `ModuleId` cannot be
+overwritten). Only the 32-byte hash travels to the creation chain inside the `Message`,
+so state stays compact (one hash per `ModuleId`) and identical values are
+content-addressed and deduplicated by the blob layer.
 
 The service exposes:
 
-- `query { get(moduleId: "...") }` — returns the bytes registered for `moduleId`, or
-  `null` if none. Internally, the service reads the hash from the map and then calls
-  `runtime.read_data_blob(hash)` to fetch the blob.
-- `mutation { write(moduleId: "...", value: [u8]) }` — schedules a `Write` operation.
+- `query { read(moduleId: "...") }` — returns the bytes registered for `moduleId`, or
+  `null` if none. Internally it reads the stored hash and fetches the data blob.
+- `query { admins }` — returns the configured admin accounts, or `null` if none.
+- `mutation { write(owner: "...", moduleId: "...", blobHash: "...") }` — schedules a
+  `Write` operation (the data blob must be published separately).
+- `mutation { setAdmins(owner: "...", admins: ["..."]) }` — schedules a `SetAdmins`
+  operation (pass `null` to clear the set).
 
 ## Setup and Deployment
 
@@ -98,14 +126,27 @@ echo "http://localhost:$PORT/chains/$CHAIN/applications/$LINERA_APPLICATION_ID"
 
 Open the printed URL to land in a GraphiQL session connected to the registry.
 
-To register the bytes for a module (replace `<MODULE_ID_HEX>` and `<BYTES>` accordingly;
-`ModuleId` is encoded as a hex string and `value` is a JSON array of byte values):
+To register a module's formats, first publish the formats description as a data blob
+(e.g. `linera publish-data-blob <FILE>`, which prints the `<BLOB_HASH>`). The blob file
+is the BCS serialization of the application's `Formats`; the `extract-formats` binary in
+this example turns an app's SNAP snapshot into such a file ready for
+`linera publish-data-blob`:
+
+```bash
+cargo run --bin extract-formats -- ../counter/tests/snapshots/format__format.snap counter-formats.bcs
+```
+
+Then bind the published blob to the module with the mutation below (replace
+`<MODULE_ID_HEX>`, `<OWNER>` and `<BLOB_HASH>` accordingly; `ModuleId`, `AccountOwner`
+and `DataBlobHash` are encoded as strings). `<OWNER>` must be the chain's signer; once
+an admin set is configured it must also be one of the admins:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN/applications/$LINERA_APPLICATION_ID
 mutation {
   write(
+    owner: "<OWNER>",
     moduleId: "<MODULE_ID_HEX>",
-    value: [1, 2, 3, 4]
+    blobHash: "<BLOB_HASH>"
   )
 }
 ```
@@ -114,7 +155,7 @@ To read it back:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN/applications/$LINERA_APPLICATION_ID
 query {
-  get(moduleId: "<MODULE_ID_HEX>")
+  read(moduleId: "<MODULE_ID_HEX>")
 }
 ```
 

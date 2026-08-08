@@ -15,7 +15,9 @@ use revm_context::result::{HaltReason, Output, SuccessReason};
 use revm_primitives::Log;
 use thiserror::Error;
 
+/// An error that occurred while executing an EVM application.
 #[derive(Debug, Error)]
+#[allow(missing_docs)]
 pub enum EvmExecutionError {
     #[error("Failed to load contract EVM module: {_0}")]
     LoadContractModule(#[source] anyhow::Error),

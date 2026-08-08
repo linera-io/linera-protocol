@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::data_types::{Blob, BlockHeight, Bytecode};
+use linera_base::data_types::{Blob, BlockHeight, Bytecode, Timestamp};
 #[cfg(with_testing)]
 use linera_base::vm::VmRuntime;
 use linera_views::context::MemoryContext;
@@ -9,7 +9,7 @@ use linera_views::context::MemoryContext;
 use super::*;
 use crate::{
     test_utils::dummy_chain_description, ExecutionStateView, TestExecutionRuntimeContext,
-    FLAG_ZERO_HASH,
+    FLAG_HISTORICAL_HASH, FLAG_HISTORICAL_HASH_SHADOW, FLAG_ZERO_HASH,
 };
 
 /// Returns an execution state view and a matching operation context, for epoch 1, with root
@@ -158,6 +158,190 @@ async fn hashing_test() -> anyhow::Result<()> {
     view.system.epoch.set(Epoch(1));
     // Starting from this epoch, the hash should be all zeros.
     assert_eq!(view.crypto_hash_mut().await?, zero_hash);
+
+    Ok(())
+}
+
+/// Installs a single committee at epoch 1 (the epoch `new_view_and_context` uses) whose content
+/// policy carries `flag`, so that `crypto_hash_mut` selects the corresponding hashing mode.
+fn install_committee_with_flag(
+    view: &mut ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>,
+    flag: &str,
+) {
+    let mut committee = Committee::default();
+    committee
+        .policy_mut()
+        .http_request_allow_list
+        .insert(flag.to_owned());
+    let mut committees = BTreeMap::new();
+    committees.insert(Epoch(1), committee);
+    view.system.committees.set(committees);
+    view.system.epoch.set(Epoch(1));
+}
+
+#[tokio::test]
+async fn historical_hashing_enforce_seeds_then_chains() -> anyhow::Result<()> {
+    let zero_hash = CryptoHash::from([0u8; 32]);
+    let (mut view, _) = new_view_and_context().await;
+    install_committee_with_flag(&mut view, FLAG_HISTORICAL_HASH);
+
+    // The first block seeds the rolling hash: a non-zero hash is reported and the register is
+    // populated.
+    assert!(view.historical_hash.get().is_none());
+    let seed = view.crypto_hash_mut().await?;
+    assert_ne!(seed, zero_hash);
+    let seed_raw = *view.historical_hash.get();
+    assert!(seed_raw.is_some());
+
+    // A later block with a content change extends the chain: a different, still non-zero hash,
+    // and the stored rolling hash advances.
+    view.system.timestamp.set(Timestamp::from(42));
+    let chained = view.crypto_hash_mut().await?;
+    assert_ne!(chained, zero_hash);
+    assert_ne!(chained, seed);
+    assert_ne!(*view.historical_hash.get(), seed_raw);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn historical_hashing_shadow_reports_zero_but_advances() -> anyhow::Result<()> {
+    let zero_hash = CryptoHash::from([0u8; 32]);
+    let (mut view, _) = new_view_and_context().await;
+    install_committee_with_flag(&mut view, FLAG_HISTORICAL_HASH_SHADOW);
+
+    // Shadow mode reports an all-zeros hash to consensus...
+    let reported = view.crypto_hash_mut().await?;
+    assert_eq!(reported, zero_hash);
+    // ...yet still computes and stores the rolling hash for cross-validator comparison.
+    let seed_raw = *view.historical_hash.get();
+    assert!(seed_raw.is_some());
+
+    view.system.timestamp.set(Timestamp::from(42));
+    assert_eq!(view.crypto_hash_mut().await?, zero_hash);
+    assert_ne!(*view.historical_hash.get(), seed_raw);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn legacy_hash_matches_pre_change_value() -> anyhow::Result<()> {
+    // Regression golden: with no historical/zero flag, `crypto_hash_mut` must reproduce exactly the
+    // value the pre-change `#[derive(HashableView)]` implementation produced for this fixed state.
+    // The constant was captured from the `testnet_conway` base (commit 801ca8f118) before this
+    // change. Any drift here would silently change the legacy execution-state hash, which is
+    // consensus-breaking, so this test must only change deliberately.
+    let (mut view, _) = new_view_and_context().await;
+    let recorded = CryptoHash::from([
+        146, 2, 171, 91, 66, 52, 95, 140, 217, 91, 65, 171, 135, 96, 184, 168, 137, 188, 74, 230,
+        101, 129, 37, 163, 165, 5, 233, 111, 203, 213, 151, 165,
+    ]);
+    assert_eq!(view.crypto_hash_mut().await?, recorded);
+    Ok(())
+}
+
+#[tokio::test]
+async fn historical_hashing_resets_when_deactivated() -> anyhow::Result<()> {
+    let zero_hash = CryptoHash::from([0u8; 32]);
+    let (mut view, _) = new_view_and_context().await;
+
+    // Activate and seed: the rolling hash is populated.
+    install_committee_with_flag(&mut view, FLAG_HISTORICAL_HASH);
+    assert_ne!(view.crypto_hash_mut().await?, zero_hash);
+    assert!(view.historical_hash.get().is_some());
+
+    // Deactivate (back to zero-hashing): the stored rolling hash is dropped so it cannot be
+    // extended later from a stale anchor.
+    install_committee_with_flag(&mut view, FLAG_ZERO_HASH);
+    assert_eq!(view.crypto_hash_mut().await?, zero_hash);
+    assert!(view.historical_hash.get().is_none());
+
+    // Re-activate: a fresh seed is produced (non-zero, populated again).
+    install_committee_with_flag(&mut view, FLAG_HISTORICAL_HASH);
+    assert_ne!(view.crypto_hash_mut().await?, zero_hash);
+    assert!(view.historical_hash.get().is_some());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn historical_hashing_is_deterministic() -> anyhow::Result<()> {
+    // Two runs with identical state and identical operations must agree; a different operation
+    // must diverge.
+    async fn run(timestamp: u64) -> anyhow::Result<(CryptoHash, CryptoHash)> {
+        let (mut view, _) = new_view_and_context().await;
+        install_committee_with_flag(&mut view, FLAG_HISTORICAL_HASH);
+        let seed = view.crypto_hash_mut().await?;
+        view.system.timestamp.set(Timestamp::from(timestamp));
+        let chained = view.crypto_hash_mut().await?;
+        Ok((seed, chained))
+    }
+
+    let (seed_a, chained_a) = Box::pin(run(42)).await?;
+    let (seed_b, chained_b) = Box::pin(run(42)).await?;
+    assert_eq!(seed_a, seed_b);
+    assert_eq!(chained_a, chained_b);
+
+    let (seed_c, chained_c) = Box::pin(run(99)).await?;
+    assert_eq!(seed_a, seed_c); // seed is computed before the differing mutation
+    assert_ne!(chained_a, chained_c); // the differing mutation changes the chained hash
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn historical_hashing_persists_and_chains_across_reload() -> anyhow::Result<()> {
+    use linera_views::{
+        batch::Batch, context::Context as _, store::WritableKeyValueStore as _, views::View as _,
+    };
+
+    // Flushes a view's pending changes to its (shared) store and clears the in-memory dirty state,
+    // exactly as the core save lifecycle does between blocks.
+    async fn save(view: &mut ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>) {
+        let mut batch = Batch::new();
+        view.pre_save(&mut batch).unwrap();
+        view.context().store().write_batch(batch).await.unwrap();
+        view.post_save();
+    }
+
+    // The committee lives in a `HashedLazyRegisterView`, which the ad-hoc `save` helper above does
+    // not round-trip (production persists the whole `RootView`). So the enforce flag is
+    // re-installed in memory after every reload; this is a test-harness concern, not a property of
+    // the historical hashing itself, whose rolling hash lives in a plain `RegisterView`.
+    let zero_hash = CryptoHash::from([0u8; 32]);
+
+    // Persist a chain's pre-activation content. The `historical_hash` register is never written,
+    // mirroring a chain created before activation.
+    let (mut view, _) = new_view_and_context().await;
+    let context = view.context().clone();
+    save(&mut view).await;
+
+    // Reload as a pre-activation chain: the appended field is absent in storage, so it loads as
+    // `None` without any migration (format compatibility).
+    let mut view = ExecutionStateView::load(context.clone()).await?;
+    assert!(view.historical_hash.get().is_none());
+
+    // Block 1 — seed, then persist and reload. The seeded rolling hash must survive the round-trip.
+    install_committee_with_flag(&mut view, FLAG_HISTORICAL_HASH);
+    let seed = view.crypto_hash_mut().await?;
+    assert_ne!(seed, zero_hash);
+    let seed_raw = *view.historical_hash.get();
+    assert!(seed_raw.is_some());
+    save(&mut view).await;
+    let mut view = ExecutionStateView::load(context.clone()).await?;
+    assert_eq!(*view.historical_hash.get(), seed_raw); // rolling hash round-trips
+
+    // Block 2 — mutate and chain *from the reloaded* stored hash. The result differs from the seed
+    // (the chain advanced) and persists across the next reload.
+    install_committee_with_flag(&mut view, FLAG_HISTORICAL_HASH);
+    view.system.timestamp.set(Timestamp::from(42));
+    let chained = view.crypto_hash_mut().await?;
+    assert_ne!(chained, seed);
+    assert_ne!(chained, zero_hash);
+    let chained_raw = *view.historical_hash.get();
+    save(&mut view).await;
+    let view = ExecutionStateView::load(context.clone()).await?;
+    assert_eq!(*view.historical_hash.get(), chained_raw);
 
     Ok(())
 }

@@ -820,6 +820,17 @@ where
         ..Default::default()
     };
 
+    // The whitelist also stops us from *following* the senders' event streams: with no app
+    // whitelisted, only the mandatory admin chain remains.
+    assert_eq!(
+        receiver
+            .event_stream_publishers()
+            .await?
+            .into_keys()
+            .collect::<BTreeSet<_>>(),
+        BTreeSet::from([admin_client.chain_id()]),
+    );
+
     // Receiver should not process the event.
     let certs = receiver.process_inbox().await.unwrap().0;
     assert!(certs.is_empty());
@@ -831,6 +842,20 @@ where
         ),
         ..Default::default()
     };
+
+    // Whitelisting the social app restores following both senders (plus the admin chain).
+    assert_eq!(
+        receiver
+            .event_stream_publishers()
+            .await?
+            .into_keys()
+            .collect::<BTreeSet<_>>(),
+        BTreeSet::from([
+            sender.chain_id(),
+            sender2.chain_id(),
+            admin_client.chain_id(),
+        ]),
+    );
 
     // Receiver should process the new event now.
     let certs = receiver.process_inbox().await.unwrap().0;

@@ -10,5 +10,8 @@ use task_processor::formats::TaskProcessorApplication;
 
 #[test]
 fn test_format() {
-    insta::assert_yaml_snapshot!("format", TaskProcessorApplication::formats().unwrap());
+    insta::assert_yaml_snapshot!(
+        "format",
+        TaskProcessorApplication::pruned_formats().unwrap()
+    );
 }

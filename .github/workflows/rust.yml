@@ -54,7 +54,6 @@ jobs:
               - '!docker/**'
               - '!docker_scylla/**'
               - '!configuration/**'
-              - '!kubernetes/**'
               - '!CONTRIBUTING.md'
               - '!INSTALL.md'
               - '!docs/**'
@@ -488,7 +487,9 @@ jobs:
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install cargo-rdme
       run: |
-        cargo install cargo-rdme --locked
+        # Pinned: cargo-rdme 1.5.1's lockfile pulls zmij 1.0.21, which needs
+        # Rust >= 1.88 and does not build on this branch's pinned toolchain.
+        cargo install cargo-rdme --locked --version 1.5.0
     - name: Check for outdated README.md
       run: |
         set -e
@@ -543,7 +544,6 @@ jobs:
     - name: Run clippy
       run: |
         cargo clippy --locked --all-targets --all-features --workspace --exclude linera-web
-        cargo clippy --locked --no-default-features --features kubernetes
         cargo clippy --locked --no-default-features
         cargo clippy --locked --target wasm32-unknown-unknown --no-default-features --features web-default \
           -p linera-client \

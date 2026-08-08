@@ -332,7 +332,9 @@ fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
     fct_call.abi_encode()
 }
 
+/// A user contract in a compiled EVM module.
 #[derive(Clone)]
+#[allow(missing_docs)]
 pub enum EvmContractModule {
     #[cfg(with_revm)]
     Revm { module: Vec<u8> },
@@ -392,6 +394,7 @@ impl UserContractModule for EvmContractModule {
 
 /// A user service in a compiled EVM module.
 #[derive(Clone)]
+#[allow(missing_docs)]
 pub enum EvmServiceModule {
     #[cfg(with_revm)]
     Revm { module: Vec<u8> },
@@ -1085,6 +1088,7 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
     }
 }
 
+/// An instance of a user contract running on the Revm EVM.
 pub struct RevmContractInstance<Runtime> {
     module: Vec<u8>,
     db: DatabaseRuntime<Runtime>,
@@ -1257,6 +1261,7 @@ impl<Runtime> RevmContractInstance<Runtime>
 where
     Runtime: ContractRuntime,
 {
+    /// Prepares a contract instance from its EVM module and the given runtime.
     pub fn prepare(module: Vec<u8>, runtime: Runtime) -> Self {
         let db = DatabaseRuntime::new(runtime);
         Self { module, db }
@@ -1417,6 +1422,7 @@ where
     }
 }
 
+/// An instance of a user service running on the Revm EVM.
 pub struct RevmServiceInstance<Runtime> {
     module: Vec<u8>,
     db: DatabaseRuntime<Runtime>,
@@ -1426,6 +1432,7 @@ impl<Runtime> RevmServiceInstance<Runtime>
 where
     Runtime: ServiceRuntime,
 {
+    /// Prepares a service instance from its EVM module and the given runtime.
     pub fn prepare(module: Vec<u8>, runtime: Runtime) -> Self {
         let db = DatabaseRuntime::new(runtime);
         Self { module, db }

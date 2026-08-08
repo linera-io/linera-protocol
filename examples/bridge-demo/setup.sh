@@ -137,6 +137,10 @@ CONTRACTS_DIR="${CONTRACTS_DIR:-/contracts}"
 OUTPUT_FILE="${OUTPUT_FILE:-$SCRIPT_DIR/.env.local}"
 FAUCET_URL="${FAUCET_URL:-http://localhost:8080}"
 RELAY_URL="${RELAY_URL:-http://localhost:3001}"
+# Browser-reachable EVM RPC for the frontend's read-only calls (balances, tx
+# receipts). The relay/forge use EVM_RPC_URL (the in-container `anvil` host),
+# which a browser can't resolve; the frontend reads via this localhost URL.
+BROWSER_EVM_RPC_URL="${BROWSER_EVM_RPC_URL:-http://localhost:8545}"
 # Docker container has its own solc; don't force a version download.
 FORGE_USE_SOLC=()
 
@@ -146,6 +150,19 @@ if [[ -z "$SHARED_DIR" ]]; then
 fi
 mkdir -p "$SHARED_DIR"
 echo "  Shared dir: $SHARED_DIR"
+
+# ── Invalidate this run's prior outputs ──
+# Clearing setup-complete here means a fresh setup
+# run re-gates the relay until this run finishes, while a standalone relay
+# restart keeps the existing marker and starts immediately. Also drop the stale
+# IDs/addresses this script produces so nothing reads last run's values mid-run.
+# Files written by the init containers (light-client-address, bridge-chain-id,
+# relay-owner, relay-wallet) are intentionally left untouched.
+echo "Clearing stale setup outputs..."
+dc_exec --user root foundry-tools sh -c \
+    "rm -f /shared/setup-complete /shared/wrapped-app-id /shared/bridge-app-id /shared/bridge-address"
+rm -f "$SHARED_DIR"/wrapped-app-id "$SHARED_DIR"/bridge-app-id "$SHARED_DIR"/bridge-address
+rm -f "$OUTPUT_FILE"
 
 echo "=== Bridge Demo Setup ==="
 echo ""
@@ -338,6 +355,10 @@ dc_exec foundry-tools env \
     TOKEN_ADDRESS="$TOKEN_ADDRESS" \
     FUNGIBLE_APP_ID="$APP_ID_BYTES32" \
     BRIDGE_APP_ID="$BRIDGE_APP_ID_BYTES32" \
+    PAUSE_GUARDIAN="${BRIDGE_PAUSE_GUARDIAN:-0x000000000000000000000000000000000000dEaD}" \
+    PROPOSER="${BRIDGE_PROPOSER:-0x000000000000000000000000000000000000bEEF}" \
+    CANCELLER="${BRIDGE_CANCELLER:-0x000000000000000000000000000000000000Ca11}" \
+    TIMELOCK_DELAY="${BRIDGE_TIMELOCK_DELAY:-86400}" \
     forge script /contracts/script/DeployFungibleBridge.s.sol \
     --root /contracts \
     --rpc-url "$EVM_RPC_URL" \
@@ -346,8 +367,10 @@ dc_exec foundry-tools env \
     cat /tmp/bridge-deploy.log >&2
     die "FungibleBridge deploy failed"
 }
+# DeployFungibleBridge also deploys the initial decoder, so transactions[0] is
+# the decoder; select the bridge by contract name.
 BRIDGE_ADDRESS=$(dc_exec foundry-tools \
-    jq -r '.transactions[0].contractAddress' \
+    jq -r '[.transactions[] | select(.contractName=="FungibleBridge")] | last | .contractAddress' \
     "/contracts/broadcast/DeployFungibleBridge.s.sol/${EVM_CHAIN_ID_DECIMAL}/run-latest.json" \
     | tr -d '[:space:]')
 validate_eth_address "FungibleBridge address" "$BRIDGE_ADDRESS"
@@ -360,9 +383,14 @@ echo "$BRIDGE_ADDRESS" > "$SHARED_DIR/bridge-address"
 
 # ── 8. Register the bridge ↔ wrapped relationship on both sides ──
 echo "Registering the bridge as the wrapped-fungible authorized caller..."
-# BCS: WrappedFungibleOperation::RegisterAuthorizedCaller (variant 8) + 32-byte
-# bridge app ID. Submitted on the WRAPPED app, on the mint (bridge) chain — the
-# relay wallet owns that chain.
+# WrappedFungibleOperation::RegisterAuthorizedCaller + 32-byte bridge app ID,
+# submitted on the WRAPPED app, on the mint (bridge) chain — the relay wallet
+# owns that chain. The operation enum is plain BCS-serialized, so the wire format
+# is the ULEB128 variant index followed by the BCS-encoded fields.
+# RegisterAuthorizedCaller is variant 8 (index from the enum order in
+# linera-sdk/src/abis/wrapped_fungible.rs) → 0x08, and `app_id: ApplicationId`
+# BCS-encodes as its 32-byte application_description_hash. Update the index if the
+# variant order ever changes.
 REGISTER_CALLER_HEX="08${BRIDGE_APP_ID}"
 dc_exec linera-network env \
     LINERA_WALLET=/shared/relay-wallet/wallet.json \
@@ -374,7 +402,10 @@ dc_exec linera-network env \
     --chain-id "$BRIDGE_CHAIN_ID" 2>&1
 
 echo "Registering FungibleBridge address in evm-bridge..."
-# BCS: BridgeOperation::RegisterFungibleBridge (variant 2) + 20-byte EVM address.
+# BridgeOperation::RegisterFungibleBridge + 20-byte EVM address. Same plain-BCS
+# encoding as above: RegisterFungibleBridge is variant 2 (see the enum order in
+# linera-bridge/src/abi.rs) → 0x02, and `address: [u8; 20]` BCS-encodes as the
+# raw 20 address bytes. Update the index if the variant order ever changes.
 REGISTER_BRIDGE_HEX="02${BRIDGE_ADDR_HEX}"
 dc_exec linera-network env \
     LINERA_WALLET=/shared/relay-wallet/wallet.json \
@@ -411,6 +442,7 @@ LINERA_BRIDGE_ADDRESS=$BRIDGE_ADDRESS
 LINERA_TOKEN_ADDRESS=$TOKEN_ADDRESS
 LINERA_BRIDGE_CHAIN_ID=$BRIDGE_CHAIN_ID
 LINERA_EVM_CHAIN_ID=$EVM_CHAIN_ID
+LINERA_EVM_RPC_URL=$BROWSER_EVM_RPC_URL
 EOF
 
 # Write setup-complete marker so the relay knows it's safe to start.

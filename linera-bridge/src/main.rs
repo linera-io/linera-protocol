@@ -3,6 +3,11 @@
 
 //! CLI tool for Linera EVM bridge operations.
 
+// The binary's crate root needs its own limit (the library's does not apply here);
+// monomorphizing the deeply recursive client futures with the bridge's storage stack
+// otherwise overflows the default of 128.
+#![recursion_limit = "512"]
+
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -30,6 +35,16 @@ struct InitLightClientOptions {
     /// Path to write the constructor args JSON file
     #[arg(long, default_value = "light-client-args.json")]
     output: PathBuf,
+
+    /// Pause-guardian address (0x-prefixed) that can emergency-pause
+    /// `registerBlock`. Governance role; cannot move funds.
+    #[arg(long)]
+    pause_guardian: String,
+
+    /// Proposer address (0x-prefixed) that gates `expireEpochsBelow`.
+    /// Governance multisig.
+    #[arg(long)]
+    proposer: String,
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -122,6 +137,21 @@ struct ServeOptions {
     /// Defaults to `bridge_relay.sqlite3` next to the RocksDB storage directory.
     #[arg(long)]
     sqlite_path: Option<std::path::PathBuf>,
+
+    /// How often to poll `eth_getTransactionReceipt` while waiting for a
+    /// settlement tx, in milliseconds (default 4000). The relay polls the
+    /// receipt directly rather than using alloy's block heartbeat, so this is
+    /// the confirmation-detection cadence; lower it (e.g. to a node's block
+    /// time) for faster local settlement.
+    #[arg(long)]
+    evm_poll_interval_ms: Option<u64>,
+
+    /// Maximum block range per `eth_getLogs` query during deposit scanning.
+    /// Lower this for RPC providers that cap the range (e.g. 2000 for the
+    /// public Base Sepolia RPC; Alchemy's free tier allows only 10). Larger
+    /// values catch up faster on providers that permit them.
+    #[arg(long, default_value = "2000")]
+    max_log_block_range: u64,
 }
 
 fn main() -> Result<()> {
@@ -166,6 +196,9 @@ impl ServeOptions {
             self.monitor_start_block,
             self.max_retries,
             self.sqlite_path.as_deref(),
+            self.evm_poll_interval_ms
+                .map(std::time::Duration::from_millis),
+            self.max_log_block_range,
         ))
         .await
     }
@@ -282,6 +315,8 @@ impl InitLightClientOptions {
             "weights": weights,
             "admin_chain_id": format!("0x{}", alloy_primitives::hex::encode(admin_chain_bytes)),
             "epoch": resp.data.current_epoch,
+            "pause_guardian": self.pause_guardian,
+            "proposer": self.proposer,
         });
 
         let json_str = serde_json::to_string_pretty(&result)?;

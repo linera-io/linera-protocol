@@ -1082,6 +1082,163 @@ where
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
+async fn test_proposal_batches_missing_dependency_catch_up<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    // Regression test for the hub-chain freeze fixed by the aggregated
+    // `MissingCrossChainUpdates` error. A block that consumes incoming bundles from several
+    // sender chains is proposed to a validator that is behind on *all* of those senders. The
+    // validator must report every missing sender at once and the client must catch them up in
+    // a single batch, instead of
+    // the legacy one-rejection-and-round-trip-per-sender loop that serialized into multi-minute
+    // stalls. The test exercises the client-side batching/termination logic in `updater.rs`,
+    // which the worker- and gRPC-level unit tests in this PR do not cover.
+    let signer = InMemorySigner::new(None);
+    // Zero default-faulty validators so the only unavailable validators are the ones this test
+    // deliberately takes offline below; the quorum is still three out of four.
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+
+    // Three independent sender chains and one recipient ("hub") chain. The committee has four
+    // validators with a quorum of three.
+    let sender1 = builder.add_root_chain(1, Amount::from_tokens(2)).await?;
+    let sender2 = builder.add_root_chain(2, Amount::from_tokens(2)).await?;
+    let sender3 = builder.add_root_chain(3, Amount::from_tokens(2)).await?;
+    let recipient = builder.add_root_chain(4, Amount::ZERO).await?;
+    let recipient_id = recipient.chain_id();
+
+    // Phase A: validator 3 is unavailable while the senders transfer to the recipient. In the
+    // single-process harness a validator only delivers a cross-chain message to the recipient's
+    // inbox when it handles the sender's certificate, so validator 3 ends up missing both the
+    // sender blocks and the resulting bundles in the recipient's inbox. The transfers still
+    // reach the quorum {0, 1, 2}.
+    builder.set_fault_type([3], FaultType::OfflineWithInfo);
+    for sender in [&sender1, &sender2, &sender3] {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::ONE,
+                Account::chain(recipient_id),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+
+    // The recipient learns about all three incoming bundles (and preprocesses the sender blocks
+    // into its local storage) from the honest quorum.
+    recipient.synchronize_from_validators().await?;
+
+    // Phase B: validator 3 comes back, but validator 2 — one of the validators that *does* have
+    // the sender blocks — goes offline. The recipient's block now needs validator 3's vote to
+    // reach a quorum {0, 1, 3}, so the updater cannot route around validator 3: it must catch it
+    // up on every missing sender before validator 3 can accept the proposal.
+    builder.set_fault_type([3], FaultType::Honest);
+    builder.set_fault_type([2], FaultType::Offline);
+
+    // Consume all three bundles in a single block. Validator 3 rejects the proposal with an
+    // aggregated `MissingCrossChainUpdates` listing all three senders; the client syncs them in
+    // one batch and the block is confirmed.
+    recipient.process_inbox().await?;
+
+    assert_eq!(
+        recipient.local_balance().await.unwrap(),
+        Amount::from_tokens(3),
+    );
+    // A single block consumed all three bundles (height 1, not 3).
+    assert_eq!(
+        recipient.chain_info().await?.next_block_height,
+        BlockHeight::from(1),
+    );
+    assert!(recipient.pending_proposal().await.is_none());
+
+    // The previously-lagging validator 3 was caught up and voted: the block reached the quorum
+    // {0, 1, 3} (validator 2 is offline and is skipped by the check).
+    builder
+        .check_that_validators_have_certificate(recipient_id, BlockHeight::ZERO, 3)
+        .await
+        .unwrap();
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_proposal_catch_up_with_sender_gap<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    // A lagging validator must be caught up on a sender that has a *gap* from the recipient's
+    // perspective: sender block 0 messages the recipient, block 1 does not, block 2 does. The
+    // recipient consumes those two bundles in two separate blocks, so the second proposal only
+    // references sender block 2 — whose bundle can only be scheduled once block 0 is executed.
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let sender_id = sender.chain_id();
+    let recipient_id = recipient.chain_id();
+
+    // Validator 3 is offline while the sender builds a gapped chain and the recipient consumes
+    // the first bundle.
+    builder.set_fault_type([3], FaultType::OfflineWithInfo);
+
+    // Sender block 0 -> recipient.
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+    recipient.synchronize_from_validators().await?;
+    recipient.process_inbox().await?; // recipient block 0 consumes sender block 0's bundle
+
+    // Sender block 1 -> itself (no message to the recipient: the gap), block 2 -> recipient.
+    sender
+        .transfer_to_account(AccountOwner::CHAIN, Amount::ONE, Account::chain(sender_id))
+        .await
+        .unwrap_ok_committed();
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(3),
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+    recipient.synchronize_from_validators().await?;
+
+    // Validator 3 comes back; validator 2 goes offline so the recipient's next block needs
+    // validator 3's vote — the updater must catch it up on the sender across the gap.
+    builder.set_fault_type([3], FaultType::Honest);
+    builder.set_fault_type([2], FaultType::Offline);
+
+    recipient.process_inbox().await?; // recipient block 1 consumes sender block 2's bundle
+
+    assert_eq!(
+        recipient.local_balance().await.unwrap(),
+        Amount::from_tokens(4),
+    );
+    assert_eq!(
+        recipient.chain_info().await?.next_block_height,
+        BlockHeight::from(2),
+    );
+    builder
+        .check_that_validators_have_certificate(recipient_id, BlockHeight::from(1), 3)
+        .await
+        .unwrap();
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
 async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances<B>(
     storage_builder: B,
 ) -> anyhow::Result<()>
@@ -1300,6 +1457,111 @@ where
     Ok(())
 }
 
+/// Tests that a client whose local view of the admin chain is stale can still use a blob
+/// whose publishing certificate was signed by a committee from an epoch the client has
+/// not heard of yet.
+///
+/// The blob-recovery path downloads the publishing certificate from a validator, but
+/// validating it locally yields `CheckCertificateResult::FutureEpoch`. The client must
+/// react by catching up on the admin chain and retrying, instead of failing on the
+/// unknown epoch.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_stale_client_reads_blob_published_in_future_epoch<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let admin = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+    let publisher = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let stale = builder.add_root_chain(2, Amount::from_tokens(3)).await?;
+    let validators = builder.initial_committee.validators().clone();
+
+    // Move the network to epoch 1. The publisher catches up; `stale` does not.
+    let committee = Committee::new(validators, ResourceControlPolicy::default());
+    admin.stage_new_committee(committee).await?;
+    publisher.synchronize_from_validators().await?;
+    publisher.process_inbox().await?;
+    assert_eq!(publisher.chain_info().await?.epoch, Epoch::from(1));
+    assert_eq!(stale.chain_info().await?.epoch, Epoch::ZERO);
+
+    // Publish a data blob under the epoch-1 committee.
+    let blob_bytes = b"future-epoch blob".to_vec();
+    let blob_id = Blob::new(BlobContent::new_data(blob_bytes.clone())).id();
+    let certificate = publisher
+        .publish_data_blob(blob_bytes)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(certificate.block().header.epoch, Epoch::from(1));
+
+    // The stale client needs the blob: it is missing locally, so the client downloads
+    // the publishing certificate from a validator and must accept it after catching up
+    // on the admin chain, rather than choking on the unknown epoch.
+    stale
+        .read_data_blob(blob_id.hash)
+        .await
+        .unwrap_ok_committed();
+
+    Ok(())
+}
+
+/// Like `test_stale_client_reads_blob_published_in_future_epoch`, but one validator is
+/// offline while the stale client catches up. The admin-chain self-heal races the
+/// reachable validators, so a single unresponsive one must not prevent recovery.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_stale_client_reads_future_epoch_blob_with_offline_validator<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let admin = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+    let publisher = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let stale = builder.add_root_chain(2, Amount::from_tokens(3)).await?;
+    let validators = builder.initial_committee.validators().clone();
+
+    // Move the network to epoch 1 (the three remaining validators still form a quorum).
+    // The publisher catches up; `stale` does not.
+    let committee = Committee::new(validators, ResourceControlPolicy::default());
+    admin.stage_new_committee(committee).await?;
+    publisher.synchronize_from_validators().await?;
+    publisher.process_inbox().await?;
+    assert_eq!(publisher.chain_info().await?.epoch, Epoch::from(1));
+    assert_eq!(stale.chain_info().await?.epoch, Epoch::ZERO);
+
+    // Publish a data blob under the epoch-1 committee.
+    let blob_bytes = b"future-epoch blob".to_vec();
+    let blob_id = Blob::new(BlobContent::new_data(blob_bytes.clone())).id();
+    let certificate = publisher
+        .publish_data_blob(blob_bytes)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(certificate.block().header.epoch, Epoch::from(1));
+
+    // Take one validator offline. The stale client's admin-chain catch-up still succeeds
+    // against the reachable ones.
+    builder.set_fault_type([3], FaultType::Offline);
+
+    stale
+        .read_data_blob(blob_id.hash)
+        .await
+        .unwrap_ok_committed();
+
+    Ok(())
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[test_log::test(tokio::test)]
@@ -1507,8 +1769,7 @@ where
         .await;
     assert_matches!(
         result,
-        Err(chain_client::Error::RemoteNodeError(NodeError::BlobsNotFound(not_found_blob_ids)))
-            if not_found_blob_ids == [blob0_id]
+        Err(chain_client::Error::CannotDownloadBlob(blob_id)) if blob_id == blob0_id
     );
 
     // Take one validator down
@@ -2309,6 +2570,135 @@ where
             );
         }
     }
+
+    Ok(())
+}
+
+/// The updater must signal `LocalNodeLagging` — rather than pushing chain information —
+/// when a validator rejects a proposal because it is *ahead* of the proposal's round or
+/// height.
+///
+/// Drives a `RemoteNodeUpdater` directly. A full client cannot reach this state without
+/// clock skew: whenever validators advanced by timeout, the shared clock has also expired
+/// the client's own round, so the client requests a timeout certificate before ever
+/// proposing at the stale round.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_stale_proposal_signals_local_node_lagging<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use linera_chain::test::{make_first_block, BlockTestExt as _};
+
+    use crate::{
+        local_node::LocalNodeClient,
+        remote_node::RemoteNode,
+        test_utils::NodeProvider,
+        updater::{CommunicateAction, RemoteNodeUpdater},
+        worker::WorkerState,
+        ChainWorkerConfig,
+    };
+
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let client = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let chain_id = client.chain_id();
+    let owner0 = client.identity().await.unwrap();
+    let owner1: AccountOwner = builder.signer.generate_new().into();
+
+    // Set up a multi-owner chain with single-leader rounds only.
+    let owners = [(owner0, 100), (owner1, 100)];
+    let ownership = ChainOwnership::multiple(owners, 0, TimeoutConfig::default());
+    client.change_ownership(ownership).await.unwrap();
+    let info = client.chain_info().await.unwrap();
+
+    // Advance the validators by two rounds, recording each round's leader: proposals must
+    // be signed by their round's leader for the round check to even be reached. The stale
+    // proposal targets the intermediate round rather than `SingleLeader(0)`, whose
+    // obsolete proposals are rejected with `InsufficientRound` instead of `WrongRound`.
+    let client2 = builder
+        .make_client(chain_id, None, BlockHeight::ZERO)
+        .await?;
+    client2.synchronize_from_validators().await?;
+    let manager = client2.chain_info().await.unwrap().manager;
+    clock.set(manager.round_timeout.unwrap());
+    client2.request_leader_timeout().await.unwrap();
+    let manager = client2.chain_info().await.unwrap().manager;
+    let (stale_round, stale_leader) = (manager.current_round, manager.leader.unwrap());
+    assert_matches!(stale_round, Round::SingleLeader(n) if n >= 1);
+    clock.set(manager.round_timeout.unwrap());
+    client2.request_leader_timeout().await.unwrap();
+    let manager = client2.chain_info().await.unwrap().manager;
+    let (validator_round, validator_leader) = (manager.current_round, manager.leader.unwrap());
+
+    // Drive the updater directly against an honest validator (validator 0 is the faulty
+    // one). An empty local node is enough: a validator that is ahead must produce the
+    // signal before anything is read from the local node.
+    let state = WorkerState::new(
+        builder.make_storage().await?,
+        ChainWorkerConfig::default(),
+        None,
+    );
+    let node = builder.node(1);
+    let mut updater =
+        RemoteNodeUpdater::<crate::environment::Impl<B::Storage, NodeProvider<B::Storage>>> {
+            remote_node: RemoteNode {
+                public_key: node.name(),
+                node,
+            },
+            local_node: LocalNodeClient::new(state),
+            admin_chain_id: builder.admin_chain_id(),
+            certificate_upload_batch_size: 100,
+        };
+    let submit = |proposal| {
+        let (clock_skew_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        CommunicateAction::SubmitBlock {
+            proposal: Box::new(proposal),
+            blob_ids: vec![],
+            clock_skew_sender,
+        }
+    };
+
+    // A proposal in an older round than the validator's: `WrongRound`, validator ahead.
+    let mut block = make_first_block(chain_id);
+    block.height = info.next_block_height;
+    block.previous_block_hash = info.block_hash;
+    block.timestamp = clock.current_time();
+    let proposal = block
+        .clone()
+        .into_proposal_with_round(stale_leader, &builder.signer, stale_round)
+        .await?;
+    let result = updater.send_chain_update(submit(proposal)).await;
+    assert_matches!(
+        result,
+        Err(chain_client::Error::LocalNodeLagging { chain_id: id, error })
+            if id == chain_id && matches!(*error, NodeError::WrongRound(round) if round == validator_round)
+    );
+
+    // A proposal at an older height than the validator's: `UnexpectedBlockHeight`,
+    // validator ahead.
+    block.height = BlockHeight::ZERO;
+    block.previous_block_hash = None;
+    let proposal = block
+        .into_proposal_with_round(validator_leader, &builder.signer, validator_round)
+        .await?;
+    let result = updater.send_chain_update(submit(proposal)).await;
+    assert_matches!(
+        result,
+        Err(chain_client::Error::LocalNodeLagging { chain_id: id, error })
+            if id == chain_id
+                && matches!(
+                    *error,
+                    NodeError::UnexpectedBlockHeight {
+                        expected_block_height: BlockHeight(1),
+                        found_block_height: BlockHeight(0),
+                    }
+                )
+    );
 
     Ok(())
 }

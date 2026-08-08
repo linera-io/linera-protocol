@@ -14,11 +14,13 @@ use current_platform::CURRENT_PLATFORM;
 use fs_err::File;
 use tracing::debug;
 
+/// A Linera application project on disk, rooted at a given directory.
 pub struct Project {
     root: PathBuf,
 }
 
 impl Project {
+    /// Creates a new application project from the template, scaffolding its files.
     pub fn create_new(name: &str, linera_root: Option<&Path>) -> Result<Self> {
         ensure!(
             !name.contains(std::path::is_separator),
@@ -70,6 +72,7 @@ impl Project {
         Ok(Self { root })
     }
 
+    /// Opens an existing application project at the given root directory.
     pub fn from_existing_project(root: PathBuf) -> Result<Self> {
         ensure!(
             root.exists(),
@@ -265,6 +268,7 @@ impl Project {
         (linera_sdk_dep, linera_sdk_dev_dep)
     }
 
+    /// Builds the project's contract and service to Wasm, returning their bytecode paths.
     pub fn build(&self, name: Option<String>) -> Result<(PathBuf, PathBuf), anyhow::Error> {
         let name = match name {
             Some(name) => name,

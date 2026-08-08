@@ -1,6 +1,6 @@
 {
   "name": "@linera/client",
-  "version": "0.15.18",
+  "version": "0.15.20",
   "description": "Web client for the Linera blockchain",
   "publishConfig": {
     "access": "public"
@@ -18,6 +18,7 @@
   "scripts": {
     "install": "true",
     "build": "bash build.bash --release",
+    "clean": "rm -rf dist",
     "prepare": "pnpm build",
     "lint": "pnpm build && cargo fmt --check && cargo clippy",
     "test": "pnpm exec vitest --run",

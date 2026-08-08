@@ -14,6 +14,7 @@ use tracing::info;
 
 use crate::common::{get_address, BadNotificationKind, BlockId, ExporterError};
 
+/// The gRPC service that receives block notifications and forwards them to the block processor.
 pub struct ExporterService {
     block_processor_sender: UnboundedSender<BlockId>,
 }
@@ -55,12 +56,14 @@ impl NotifierService for ExporterService {
 }
 
 impl ExporterService {
+    /// Creates a new exporter service forwarding notifications to the given sender.
     pub fn new(sender: UnboundedSender<BlockId>) -> ExporterService {
         ExporterService {
             block_processor_sender: sender,
         }
     }
 
+    /// Runs the notification server until the cancellation token is triggered.
     pub async fn run(
         self,
         cancellation_token: CancellationToken,

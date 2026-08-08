@@ -42,7 +42,7 @@ formats for a given application:
   application itself.
 
 When both are set, the explorer will, for each user application it observes,
-issue `query { get(moduleId: "<hex>") }` against the registry. If the registry
+issue `query { read(moduleId: "<hex>") }` against the registry. If the registry
 returns a payload, the explorer deserializes it as `Formats` and uses it to
 decode BCS bytes shown in the Applications and block detail views.
 

@@ -7,9 +7,10 @@ mod state;
 
 use std::sync::Arc;
 
-use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
+use async_graphql::{ComplexObject, Context, EmptySubscription, Schema};
+use formats_registry::{FormatsRegistryAbi, Operation};
 use linera_sdk::{
-    abis::formats_registry::{FormatsRegistryAbi, Operation},
+    graphql::GraphQLMutationRoot,
     linera_base_types::{ModuleId, WithServiceAbi},
     views::View,
     Service, ServiceRuntime,
@@ -41,43 +42,30 @@ impl Service for FormatsRegistryService {
         }
     }
 
-    async fn handle_query(&self, request: Request) -> Response {
-        let schema = Schema::build(
-            QueryRoot {
-                state: self.state.clone(),
-            },
-            MutationRoot {
-                runtime: self.runtime.clone(),
-            },
+    async fn handle_query(&self, query: Self::Query) -> Self::QueryResponse {
+        log::info!("Handling query on chain {}", self.runtime.chain_id());
+        Schema::build(
+            self.state.clone(),
+            Operation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
-        .finish();
-        schema.execute(request).await
+        .data(self.runtime.clone())
+        .finish()
+        .execute(query)
+        .await
     }
 }
 
-struct QueryRoot {
-    state: Arc<FormatsRegistryState>,
-}
-
-#[Object]
-impl QueryRoot {
-    /// Returns the bytes registered for the given module, or `None` if the
-    /// module has no entry yet.
-    async fn get(&self, module_id: ModuleId) -> Option<Vec<u8>> {
-        self.state.formats.get(&module_id).await.unwrap()
-    }
-}
-
-struct MutationRoot {
-    runtime: Arc<ServiceRuntime<FormatsRegistryService>>,
-}
-
-#[Object]
-impl MutationRoot {
-    async fn write(&self, module_id: ModuleId, value: Vec<u8>) -> [u8; 0] {
-        self.runtime
-            .schedule_operation(&Operation::Write { module_id, value });
-        []
+#[ComplexObject]
+impl FormatsRegistryState {
+    /// Returns the bytes registered for the given module, or `None` if the module
+    /// has no entry yet. Reads the registered hash from state and fetches the
+    /// corresponding data blob.
+    async fn read(&self, ctx: &Context<'_>, module_id: ModuleId) -> Option<Vec<u8>> {
+        let blob_hash = self.formats.get(&module_id).await.expect("storage")?;
+        let runtime = ctx
+            .data::<Arc<ServiceRuntime<FormatsRegistryService>>>()
+            .expect("the runtime is available in the GraphQL context");
+        Some(runtime.read_data_blob(blob_hash))
     }
 }

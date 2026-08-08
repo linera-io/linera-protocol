@@ -1,23 +1,8 @@
 ---
 source: controller/tests/format.rs
-expression: "ControllerApplication::formats().unwrap()"
+expression: "ControllerApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
-  AccountOwner:
-    ENUM:
-      0:
-        Reserved:
-          NEWTYPE: U8
-      1:
-        Address32:
-          NEWTYPE:
-            TYPENAME: CryptoHash
-      2:
-        Address20:
-          NEWTYPE:
-            TUPLEARRAY:
-              CONTENT: U8
-              SIZE: 20
   ChainId:
     NEWTYPESTRUCT:
       TYPENAME: CryptoHash
@@ -79,11 +64,6 @@ REGISTRY:
                     - TYPENAME: ChainId
                     - SEQ:
                         TYPENAME: ChainId
-  CryptoHash:
-    NEWTYPESTRUCT:
-      TUPLEARRAY:
-        CONTENT: U8
-        SIZE: 32
   DataBlobHash:
     NEWTYPESTRUCT:
       TYPENAME: CryptoHash

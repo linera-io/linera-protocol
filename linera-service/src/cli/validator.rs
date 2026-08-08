@@ -46,9 +46,13 @@ impl FromStr for Votes {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Spec {
+    /// The validator's public key, identifying it on the network.
     pub public_key: ValidatorPublicKey,
+    /// The public key of the validator's chain account.
     pub account_key: AccountPublicKey,
+    /// The network address at which the validator can be reached.
     pub network_address: url::Url,
+    /// The voting weight assigned to the validator.
     #[serde(default)]
     pub votes: Votes,
 }
@@ -57,8 +61,11 @@ pub struct Spec {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Change {
+    /// The new public key for the validator's chain account.
     pub account_key: AccountPublicKey,
+    /// The new network address at which the validator can be reached.
     pub address: url::Url,
+    /// The new voting weight assigned to the validator.
     #[serde(default)]
     pub votes: Votes,
 }
@@ -73,11 +80,16 @@ pub type BatchFile = HashMap<ValidatorPublicKey, Option<Change>>;
 /// Structure for batch validator queries from JSON file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryBatch {
+    /// The validators to query.
     pub validators: Vec<Spec>,
 }
 
 /// Validator subcommands.
+// Each variant delegates to a documented args struct; giving the variant its own
+// doc comment would shadow that struct's richer `--help` text, so `missing_docs`
+// is allowed here rather than duplicating those docs.
 #[derive(Debug, Clone, clap::Subcommand)]
+#[allow(missing_docs)]
 pub enum Command {
     Add(Add),
     BatchQuery(BatchQuery),
@@ -102,7 +114,7 @@ pub struct Add {
     /// Account public key for receiving payments and rewards
     #[arg(long)]
     account_key: AccountPublicKey,
-    /// Network address where the validator can be reached (e.g., grpcs://host:port)
+    /// Network address where the validator can be reached (e.g., grpcs:host:port)
     #[arg(long)]
     address: url::Url,
     /// Voting weight for consensus (default: 1)
@@ -170,7 +182,7 @@ pub struct List {
 /// view of the blockchain state, including block height and committee information.
 #[derive(Debug, Clone, clap::Parser)]
 pub struct Query {
-    /// Network address of the validator (e.g., grpcs://host:port)
+    /// Network address of the validator (e.g., grpcs:host:port)
     address: String,
     /// Chain ID to query about (defaults to default chain)
     #[arg(long)]
@@ -186,7 +198,7 @@ pub struct Query {
 /// view of the blockchain.
 #[derive(Debug, Clone, clap::Parser)]
 pub struct QueryBlock {
-    /// Network address of the validator (e.g., grpcs://host:port)
+    /// Network address of the validator (e.g., grpcs:host:port)
     address: String,
     /// Chain ID to query about (defaults to default chain)
     #[arg(long)]
@@ -216,7 +228,7 @@ pub struct Remove {
 /// ensuring the validator has up-to-date information about specified chains.
 #[derive(Debug, Clone, clap::Parser)]
 pub struct Sync {
-    /// Network address of the validator to sync (e.g., grpcs://host:port)
+    /// Network address of the validator to sync (e.g., grpcs:host:port)
     address: String,
     /// Chain IDs to synchronize (defaults to all chains in wallet)
     #[arg(long)]

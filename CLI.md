@@ -33,6 +33,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera list-events-from-index`↴](#linera-list-events-from-index)
 * [`linera publish-data-blob`↴](#linera-publish-data-blob)
 * [`linera read-data-blob`↴](#linera-read-data-blob)
+* [`linera describe-application`↴](#linera-describe-application)
 * [`linera create-application`↴](#linera-create-application)
 * [`linera publish-and-create`↴](#linera-publish-and-create)
 * [`linera keygen`↴](#linera-keygen)
@@ -112,6 +113,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `list-events-from-index` — Print events from a specific chain and stream from a specified index
 * `publish-data-blob` — Publish a data blob of binary data
 * `read-data-blob` — Verify that a data blob is readable
+* `describe-application` — Describe an existing application: print its `ApplicationDescription` (module ID, creator chain, parameters and required dependencies) as JSON. The description is content-addressed and fetched from the validators, so the application need not be registered on the wallet's default chain
 * `create-application` — Create an application
 * `publish-and-create` — Create an application, and publish the required module
 * `keygen` — Create an unassigned key pair
@@ -187,10 +189,10 @@ Client implementation and command-line tool for the Linera blockchain
   - `ignore`:
     Don't include any messages in blocks, and don't make any decision whether to accept or reject
 
-* `--restrict-chain-ids-to <RESTRICT_CHAIN_IDS_TO>` — A set of chains to restrict incoming messages from. By default, messages from all chains are accepted. To reject messages from all chains, specify an empty string
+* `--restrict-chain-ids-to <RESTRICT_CHAIN_IDS_TO>` — A set of chains to restrict incoming messages and events from. By default, messages and events from all chains are accepted. To reject all of them, specify an empty string. The admin chain's event stream is always followed regardless of this setting
 * `--reject-message-bundles-without-application-ids <REJECT_MESSAGE_BUNDLES_WITHOUT_APPLICATION_IDS>` — A set of application IDs. If specified, only bundles with at least one message from one of these applications will be accepted
 * `--reject-message-bundles-with-other-application-ids <REJECT_MESSAGE_BUNDLES_WITH_OTHER_APPLICATION_IDS>` — A set of application IDs. If specified, only bundles where all messages are from one of these applications will be accepted
-* `--process-events-from-application-ids <PROCESS_EVENTS_FROM_APPLICATION_IDS>` — A set of application IDs. If specified, only events coming from streams created by applications from this set will be processed
+* `--process-events-from-application-ids <PROCESS_EVENTS_FROM_APPLICATION_IDS>` — A set of application IDs. If specified, only event streams created by applications from this set are processed and followed. The admin chain's event stream is always followed
 * `--never-reject-application-ids <NEVER_REJECT_APPLICATION_IDS>` — A set of application IDs whose messages must never be rejected. Bundles whose messages are all from one of these applications bypass the other rejection rules (except `--restrict-chain-ids-to`), and on execution failure they (and subsequent bundles from the same sender) are removed from the block for later retry instead of being rejected, with a warning logged. Bundles that contain any message from an application not on this list can be rejected
 * `--timings` — Enable timing reports during operations
 * `--timing-interval <TIMING_INTERVAL>` — Interval in seconds between timing reports (defaults to 5)
@@ -199,10 +201,10 @@ Client implementation and command-line tool for the Linera blockchain
 * `--quorum-grace-period <QUORUM_GRACE_PERIOD>` — An additional delay, after reaching a quorum, to wait for additional validator signatures, as a fraction of time taken to reach quorum
 
   Default value: `0.2`
-* `--blob-download-timeout-ms <BLOB_DOWNLOAD_TIMEOUT>` — The maximum time without progress (stream opening or a new blob arriving) when downloading blobs from a validator, after which we try the next validator, in milliseconds
+* `--blob-download-hedge-delay-ms <BLOB_DOWNLOAD_HEDGE_DELAY>` — The maximum time without progress (the stream opening, or a new blob arriving) when downloading blobs from a validator, after which we try the next validator, in milliseconds
 
   Default value: `1000`
-* `--cert-batch-download-timeout-ms <CERTIFICATE_BATCH_DOWNLOAD_TIMEOUT>` — The delay when downloading a batch of certificates, after which we try a second validator, in milliseconds
+* `--cert-batch-download-hedge-delay-ms <CERTIFICATE_BATCH_DOWNLOAD_HEDGE_DELAY>` — The delay when downloading a batch of certificates, after which we try a second validator, in milliseconds
 
   Default value: `1000`
 * `--certificate-download-batch-size <CERTIFICATE_DOWNLOAD_BATCH_SIZE>` — Maximum number of certificates that we download at a time from one validator when synchronizing one of our chains
@@ -295,6 +297,9 @@ Client implementation and command-line tool for the Linera blockchain
 * `--event-cache-size <EVENT_CACHE_SIZE>` — The maximal number of entries in the event cache
 
   Default value: `1000`
+* `--block-hash-by-height-cache-size <BLOCK_HASH_BY_HEIGHT_CACHE_SIZE>` — The maximal number of entries in the block-hash-by-height cache
+
+  Default value: `1000`
 * `--block-cache-size <BLOCK_CACHE_SIZE>` — The number of entries in the block cache
 
   Default value: `5000`
@@ -304,6 +309,10 @@ Client implementation and command-line tool for the Linera blockchain
 * `--storage-replication-factor <STORAGE_REPLICATION_FACTOR>` — The replication factor for the keyspace
 
   Default value: `1`
+* `--rocksdb-enable-statistics` — Enable RocksDB's internal statistics collection and export them as Prometheus metrics. Off by default; enable it on nodes whose metrics are scraped
+* `--rocksdb-statistics-level <ROCKSDB_STATISTICS_LEVEL>` — The level of detail collected when `--rocksdb-enable-statistics` is set. Higher levels collect more, and more expensive, data. One of: `disable-all`, `except-histogram-or-timers`, `except-timers`, `except-detailed-timers`, `except-time-for-mutex`, `all`
+
+  Default value: `except-histogram-or-timers`
 * `--wasm-runtime <WASM_RUNTIME>` — The WebAssembly runtime to use
 * `--with-application-logs` — Output log messages from contract execution
 * `--tokio-threads <TOKIO_THREADS>` — The number of Tokio worker threads to use
@@ -543,7 +552,7 @@ Deprecates all committees up to and including the specified one
 
 ###### **Arguments:**
 
-* `<EPOCH>`
+* `<EPOCH>` — The highest epoch to deprecate
 
 
 
@@ -709,7 +718,11 @@ Create genesis configuration for a Linera deployment. Create initial user chains
 
   Default value: `no-fees`
 
-  Possible values: `no-fees`, `testnet`
+  Possible values:
+  - `no-fees`:
+    Charges nothing for any resource, with no usage limits
+  - `testnet`:
+    Uses the fees and limits that match the public Testnet
 
 * `--wasm-fuel-unit-price <WASM_FUEL_UNIT_PRICE>` — Set the price per unit of Wasm fuel. (This will overwrite value from `--policy-config`)
 * `--evm-fuel-unit-price <EVM_FUEL_UNIT_PRICE>` — Set the price per unit of EVM fuel. (This will overwrite value from `--policy-config`)
@@ -922,6 +935,18 @@ Verify that a data blob is readable
 
 
 
+## `linera describe-application`
+
+Describe an existing application: print its `ApplicationDescription` (module ID, creator chain, parameters and required dependencies) as JSON. The description is content-addressed and fetched from the validators, so the application need not be registered on the wallet's default chain
+
+**Usage:** `linera describe-application <APPLICATION_ID>`
+
+###### **Arguments:**
+
+* `<APPLICATION_ID>` — The ID of the application to describe
+
+
+
 ## `linera create-application`
 
 Create an application
@@ -1063,7 +1088,7 @@ Change the wallet default chain
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>`
+* `<CHAIN_ID>` — The chain to set as the default
 
 
 
@@ -1136,7 +1161,7 @@ Forgets the specified chain's keys. The chain will still be followed by the wall
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>`
+* `<CHAIN_ID>` — The chain whose keys will be forgotten
 
 
 
@@ -1148,7 +1173,7 @@ Forgets the specified chain, including the associated key pair
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>`
+* `<CHAIN_ID>` — The chain to forget
 
 
 
@@ -1230,7 +1255,7 @@ Equivalent to running `cargo test` with the appropriate test runner.
 
 ###### **Arguments:**
 
-* `<PATH>`
+* `<PATH>` — The path of the root of the Linera project to test
 
 
 
@@ -1298,7 +1323,11 @@ Start a Local Linera Network
 
   Default value: `no-fees`
 
-  Possible values: `no-fees`, `testnet`
+  Possible values:
+  - `no-fees`:
+    Charges nothing for any resource, with no usage limits
+  - `testnet`:
+    Uses the fees and limits that match the public Testnet
 
 * `--cross-chain-queue-size <QUEUE_SIZE>` — Number of cross-chain messages allowed before dropping them
 
@@ -1389,7 +1418,7 @@ Adds a new validator with the specified public key, account key, network address
 
 * `--public-key <PUBLIC_KEY>` — Public key of the validator to add
 * `--account-key <ACCOUNT_KEY>` — Account public key for receiving payments and rewards
-* `--address <ADDRESS>` — Network address where the validator can be reached (e.g., grpcs://host:port)
+* `--address <ADDRESS>` — Network address where the validator can be reached (e.g., grpcs:host:port)
 * `--votes <VOTES>` — Voting weight for consensus (default: 1)
 * `--skip-online-check` — Skip online connectivity verification before adding
 
@@ -1425,7 +1454,7 @@ PREREQUISITE: the read layers are only meaningful if the candidate already holds
 
 ###### **Arguments:**
 
-* `<ADDRESS>` — Network address of the candidate validator (e.g. `grpcs://host:port`)
+* `<ADDRESS>` — Network address of the candidate validator (e.g. `grpcs:host:port`)
 
 ###### **Options:**
 
@@ -1524,7 +1553,7 @@ Connects to a validator at the specified network address and queries its view of
 
 ###### **Arguments:**
 
-* `<ADDRESS>` — Network address of the validator (e.g., grpcs://host:port)
+* `<ADDRESS>` — Network address of the validator (e.g., grpcs:host:port)
 
 ###### **Options:**
 
@@ -1543,7 +1572,7 @@ Connects to a validator at the specified network address and queries its view of
 
 ###### **Arguments:**
 
-* `<ADDRESS>` — Network address of the validator (e.g., grpcs://host:port)
+* `<ADDRESS>` — Network address of the validator (e.g., grpcs:host:port)
 
 ###### **Options:**
 
@@ -1577,7 +1606,7 @@ Pushes the current chain state from local storage to a validator node, ensuring 
 
 ###### **Arguments:**
 
-* `<ADDRESS>` — Network address of the validator to sync (e.g., grpcs://host:port)
+* `<ADDRESS>` — Network address of the validator to sync (e.g., grpcs:host:port)
 
 ###### **Options:**
 
@@ -1636,7 +1665,7 @@ Initialize a namespace in the database
 
 ###### **Options:**
 
-* `--genesis <GENESIS_CONFIG_PATH>`
+* `--genesis <GENESIS_CONFIG_PATH>` — The path to the genesis configuration file
 
 
 

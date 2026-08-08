@@ -22,7 +22,7 @@ use linera_storage_service::{
 };
 #[cfg(feature = "rocksdb")]
 use linera_views::rocks_db::{
-    PathWithGuard, RocksDbDatabase, RocksDbSpawnMode, RocksDbStoreConfig,
+    PathWithGuard, RocksDbDatabase, RocksDbSpawnMode, RocksDbStatisticsLevel, RocksDbStoreConfig,
     RocksDbStoreInternalConfig,
 };
 use linera_views::{
@@ -108,6 +108,10 @@ pub struct CommonStorageOptions {
     #[arg(long, default_value = "1000", global = true)]
     pub event_cache_size: usize,
 
+    /// The maximal number of entries in the block-hash-by-height cache.
+    #[arg(long, default_value = "1000", global = true)]
+    pub block_hash_by_height_cache_size: usize,
+
     /// The number of entries in the block cache.
     #[arg(long, default_value = "5000", global = true)]
     pub block_cache_size: usize,
@@ -119,6 +123,25 @@ pub struct CommonStorageOptions {
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1", global = true)]
     pub storage_replication_factor: u32,
+
+    /// Enable RocksDB's internal statistics collection and export them as Prometheus
+    /// metrics. Off by default; enable it on nodes whose metrics are scraped.
+    #[cfg(feature = "rocksdb")]
+    #[arg(long, global = true)]
+    pub rocksdb_enable_statistics: bool,
+
+    /// The level of detail collected when `--rocksdb-enable-statistics` is set. Higher
+    /// levels collect more, and more expensive, data. One of: `disable-all`,
+    /// `except-histogram-or-timers`, `except-timers`, `except-detailed-timers`,
+    /// `except-time-for-mutex`, `all`.
+    #[cfg(feature = "rocksdb")]
+    #[arg(
+        long,
+        default_value = "except-histogram-or-timers",
+        value_parser = RocksDbStatisticsLevel::from_str,
+        global = true
+    )]
+    pub rocksdb_statistics_level: RocksDbStatisticsLevel,
 }
 
 impl CommonStorageOptions {
@@ -130,6 +153,7 @@ impl CommonStorageOptions {
             certificate_cache_size: self.certificate_cache_size,
             certificate_raw_cache_size: self.certificate_raw_cache_size,
             event_cache_size: self.event_cache_size,
+            block_hash_by_height_cache_size: self.block_hash_by_height_cache_size,
             cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
         }
     }
@@ -517,6 +541,8 @@ impl StorageConfig {
                     spawn_mode: *spawn_mode,
                     path_with_guard,
                     max_stream_queries: options.storage_max_stream_queries,
+                    enable_statistics: options.rocksdb_enable_statistics,
+                    statistics_level: options.rocksdb_statistics_level,
                 };
                 let config = RocksDbStoreConfig {
                     inner_config,
@@ -548,6 +574,8 @@ impl StorageConfig {
                     spawn_mode: *spawn_mode,
                     path_with_guard: path_with_guard.clone(),
                     max_stream_queries: options.storage_max_stream_queries,
+                    enable_statistics: options.rocksdb_enable_statistics,
+                    statistics_level: options.rocksdb_statistics_level,
                 };
                 let first_config = RocksDbStoreConfig {
                     inner_config,

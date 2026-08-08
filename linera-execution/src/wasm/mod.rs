@@ -80,6 +80,7 @@ mod metrics {
 
 /// A user contract in a compiled WebAssembly module.
 #[derive(Clone)]
+#[allow(missing_docs)]
 pub enum WasmContractModule {
     #[cfg(with_wasmer)]
     Wasmer {
@@ -145,6 +146,7 @@ impl UserContractModule for WasmContractModule {
 
 /// A user service in a compiled WebAssembly module.
 #[derive(Clone)]
+#[allow(missing_docs)]
 pub enum WasmServiceModule {
     #[cfg(with_wasmer)]
     Wasmer { module: ::wasmer::Module },
@@ -307,6 +309,7 @@ const _: () = {
 
 /// Errors that can occur when executing a user application in a WebAssembly module.
 #[derive(Debug, Error)]
+#[allow(missing_docs)]
 pub enum WasmExecutionError {
     #[error("Failed to load contract Wasm module: {_0}")]
     LoadContractModule(#[source] anyhow::Error),
@@ -374,6 +377,7 @@ pub mod test {
         Ok(())
     }
 
+    /// Returns the contract and service bytecode file paths for the named example application.
     pub fn get_example_bytecode_paths(name: &str) -> Result<(String, String), std::io::Error> {
         let name = name.replace('-', "_");
         static INSTANCE: LazyLock<()> = LazyLock::new(|| build_applications().unwrap());

@@ -346,6 +346,15 @@ impl From<Amount> for U256 {
     }
 }
 
+impl From<Amount> for f64 {
+    /// Returns the amount as a floating-point number of whole tokens. This is
+    /// lossy for large or high-precision amounts; intended for telemetry, not
+    /// for arithmetic.
+    fn from(amount: Amount) -> f64 {
+        amount.0 as f64 / Amount::ONE.0 as f64
+    }
+}
+
 impl TryFrom<U256> for Amount {
     type Error = ArithmeticError;
 
@@ -368,8 +377,6 @@ impl TryFrom<U256> for Amount {
     PartialOrd,
     Hash,
     derive_more::Display,
-    derive_more::From,
-    derive_more::Into,
     derive_more::Deref,
     derive_more::DerefMut,
     derive_more::FromStr,
@@ -486,6 +493,11 @@ impl TimeDelta {
     /// Returns the given number of seconds as a [`TimeDelta`].
     pub const fn from_secs(secs: u64) -> Self {
         TimeDelta(secs.saturating_mul(1_000_000))
+    }
+
+    /// Returns the given [`Duration`] as a [`TimeDelta`], saturating at the maximum on overflow.
+    pub fn from_duration(duration: Duration) -> Self {
+        TimeDelta(u64::try_from(duration.as_micros()).unwrap_or(u64::MAX))
     }
 
     /// Returns this [`TimeDelta`] as a number of microseconds.
@@ -829,6 +841,7 @@ impl TryFrom<BlockHeight> for usize {
 }
 
 impl_wrapped_number!(Amount, u128);
+impl_wrapped_number!(U128, u128);
 impl_wrapped_number!(BlockHeight, u64);
 impl_wrapped_number!(TimeDelta, u64);
 
@@ -1880,9 +1893,10 @@ impl BcsHashable<'_> for Event {}
 pub struct MessagePolicy {
     /// The blanket policy applied to all messages.
     pub blanket: BlanketMessagePolicy,
-    /// A collection of chains which restrict the origin of messages to be
-    /// accepted. `Option::None` means that messages from all chains are accepted. An empty
-    /// `HashSet` denotes that messages from no chains are accepted.
+    /// A collection of chains which restrict the origin of messages and events to be
+    /// accepted. `Option::None` means that messages and events from all chains are accepted. An
+    /// empty `HashSet` denotes that none are accepted. The admin chain's event stream is always
+    /// followed regardless of this setting.
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
     /// A collection of chains whose incoming messages should be ignored.
     pub ignore_chain_ids: HashSet<ChainId>,
@@ -1893,7 +1907,7 @@ pub struct MessagePolicy {
     /// applications will be accepted.
     pub reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
     /// A collection of applications: If `Some`, only event streams from those
-    /// applications will be processed.
+    /// applications are processed and followed. The admin chain's event stream is always followed.
     pub process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
     /// A collection of applications whose messages must never be rejected. Bundles whose
     /// messages are all from one of these applications bypass the other rejection rules
@@ -1953,6 +1967,21 @@ impl MessagePolicy {
                 .restrict_chain_ids_to
                 .as_ref()
                 .is_some_and(|set| !set.contains(origin))
+    }
+
+    /// Returns `true` if events from `stream_id`, published by `chain_id`, should be followed
+    /// and processed: `restrict_chain_ids_to` (if set) must contain `chain_id`, and
+    /// `process_events_from_application_ids` (if set) must contain the stream's application. The
+    /// admin chain is exempt; callers always follow it.
+    #[instrument(level = "trace", skip(self))]
+    pub fn accepts_event_stream(&self, chain_id: &ChainId, stream_id: &StreamId) -> bool {
+        self.restrict_chain_ids_to
+            .as_ref()
+            .is_none_or(|chain_ids| chain_ids.contains(chain_id))
+            && self
+                .process_events_from_application_ids
+                .as_ref()
+                .is_none_or(|app_ids| app_ids.contains(&stream_id.application_id))
     }
 }
 

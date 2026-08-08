@@ -1,6 +1,6 @@
 ---
 source: game-of-life-challenge/tests/format.rs
-expression: "GameOfLifeApplication::formats().unwrap()"
+expression: "GameOfLifeApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
   Board:
@@ -9,11 +9,6 @@ REGISTRY:
       - live_cells:
           SEQ:
             TYPENAME: Position
-  CryptoHash:
-    NEWTYPESTRUCT:
-      TUPLEARRAY:
-        CONTENT: U8
-        SIZE: 32
   DataBlobHash:
     NEWTYPESTRUCT:
       TYPENAME: CryptoHash

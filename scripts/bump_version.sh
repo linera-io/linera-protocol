@@ -57,6 +57,7 @@ LOCK_DIRS=(
     "$ROOT/examples"
     "$ROOT/linera-bridge/tests/e2e"
     "$ROOT/linera-sdk/tests/fixtures"
+    "$ROOT/linera-bridge/contracts/evm-bridge"
 )
 
 for dir in "${LOCK_DIRS[@]}"; do

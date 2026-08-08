@@ -68,6 +68,7 @@ use crate::{
     HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
 };
 
+/// A gRPC client for communicating with a validator node.
 #[derive(Clone)]
 pub struct GrpcClient {
     address: String,
@@ -82,6 +83,7 @@ pub struct GrpcClient {
 }
 
 impl GrpcClient {
+    /// Creates a new gRPC client for the validator at the given address.
     pub fn new(
         address: String,
         channel: transport::Channel,
@@ -103,6 +105,7 @@ impl GrpcClient {
         }
     }
 
+    /// Returns the address of the validator this client connects to.
     pub fn address(&self) -> &str {
         &self.address
     }
