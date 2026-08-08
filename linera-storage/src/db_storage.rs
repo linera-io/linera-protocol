@@ -652,6 +652,12 @@ impl Clock for WallClock {
 #[derive(Default)]
 struct TestClockInner {
     time: Timestamp,
+    /// How much simulated time has passed, counting forward motion only.
+    ///
+    /// Tracked separately from `time` so that a monotonic reading survives a test setting
+    /// the clock backwards, the way a real monotonic clock survives the system clock being
+    /// stepped back.
+    elapsed: Duration,
     sleeps: BTreeMap<Reverse<Timestamp>, Vec<oneshot::Sender<()>>>,
     /// Optional callback that decides whether to auto-advance for a given target timestamp.
     /// Returns `true` if the clock should auto-advance to that time.
@@ -661,6 +667,8 @@ struct TestClockInner {
 #[cfg(with_testing)]
 impl TestClockInner {
     fn set(&mut self, time: Timestamp) {
+        // `duration_since` saturates to zero, so moving the clock back adds nothing.
+        self.elapsed = self.elapsed.saturating_add(time.duration_since(self.time));
         self.time = time;
         let senders = self.sleeps.split_off(&Reverse(time));
         for sender in senders.into_values().flatten() {
@@ -707,15 +715,14 @@ impl Clock for TestClock {
     fn instant(&self) -> Instant {
         use std::sync::LazyLock;
 
-        // Derived from the same simulated time as `current_time`, so the two cannot
-        // disagree. All test clocks share one baseline, so equal simulated times map to
-        // equal instants. Saturating keeps this total for absurdly distant times; it is
-        // monotonic as long as the test does not rewind the clock, exactly like
-        // `current_time`.
+        // `Instant` cannot be built from a number, so offset a fixed reading by the
+        // simulated time that has passed. Only the difference between two readings is
+        // meaningful; the baseline itself is arbitrary, and shared so that clocks driven
+        // alike report alike.
         static BASELINE: LazyLock<Instant> = LazyLock::new(Instant::now);
         BASELINE
-            .checked_add(Duration::from_micros(self.lock().time.micros()))
-            .unwrap_or(*BASELINE)
+            .checked_add(self.lock().elapsed)
+            .expect("simulated time is too far in the future to be an `Instant`")
     }
 
     async fn sleep_until(&self, timestamp: Timestamp) {
@@ -2215,7 +2222,10 @@ mod tests {
 
 #[cfg(test)]
 mod clock_tests {
-    use linera_base::{data_types::TimeDelta, time::Duration};
+    use linera_base::{
+        data_types::{TimeDelta, Timestamp},
+        time::Duration,
+    };
 
     use super::*;
 
@@ -2239,18 +2249,28 @@ mod clock_tests {
         );
     }
 
-    /// A monotonic reading is exactly what a wall-clock timestamp is not: it must not move
-    /// when only the simulated wall clock is rewound.
+    /// A monotonic reading is exactly what a wall-clock timestamp is not: setting the
+    /// simulated clock backwards must not take it along.
     #[test]
-    fn test_test_clock_instant_does_not_run_backwards_on_its_own() {
+    fn test_test_clock_instant_survives_a_rewound_wall_clock() {
         let clock = TestClock::new();
         clock.add(TimeDelta::from_secs(60));
-        let instant = clock.instant();
+        let before = clock.instant();
+
+        clock.set(Timestamp::from(0));
 
         assert_eq!(
-            clock.instant(),
-            instant,
-            "reading twice gives the same time"
+            clock.current_time(),
+            Timestamp::from(0),
+            "the wall clock moved back",
+        );
+        assert!(clock.instant() >= before, "the monotonic reading did not");
+
+        // It also keeps counting from where it was, not from the rewound time.
+        clock.add(TimeDelta::from_secs(10));
+        assert_eq!(
+            clock.instant().saturating_duration_since(before),
+            Duration::from_secs(10),
         );
     }
 }
