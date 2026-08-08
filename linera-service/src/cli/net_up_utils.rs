@@ -14,11 +14,6 @@ use linera_storage_service::{
 };
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-#[cfg(feature = "kubernetes")]
-use {
-    crate::cli_wrappers::local_kubernetes_net::{BuildMode, LocalKubernetesNetConfig},
-    std::path::PathBuf,
-};
 
 use crate::{
     cli_wrappers::{
@@ -102,88 +97,6 @@ impl StorageConfigProvider {
             InnerStorageConfig::DualRocksDbScyllaDb { .. } => Ok(Database::DualRocksDbScyllaDb),
         }
     }
-}
-
-/// Starts a local test network and, optionally, a faucet and block exporter.
-#[expect(clippy::too_many_arguments)]
-#[cfg(feature = "kubernetes")]
-pub async fn handle_net_up_kubernetes(
-    num_other_initial_chains: u32,
-    initial_amount: u128,
-    num_initial_validators: usize,
-    num_shards: usize,
-    testing_prng_seed: Option<u64>,
-    binaries: &Option<Option<PathBuf>>,
-    no_build: bool,
-    docker_image_name: String,
-    build_mode: BuildMode,
-    policy_config: ResourceControlPolicyConfig,
-    with_faucet: bool,
-    faucet_chain: Option<u32>,
-    faucet_port: NonZeroU16,
-    faucet_amount: Amount,
-    with_block_exporter: bool,
-    num_block_exporters: usize,
-    indexer_image_name: String,
-    explorer_image_name: String,
-    dual_store: bool,
-) -> anyhow::Result<()> {
-    assert!(
-        num_initial_validators >= 1,
-        "The local test network must have at least one validator."
-    );
-    assert!(
-        num_shards >= 1,
-        "The local test network must have at least one shard per validator."
-    );
-    if faucet_chain.is_some() {
-        assert!(
-            with_faucet,
-            "--faucet-chain must be provided only with --with-faucet"
-        );
-    }
-
-    let shutdown_notifier = CancellationToken::new();
-    tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
-
-    let num_block_exporters = if with_block_exporter {
-        assert!(
-            num_block_exporters > 0,
-            "If --with-block-exporter is provided, --num-block-exporters must be greater than 0"
-        );
-        num_block_exporters
-    } else {
-        0
-    };
-
-    let config = LocalKubernetesNetConfig {
-        network: Network::Grpc,
-        testing_prng_seed,
-        num_other_initial_chains,
-        initial_amount: Amount::from_tokens(initial_amount),
-        num_initial_validators,
-        num_shards,
-        binaries: binaries.clone().into(),
-        no_build,
-        docker_image_name,
-        build_mode,
-        policy_config,
-        num_block_exporters,
-        indexer_image_name,
-        explorer_image_name,
-        dual_store,
-    };
-    let (mut net, client) = config.instantiate().await?;
-    let faucet_service = print_messages_and_create_faucet(
-        client,
-        with_faucet,
-        faucet_chain,
-        faucet_port,
-        faucet_amount,
-        num_other_initial_chains,
-    )
-    .await?;
-    wait_for_shutdown(shutdown_notifier, &mut net, faucet_service).await
 }
 
 /// Starts a local test network using native processes and, optionally, a faucet and block exporter.

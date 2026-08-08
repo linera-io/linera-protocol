@@ -77,9 +77,15 @@ jobs:
         continue-on-error: true
         run: |
           BRANCH="${{ github.base_ref || github.ref_name }}"
-          docker pull "${GCP_REGISTRY}/linera:${BRANCH}"
+          # linera-tests, not linera: this wants the all-three-binaries image
+          # that `linera net up` needs, which is now published under that name.
+          # Pulling `linera` would keep SUCCEEDING against the tag frozen at the
+          # last pre-split build — and since this step is continue-on-error and
+          # only a failed pull falls through to building, that would silently
+          # test stale code forever instead of failing.
+          docker pull "${GCP_REGISTRY}/linera-tests:${BRANCH}"
           docker pull "${GCP_REGISTRY}/linera-exporter:${BRANCH}"
-          docker tag "${GCP_REGISTRY}/linera:${BRANCH}" linera-test
+          docker tag "${GCP_REGISTRY}/linera-tests:${BRANCH}" linera-test
           docker tag "${GCP_REGISTRY}/linera-exporter:${BRANCH}" linera-exporter
 
       - name: Build linera image
@@ -88,6 +94,7 @@ jobs:
         with:
           context: .
           file: ./docker/Dockerfile
+          target: tests
           tags: linera-test
           load: true
           build-args: |
@@ -147,12 +154,6 @@ jobs:
           tags: |
             linera-bridge:latest
             ${{ github.event_name != 'workflow_dispatch' && format('{0}/linera-bridge:{1}', env.GCP_REGISTRY, github.base_ref || github.ref_name) || '' }}
-
-      - name: Push bridge image to registry
-        if: steps.build-bridge.outcome == 'success' && github.event_name != 'workflow_dispatch'
-        run: |
-          BRANCH="${{ github.base_ref || github.ref_name }}"
-          docker push "${GCP_REGISTRY}/linera-bridge:${BRANCH}"
 
       - name: Build evm-bridge Wasm module
         run: cargo build --release --target wasm32-unknown-unknown

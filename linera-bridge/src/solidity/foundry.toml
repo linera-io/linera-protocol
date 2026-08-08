@@ -40,3 +40,17 @@ ignore = [
     "BridgeTypes.sol",
     "WrappedFungibleTypesV1.sol",
 ]
+
+# Named endpoints + explorer profiles for manual `forge`/`cast` use and
+# re-verification, e.g. `forge script ... --rpc-url base_sepolia --verify`.
+# Values are read from the environment so no secrets live in this file. The
+# deploy/ tooling passes --rpc-url / --verify explicitly and does not depend on
+# these, but they make ad-hoc commands and `forge verify-contract` convenient.
+[rpc_endpoints]
+base_sepolia = "${RPC_URL}"
+ethereum_sepolia = "${RPC_URL}"
+local_anvil = "${RPC_URL}"
+
+[etherscan]
+base_sepolia = { key = "${EXPLORER_API_KEY}", url = "https://api-sepolia.basescan.org/api" }
+ethereum_sepolia = { key = "${EXPLORER_API_KEY}", url = "https://api-sepolia.etherscan.io/api" }

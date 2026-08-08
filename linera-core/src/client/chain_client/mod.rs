@@ -247,7 +247,7 @@ impl<Env: Environment> Clone for ChainClient<Env> {
 }
 
 /// Error type for [`ChainClient`].
-#[derive(Debug, Error)]
+#[derive(Debug, Error, strum::IntoStaticStr)]
 #[allow(missing_docs)]
 pub enum Error {
     #[error("Local node operation failed: {0}")]
@@ -255,6 +255,14 @@ pub enum Error {
 
     #[error("Remote node operation failed: {0}")]
     RemoteNodeError(#[from] NodeError),
+
+    /// A validator reported state ahead of the local node for this chain. The caller may pull
+    /// the missing state from that validator, then retry or surface the carried error.
+    #[error("The local node is lagging behind a validator on chain {chain_id}: {error}")]
+    LocalNodeLagging {
+        chain_id: ChainId,
+        error: Box<NodeError>,
+    },
 
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
@@ -368,6 +376,20 @@ impl Error {
     /// Wraps a signer error into a [`Error::Signer`] variant.
     pub fn signer_failure(err: impl signer::Error + 'static) -> Self {
         Self::Signer(Box::new(err))
+    }
+
+    /// Returns the qualified error variant name for the `error_type` metric label,
+    /// delegating to the wrapped error's `error_type()` so the underlying worker or
+    /// chain error name is surfaced rather than just the outer variant.
+    pub fn error_type(&self) -> String {
+        match self {
+            Error::LocalNodeError(local_node_error) => local_node_error.error_type(),
+            Error::ChainError(chain_error) => chain_error.error_type(),
+            other => {
+                let variant: &'static str = other.into();
+                format!("ChainClientError::{variant}")
+            }
+        }
     }
 }
 
@@ -502,8 +524,16 @@ impl<Env: Environment> ChainClient<Env> {
             .get_event_subscriptions(self.chain_id)
             .await?;
         let mut publishers = BTreeMap::<ChainId, BTreeSet<StreamId>>::new();
-        for ((chain_id, stream_name), _) in subscriptions {
-            publishers.entry(chain_id).or_default().insert(stream_name);
+        // Only follow publishers whose events pass the message policy; events from the others are
+        // discarded in `collect_stream_updates`, so subscribing to them is wasted work.
+        for ((chain_id, stream_id), _) in subscriptions {
+            if self
+                .options
+                .message_policy
+                .accepts_event_stream(&chain_id, &stream_id)
+            {
+                publishers.entry(chain_id).or_default().insert(stream_id);
+            }
         }
         if self.chain_id != self.client.admin_chain_id {
             // Empty streams = follow all for admin chain.
@@ -658,19 +688,10 @@ impl<Env: Environment> ChainClient<Env> {
         // Collect the indices of all new events.
         let futures = subscription_map
             .into_iter()
-            .filter(|((chain_id, _), _)| {
+            .filter(|((chain_id, stream_id), _)| {
                 self.options
                     .message_policy
-                    .restrict_chain_ids_to
-                    .as_ref()
-                    .is_none_or(|chain_set| chain_set.contains(chain_id))
-            })
-            .filter(|((_, stream_id), _)| {
-                self.options
-                    .message_policy
-                    .process_events_from_application_ids
-                    .as_ref()
-                    .is_none_or(|app_set| app_set.contains(&stream_id.application_id))
+                    .accepts_event_stream(chain_id, stream_id)
             })
             .map(|((chain_id, stream_id), subscriptions)| {
                 let client = self.client.clone();
@@ -958,7 +979,14 @@ impl<Env: Environment> ChainClient<Env> {
         // Group subscribed streams by publisher chain.
         let mut streams_by_chain = BTreeMap::<ChainId, BTreeSet<StreamId>>::new();
         for ((chain_id, stream_id), _) in &subscriptions {
-            if *chain_id != self.chain_id {
+            // The admin chain is synced separately below; other publishers are only synced if
+            // their events pass the message policy, matching what we follow and process.
+            if *chain_id != self.chain_id
+                && self
+                    .options
+                    .message_policy
+                    .accepts_event_stream(chain_id, stream_id)
+            {
                 streams_by_chain
                     .entry(*chain_id)
                     .or_default()
@@ -1458,6 +1486,23 @@ impl<Env: Environment> ChainClient<Env> {
         #[cfg(with_metrics)]
         let _latency = super::metrics::EXECUTE_BLOCK_LATENCY.measure_latency();
 
+        let result = self.try_execute_block(operations, blobs).await;
+        if let Err(error) = &result {
+            let error_type = error.error_type();
+            #[cfg(with_metrics)]
+            super::metrics::BLOCK_STAGING_FAILURES_TOTAL
+                .with_label_values(&[error_type.as_str()])
+                .inc();
+            info!(chain_id = %self.chain_id, %error_type, "Block staging failed");
+        }
+        result
+    }
+
+    async fn try_execute_block(
+        &self,
+        operations: Vec<Operation>,
+        blobs: Vec<Blob>,
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, Error> {
         let mutex = self.proposal_mutex();
         let lock_start = linera_base::time::Instant::now();
         let mut proposal_guard = mutex.lock_owned().await;
@@ -2032,17 +2077,19 @@ impl<Env: Environment> ChainClient<Env> {
                 return Err(err);
             };
             if current == snapshot {
-                // The lazy per-validator pull on rejection (`Updater::send_block_proposal`) can be
-                // raced out: `communicate_with_quorum` breaks as soon as a quorum is impossible and
-                // drops the still-in-flight `synchronize_chain_state_from` calls, so a locking block
-                // held only by the slower-to-respond validators is never absorbed. Fall back once to
-                // an explicit quorum sync — guaranteed to reach a lock-holder — and retry if it
-                // absorbed anything; otherwise the rejection was genuine, so propagate it.
+                // The post-quorum pull on rejection (`Client::process_lag_reports`) only covers
+                // validators whose rejection was actually received: `communicate_with_quorum`
+                // breaks as soon as a quorum is impossible and drops still-in-flight requests, so
+                // a locking block held only by the slower-to-respond validators is never even
+                // reported. Fall back once to an explicit quorum sync — guaranteed to reach a
+                // lock-holder — and retry if it absorbed anything; otherwise the rejection was
+                // genuine, so propagate it.
                 //
-                // TODO(#6453): this fallback path has no deterministic regression test yet — forcing
-                // the lazy pull to miss needs a clock-driven per-validator response delay in the test
-                // harness (building on #6448); until then it is only covered indirectly by the (now
-                // non-flaky) `test_lazy_pull_absorbs_locking_block_on_proposal_rejection`.
+                // TODO(#6453): this fallback path has no deterministic regression test yet —
+                // forcing a lock-holder's response to be dropped needs a clock-driven
+                // per-validator response delay in the test harness (building on #6448); until
+                // then it is only covered indirectly by the (now non-flaky)
+                // `test_lazy_pull_absorbs_locking_block_on_proposal_rejection`.
                 if did_fallback_sync {
                     return Err(err);
                 }
@@ -3537,5 +3584,26 @@ impl<Env: Environment> ChainClient<Env> {
         self.process_notification(remote_node, local_node, notification)
             .await
             .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Error, LocalNodeError};
+
+    #[test]
+    fn error_type_delegates_to_local_node_error() {
+        assert_eq!(
+            Error::LocalNodeError(LocalNodeError::InvalidChainInfoResponse).error_type(),
+            "LocalNodeError::InvalidChainInfoResponse"
+        );
+    }
+
+    #[test]
+    fn error_type_falls_back_to_chain_client_variant() {
+        assert_eq!(
+            Error::WalletSynchronizationError.error_type(),
+            "ChainClientError::WalletSynchronizationError"
+        );
     }
 }

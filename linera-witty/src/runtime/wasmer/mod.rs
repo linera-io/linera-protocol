@@ -123,7 +123,7 @@ impl<UserData> AsStoreMut for EntrypointInstance<UserData> {
 impl<UserData> EntrypointInstance<UserData> {
     /// Returns mutable references to the [`Store`] and the [`wasmer::Instance`] stored inside this
     /// [`EntrypointInstance`].
-    pub fn as_store_and_instance_mut(&mut self) -> (StoreMut, &mut wasmer::Instance) {
+    pub fn as_store_and_instance_mut(&mut self) -> (StoreMut<'_>, &mut wasmer::Instance) {
         (self.store.as_store_mut(), &mut self.instance)
     }
 }

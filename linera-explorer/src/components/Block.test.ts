@@ -57,10 +57,8 @@ function mountBlockWithRoot(block: any, opts: {
     global: {
       config: {
         globalProperties: {
-          config: {
-            formats_registry_chain: opts.formats_registry ? 'fake-chain-id' : null,
-            formats_registry_app_id: opts.formats_registry ?? null,
-          },
+          formats_registry_chain: opts.formats_registry ? 'fake-chain-id' : null,
+          formats_registry_app_id: opts.formats_registry ?? null,
           decode_user_event_value: (application_id: string, bytes_hex: string) =>
             opts.decode_user_event_value ? opts.decode_user_event_value(application_id, bytes_hex) : null,
           decode_user_response: (application_id: string, bytes_hex: string) =>

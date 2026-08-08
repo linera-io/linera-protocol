@@ -323,6 +323,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             5,                                 // max_retries
             None,
             None,
+            2000, // max_log_block_range
         ))
         .await
     });

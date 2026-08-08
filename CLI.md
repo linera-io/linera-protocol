@@ -189,10 +189,10 @@ Client implementation and command-line tool for the Linera blockchain
   - `ignore`:
     Don't include any messages in blocks, and don't make any decision whether to accept or reject
 
-* `--restrict-chain-ids-to <RESTRICT_CHAIN_IDS_TO>` — A set of chains to restrict incoming messages from. By default, messages from all chains are accepted. To reject messages from all chains, specify an empty string
+* `--restrict-chain-ids-to <RESTRICT_CHAIN_IDS_TO>` — A set of chains to restrict incoming messages and events from. By default, messages and events from all chains are accepted. To reject all of them, specify an empty string. The admin chain's event stream is always followed regardless of this setting
 * `--reject-message-bundles-without-application-ids <REJECT_MESSAGE_BUNDLES_WITHOUT_APPLICATION_IDS>` — A set of application IDs. If specified, only bundles with at least one message from one of these applications will be accepted
 * `--reject-message-bundles-with-other-application-ids <REJECT_MESSAGE_BUNDLES_WITH_OTHER_APPLICATION_IDS>` — A set of application IDs. If specified, only bundles where all messages are from one of these applications will be accepted
-* `--process-events-from-application-ids <PROCESS_EVENTS_FROM_APPLICATION_IDS>` — A set of application IDs. If specified, only events coming from streams created by applications from this set will be processed
+* `--process-events-from-application-ids <PROCESS_EVENTS_FROM_APPLICATION_IDS>` — A set of application IDs. If specified, only event streams created by applications from this set are processed and followed. The admin chain's event stream is always followed
 * `--never-reject-application-ids <NEVER_REJECT_APPLICATION_IDS>` — A set of application IDs whose messages must never be rejected. Bundles whose messages are all from one of these applications bypass the other rejection rules (except `--restrict-chain-ids-to`), and on execution failure they (and subsequent bundles from the same sender) are removed from the block for later retry instead of being rejected, with a warning logged. Bundles that contain any message from an application not on this list can be rejected
 * `--timings` — Enable timing reports during operations
 * `--timing-interval <TIMING_INTERVAL>` — Interval in seconds between timing reports (defaults to 5)
@@ -312,6 +312,10 @@ Client implementation and command-line tool for the Linera blockchain
 * `--storage-replication-factor <STORAGE_REPLICATION_FACTOR>` — The replication factor for the keyspace
 
   Default value: `1`
+* `--rocksdb-enable-statistics` — Enable RocksDB's internal statistics collection and export them as Prometheus metrics. Off by default; enable it on nodes whose metrics are scraped
+* `--rocksdb-statistics-level <ROCKSDB_STATISTICS_LEVEL>` — The level of detail collected when `--rocksdb-enable-statistics` is set. Higher levels collect more, and more expensive, data. One of: `disable-all`, `except-histogram-or-timers`, `except-timers`, `except-detailed-timers`, `except-time-for-mutex`, `all`
+
+  Default value: `except-histogram-or-timers`
 * `--wasm-runtime <WASM_RUNTIME>` — The WebAssembly runtime to use
 * `--with-application-logs` — Output log messages from contract execution
 * `--tokio-threads <TOKIO_THREADS>` — The number of Tokio worker threads to use
@@ -1417,7 +1421,7 @@ Adds a new validator with the specified public key, account key, network address
 
 * `--public-key <PUBLIC_KEY>` — Public key of the validator to add
 * `--account-key <ACCOUNT_KEY>` — Account public key for receiving payments and rewards
-* `--address <ADDRESS>` — Network address where the validator can be reached (e.g., grpcs://host:port)
+* `--address <ADDRESS>` — Network address where the validator can be reached (e.g., grpcs:host:port)
 * `--votes <VOTES>` — Voting weight for consensus (default: 1)
 * `--skip-online-check` — Skip online connectivity verification before adding
 
@@ -1453,7 +1457,7 @@ PREREQUISITE: the read layers are only meaningful if the candidate already holds
 
 ###### **Arguments:**
 
-* `<ADDRESS>` — Network address of the candidate validator (e.g. `grpcs://host:port`)
+* `<ADDRESS>` — Network address of the candidate validator (e.g. `grpcs:host:port`)
 
 ###### **Options:**
 
@@ -1552,7 +1556,7 @@ Connects to a validator at the specified network address and queries its view of
 
 ###### **Arguments:**
 
-* `<ADDRESS>` — Network address of the validator (e.g., grpcs://host:port)
+* `<ADDRESS>` — Network address of the validator (e.g., grpcs:host:port)
 
 ###### **Options:**
 
@@ -1571,7 +1575,7 @@ Connects to a validator at the specified network address and queries its view of
 
 ###### **Arguments:**
 
-* `<ADDRESS>` — Network address of the validator (e.g., grpcs://host:port)
+* `<ADDRESS>` — Network address of the validator (e.g., grpcs:host:port)
 
 ###### **Options:**
 
@@ -1605,7 +1609,7 @@ Pushes the current chain state from local storage to a validator node, ensuring 
 
 ###### **Arguments:**
 
-* `<ADDRESS>` — Network address of the validator to sync (e.g., grpcs://host:port)
+* `<ADDRESS>` — Network address of the validator to sync (e.g., grpcs:host:port)
 
 ###### **Options:**
 

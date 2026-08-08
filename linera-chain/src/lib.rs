@@ -53,15 +53,6 @@ pub enum ChainError {
     #[error("The chain being queried is not active {0}")]
     InactiveChain(ChainId),
     #[error(
-        "Cannot vote for block proposal of chain {chain_id} because a message \
-         from chain {origin} at height {height} has not been received yet"
-    )]
-    MissingCrossChainUpdate {
-        chain_id: ChainId,
-        origin: ChainId,
-        height: BlockHeight,
-    },
-    #[error(
         "Message in block proposed to {chain_id} does not match the previously received messages from \
         origin {origin:?}: was {bundle:?} instead of {previous_bundle:?}"
     )]
@@ -176,6 +167,19 @@ pub enum ChainError {
     RoundDoesNotTimeOut,
     #[error("Not signing timeout certificate; current round times out at time {0}")]
     NotTimedOutYet(Timestamp),
+    #[error(
+        "Cannot vote for block proposal of chain {chain_id} because {} cross-chain message \
+         bundle(s) have not been received yet",
+        bundles.len()
+    )]
+    MissingCrossChainUpdates {
+        chain_id: ChainId,
+        /// The missing incoming message bundles, as `(origin chain, height)` pairs that must
+        /// all be received before this block can be validated. The validator reports every
+        /// missing bundle at once so the client can fetch them in a single round, instead of
+        /// the legacy one-rejection-per-missing-sender behavior.
+        bundles: Vec<(ChainId, BlockHeight)>,
+    },
 }
 
 impl ChainError {
@@ -213,7 +217,7 @@ impl ChainError {
             | ChainError::MissingOracleResponseList
             | ChainError::RoundDoesNotTimeOut
             | ChainError::NotTimedOutYet(_)
-            | ChainError::MissingCrossChainUpdate { .. } => false,
+            | ChainError::MissingCrossChainUpdates { .. } => false,
             ChainError::ViewError(_)
             | ChainError::UnexpectedMessage { .. }
             | ChainError::InboxGapDetected { .. }
