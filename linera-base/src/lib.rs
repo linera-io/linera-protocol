@@ -28,6 +28,8 @@ pub mod identifiers;
 mod limited_writer;
 pub mod ownership;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod panic_hook;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod port;
 #[cfg(with_metrics)]
 pub mod prometheus_util;
