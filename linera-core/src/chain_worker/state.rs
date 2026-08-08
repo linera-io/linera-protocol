@@ -15,8 +15,8 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, OracleResponse, Round,
-        Timestamp,
+        Amount, ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, OracleResponse,
+        Round, Timestamp,
     },
     ensure,
     hashed::Hashed,
@@ -25,8 +25,8 @@ use linera_base::{
 use linera_cache::{Arc as CacheArc, UniqueValueCache, ValueCache};
 use linera_chain::{
     data_types::{
-        BlockProposal, BundleExecutionPolicy, IncomingBundle, MessageAction, MessageBundle,
-        OriginalProposal, ProposalContent, ProposedBlock,
+        BlockProposal, BundleExecutionPolicy, ChainAndHeight, IncomingBundle, MessageAction,
+        MessageBundle, OriginalProposal, ProposalContent, ProposedBlock,
     },
     manager::{self, ManagerSafetySnapshot},
     types::{
@@ -412,6 +412,64 @@ where
             self.vote_for_fallback().await?;
         }
         self.prepare_chain_info_response(query).await
+    }
+
+    /// Serves a received-log page query (see [`ChainInfoQuery::is_received_log_page`])
+    /// under a read lock. Serving a page of a long backlog reads tens of thousands of
+    /// storage rows; doing that under the write lock blocks all other work on the
+    /// chain, including block processing, for the duration of every page.
+    ///
+    /// Returns `Ok(None)` if the chain is not active: the caller must then retry
+    /// through the write path, which may initialize the chain state. The response
+    /// leaves `state_hash` unset — computing it memoizes the hash and therefore
+    /// needs mutable access — which is fine because the received-log pager does not
+    /// read it.
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub(crate) async fn handle_received_log_page_query(
+        &self,
+        query: ChainInfoQuery,
+    ) -> Result<Option<ChainInfoResponse>, WorkerError> {
+        debug_assert!(query.is_received_log_page());
+        if !self.knows_chain_is_active() && !self.chain.is_active().await? {
+            return Ok(None);
+        }
+        let mut info = ChainInfo::from_chain_view_without_state_hash(&self.chain).await?;
+        info.requested_owner_balance = self
+            .requested_owner_balance(query.request_owner_balance)
+            .await?;
+        if let Some(start) = query.request_received_log_excluding_first_n {
+            info.requested_received_log = self.read_received_log_page(start).await?;
+        }
+        Ok(Some(ChainInfoResponse::new(info, self.config.key_pair())))
+    }
+
+    /// Reads the balance requested via [`ChainInfoQuery::request_owner_balance`].
+    async fn requested_owner_balance(
+        &self,
+        owner: AccountOwner,
+    ) -> Result<Option<Amount>, WorkerError> {
+        if owner == AccountOwner::CHAIN {
+            Ok(Some(*self.chain.execution_state.system.balance.get()))
+        } else {
+            Ok(self
+                .chain
+                .execution_state
+                .system
+                .balances
+                .get(&owner)
+                .await?)
+        }
+    }
+
+    /// Reads one page of the received log, starting at entry number `start` and
+    /// bounded by the configured maximum number of entries per response.
+    async fn read_received_log_page(&self, start: u64) -> Result<Vec<ChainAndHeight>, WorkerError> {
+        let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
+        let max_received_log_entries = self.config.chain_info_max_received_log_entries;
+        let end = start
+            .saturating_add(max_received_log_entries)
+            .min(self.chain.received_log.count());
+        Ok(self.chain.received_log.read(start..end).await?)
     }
 
     /// Returns the requested blob, if it belongs to the current locking block or pending proposal.
@@ -2591,17 +2649,10 @@ where
     ) -> Result<ChainInfoResponse, WorkerError> {
         self.initialize_and_save_if_needed().await?;
         let mut info = ChainInfo::from_chain_view(&mut self.chain).await?;
+        info.requested_owner_balance = self
+            .requested_owner_balance(query.request_owner_balance)
+            .await?;
         let chain = &self.chain;
-        if query.request_owner_balance == AccountOwner::CHAIN {
-            info.requested_owner_balance = Some(*chain.execution_state.system.balance.get());
-        } else {
-            info.requested_owner_balance = chain
-                .execution_state
-                .system
-                .balances
-                .get(&query.request_owner_balance)
-                .await?;
-        }
         if let Some(next_block_height) = query.test_next_block_height {
             // If not, send the same error as if a block with next_block_height was proposed.
             ensure!(
@@ -2653,12 +2704,7 @@ where
             .await?;
         info.requested_sent_certificate_hashes = hashes;
         if let Some(start) = query.request_received_log_excluding_first_n {
-            let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
-            let max_received_log_entries = self.config.chain_info_max_received_log_entries;
-            let end = start
-                .saturating_add(max_received_log_entries)
-                .min(chain.received_log.count());
-            info.requested_received_log = chain.received_log.read(start..end).await?;
+            info.requested_received_log = self.read_received_log_page(start).await?;
         }
         if query.request_manager_values {
             info.manager.add_values(&chain.manager);

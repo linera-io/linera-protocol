@@ -1772,6 +1772,29 @@ where
         #[cfg(with_metrics)]
         metrics::CHAIN_INFO_QUERIES.inc();
         let chain_id = query.chain_id;
+        // Received-log pages are served under a read lock so that paging a long
+        // backlog does not block block processing on the chain. The read path bows
+        // out (`Ok(None)`) if the chain state was never initialized; only then take
+        // the write lock, which initializes it.
+        if query.is_received_log_page() {
+            let read_query = query.clone();
+            let read_result = self
+                .chain_read(chain_id, move |guard| async move {
+                    guard.handle_received_log_page_query(read_query).await
+                })
+                .await;
+            match read_result {
+                Ok(Some(response)) => {
+                    trace!("{} --> {:?}", self.nickname(), response);
+                    return Ok(response);
+                }
+                Ok(None) => (),
+                Err(error) => {
+                    trace!("{} --> {:?}", self.nickname(), error);
+                    return Err(error);
+                }
+            }
+        }
         let result = self
             .chain_write(chain_id, move |mut guard| async move {
                 guard.handle_chain_info_query(query).await
