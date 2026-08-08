@@ -203,7 +203,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `--quorum-grace-period <QUORUM_GRACE_PERIOD>` — An additional delay, after reaching a quorum, to wait for additional validator signatures, as a fraction of time taken to reach quorum
 
   Default value: `0.2`
-* `--blob-download-hedge-delay-ms <BLOB_DOWNLOAD_HEDGE_DELAY>` — The maximum time without progress (the stream opening, or a new blob arriving) when downloading blobs from a validator, after which we try the next validator, in milliseconds
+* `--blob-download-hedge-delay-ms <BLOB_DOWNLOAD_HEDGE_DELAY>` — The maximum time without progress (stream opening or a new blob arriving) when downloading blobs from a validator, after which we try the next validator, in milliseconds
 
   Default value: `1000`
 * `--cert-batch-download-hedge-delay-ms <CERTIFICATE_BATCH_DOWNLOAD_HEDGE_DELAY>` — The delay when downloading a batch of certificates, after which we try a second validator, in milliseconds

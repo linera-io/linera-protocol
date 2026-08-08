@@ -101,7 +101,7 @@ pub struct Options {
     /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
     /// as a fraction of time taken to reach quorum.
     pub quorum_grace_period: f64,
-    /// The maximum time without progress (the stream opening, or a new blob arriving) when
+    /// The maximum time without progress (stream opening or a new blob arriving) when
     /// downloading blobs from a validator, after which we try the next validator.
     pub blob_download_hedge_delay: Duration,
     /// The delay when downloading a batch of certificates, after which we try a second validator.
