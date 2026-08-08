@@ -99,10 +99,6 @@ where
 {
     const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE - 4;
 
-    fn max_stream_queries(&self) -> usize {
-        self.store.max_stream_queries()
-    }
-
     fn root_key(&self) -> Result<Vec<u8>, Self::Error> {
         Ok(self.store.root_key()?)
     }
@@ -440,10 +436,6 @@ impl WithError for LimitedTestMemoryStore {
 #[cfg(with_testing)]
 impl ReadableKeyValueStore for LimitedTestMemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
-
-    fn max_stream_queries(&self) -> usize {
-        self.inner.max_stream_queries()
-    }
 
     fn root_key(&self) -> Result<Vec<u8>, MemoryStoreError> {
         self.inner.root_key()

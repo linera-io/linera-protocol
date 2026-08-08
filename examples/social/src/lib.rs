@@ -108,6 +108,11 @@ pub enum Event {
     Like { key: Key },
     /// A user commented on a post
     Comment { key: Key, comment: String },
+    /// A summary emitted at a checkpoint, carrying the most recent posts on the stream.
+    /// Older events may be dropped after the checkpoint; this lets a subscriber that joins
+    /// afterwards still receive those posts. Each entry is the post's index in the author's
+    /// own-post log paired with the post itself.
+    Summary { recent_posts: Vec<(u32, OwnPost)> },
 }
 
 #[cfg(not(target_arch = "wasm32"))]

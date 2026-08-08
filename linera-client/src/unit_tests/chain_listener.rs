@@ -436,6 +436,168 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Tests that the chain listener stops tracking an event publisher chain once the subscriber
+/// chain unsubscribes from it (#4260).
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+#[cfg_attr(feature = "wasmer", test_case::test_case(linera_execution::WasmRuntime::Wasmer; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case::test_case(linera_execution::WasmRuntime::Wasmtime; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_chain_listener_untracks_after_unsubscribe(
+    wasm_runtime: linera_execution::WasmRuntime,
+) -> anyhow::Result<()> {
+    use linera_base::{data_types::Bytecode, vm::VmRuntime};
+    use linera_core::test_utils::ClientOutcomeResultExt as _;
+    use linera_execution::{Operation, ResourceControlPolicy};
+
+    let signer = InMemorySigner::new(Some(0));
+    let config = ChainListenerConfig::default();
+    let storage_builder = MemoryStorageBuilder::with_wasm_runtime(wasm_runtime);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer.clone())
+        .await?
+        .with_policy(ResourceControlPolicy::all_categories());
+    // Root chain 0 is the admin chain (always fully synced); use higher indices for the test
+    // chains so that the publisher is not the admin chain.
+    let _admin = builder.add_root_chain(0, Amount::ONE).await?;
+    let sender = builder.add_root_chain(1, Amount::ONE).await?;
+    let receiver = builder.add_root_chain(2, Amount::ONE).await?;
+    let sender_id = sender.chain_id();
+    let receiver_id = receiver.chain_id();
+
+    let genesis_config = GenesisConfig::new_for_testing(&builder);
+    let admin_chain_id = genesis_config.admin_chain_id();
+
+    // Publish the `social` example (which uses event streams) and create an instance on both
+    // chains.
+    let (contract_path, service_path) =
+        linera_execution::wasm_test::get_example_bytecode_paths("social")?;
+    let contract = Bytecode::load_from_file(contract_path).await?;
+    let service = Bytecode::load_from_file(service_path).await?;
+    let (module_id, _) = receiver
+        .publish_module(contract, service, VmRuntime::Wasm, None)
+        .await
+        .unwrap_ok_committed();
+    let module_id = module_id.with_abi::<social::SocialAbi, (), ()>();
+    let (application_id, _) = receiver
+        .create_application(module_id, &(), &(), vec![])
+        .await
+        .unwrap_ok_committed();
+
+    // The receiver subscribes to the sender's posts, the sender posts, and the receiver records
+    // the event.
+    let subscribe = social::Operation::Subscribe {
+        chain_id: sender_id,
+    };
+    receiver
+        .execute_operation(Operation::user(application_id, &subscribe)?)
+        .await
+        .unwrap_ok_committed();
+    let post = social::Operation::Post {
+        text: "hello".to_string(),
+        image_url: None,
+    };
+    sender
+        .execute_operation(Operation::user(application_id, &post)?)
+        .await
+        .unwrap_ok_committed();
+    receiver.synchronize_from_validators().await?;
+    receiver.process_inbox().await?;
+
+    // Start a chain listener that fully tracks the receiver. Its signer holds no keys, so it only
+    // follows the chains: it observes blocks but never proposes any itself.
+    let storage = builder.make_storage().await?;
+    let receiver_epoch = receiver.chain_info().await?.epoch;
+    let mut context = ClientContext {
+        client: Arc::new(Client::new(
+            environment::Impl {
+                storage: storage.clone(),
+                network: builder.make_node_provider(),
+                signer: InMemorySigner::new(Some(99)),
+                wallet: environment::TestWallet::default(),
+            },
+            admin_chain_id,
+            false,
+            [(receiver_id, ListeningMode::FullChain)],
+            format!("Listener for {receiver_id:.8}"),
+            Some(Duration::from_secs(30)),
+            Some(Duration::from_secs(1)),
+            1000,
+            chain_client::Options::test_default(),
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
+            &linera_core::client::RequestsSchedulerConfig::default(),
+        )),
+    };
+    context
+        .update_wallet_for_new_chain(
+            receiver_id,
+            receiver.preferred_owner(),
+            clock.current_time(),
+            receiver_epoch,
+        )
+        .await?;
+    let listener_client = context.client.clone();
+
+    let context = Arc::new(Mutex::new(context));
+    let cancellation_token = CancellationToken::new();
+    let chain_listener = ChainListener::new(
+        config,
+        context,
+        storage,
+        cancellation_token.child_token(),
+        tokio::sync::mpsc::unbounded_channel().1,
+        false,
+    )
+    .run()
+    .await
+    .unwrap();
+    let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
+
+    // Because the receiver is subscribed to the sender, the listener should start tracking the
+    // sender as an event publisher (in `EventsOnly` mode).
+    wait_until(|| {
+        matches!(
+            listener_client.chain_mode(sender_id),
+            Some(ListeningMode::EventsOnly(_))
+        )
+    })
+    .await;
+
+    // The receiver unsubscribes. The listener should react to the new block and stop tracking the
+    // sender, since the subscription was the only reason it was tracked.
+    let unsubscribe = social::Operation::Unsubscribe {
+        chain_id: sender_id,
+    };
+    receiver
+        .execute_operation(Operation::user(application_id, &unsubscribe)?)
+        .await
+        .unwrap_ok_committed();
+
+    wait_until(|| listener_client.chain_mode(sender_id).is_none()).await;
+
+    // The receiver itself is still tracked.
+    assert!(listener_client.chain_mode(receiver_id).is_some());
+
+    cancellation_token.cancel();
+    handle.await;
+
+    Ok(())
+}
+
+/// Polls `condition`, yielding to the background listener task between attempts, until it holds or
+/// the attempt budget is exhausted (in which case it panics). The listener here is notification-
+/// driven, so no test-clock advancement is needed.
+#[cfg(any(feature = "wasmer", feature = "wasmtime"))]
+async fn wait_until(mut condition: impl FnMut() -> bool) {
+    for i in 0.. {
+        if condition() {
+            return;
+        }
+        assert!(i < 200, "condition not met within the attempt budget");
+        linera_base::time::timer::sleep(Duration::from_millis(20)).await;
+    }
+}
+
 /// Tests that the ListenerCommand::Listen actually adds chains to the wallet.
 #[test_log::test(tokio::test)]
 async fn test_chain_listener_listen_command_adds_chains_to_wallet() -> anyhow::Result<()> {

@@ -3,10 +3,19 @@
 
 //! CLI tool for Linera EVM bridge operations.
 
+// The binary's crate root needs its own limit (the library's does not apply here);
+// monomorphizing the deeply recursive client futures with the bridge's storage stack
+// otherwise overflows the default of 128.
+#![recursion_limit = "512"]
+
 use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
+#[cfg(feature = "relay")]
+use linera_base::identifiers::{AccountOwner, ChainId};
+#[cfg(feature = "relay")]
+use linera_storage::StorageCacheConfig;
 
 /// Linera Bridge CLI
 #[derive(Parser, Debug)]
@@ -30,6 +39,16 @@ struct InitLightClientOptions {
     /// Path to write the constructor args JSON file
     #[arg(long, default_value = "light-client-args.json")]
     output: PathBuf,
+
+    /// Pause-guardian address (0x-prefixed) that can emergency-pause
+    /// `registerBlock`. Governance role; cannot move funds.
+    #[arg(long)]
+    pause_guardian: String,
+
+    /// Proposer address (0x-prefixed) that gates `expireEpochsBelow`.
+    /// Governance multisig.
+    #[arg(long)]
+    proposer: String,
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -68,11 +87,11 @@ struct ServeOptions {
 
     /// Linera bridge chain ID
     #[arg(long)]
-    linera_bridge_chain_id: linera_base::identifiers::ChainId,
+    linera_bridge_chain_id: ChainId,
 
     /// Owner of the bridge chain
     #[arg(long)]
-    linera_bridge_chain_owner: linera_base::identifiers::AccountOwner,
+    linera_bridge_chain_owner: AccountOwner,
 
     /// Address of the FungibleBridge contract on EVM.
     #[arg(long)]
@@ -99,6 +118,10 @@ struct ServeOptions {
     #[arg(long, default_value = "3001")]
     port: u16,
 
+    /// Port for the localhost-only admin HTTP server (retry endpoints).
+    #[arg(long, default_value = "3002")]
+    admin_port: u16,
+
     /// The maximal number of entries in the blob cache.
     #[arg(long, default_value = "1000")]
     blob_cache_size: usize,
@@ -119,6 +142,14 @@ struct ServeOptions {
     #[arg(long, default_value = "1000")]
     event_cache_size: usize,
 
+    /// The maximal number of entries in the block-hash-by-height cache.
+    #[arg(long, default_value = "1000")]
+    block_hash_by_height_cache_size: usize,
+
+    /// The maximal number of entries in the event-block-height cache.
+    #[arg(long, default_value = "1000")]
+    event_block_height_cache_size: usize,
+
     /// Interval between monitor scan loops, in seconds.
     #[arg(long, default_value = "30")]
     monitor_scan_interval: u64,
@@ -135,6 +166,21 @@ struct ServeOptions {
     /// Defaults to `bridge_relay.sqlite3` next to the RocksDB storage directory.
     #[arg(long)]
     sqlite_path: Option<std::path::PathBuf>,
+
+    /// How often to poll `eth_getTransactionReceipt` while waiting for a
+    /// settlement tx, in milliseconds (default 4000). The relay polls the
+    /// receipt directly rather than using alloy's block heartbeat, so this is
+    /// the confirmation-detection cadence; lower it (e.g. to a node's block
+    /// time) for faster local settlement.
+    #[arg(long)]
+    evm_poll_interval_ms: Option<u64>,
+
+    /// Maximum block range per `eth_getLogs` query during deposit scanning.
+    /// Lower this for RPC providers that cap the range (e.g. 2000 for the
+    /// public Base Sepolia RPC; Alchemy's free tier allows only 10). Larger
+    /// values catch up faster on providers that permit them.
+    #[arg(long, default_value = "2000")]
+    max_log_block_range: u64,
 }
 
 fn main() -> Result<()> {
@@ -173,18 +219,24 @@ impl ServeOptions {
             &self.evm_private_key,
             self.evm_light_client_address.as_deref(),
             self.port,
-            linera_storage::StorageCacheConfig {
+            self.admin_port,
+            StorageCacheConfig {
                 blob_cache_size: self.blob_cache_size,
                 confirmed_block_cache_size: self.confirmed_block_cache_size,
                 certificate_cache_size: self.certificate_cache_size,
                 certificate_raw_cache_size: self.certificate_raw_cache_size,
                 event_cache_size: self.event_cache_size,
+                block_hash_by_height_cache_size: self.block_hash_by_height_cache_size,
+                event_block_height_cache_size: self.event_block_height_cache_size,
                 cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
             },
             std::time::Duration::from_secs(self.monitor_scan_interval),
             self.monitor_start_block,
             self.max_retries,
             self.sqlite_path.as_deref(),
+            self.evm_poll_interval_ms
+                .map(std::time::Duration::from_millis),
+            self.max_log_block_range,
         ))
         .await
     }
@@ -301,6 +353,8 @@ impl InitLightClientOptions {
             "weights": weights,
             "admin_chain_id": format!("0x{}", alloy_primitives::hex::encode(admin_chain_bytes)),
             "epoch": resp.data.current_epoch,
+            "pause_guardian": self.pause_guardian,
+            "proposer": self.proposer,
         });
 
         let json_str = serde_json::to_string_pretty(&result)?;

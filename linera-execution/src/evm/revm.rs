@@ -73,9 +73,9 @@ use crate::{
         inputs::{
             ensure_message_length, ensure_selector_presence, forbid_execute_operation_origin,
             get_revm_execute_message_bytes, get_revm_instantiation_bytes,
-            get_revm_process_streams_bytes, has_selector, EXECUTE_MESSAGE_SELECTOR, FAUCET_ADDRESS,
-            INSTANTIATE_SELECTOR, PRECOMPILE_ADDRESS, PROCESS_STREAMS_SELECTOR, SERVICE_ADDRESS,
-            ZERO_ADDRESS,
+            get_revm_process_streams_bytes, get_revm_summarize_events_bytes, has_selector,
+            EXECUTE_MESSAGE_SELECTOR, FAUCET_ADDRESS, INSTANTIATE_SELECTOR, PRECOMPILE_ADDRESS,
+            PROCESS_STREAMS_SELECTOR, SERVICE_ADDRESS, SUMMARIZE_EVENTS_SELECTOR, ZERO_ADDRESS,
         },
     },
     BaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, DataBlobHash, EvmExecutionError,
@@ -142,7 +142,9 @@ mod metrics {
     });
 }
 
+/// A user contract in a compiled EVM module.
 #[derive(Clone)]
+#[allow(missing_docs)]
 pub enum EvmContractModule {
     #[cfg(with_revm)]
     Revm { module: Vec<u8> },
@@ -203,6 +205,7 @@ impl UserContractModule for EvmContractModule {
 
 /// A user service in a compiled EVM module.
 #[derive(Clone)]
+#[allow(missing_docs)]
 pub enum EvmServiceModule {
     #[cfg(with_revm)]
     Revm { module: Vec<u8> },
@@ -262,6 +265,7 @@ type ContractCtx<'a, Runtime> = MainnetContext<WrapDatabaseRef<&'a mut ContractD
 
 type ServiceCtx<'a, Runtime> = MainnetContext<WrapDatabaseRef<&'a mut ServiceDatabase<Runtime>>>;
 
+/// Converts an EVM address into the corresponding Linera application ID.
 pub fn address_to_user_application_id(address: Address) -> ApplicationId {
     let mut vec = vec![0_u8; 32];
     vec[..20].copy_from_slice(address.as_ref());
@@ -1187,6 +1191,7 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
     }
 }
 
+/// An instance of a user contract running on the Revm EVM.
 pub struct RevmContractInstance<Runtime> {
     module: Vec<u8>,
     db: ContractDatabase<Runtime>,
@@ -1337,6 +1342,20 @@ where
         self.execute_no_return_operation(operation, "process_streams", value, caller)
     }
 
+    fn summarize_events(&mut self, streams: Vec<StreamUpdate>) -> Result<(), ExecutionError> {
+        self.db.inner.set_contract_address()?;
+        let operation = get_revm_summarize_events_bytes(streams);
+        ensure_selector_presence(
+            &self.module,
+            SUMMARIZE_EVENTS_SELECTOR,
+            "function summarize_events(Linera.StreamUpdate[] memory streams)",
+        )?;
+        // For summarize_events, authenticated_owner and authenticated_called_id are None.
+        let caller = Address::ZERO;
+        let value = U256::ZERO;
+        self.execute_no_return_operation(operation, "summarize_events", value, caller)
+    }
+
     fn finalize(&mut self) -> Result<(), ExecutionError> {
         Ok(())
     }
@@ -1379,6 +1398,7 @@ impl<Runtime> RevmContractInstance<Runtime>
 where
     Runtime: ContractRuntime,
 {
+    /// Prepares a contract instance from its EVM module and the given runtime.
     pub fn prepare(module: Vec<u8>, runtime: Runtime) -> Self {
         let db = ContractDatabase::new(runtime);
         Self { module, db }
@@ -1551,6 +1571,7 @@ where
     }
 }
 
+/// An instance of a user service running on the Revm EVM.
 pub struct RevmServiceInstance<Runtime> {
     module: Vec<u8>,
     db: ServiceDatabase<Runtime>,
@@ -1560,6 +1581,7 @@ impl<Runtime> RevmServiceInstance<Runtime>
 where
     Runtime: ServiceRuntime,
 {
+    /// Prepares a service instance from its EVM module and the given runtime.
     pub fn prepare(module: Vec<u8>, runtime: Runtime) -> Self {
         let db = ServiceDatabase::new(runtime);
         Self { module, db }

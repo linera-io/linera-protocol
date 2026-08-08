@@ -22,27 +22,36 @@ pub use wallet::{ApplicationWrapper, ClientWrapper, FaucetService, NodeService, 
 /// The information needed to start a Linera net of a particular kind.
 #[async_trait]
 pub trait LineraNetConfig {
+    /// The type of Linera net produced by this configuration.
     type Net: LineraNet + Sized + Send + Sync + 'static;
 
+    /// Starts the Linera net and returns it together with a client to interact with it.
     async fn instantiate(self) -> Result<(Self::Net, ClientWrapper)>;
 }
 
 /// A running Linera net.
 #[async_trait]
 pub trait LineraNet {
+    /// Checks that the net is still running and returns an error otherwise.
     async fn ensure_is_running(&mut self) -> Result<()>;
 
+    /// Creates a new client to interact with the net.
     async fn make_client(&mut self) -> ClientWrapper;
 
+    /// Shuts down the net.
     async fn terminate(&mut self) -> Result<()>;
 }
 
 /// Network protocol in use
 #[derive(Copy, Clone)]
 pub enum Network {
+    /// gRPC over cleartext (no TLS).
     Grpc,
+    /// gRPC secured with TLS.
     Grpcs,
+    /// Simple transport over TCP.
     Tcp,
+    /// Simple transport over UDP.
     Udp,
 }
 
@@ -65,6 +74,7 @@ impl Network {
         }
     }
 
+    /// Returns a short lowercase name for the network protocol.
     pub fn short(&self) -> &'static str {
         match self {
             Network::Grpc => "grpc",
@@ -74,6 +84,7 @@ impl Network {
         }
     }
 
+    /// Returns the equivalent network protocol without TLS.
     pub fn drop_tls(&self) -> Self {
         match self {
             Network::Grpc => Network::Grpc,
@@ -83,6 +94,7 @@ impl Network {
         }
     }
 
+    /// Returns the localhost address to use for this network protocol.
     pub fn localhost(&self) -> &'static str {
         match self {
             Network::Grpc | Network::Grpcs => "localhost",

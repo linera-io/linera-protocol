@@ -55,7 +55,7 @@ pub async fn fetch_formats(
                 .ok_or_else(|| anyhow!("application formats query returned non-u8 byte"))
         })
         .collect::<Result<_>>()?;
-    let formats: Formats = serde_json::from_slice(&bytes)
-        .context("formats blob did not deserialize as Formats JSON")?;
+    let formats: Formats = linera_sdk::bcs::from_bytes(&bytes)
+        .context("formats blob did not deserialize as Formats BCS")?;
     Ok(Some(formats))
 }

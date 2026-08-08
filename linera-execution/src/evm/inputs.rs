@@ -42,10 +42,13 @@ alloy_sol_types::sol! {
         InternalChainId chain_id;
         InternalStreamId stream_id;
         uint32 previous_index;
+        uint32 first_index;
         uint32 next_index;
     }
 
     function process_streams(InternalStreamUpdate[] internal_streams);
+
+    function summarize_events(InternalStreamUpdate[] internal_streams);
 }
 
 fn crypto_hash_to_internal_crypto_hash(hash: CryptoHash) -> B256 {
@@ -117,6 +120,7 @@ impl From<StreamUpdate> for InternalStreamUpdate {
             chain_id,
             stream_id,
             previous_index: stream_update.previous_index,
+            first_index: stream_update.first_index,
             next_index: stream_update.next_index,
         }
     }
@@ -149,7 +153,13 @@ pub(crate) const EXECUTE_MESSAGE_SELECTOR: &[u8] = &[173, 125, 234, 205];
 
 /// This is the selector of `process_streams` that should be called
 /// only from a submitted message
-pub(crate) const PROCESS_STREAMS_SELECTOR: &[u8] = &[254, 72, 102, 28];
+pub(crate) const PROCESS_STREAMS_SELECTOR: &[u8] =
+    &<process_streamsCall as alloy_sol_types::SolCall>::SELECTOR;
+
+/// This is the selector of `summarize_events`, which is called by the system on a
+/// checkpoint and never from a submitted operation.
+pub(crate) const SUMMARIZE_EVENTS_SELECTOR: &[u8] =
+    &<summarize_eventsCall as alloy_sol_types::SolCall>::SELECTOR;
 
 /// This is the selector of `instantiate` that should be called
 /// only when creating a new instance of a shared contract
@@ -163,6 +173,10 @@ pub(crate) fn forbid_execute_operation_origin(vec: &[u8]) -> Result<(), EvmExecu
     ensure!(
         vec != PROCESS_STREAMS_SELECTOR,
         EvmExecutionError::IllegalOperationCall("function process_streams".to_string(),)
+    );
+    ensure!(
+        vec != SUMMARIZE_EVENTS_SELECTOR,
+        EvmExecutionError::IllegalOperationCall("function summarize_events".to_string(),)
     );
     ensure!(
         vec != INSTANTIATE_SELECTOR,
@@ -232,6 +246,15 @@ pub(crate) fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<
     fct_call.abi_encode()
 }
 
+pub(crate) fn get_revm_summarize_events_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
+    use alloy_sol_types::SolCall;
+
+    let internal_streams = streams.into_iter().map(StreamUpdate::into).collect();
+
+    let fct_call = summarize_eventsCall { internal_streams };
+    fct_call.abi_encode()
+}
+
 #[cfg(test)]
 mod tests {
     use revm_primitives::keccak256;
@@ -254,7 +277,7 @@ mod tests {
         use alloy_sol_types::SolCall;
         assert_eq!(
             process_streamsCall::SIGNATURE,
-            "process_streams(((bytes32),((uint8,(bytes32)),(bytes)),uint32,uint32)[])"
+            "process_streams(((bytes32),((uint8,(bytes32)),(bytes)),uint32,uint32,uint32)[])"
         );
         assert_eq!(process_streamsCall::SELECTOR, PROCESS_STREAMS_SELECTOR);
     }

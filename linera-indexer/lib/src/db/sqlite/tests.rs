@@ -4,7 +4,6 @@
 use linera_base::{
     crypto::{CryptoHash, TestString},
     data_types::{Amount, Blob, BlockHeight, Epoch, Timestamp},
-    hashed::Hashed,
     identifiers::{ApplicationId, ChainId},
 };
 use linera_chain::{
@@ -87,7 +86,7 @@ async fn test_high_level_atomic_api() {
     let height = BlockHeight(1);
     let timestamp = Timestamp::now();
     let test_block = create_test_block(chain_id, height);
-    let block_hash = Hashed::new(test_block.clone()).hash();
+    let block_hash = test_block.hash();
     let block_data = bincode::serialize(&test_block).unwrap();
 
     let blobs = vec![
@@ -181,7 +180,7 @@ async fn test_incoming_bundles_storage_and_query() {
             incoming_bundle.clone(),
         ));
 
-    let block_hash = Hashed::new(test_block.clone()).hash();
+    let block_hash = test_block.hash();
     let block_data = bincode::serialize(&test_block).unwrap();
 
     let mut tx = db.begin_transaction().await.unwrap();

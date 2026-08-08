@@ -4060,7 +4060,6 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
- "url",
  "wrapped-fungible",
 ]
 
@@ -4120,6 +4119,7 @@ dependencies = [
  "async-graphql",
  "cfg_aliases",
  "custom_debug_derive",
+ "derive_more 1.0.0",
  "futures",
  "linera-base",
  "linera-execution",
@@ -4451,6 +4451,7 @@ dependencies = [
  "serde",
  "sha3 0.10.9",
  "static_assertions",
+ "strum 0.26.3",
  "sysinfo",
  "tempfile",
  "thiserror 1.0.69",

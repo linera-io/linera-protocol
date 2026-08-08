@@ -345,6 +345,15 @@ impl From<Amount> for U256 {
     }
 }
 
+impl From<Amount> for f64 {
+    /// Returns the amount as a floating-point number of whole tokens. This is
+    /// lossy for large or high-precision amounts; intended for telemetry, not
+    /// for arithmetic.
+    fn from(amount: Amount) -> f64 {
+        amount.0 as f64 / Amount::ONE.0 as f64
+    }
+}
+
 /// Error converting from `U256` to `Amount`.
 /// This can fail since `Amount` is a `u128`.
 #[derive(Error, Debug)]
@@ -372,8 +381,6 @@ impl TryFrom<U256> for Amount {
     PartialOrd,
     Hash,
     derive_more::Display,
-    derive_more::From,
-    derive_more::Into,
     derive_more::Deref,
     derive_more::DerefMut,
     derive_more::FromStr,
@@ -490,6 +497,11 @@ impl TimeDelta {
     /// Returns the given number of seconds as a [`TimeDelta`].
     pub const fn from_secs(secs: u64) -> Self {
         TimeDelta(secs.saturating_mul(1_000_000))
+    }
+
+    /// Returns the given [`Duration`] as a [`TimeDelta`], saturating at the maximum on overflow.
+    pub fn from_duration(duration: Duration) -> Self {
+        TimeDelta(u64::try_from(duration.as_micros()).unwrap_or(u64::MAX))
     }
 
     /// Returns this [`TimeDelta`] as a number of microseconds.
@@ -837,6 +849,7 @@ impl TryFrom<BlockHeight> for usize {
 }
 
 impl_wrapped_number!(Amount, u128);
+impl_wrapped_number!(U128, u128);
 impl_wrapped_number!(BlockHeight, u64);
 impl_wrapped_number!(TimeDelta, u64);
 
@@ -1705,7 +1718,7 @@ impl BlobContent {
         BlobContent::new(BlobType::ApplicationDescription, bytes)
     }
 
-    /// Creates a new application formats [`BlobContent`] from the JSON-encoded
+    /// Creates a new application formats [`BlobContent`] from the BCS-encoded
     /// `Formats` description bytes.
     pub fn new_application_formats(bytes: impl Into<Box<[u8]>>) -> Self {
         BlobContent::new(BlobType::ApplicationFormats, bytes)
@@ -1827,7 +1840,7 @@ impl Blob {
         ))
     }
 
-    /// Creates a new application formats [`Blob`] from the JSON-encoded
+    /// Creates a new application formats [`Blob`] from the BCS-encoded
     /// `Formats` description bytes.
     pub fn new_application_formats(bytes: impl Into<Box<[u8]>>) -> Self {
         Blob::new(BlobContent::new_application_formats(bytes))
@@ -1945,6 +1958,10 @@ pub struct StreamUpdate {
     pub stream_id: StreamId,
     /// The lowest index of a new event. See [`StreamUpdate::new_indices`].
     pub previous_index: u32,
+    /// The lowest index whose event is still guaranteed to be readable (if it exists): the
+    /// index of the first event published since the publisher's most recent checkpoint. Reading
+    /// an event below this index may fail, since checkpoints prune earlier events.
+    pub first_index: u32,
     /// The index of the next event, i.e. the lowest for which no event is known yet.
     pub next_index: u32,
 }

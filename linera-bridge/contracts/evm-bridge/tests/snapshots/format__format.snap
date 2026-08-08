@@ -1,5 +1,6 @@
 ---
 source: tests/format.rs
+assertion_line: 13
 expression: "EvmBridgeApplication::formats().unwrap()"
 ---
 REGISTRY:
@@ -9,11 +10,6 @@ REGISTRY:
           TYPENAME: CryptoHash
   BridgeOperation:
     ENUM:
-      156639874:
-        RegisterFungibleApp:
-          STRUCT:
-            - app_id:
-                TYPENAME: ApplicationId
       185405235:
         VerifyBlockHash:
           STRUCT:
@@ -44,6 +40,14 @@ REGISTRY:
                 TUPLEARRAY:
                   CONTENT: U8
                   SIZE: 20
+      239329758:
+        Burn:
+          STRUCT:
+            - amount: U128
+            - evm_target:
+                TUPLEARRAY:
+                  CONTENT: U8
+                  SIZE: 20
   BridgeParameters:
     STRUCT:
       - source_chain_id: U64
@@ -51,6 +55,13 @@ REGISTRY:
           TUPLEARRAY:
             CONTENT: U8
             SIZE: 20
+      - bridge_chain_id:
+          TYPENAME: ChainId
+      - fungible_app_id:
+          TYPENAME: ApplicationId
+  ChainId:
+    NEWTYPESTRUCT:
+      TYPENAME: CryptoHash
   CryptoHash:
     NEWTYPESTRUCT:
       TUPLEARRAY:

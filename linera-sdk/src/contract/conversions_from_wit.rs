@@ -169,6 +169,7 @@ impl From<wit_entrypoints::StreamUpdate> for StreamUpdate {
             chain_id: stream_update.chain_id.into(),
             stream_id: stream_update.stream_id.into(),
             previous_index: stream_update.previous_index,
+            first_index: stream_update.first_index,
             next_index: stream_update.next_index,
         }
     }

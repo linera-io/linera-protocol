@@ -181,10 +181,11 @@ For a production testnet deployment runbook see
 
 ## How a withdrawal works
 
-1. User calls `wrapped-fungible.transfer` targeting the relay's chain with an
-   `Address20` owner (their EVM address)
-2. On the relay chain, the `Credit` message triggers an auto-burn and emits a
-   `BurnEvent` on the `"burns"` stream
+1. User submits a `Burn` operation to the `evm-bridge` app with their EVM
+   address as the target
+2. The bridge moves the tokens into its escrow account on the relay (bridge)
+   chain and burns them, emitting a `BurnEvent` on the bridge app's `"burns"`
+   stream
 3. Relay detects the `BurnEvent` and forwards the Linera block to
    `FungibleBridge.addBlock()`
 4. `FungibleBridge` verifies the block via `LightClient`, deserializes the
@@ -200,9 +201,9 @@ requests and automatically retries them:
   processed. Unprocessed deposits are retried by regenerating the MPT proof
   and resubmitting.
 - **Linera→EVM burns**: the relay scans Linera blocks for `BurnEvent` events
-  on the `"burns"` stream and checks EVM for matching ERC-20 `Transfer` events.
-  Unforwarded burns are retried by re-reading the block containing the
-  auto-burn from chain storage and re-calling `addBlock`.
+  on the bridge app's `"burns"` stream and checks EVM for matching ERC-20
+  `Transfer` events. Unforwarded burns are retried by re-reading the block
+  containing the burn from chain storage and re-calling `addBlock`.
 
 This means the relay self-heals after crashes or transient RPC failures
 without operator intervention. On-chain replay protection (`processed_deposits`

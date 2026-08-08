@@ -22,21 +22,17 @@ pub struct WrappedParameters {
     pub ticker_symbol: String,
     /// Number of decimal places used by the source ERC-20 (e.g. 6 for USDC).
     pub decimals: u8,
-    /// If set, only this account owner can sign mint operations
-    pub minter: Option<AccountOwner>,
-    /// If set, minting and auto-burning are restricted to this chain
-    pub mint_chain_id: Option<ChainId>,
+    /// The chain on which minting and burning are allowed (the bridge chain).
+    pub mint_chain_id: ChainId,
     /// The ERC-20 token address on the source EVM chain
     pub evm_token_address: [u8; 20],
     /// The EVM chain ID of the source chain (e.g. 8453 for Base)
     pub evm_source_chain_id: u64,
-    /// If set, only this application can call Mint (via cross-app call)
-    pub bridge_app_id: Option<ApplicationId>,
 }
 
-/// Event emitted when tokens are auto-burned on the bridge chain.
-/// The relayer observes these on the "burns" stream and forwards
-/// to EVM to release the corresponding ERC-20 tokens.
+/// Event emitted by the bridge application on its "burns" stream when it burns
+/// wrapped tokens on the bridge chain. The relayer observes these and forwards
+/// them to EVM to release the corresponding ERC-20 tokens.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BurnEvent {
     /// The Ethereum address to receive the unlocked ERC-20 tokens
@@ -47,6 +43,7 @@ pub struct BurnEvent {
 
 /// Initial accounts and balances for the wrapped fungible token application.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[allow(missing_docs)]
 pub struct InitialState {
     pub accounts: BTreeMap<AccountOwner, U128>,
 }
@@ -58,11 +55,13 @@ pub struct InitialStateBuilder {
 }
 
 impl InitialStateBuilder {
+    /// Adds an account with the given initial balance.
     pub fn with_account(mut self, account: AccountOwner, balance: U128) -> Self {
         self.account_balances.insert(account, balance);
         self
     }
 
+    /// Builds the [`InitialState`] from the configured accounts.
     pub fn build(&self) -> InitialState {
         InitialState {
             accounts: self.account_balances.clone(),
@@ -72,6 +71,7 @@ impl InitialStateBuilder {
 
 /// Response variants returned by the wrapped fungible token application.
 #[derive(Debug, StableEnumInCrate, Default)]
+#[allow(missing_docs)]
 pub enum FungibleResponse {
     #[default]
     Ok,
@@ -81,6 +81,7 @@ pub enum FungibleResponse {
 
 /// Operations for the wrapped fungible token application.
 #[derive(Debug, StableEnumInCrate, GraphQLMutationRootInCrate)]
+#[allow(missing_docs)]
 pub enum WrappedFungibleOperation {
     /// Requests an account balance.
     Balance { owner: AccountOwner },
@@ -111,20 +112,29 @@ pub enum WrappedFungibleOperation {
         amount: U128,
         target_account: Account,
     },
-    /// Mints new tokens and transfers them to a target account. Only the authorized
-    /// minter can call this.
+    /// Mints new tokens and transfers them to a target account. Driven by the
+    /// registered authorized caller (see [`Self::RegisterAuthorizedCaller`]) on the
+    /// designated mint chain.
     MintAndTransfer {
         target_account: Account,
         amount: U128,
     },
-    /// Burns tokens from an account. Rejected by the contract — burning happens
-    /// automatically when tokens are transferred to an Address20 on the bridge chain.
+    /// Burns tokens from an account. Authorized only via the registered authorized
+    /// caller (see [`Self::RegisterAuthorizedCaller`]) on the designated mint chain.
     Burn { owner: AccountOwner, amount: U128 },
+    /// Registers the application authorized to drive `MintAndTransfer`/`Burn`. Must run on
+    /// the designated `mint_chain_id` — the only chain where it is consulted — and
+    /// requires an authenticated signer. Because an authorized caller may take
+    /// this token's id as a creation parameter, the two cannot reference each
+    /// other at creation; this token is created first and registers its caller
+    /// afterwards.
+    RegisterAuthorizedCaller { app_id: ApplicationId },
 }
 
 /// Cross-chain message used by the wrapped fungible token application.
 /// Amounts are [`U128`] in the source ERC-20's decimal scale.
 #[derive(Debug, Deserialize, Serialize)]
+#[allow(missing_docs)]
 pub enum Message {
     /// Credits the given `target` account, unless the message is bouncing, in which case
     /// `source` is credited instead.

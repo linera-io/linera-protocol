@@ -1,19 +1,18 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Builds the BCS registry from offchain-only bridge types (`block_proof`, etc.), so it only
+// compiles when the `offchain` feature is on — never in the wasm32/`chain` contract build.
+#![cfg(all(not(target_arch = "wasm32"), feature = "offchain"))]
+
 use linera_base::{
     crypto::{CryptoHash, TestString},
-    data_types::{OracleResponse, Round},
+    data_types::{BlobContent, Event, OracleResponse, Round},
     identifiers::{AccountOwner, BlobType, GenericApplicationId},
-    vm::VmRuntime,
 };
-use linera_chain::{
-    data_types::{MessageAction, Transaction, VoteValue},
-    types::{CertificateKind, ConfirmedBlockCertificate},
-};
-use linera_execution::{
-    system::AdminOperation, Message, MessageKind, Operation, SystemMessage, SystemOperation,
-};
+use linera_bridge::block_proof::BlockProof;
+use linera_chain::{data_types::VoteValue, types::CertificateKind};
+use linera_execution::system::EpochEventData;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 
 fn get_registry() -> Result<Registry> {
@@ -45,21 +44,15 @@ fn get_registry() -> Result<Registry> {
     // Trace enums that appear in the ConfirmedBlockCertificate type graph.
     tracer.trace_type::<AccountOwner>(&samples)?;
     tracer.trace_type::<BlobType>(&samples)?;
+    tracer.trace_type::<BlobContent>(&samples)?;
     tracer.trace_type::<GenericApplicationId>(&samples)?;
-    tracer.trace_type::<Message>(&samples)?;
-    tracer.trace_type::<MessageAction>(&samples)?;
-    tracer.trace_type::<MessageKind>(&samples)?;
-    tracer.trace_type::<Operation>(&samples)?;
     tracer.trace_type::<OracleResponse>(&samples)?;
     tracer.trace_type::<Round>(&samples)?;
-    tracer.trace_type::<SystemMessage>(&samples)?;
-    tracer.trace_type::<SystemOperation>(&samples)?;
-    tracer.trace_type::<AdminOperation>(&samples)?;
-    tracer.trace_type::<VmRuntime>(&samples)?;
     tracer.trace_type::<CertificateKind>(&samples)?;
-    tracer.trace_type::<Transaction>(&samples)?;
     tracer.trace_type::<VoteValue>(&samples)?;
-    tracer.trace_type::<ConfirmedBlockCertificate>(&samples)?;
+    tracer.trace_type::<BlockProof>(&samples)?;
+    tracer.trace_type::<Event>(&samples)?;
+    tracer.trace_type::<EpochEventData>(&samples)?;
     tracer.registry()
 }
 

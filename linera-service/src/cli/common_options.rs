@@ -59,6 +59,7 @@ pub struct CommonCliOptions {
 }
 
 impl CommonCliOptions {
+    /// Returns the wallet-specific suffix used when resolving paths and environment variables.
     pub fn suffix(&self) -> String {
         self.with_wallet
             .as_ref()
@@ -66,6 +67,7 @@ impl CommonCliOptions {
             .unwrap_or_default()
     }
 
+    /// Resolves the storage configuration from CLI options, environment variables, or defaults.
     pub fn storage_config(&self) -> Result<StorageConfig, Error> {
         if let Some(config) = &self.storage_config {
             return config.parse();
@@ -94,22 +96,27 @@ impl CommonCliOptions {
         }
     }
 
+    /// Returns the path to the wallet file.
     pub fn wallet_path(&self) -> Result<PathBuf, Error> {
         linera_wallet_json::paths::wallet_path(self.wallet_state_path.as_ref(), &self.suffix())
     }
 
+    /// Returns the path to the keystore file.
     pub fn keystore_path(&self) -> Result<PathBuf, Error> {
         linera_wallet_json::paths::keystore_path(self.keystore_path.as_ref(), &self.suffix())
     }
 
+    /// Reads and returns the wallet.
     pub fn wallet(&self) -> Result<Wallet, Error> {
         Ok(Wallet::read(&self.wallet_path()?)?)
     }
 
+    /// Reads and returns the keystore.
     pub fn keystore(&self) -> Result<linera_wallet_json::Keystore, Error> {
         Ok(linera_wallet_json::Keystore::read(&self.keystore_path()?)?)
     }
 
+    /// Creates and saves a new wallet from the given genesis configuration.
     pub fn create_wallet(&self, genesis_config: GenesisConfig) -> Result<Wallet, Error> {
         let wallet_path = self.wallet_path()?;
         if wallet_path.exists() {
@@ -120,6 +127,7 @@ impl CommonCliOptions {
         Ok(wallet)
     }
 
+    /// Creates and saves a new keystore, optionally seeded for deterministic testing.
     pub fn create_keystore(
         &self,
         testing_prng_seed: Option<u64>,

@@ -162,13 +162,18 @@ pub async fn parse_broadcast_address(
     project_name: &str,
     compose_file: &std::path::Path,
     script_name: &str,
+    contract_name: &str,
 ) -> anyhow::Result<Address> {
+    // Select by contract name rather than `.transactions[0]`: a script may
+    // deploy more than one contract (e.g. DeployFungibleBridge also deploys the
+    // initial decoder), and the target is not necessarily the first CREATE.
     let output = exec_output(
         compose,
         "foundry-tools",
         &format!(
             "CHAIN_ID=$(cast chain-id --rpc-url http://anvil:8545); \
-             jq -r '.transactions[0].contractAddress' \
+             jq -r --arg name '{contract_name}' \
+             '[.transactions[] | select(.contractName==$name)] | last | .contractAddress' \
              /contracts/broadcast/{script_name}/$CHAIN_ID/run-latest.json"
         ),
         project_name,
@@ -204,6 +209,7 @@ pub async fn deploy_linera_token(
         project_name,
         compose_file,
         "DeployLineraToken.s.sol",
+        "LineraToken",
     )
     .await
 }
@@ -238,6 +244,7 @@ pub async fn deploy_linera_token_with_supply(
         project_name,
         compose_file,
         "DeployLineraToken.s.sol",
+        "LineraToken",
     )
     .await
 }
@@ -271,6 +278,7 @@ pub async fn deploy_linera_token_with_decimals(
         project_name,
         compose_file,
         "DeployLineraToken.s.sol",
+        "LineraToken",
     )
     .await
 }
@@ -285,6 +293,7 @@ pub async fn deploy_fungible_bridge(
     chain_id_bytes32: &str,
     token: Address,
     fungible_app_id_bytes32: &str,
+    bridge_app_id_bytes32: &str,
 ) -> anyhow::Result<Address> {
     exec_ok(
         compose,
@@ -294,6 +303,11 @@ pub async fn deploy_fungible_bridge(
                  BRIDGE_CHAIN_ID={chain_id_bytes32} \
                  TOKEN_ADDRESS={token} \
                  FUNGIBLE_APP_ID={fungible_app_id_bytes32} \
+                 BRIDGE_APP_ID={bridge_app_id_bytes32} \
+                 PAUSE_GUARDIAN=0x000000000000000000000000000000000000dead \
+                 PROPOSER=0x000000000000000000000000000000000000beef \
+                 CANCELLER=0x000000000000000000000000000000000000ca11 \
+                 TIMELOCK_DELAY=86400 \
              forge script /contracts/script/DeployFungibleBridge.s.sol \
              --root /contracts \
              --rpc-url http://anvil:8545 \
@@ -309,6 +323,7 @@ pub async fn deploy_fungible_bridge(
         project_name,
         compose_file,
         "DeployFungibleBridge.s.sol",
+        "FungibleBridge",
     )
     .await
 }
@@ -481,11 +496,9 @@ where
             serde_json::to_vec(&wrapped_fungible::WrappedParameters {
                 ticker_symbol: "wTEST".to_string(),
                 decimals: 18,
-                minter: None,
-                mint_chain_id: Some(mint_chain_id),
+                mint_chain_id: mint_chain_id,
                 evm_token_address: erc20_addr.0 .0,
                 evm_source_chain_id: 31337,
-                bridge_app_id: None,
             })?,
             serde_json::to_vec(&wrapped_fungible::InitialState {
                 accounts: std::collections::BTreeMap::from([(initial_holder, initial_balance)]),
@@ -495,6 +508,90 @@ where
         .await?
         .expect("create wrapped-fungible app committed");
     Ok(fungible_app_id)
+}
+
+/// Publishes the evm-bridge Wasm module on `chain_client` and creates an
+/// application instance for the given source token, with `bridge_chain_id`
+/// set to the chain that drives mints/burns. The Wasm artifacts load from
+/// `linera-bridge/contracts/evm-bridge/target/wasm32-unknown-unknown/release/`
+/// — bridge tests must build the evm-bridge contract before invoking this.
+pub async fn publish_and_create_evm_bridge<E>(
+    chain_client: &linera_core::client::ChainClient<E>,
+    erc20_addr: Address,
+    bridge_chain_id: linera_base::identifiers::ChainId,
+    fungible_app_id: linera_base::identifiers::ApplicationId,
+) -> anyhow::Result<linera_base::identifiers::ApplicationId>
+where
+    E: linera_core::environment::Environment,
+{
+    use anyhow::Context as _;
+    use linera_base::{data_types::Bytecode, vm::VmRuntime};
+
+    let repo_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(3)
+        .context("manifest dir has fewer than 3 ancestors")?
+        .to_path_buf();
+    let wasm_dir =
+        repo_root.join("linera-bridge/contracts/evm-bridge/target/wasm32-unknown-unknown/release");
+    let eb_contract = Bytecode::load_from_file(wasm_dir.join("evm_bridge_contract.wasm")).await?;
+    let eb_service = Bytecode::load_from_file(wasm_dir.join("evm_bridge_service.wasm")).await?;
+    let (eb_module_id, _) = chain_client
+        .publish_module(eb_contract, eb_service, VmRuntime::Wasm, None)
+        .await?
+        .expect("publish evm-bridge module committed");
+    chain_client.synchronize_from_validators().await?;
+    chain_client.process_inbox().await?;
+
+    let (bridge_app_id, _) = chain_client
+        .create_application_untyped(
+            eb_module_id,
+            serde_json::to_vec(&linera_bridge::abi::BridgeParameters {
+                source_chain_id: 31337,
+                token_address: erc20_addr.0 .0,
+                bridge_chain_id,
+                fungible_app_id,
+            })?,
+            serde_json::to_vec(&linera_bridge::abi::BridgeInstantiationArgument {
+                rpc_endpoint: String::new(),
+            })?,
+            vec![],
+        )
+        .await?
+        .expect("create evm-bridge app committed");
+    Ok(bridge_app_id)
+}
+
+/// Registers the evm-bridge application with the wrapped-fungible app so the
+/// bridge may drive Mint/Burn on it. Submits `RegisterAuthorizedCaller` on the
+/// wrapped-fungible application and processes the inbox.
+pub async fn register_bridge_app<E>(
+    chain_client: &linera_core::client::ChainClient<E>,
+    fungible_app_id: linera_base::identifiers::ApplicationId,
+    bridge_app_id: linera_base::identifiers::ApplicationId,
+) -> anyhow::Result<()>
+where
+    E: linera_core::environment::Environment,
+{
+    use linera_execution::Operation;
+    let bytes = bcs::to_bytes(
+        &wrapped_fungible::WrappedFungibleOperation::RegisterAuthorizedCaller {
+            app_id: bridge_app_id,
+        },
+    )?;
+    chain_client
+        .execute_operations(
+            vec![Operation::User {
+                application_id: fungible_app_id,
+                bytes,
+            }],
+            vec![],
+        )
+        .await?
+        .expect("register bridge app committed");
+    chain_client.synchronize_from_validators().await?;
+    chain_client.process_inbox().await?;
+    Ok(())
 }
 
 /// Transfers `amount` ERC-20 attos from the deployer (Anvil account 0)
@@ -615,4 +712,40 @@ where
     let info = chain_client.chain_info().await?;
     let hash = info.block_hash.context("chain has no blocks yet")?;
     Ok(chain_client.read_certificate(hash).await?)
+}
+
+/// Storage cache configuration used by the e2e tests.
+pub fn test_storage_cache_config() -> linera_storage::StorageCacheConfig {
+    linera_storage::StorageCacheConfig {
+        blob_cache_size: 1000,
+        confirmed_block_cache_size: 1000,
+        certificate_cache_size: 1000,
+        certificate_raw_cache_size: 1000,
+        event_cache_size: 1000,
+        block_hash_by_height_cache_size: 1000,
+        event_block_height_cache_size: 1000,
+        cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
+    }
+}
+
+/// Returns the positions of `bridge_app_id`'s "burns"-stream events in `certificate`, grouped by
+/// transaction index. Mirrors `FungibleBridge`'s burn matching (the bridge application id plus the
+/// "burns" stream) so a test can settle exactly those events via `registerBlock` + `processBurns`,
+/// the same path the relayer uses in production.
+pub fn burn_positions_by_tx(
+    certificate: &linera_chain::types::ConfirmedBlockCertificate,
+    bridge_app_id: linera_base::identifiers::ApplicationId,
+) -> Vec<(u32, Vec<u32>)> {
+    use linera_base::identifiers::GenericApplicationId;
+    let mut by_tx: std::collections::BTreeMap<u32, Vec<u32>> = std::collections::BTreeMap::new();
+    for (tx_index, tx_events) in (0u32..).zip(&certificate.block().body.events) {
+        for (pos, event) in (0u32..).zip(tx_events) {
+            if event.stream_id.application_id == GenericApplicationId::User(bridge_app_id)
+                && event.stream_id.stream_name.0 == b"burns"
+            {
+                by_tx.entry(tx_index).or_default().push(pos);
+            }
+        }
+    }
+    by_tx.into_iter().collect()
 }

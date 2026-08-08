@@ -15,8 +15,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, ProposedBlock},
-    types::{Block, ConfirmedBlockCertificate, GenericCertificate},
-    ChainError, ChainExecutionContext,
+    types::{Block, ConfirmedBlockCertificate},
+    ChainError, ChainExecutionContext, StreamCounts,
 };
 use linera_execution::{BlobState, ExecutionError, Query, QueryOutcome, ResourceTracker};
 use linera_storage::{Arc as CacheArc, Storage};
@@ -49,7 +49,8 @@ where
 }
 
 /// Error type for the operations on a local node.
-#[derive(Debug, Error)]
+#[derive(Debug, Error, strum::IntoStaticStr)]
+#[allow(missing_docs)]
 pub enum LocalNodeError {
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
@@ -74,6 +75,20 @@ pub enum LocalNodeError {
 
     #[error("Events not found: {0:?}")]
     EventsNotFound(Vec<EventId>),
+}
+
+impl LocalNodeError {
+    /// Returns the qualified error variant name for the `error_type` metric label,
+    /// delegating to [`WorkerError::error_type`] for wrapped worker errors.
+    pub fn error_type(&self) -> String {
+        match self {
+            LocalNodeError::WorkerError(worker_error) => worker_error.error_type(),
+            other => {
+                let variant: &'static str = other.into();
+                format!("LocalNodeError::{variant}")
+            }
+        }
+    }
 }
 
 impl From<ExecutionError> for LocalNodeError {
@@ -118,7 +133,7 @@ where
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_certificate<T>(
         &self,
-        certificate: GenericCertificate<T>,
+        certificate: T::Certificate,
         notifier: &impl Notifier,
     ) -> Result<ChainInfoResponse, LocalNodeError>
     where
@@ -440,16 +455,17 @@ where
         Ok(self.node.state.get_event_subscriptions(chain_id).await?)
     }
 
-    /// Gets the next expected event index for a stream.
-    pub async fn get_next_expected_event(
+    /// Gets a stream's [`StreamCounts`]: its next expected event index and its lowest readable
+    /// index, read from a single chain state view so they are mutually consistent.
+    pub async fn get_stream_indices(
         &self,
         chain_id: ChainId,
         stream_id: StreamId,
-    ) -> Result<Option<u32>, LocalNodeError> {
+    ) -> Result<StreamCounts, LocalNodeError> {
         Ok(self
             .node
             .state
-            .get_next_expected_event(chain_id, stream_id)
+            .get_stream_indices(chain_id, stream_id)
             .await?)
     }
 
@@ -464,6 +480,15 @@ where
             .state
             .next_expected_events(chain_id, stream_ids)
             .await?)
+    }
+
+    /// Test helper: resets a chain and re-executes it from its latest checkpoint.
+    #[cfg(with_testing)]
+    pub async fn reset_and_reexecute_chain(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<Vec<crate::data_types::CrossChainRequest>, LocalNodeError> {
+        Ok(self.node.state.reset_and_reexecute_chain(chain_id).await?)
     }
 
     /// Gets received certificate trackers.
@@ -501,5 +526,26 @@ where
             .state
             .get_next_height_to_preprocess(chain_id)
             .await?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn error_type_delegates_to_worker_error() {
+        assert_eq!(
+            LocalNodeError::WorkerError(WorkerError::InvalidOwner).error_type(),
+            "WorkerError::InvalidOwner"
+        );
+    }
+
+    #[test]
+    fn error_type_falls_back_to_local_node_variant() {
+        assert_eq!(
+            LocalNodeError::InvalidChainInfoResponse.error_type(),
+            "LocalNodeError::InvalidChainInfoResponse"
+        );
     }
 }

@@ -5,7 +5,7 @@
 //!
 //! Two background scan loops actively poll both chains:
 //! - **EVM scan** ([`evm`]): queries `DepositInitiated` events, checks Linera for completion.
-//! - **Linera scan** ([`linera`]): walks block history for Credit-to-Address20 messages,
+//! - **Linera scan** (`linera`): walks block history for Credit-to-Address20 messages,
 //!   checks EVM for completion via ERC-20 `Transfer` events.
 
 pub mod db;
@@ -18,21 +18,25 @@ use std::{
     time::{Duration, Instant},
 };
 
-use alloy::primitives::{Address, B256, U256};
+use alloy::{
+    primitives::{Address, B256, U256},
+    providers::Provider,
+};
 use anyhow::Context as _;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlockHeight, U128},
     identifiers::ApplicationId,
 };
+use linera_core::{client::ChainClient, environment::Environment};
 use linera_execution::{Query, QueryResponse};
 use tokio::sync::RwLock;
 
 use crate::proof::DepositKey;
 
 /// Queries the evm-bridge app to check whether a deposit has been processed on Linera.
-pub async fn query_deposit_processed<E: linera_core::environment::Environment>(
-    chain_client: &linera_core::client::ChainClient<E>,
+pub async fn query_deposit_processed<E: Environment>(
+    chain_client: &ChainClient<E>,
     bridge_app_id: ApplicationId,
     deposit_key: &DepositKey,
 ) -> anyhow::Result<bool> {
@@ -49,8 +53,8 @@ pub async fn query_deposit_processed<E: linera_core::environment::Environment>(
 }
 
 /// Queries the wrapped-fungible app for its declared source-ERC-20 decimals.
-pub async fn query_wrapped_fungible_decimals<E: linera_core::environment::Environment>(
-    chain_client: &linera_core::client::ChainClient<E>,
+pub async fn query_wrapped_fungible_decimals<E: Environment>(
+    chain_client: &ChainClient<E>,
     fungible_app_id: ApplicationId,
 ) -> anyhow::Result<u8> {
     let query = Query::user_without_abi(
@@ -74,21 +78,27 @@ pub async fn query_wrapped_fungible_decimals<E: linera_core::environment::Enviro
 /// A pending deposit detected by the EVM scanner, sent to the retry loop.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct PendingDeposit {
+    /// Replay-protection key identifying this deposit `(source_chain_id, block_hash, tx_index, log_index)`.
     pub key: DepositKey,
+    /// Hash of the EVM transaction that emitted the `DepositInitiated` event.
     pub tx_hash: B256,
+    /// EVM address that initiated the deposit.
     pub depositor: Address,
+    /// Amount of tokens deposited, in the source ERC-20's base units.
     pub amount: U256,
+    /// Per-depositor nonce assigned by the bridge contract.
     pub nonce: U256,
 }
 
 /// A pending burn detected by the Linera scanner, sent to the retry loop.
 ///
 /// `event_index` is the underlying Linera `Event.index` — the position of
-/// the burn event within its stream ("burns" on the configured fungible
+/// the burn event within its stream ("burns" on the configured bridge
 /// application). Used both as the dedup key off-chain and as the value
 /// the `FungibleBridge.isBurnProcessed(height, eventIndex)` view consumes.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct PendingBurn {
+    /// Height of the Linera block that produced this burn.
     pub height: BlockHeight,
     /// Hash of the Linera block that produced this burn. Lets the relayer
     /// fetch the certificate via a direct `linera_client.read_certificate`
@@ -101,24 +111,31 @@ pub struct PendingBurn {
     /// Used by `processBurns(cert, tx_index, [event_pos_in_tx, ...])`.
     pub event_pos_in_tx: u32,
     /// `Event.index` — sequential position of this burn within its stream
-    /// (the "burns" stream of the configured fungible app on the configured
+    /// (the "burns" stream of the configured bridge app on the configured
     /// Linera chain). Unique for the lifetime of that stream, so unique
     /// across all heights within the relayer's scope. Off-chain and on-chain
     /// dedup key.
     pub event_index: u32,
+    /// EVM address that receives the bridged tokens.
     pub evm_recipient: Address,
+    /// Amount of tokens to release on the EVM side.
     pub amount: U128,
 }
 
 /// Wraps a pending bridging request with tracking metadata.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Tracked<T: Clone> {
+    /// The underlying pending bridging request being tracked.
     #[serde(flatten)]
     pub value: T,
+    /// Whether this request has been successfully forwarded to the other chain.
     pub forwarded: bool,
+    /// Whether this request exhausted its retry budget and was marked failed.
     pub failed: bool,
+    /// Number of retry attempts made so far.
     #[serde(skip)]
     pub retry_count: u32,
+    /// Instant of the most recent retry attempt, used to gate exponential backoff.
     #[serde(skip)]
     pub last_retry_at: Option<Instant>,
 }
@@ -135,7 +152,9 @@ impl<T: Clone> Tracked<T> {
     }
 }
 
+/// A [`PendingDeposit`] wrapped with retry-tracking metadata.
 pub type TrackedDeposit = Tracked<PendingDeposit>;
+/// A [`PendingBurn`] wrapped with retry-tracking metadata.
 pub type TrackedBurn = Tracked<PendingBurn>;
 
 /// One height's slice of `pending_burns_by_height_and_tx`. The two views
@@ -148,6 +167,7 @@ pub type TrackedBurn = Tracked<PendingBurn>;
 /// entry per height).
 #[derive(Debug, Clone)]
 pub struct PendingBurnsAtHeight {
+    /// Linera block height these pending burns belong to.
     pub height: BlockHeight,
     /// Hash of the Linera block at `height` — lets `process_pending_burns`
     /// pull the certificate via a direct `read_certificate` call.
@@ -192,6 +212,7 @@ pub struct MonitorState {
 }
 
 impl MonitorState {
+    /// Creates an empty monitoring state that begins scanning EVM at `start_evm_block`.
     pub fn new(start_evm_block: u64) -> Self {
         Self {
             deposits: HashMap::new(),
@@ -216,21 +237,32 @@ impl MonitorState {
     /// Uses Entry API instead of insert() to avoid overwriting existing entries
     /// that may have accumulated retry state.
     pub async fn track_deposit(&mut self, pending: PendingDeposit) -> bool {
-        match self.deposits.entry(pending.key.clone()) {
-            Entry::Occupied(_) => false,
-            Entry::Vacant(e) => {
-                if let Some(db) = &self.db {
-                    if let Err(error) = db.insert_deposit(&pending).await {
-                        tracing::warn!(?error, "Failed to persist deposit to SQLite");
-                    }
+        if self.deposits.contains_key(&pending.key) {
+            return false;
+        }
+        // Skip deposits already settled in a previous run (see `track_burn`).
+        if let Some(db) = &self.db {
+            match db.is_deposit_completed(&pending.key).await {
+                Ok(true) => return false,
+                Ok(false) => {}
+                Err(error) => {
+                    tracing::warn!(
+                        ?error,
+                        "finished_deposits lookup failed; treating deposit as new"
+                    );
                 }
-                e.insert(Tracked::new(pending));
-                crate::relay::metrics::deposit_detected();
-                true
+            }
+            if let Err(error) = db.insert_deposit(&pending).await {
+                tracing::warn!(?error, "Failed to persist deposit to SQLite");
             }
         }
+        self.deposits
+            .insert(pending.key.clone(), Tracked::new(pending));
+        crate::relay::metrics::deposit_detected();
+        true
     }
 
+    /// Marks the tracked deposit as forwarded and records its completion in SQLite.
     pub async fn complete_deposit(&mut self, key: &DepositKey) {
         if let Some(d) = self.deposits.get_mut(key) {
             d.forwarded = true;
@@ -250,21 +282,33 @@ impl MonitorState {
     /// that may have accumulated retry state.
     pub async fn track_burn(&mut self, pending: PendingBurn) -> bool {
         let key = (pending.height, pending.event_index);
-        match self.burns.entry(key) {
-            Entry::Occupied(_) => false,
-            Entry::Vacant(e) => {
-                if let Some(db) = &self.db {
-                    if let Err(error) = db.insert_burn(&pending).await {
-                        tracing::warn!(?error, "Failed to persist burn to SQLite");
-                    }
+        if self.burns.contains_key(&key) {
+            return false;
+        }
+        // Skip burns already settled in a previous run. The durable record lives
+        // in `finished_burns`; the in-memory map starts empty after a restart,
+        // so without this guard a re-scan would re-track and re-settle them.
+        if let Some(db) = &self.db {
+            match db
+                .is_burn_completed(pending.height, pending.event_index)
+                .await
+            {
+                Ok(true) => return false,
+                Ok(false) => {}
+                Err(error) => {
+                    tracing::warn!(?error, "finished_burns lookup failed; treating burn as new");
                 }
-                e.insert(Tracked::new(pending));
-                crate::relay::metrics::burn_detected();
-                true
+            }
+            if let Err(error) = db.insert_burn(&pending).await {
+                tracing::warn!(?error, "Failed to persist burn to SQLite");
             }
         }
+        self.burns.insert(key, Tracked::new(pending));
+        crate::relay::metrics::burn_detected();
+        true
     }
 
+    /// Marks the tracked burn as forwarded and records its completion in SQLite.
     pub async fn complete_burn(&mut self, height: BlockHeight, event_index: u32) {
         if let Some(b) = self.burns.get_mut(&(height, event_index)) {
             b.forwarded = true;
@@ -287,26 +331,32 @@ impl MonitorState {
         }
     }
 
+    /// Returns every tracked deposit, regardless of status.
     pub fn all_deposits(&self) -> Vec<&TrackedDeposit> {
         self.deposits.values().collect()
     }
 
+    /// Returns the deposits that have not yet been forwarded.
     pub fn pending_deposits(&self) -> Vec<&TrackedDeposit> {
         self.deposits.values().filter(|d| !d.forwarded).collect()
     }
 
+    /// Returns the deposits that have been forwarded.
     pub fn completed_deposits(&self) -> Vec<&TrackedDeposit> {
         self.deposits.values().filter(|d| d.forwarded).collect()
     }
 
+    /// Returns every tracked burn, regardless of status.
     pub fn all_burns(&self) -> Vec<&TrackedBurn> {
         self.burns.values().collect()
     }
 
+    /// Returns the burns that have not yet been forwarded.
     pub fn pending_burns(&self) -> Vec<&TrackedBurn> {
         self.burns.values().filter(|b| !b.forwarded).collect()
     }
 
+    /// Returns the burns that have been forwarded.
     pub fn completed_burns(&self) -> Vec<&TrackedBurn> {
         self.burns.values().filter(|b| b.forwarded).collect()
     }
@@ -360,6 +410,7 @@ impl MonitorState {
             .collect()
     }
 
+    /// Returns the pending deposits whose retry backoff has elapsed and that are within `max_retries`.
     pub fn deposits_ready_for_retry(&self, max_retries: u32) -> Vec<&TrackedDeposit> {
         self.deposits
             .values()
@@ -371,6 +422,7 @@ impl MonitorState {
             .collect()
     }
 
+    /// Returns the pending burns whose retry backoff has elapsed and that are within `max_retries`.
     pub fn burns_ready_for_retry(&self, max_retries: u32) -> Vec<&TrackedBurn> {
         self.burns
             .values()
@@ -427,12 +479,47 @@ impl MonitorState {
             self.burns
                 .insert((b.height, b.event_index), Tracked::new(b));
         }
+
+        // Resume scanning from the persisted cursors instead of re-scanning from
+        // genesis, so already-settled burns/deposits are not re-discovered and
+        // re-submitted. `last_scanned_evm_block` keeps the larger of the
+        // persisted cursor and the configured `monitor_start_block` floor.
+        if let Some(height) = db.load_cursor(db::CURSOR_LINERA_HEIGHT).await? {
+            self.last_scanned_linera_height = BlockHeight(height);
+        }
+        if let Some(block) = db.load_cursor(db::CURSOR_EVM_BLOCK).await? {
+            self.last_scanned_evm_block = self.last_scanned_evm_block.max(block);
+        }
+
         tracing::info!(
             deposits = n_deposits,
             burns = n_burns,
+            last_scanned_linera_height = %self.last_scanned_linera_height,
+            last_scanned_evm_block = self.last_scanned_evm_block,
             "Recovered pending bridge requests from SQLite WAL"
         );
         Ok(())
+    }
+
+    /// Advances the Linera scan cursor and persists it so a restart resumes from
+    /// here instead of re-scanning from genesis.
+    pub async fn advance_linera_cursor(&mut self, height: BlockHeight) {
+        self.last_scanned_linera_height = height;
+        if let Some(db) = &self.db {
+            if let Err(error) = db.save_cursor(db::CURSOR_LINERA_HEIGHT, height.0).await {
+                tracing::warn!(?error, "Failed to persist Linera scan cursor");
+            }
+        }
+    }
+
+    /// Advances the EVM scan cursor and persists it (see `advance_linera_cursor`).
+    pub async fn advance_evm_cursor(&mut self, block: u64) {
+        self.last_scanned_evm_block = block;
+        if let Some(db) = &self.db {
+            if let Err(error) = db.save_cursor(db::CURSOR_EVM_BLOCK, block).await {
+                tracing::warn!(?error, "Failed to persist EVM scan cursor");
+            }
+        }
     }
 
     /// Bumps the deposit's retry counter; if the bump exhausts `max_retries`,
@@ -452,9 +539,12 @@ impl MonitorState {
         }
     }
 
+    /// Marks a deposit `failed`: removes it from the in-memory map (a failed
+    /// deposit is no longer pending work) and moves the DB row to
+    /// `finished_deposits`. The DB row is the durable record; recovery is via
+    /// `retry_failed_deposits`.
     pub async fn mark_deposit_failed(&mut self, key: &DepositKey) {
-        if let Some(d) = self.deposits.get_mut(key) {
-            d.failed = true;
+        if self.deposits.remove(key).is_some() {
             crate::relay::metrics::deposit_failed();
             if let Some(db) = &self.db {
                 if let Err(error) = db.update_deposit_status(key, "failed").await {
@@ -504,9 +594,12 @@ impl MonitorState {
         }
     }
 
+    /// Marks a burn `failed`: removes it from the in-memory map (a failed
+    /// burn is no longer pending work) and moves the DB row to
+    /// `finished_burns`. The DB row is the durable record; recovery is via
+    /// `retry_failed_burns`.
     pub async fn mark_burn_failed(&mut self, height: BlockHeight, event_index: u32) {
-        if let Some(b) = self.burns.get_mut(&(height, event_index)) {
-            b.failed = true;
+        if self.burns.remove(&(height, event_index)).is_some() {
             crate::relay::metrics::burn_failed();
             if let Some(db) = &self.db {
                 if let Err(error) = db.update_burn_status(height, event_index, "failed").await {
@@ -521,6 +614,72 @@ impl MonitorState {
         }
     }
 
+    /// Re-queues every `failed` burn at `height` so the normal retry
+    /// machinery picks them up without a relayer restart. A failed burn lives
+    /// only in the `finished_burns` table — it is removed from the in-memory
+    /// map when it fails — so this moves the DB row back to `pending_burns`
+    /// and rebuilds the in-memory `Tracked` entry. Returns the `event_index`
+    /// values re-queued (empty if none were failed or no DB is configured).
+    pub async fn retry_failed_burns(&mut self, height: BlockHeight) -> Vec<u32> {
+        let moved = if let Some(db) = &self.db {
+            db.requeue_failed_burns(height)
+                .await
+                .unwrap_or_else(|error| {
+                    tracing::warn!(?height, ?error, "Failed to requeue burns in SQLite");
+                    Vec::new()
+                })
+        } else {
+            tracing::warn!("No persistent DB configured for the relayer");
+            Vec::new()
+        };
+
+        let mut reset = BTreeSet::new();
+        for burn in moved {
+            let key = (burn.height, burn.event_index);
+            if let Entry::Vacant(slot) = self.burns.entry(key) {
+                slot.insert(Tracked::new(burn));
+                reset.insert(key.1);
+            }
+        }
+        reset.into_iter().collect()
+    }
+
+    /// Re-queues every `failed` deposit for `(source_chain_id, tx_hash)` so
+    /// the normal retry machinery picks them up. A failed deposit lives only
+    /// in the `finished_deposits` table — it is removed from the in-memory
+    /// map when it fails — so this moves the DB row back to `pending_deposits`
+    /// and rebuilds the in-memory `Tracked` entry. Returns the `log_index`
+    /// values re-queued (empty if none were failed or no DB is configured).
+    pub async fn retry_failed_deposits(&mut self, source_chain_id: u64, tx_hash: B256) -> Vec<u64> {
+        let moved = if let Some(db) = &self.db {
+            db.requeue_failed_deposits(source_chain_id, tx_hash)
+                .await
+                .unwrap_or_else(|error| {
+                    tracing::warn!(
+                        source_chain_id,
+                        ?error,
+                        "Failed to requeue deposits in SQLite"
+                    );
+                    Vec::new()
+                })
+        } else {
+            tracing::warn!("No persistent DB configured for the relayer");
+            Vec::new()
+        };
+
+        let mut reset = BTreeSet::new();
+        for deposit in moved {
+            let key = deposit.key.clone();
+            let log_index = key.log_index;
+            if let Entry::Vacant(slot) = self.deposits.entry(key) {
+                slot.insert(Tracked::new(deposit));
+                reset.insert(log_index);
+            }
+        }
+        reset.into_iter().collect()
+    }
+
+    /// Returns a snapshot of pending/completed counts and scan cursors for status reporting.
     pub fn status_summary(&self) -> StatusSummary {
         StatusSummary {
             deposits_pending: self.deposits.values().filter(|d| !d.forwarded).count(),
@@ -533,13 +692,20 @@ impl MonitorState {
     }
 }
 
+/// A snapshot of the monitor's pending/completed counts and scan cursors.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct StatusSummary {
+    /// Number of tracked deposits not yet forwarded to Linera.
     pub deposits_pending: usize,
+    /// Number of tracked deposits already forwarded to Linera.
     pub deposits_completed: usize,
+    /// Number of tracked burns not yet forwarded to the EVM chain.
     pub burns_pending: usize,
+    /// Number of tracked burns already forwarded to the EVM chain.
     pub burns_forwarded: usize,
+    /// Highest EVM block number the deposit scanner has processed.
     pub last_scanned_evm_block: u64,
+    /// Highest Linera block height the burn scanner has processed.
     pub last_scanned_linera_height: BlockHeight,
 }
 
@@ -548,10 +714,10 @@ pub struct StatusSummary {
 /// and is woken either by a `Notify` signal from the corresponding scanner or
 /// by a periodic poll for items whose retry backoff has just elapsed.
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn retry_loop<E: linera_core::environment::Environment + 'static>(
+pub(crate) async fn retry_loop<E: Environment + 'static>(
     monitor: Arc<RwLock<MonitorState>>,
     proof_client: crate::proof::gen::HttpDepositProofClient,
-    evm_client: Arc<crate::relay::evm::EvmClient<impl alloy::providers::Provider + 'static>>,
+    evm_client: Arc<crate::relay::evm::EvmClient<impl Provider + 'static>>,
     linera_client: Arc<crate::relay::linera::LineraClient<E>>,
     deposit_notify: Arc<tokio::sync::Notify>,
     burn_notify: Arc<tokio::sync::Notify>,
@@ -1036,5 +1202,130 @@ mod tests {
         assert_eq!(state.event_index_for_pos(BlockHeight(5), 2, 0), None);
         assert_eq!(state.event_index_for_pos(BlockHeight(5), 0, 1), None);
         assert_eq!(state.event_index_for_pos(BlockHeight(6), 2, 1), None);
+    }
+
+    #[tokio::test]
+    async fn mark_burn_failed_removes_from_memory() {
+        let mut state = MonitorState::new(0);
+        state
+            .track_burn(PendingBurn {
+                height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
+                tx_index: 0,
+                event_pos_in_tx: 0,
+                event_index: 10,
+                evm_recipient: Address::ZERO,
+                amount: U128(0),
+            })
+            .await;
+        state.mark_burn_failed(BlockHeight(5), 10).await;
+        assert!(!state.burns.contains_key(&(BlockHeight(5), 10)));
+    }
+
+    #[tokio::test]
+    async fn retry_failed_burns_rebuilds_from_db() {
+        let mut state = MonitorState::new(0);
+        state.set_db(db::BridgeDb::open_in_memory().await.unwrap());
+        state
+            .track_burn(PendingBurn {
+                height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
+                tx_index: 0,
+                event_pos_in_tx: 0,
+                event_index: 10,
+                evm_recipient: Address::ZERO,
+                amount: U128(0),
+            })
+            .await;
+        state.mark_burn_failed(BlockHeight(5), 10).await;
+        // Failing removed it from memory and moved it to `finished_burns`.
+        assert!(!state.burns.contains_key(&(BlockHeight(5), 10)));
+        assert!(state.pending_burns_by_height_and_tx(10).is_empty());
+
+        let reset = state.retry_failed_burns(BlockHeight(5)).await;
+        assert_eq!(reset, vec![10u32]);
+        assert_eq!(state.pending_burns_by_height_and_tx(10).len(), 1);
+    }
+
+    #[tokio::test]
+    async fn retry_failed_burns_no_failed_items_returns_empty() {
+        let mut state = MonitorState::new(0);
+        state.set_db(db::BridgeDb::open_in_memory().await.unwrap());
+        state
+            .track_burn(PendingBurn {
+                height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
+                tx_index: 0,
+                event_pos_in_tx: 0,
+                event_index: 10,
+                evm_recipient: Address::ZERO,
+                amount: U128(0),
+            })
+            .await;
+        // Nothing failed at this height; the pending burn is left untouched.
+        let reset = state.retry_failed_burns(BlockHeight(5)).await;
+        assert!(reset.is_empty());
+        assert_eq!(state.pending_burns_by_height_and_tx(10).len(), 1);
+    }
+
+    #[tokio::test]
+    async fn mark_deposit_failed_removes_from_memory() {
+        let mut state = MonitorState::new(0);
+        let key = DepositKey {
+            source_chain_id: 8453,
+            block_hash: B256::from([1u8; 32]),
+            tx_index: 2,
+            log_index: 0,
+        };
+        state
+            .track_deposit(PendingDeposit {
+                key: key.clone(),
+                tx_hash: B256::from([7u8; 32]),
+                depositor: Address::ZERO,
+                amount: U256::from(0),
+                nonce: U256::from(0),
+            })
+            .await;
+        state.mark_deposit_failed(&key).await;
+        assert!(!state.deposits.contains_key(&key));
+        assert!(state.next_deposit_for_retry(10).is_none());
+    }
+
+    #[tokio::test]
+    async fn retry_failed_deposits_rebuilds_from_db() {
+        let mut state = MonitorState::new(0);
+        state.set_db(db::BridgeDb::open_in_memory().await.unwrap());
+        let tx_hash = B256::from([7u8; 32]);
+        let key = DepositKey {
+            source_chain_id: 8453,
+            block_hash: B256::from([1u8; 32]),
+            tx_index: 2,
+            log_index: 0,
+        };
+        state
+            .track_deposit(PendingDeposit {
+                key: key.clone(),
+                tx_hash,
+                depositor: Address::ZERO,
+                amount: U256::from(0),
+                nonce: U256::from(0),
+            })
+            .await;
+        state.mark_deposit_failed(&key).await;
+        assert!(!state.deposits.contains_key(&key));
+
+        let reset = state.retry_failed_deposits(8453, tx_hash).await;
+        assert_eq!(reset, vec![0u64]);
+        assert!(state.next_deposit_for_retry(10).is_some());
+    }
+
+    #[tokio::test]
+    async fn retry_failed_deposits_no_failed_items_returns_empty() {
+        let mut state = MonitorState::new(0);
+        state.set_db(db::BridgeDb::open_in_memory().await.unwrap());
+        let reset = state
+            .retry_failed_deposits(8453, B256::from([7u8; 32]))
+            .await;
+        assert!(reset.is_empty());
     }
 }

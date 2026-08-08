@@ -58,6 +58,7 @@ pub struct NativeFungibleTransferGenerator {
 }
 
 impl NativeFungibleTransferGenerator {
+    /// Creates a generator that sends native token transfers from the source chain.
     pub fn new(
         source_chain_id: ChainId,
         mut destination_chains: Vec<ChainId>,
@@ -134,6 +135,7 @@ pub struct FungibleTransferGenerator {
 }
 
 impl FungibleTransferGenerator {
+    /// Creates a generator that sends fungible token transfers from the source chain.
     pub fn new(
         application_id: ApplicationId,
         source_chain_id: ChainId,
@@ -194,7 +196,9 @@ impl OperationGenerator for FungibleTransferGenerator {
 const PROXY_LATENCY_P99_THRESHOLD: f64 = 400.0;
 const LATENCY_METRIC_PREFIX: &str = "linera_proxy_request_latency";
 
+/// An error that can occur while running a benchmark.
 #[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
 pub enum BenchmarkError {
     #[error("Failed to join task: {0}")]
     JoinError(#[from] task::JoinError),
@@ -245,17 +249,21 @@ struct HistogramSnapshot {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+/// Configuration listing the chains to use for a benchmark.
 pub struct BenchmarkConfig {
+    /// The chains to use for the benchmark.
     pub chain_ids: Vec<ChainId>,
 }
 
 impl BenchmarkConfig {
+    /// Loads the benchmark configuration from a YAML file.
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> anyhow::Result<Self> {
         let content = std::fs::read_to_string(path)?;
         let config = serde_yaml::from_str(&content)?;
         Ok(config)
     }
 
+    /// Saves the benchmark configuration to a YAML file.
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> anyhow::Result<()> {
         let content = serde_yaml::to_string(self)?;
         std::fs::write(path, content)?;
@@ -263,6 +271,7 @@ impl BenchmarkConfig {
     }
 }
 
+/// Driver for running benchmarks against a network.
 pub struct Benchmark<Env: Environment> {
     _phantom: std::marker::PhantomData<Env>,
 }
@@ -820,6 +829,7 @@ impl<Env: Environment> Benchmark<Env> {
         Ok(())
     }
 
+    /// Returns the chains to benchmark, from the config file if given, otherwise from the wallet.
     pub fn get_all_chains(
         chains_config_path: Option<&Path>,
         benchmark_chains: &[(ChainId, AccountOwner)],
@@ -841,6 +851,7 @@ impl<Env: Environment> Benchmark<Env> {
     }
 }
 
+/// Builds a fungible token transfer operation for the given application.
 pub fn fungible_transfer(
     application_id: ApplicationId,
     chain_id: ChainId,

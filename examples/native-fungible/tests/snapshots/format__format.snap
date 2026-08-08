@@ -1,6 +1,6 @@
 ---
 source: native-fungible/tests/format.rs
-expression: "NativeFungibleApplication::formats().unwrap()"
+expression: "NativeFungibleApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
   Account:
@@ -15,31 +15,9 @@ REGISTRY:
           TYPENAME: AccountOwner
       - value:
           TYPENAME: Amount
-  AccountOwner:
-    ENUM:
-      0:
-        Reserved:
-          NEWTYPE: U8
-      1:
-        Address32:
-          NEWTYPE:
-            TYPENAME: CryptoHash
-      2:
-        Address20:
-          NEWTYPE:
-            TUPLEARRAY:
-              CONTENT: U8
-              SIZE: 20
-  Amount:
-    NEWTYPESTRUCT: U128
   ChainId:
     NEWTYPESTRUCT:
       TYPENAME: CryptoHash
-  CryptoHash:
-    NEWTYPESTRUCT:
-      TUPLEARRAY:
-        CONTENT: U8
-        SIZE: 32
   FungibleOperation:
     ENUM:
       142627141:

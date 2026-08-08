@@ -32,6 +32,7 @@ use tracing::{debug, error, info, instrument, warn, Instrument as _};
 
 use crate::error::{self, Error};
 
+/// The configuration for the chain listener.
 #[derive(Default, Debug, Clone, clap::Args, serde::Serialize, serde::Deserialize, tsify::Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct ChainListenerConfig {
@@ -65,17 +66,23 @@ pub struct ChainListenerConfig {
 
 type ContextChainClient<C> = ChainClient<<C as ClientContext>::Environment>;
 
+/// The context in which a chain listener operates, providing access to the wallet, storage and client.
 #[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 #[allow(async_fn_in_trait)]
 pub trait ClientContext {
+    /// The execution environment used by the client.
     type Environment: linera_core::Environment;
 
+    /// Returns a reference to the wallet.
     fn wallet(&self) -> &<Self::Environment as linera_core::Environment>::Wallet;
 
+    /// Returns a reference to the storage.
     fn storage(&self) -> &<Self::Environment as linera_core::Environment>::Storage;
 
+    /// Returns a reference to the client.
     fn client(&self) -> &Arc<linera_core::client::Client<Self::Environment>>;
 
+    /// Returns the ID of the admin chain.
     fn admin_chain_id(&self) -> ChainId {
         self.client().admin_chain_id()
     }
@@ -86,6 +93,7 @@ pub trait ClientContext {
         &self,
     ) -> Option<tokio::sync::mpsc::UnboundedSender<(u64, linera_core::client::TimingType)>>;
 
+    /// Gets the timing sender for benchmarking, if available.
     #[cfg(web)]
     fn timing_sender(
         &self,
@@ -93,6 +101,7 @@ pub trait ClientContext {
         None
     }
 
+    /// Creates a chain client for the chain with the given ID, using the wallet's state.
     fn make_chain_client(
         &self,
         chain_id: ChainId,
@@ -118,6 +127,7 @@ pub trait ClientContext {
         }
     }
 
+    /// Adds a newly created chain to the wallet.
     async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
@@ -126,11 +136,14 @@ pub trait ClientContext {
         epoch: Epoch,
     ) -> Result<(), Error>;
 
+    /// Updates the wallet with the latest state of the given chain client.
     async fn update_wallet(&mut self, client: &ContextChainClient<Self>) -> Result<(), Error>;
 }
 
+/// Extension methods for [`ClientContext`].
 #[allow(async_fn_in_trait)]
 pub trait ClientContextExt: ClientContext {
+    /// Returns a chain client for every chain in the wallet.
     async fn clients(&self) -> Result<Vec<ContextChainClient<Self>>, Error> {
         use futures::stream::TryStreamExt as _;
         self.wallet()
@@ -648,11 +661,40 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         })
     }
 
-    fn remove_event_subscriber(&mut self, chain_id: ChainId) {
-        self.event_subscribers.retain(|_, subscribers| {
+    /// Removes `chain_id` as a subscriber from every publisher, and returns the publishers that
+    /// no longer have any subscribers as a result.
+    fn remove_event_subscriber(&mut self, chain_id: ChainId) -> Vec<ChainId> {
+        let mut orphaned = Vec::new();
+        self.event_subscribers.retain(|publisher_id, subscribers| {
             subscribers.remove(&chain_id);
-            !subscribers.is_empty()
+            if subscribers.is_empty() {
+                orphaned.push(*publisher_id);
+                false
+            } else {
+                true
+            }
         });
+        orphaned
+    }
+
+    /// Stops listening to a publisher chain whose last subscriber went away, provided the chain is
+    /// only tracked because of event subscriptions (i.e. its mode is `EventsOnly`). Wallet chains
+    /// (`FullChain`/`FollowChain`) are left untouched, as is any chain we're not listening to.
+    async fn stop_tracking_publisher(&mut self, publisher_id: ChainId) {
+        let mode = self.context.lock().await.client().chain_mode(publisher_id);
+        if !matches!(mode, Some(ListeningMode::EventsOnly(_))) {
+            return;
+        }
+        let Some(listening_client) = self.listening.remove(&publisher_id) else {
+            return;
+        };
+        self.context
+            .lock()
+            .await
+            .client()
+            .remove_chain_mode(publisher_id);
+        listening_client.stop().await;
+        debug!(%publisher_id, "stopped tracking publisher chain after its last subscriber went away");
     }
 
     /// Updates the event subscribers map, and returns all publishing chains we need to listen to.
@@ -697,6 +739,29 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 .or_default()
                 .insert(chain_id);
         }
+        // Detect publishers this chain no longer subscribes to (e.g. an application called
+        // `unsubscribe_from_events`), and stop tracking any that were only tracked on its behalf.
+        let removed_publishers = self
+            .event_subscribers
+            .iter()
+            .filter(|(publisher_id, subscribers)| {
+                subscribers.contains(&chain_id) && !publishing_chains.contains_key(publisher_id)
+            })
+            .map(|(publisher_id, _)| *publisher_id)
+            .collect::<Vec<_>>();
+        for publisher_id in removed_publishers {
+            let orphaned = {
+                let Some(subscribers) = self.event_subscribers.get_mut(&publisher_id) else {
+                    continue;
+                };
+                subscribers.remove(&chain_id);
+                subscribers.is_empty()
+            };
+            if orphaned {
+                self.event_subscribers.remove(&publisher_id);
+                self.stop_tracking_publisher(publisher_id).await;
+            }
+        }
         Ok(publishing_chains)
     }
 
@@ -736,8 +801,11 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                                     error!(%chain_id, "attempted to drop a non-existent listener");
                                     continue;
                                 };
-                                self.remove_event_subscriber(chain_id);
+                                let orphaned = self.remove_event_subscriber(chain_id);
                                 listening_client.stop().await;
+                                for publisher_id in orphaned {
+                                    self.stop_tracking_publisher(publisher_id).await;
+                                }
                                 if let Err(error) = self.context.lock().await.wallet().remove(chain_id).await {
                                     error!(%error, %chain_id, "error removing a chain from the wallet");
                                 }
@@ -772,8 +840,11 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                             error!(%chain_id, "attempted to drop a non-existent listener");
                             continue;
                         };
-                        self.remove_event_subscriber(chain_id);
+                        let orphaned = self.remove_event_subscriber(chain_id);
                         listening_client.stop().await;
+                        for publisher_id in orphaned {
+                            self.stop_tracking_publisher(publisher_id).await;
+                        }
                         continue;
                     };
                     return Ok(Action::Notification(notification));

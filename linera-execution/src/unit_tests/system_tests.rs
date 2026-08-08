@@ -276,7 +276,7 @@ async fn checkpoint_roundtrip_via_separate_view_yields_matching_hash() -> anyhow
 
 #[tokio::test]
 async fn checkpoint_notifies_origins_and_receive_records_finalization() -> anyhow::Result<()> {
-    use linera_base::{crypto::CryptoHash, data_types::Cursor};
+    use linera_base::data_types::Cursor;
 
     let origin_a = dummy_chain_description(1).id();
     let origin_b = dummy_chain_description(2).id();
@@ -331,10 +331,9 @@ async fn checkpoint_notifies_origins_and_receive_records_finalization() -> anyho
 
     // Receiver side: pre-populate `unfinalized_message_blocks` with three heights
     // from origin_a (the block-end hook would normally do this), then deliver the
-    // checkpoint message and verify both halves of the receive logic:
-    //   - `finalized_sent_messages[origin_a]` records (cursor, cert_hash).
-    //   - `unfinalized_message_blocks[origin_a]` drops heights strictly below the
-    //     cursor's height and retains heights at-or-above (per-block granularity).
+    // checkpoint message and verify that `unfinalized_message_blocks[origin_a]`
+    // drops heights strictly below the cursor's height and retains heights
+    // at-or-above (per-block granularity).
     let mut receiver = SystemExecutionState {
         description: Some(dummy_chain_description(3)),
         ..SystemExecutionState::default()
@@ -370,11 +369,9 @@ async fn checkpoint_notifies_origins_and_receive_records_finalization() -> anyho
             },
         ]),
     )?;
-    let sender_cert_hash = CryptoHash::test_hash("sender block");
     let context = MessageContext {
         chain_id: dummy_chain_description(3).id(),
         origin: origin_a,
-        origin_certificate_hash: sender_cert_hash,
         origin_timestamp: Default::default(),
         is_bouncing: false,
         authenticated_owner: None,
@@ -393,14 +390,6 @@ async fn checkpoint_notifies_origins_and_receive_records_finalization() -> anyho
         )
         .await?;
     assert!(produced.is_empty());
-    assert_eq!(
-        receiver
-            .system
-            .finalized_sent_messages
-            .get(&origin_a)
-            .await?,
-        Some((cursor_a, sender_cert_hash))
-    );
     assert_eq!(
         receiver
             .system

@@ -89,6 +89,7 @@ impl Decoder for Codec {
 
 /// Errors that can arise during transmission or reception of [`RpcMessage`]s.
 #[derive(Debug, Error)]
+#[allow(missing_docs)]
 pub enum Error {
     #[error("I/O error in the underlying transport: {0}")]
     IoError(#[from] io::Error),

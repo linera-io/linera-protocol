@@ -31,8 +31,8 @@ use crate::doc_scalar;
 /// Name of the secp256k1 scheme.
 const SECP256K1_SCHEME_LABEL: &str = "secp256k1";
 
-/// Length of secp256k1 compressed public key.
-const SECP256K1_PUBLIC_KEY_SIZE: usize = 33;
+/// Length of secp256k1 uncompressed public key.
+const SECP256K1_PUBLIC_KEY_SIZE: usize = 65;
 
 /// Length of secp256k1 signature.
 const SECP256K1_SIGNATURE_SIZE: usize = 64;
@@ -53,7 +53,7 @@ impl Allocative for Secp256k1PublicKey {
 
 impl Hash for Secp256k1PublicKey {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.to_encoded_point(true).as_bytes().hash(state);
+        self.as_bytes().hash(state);
     }
 }
 
@@ -86,14 +86,18 @@ impl Secp256k1PublicKey {
         Self(sk.public_key().into())
     }
 
-    /// Returns the bytes of the public key in compressed representation.
+    /// Returns the bytes of the public key in uncompressed representation.
     pub fn as_bytes(&self) -> [u8; SECP256K1_PUBLIC_KEY_SIZE] {
         // UNWRAP: We already have valid key so conversion should not fail.
-        self.0.to_encoded_point(true).as_bytes().try_into().unwrap()
+        self.0
+            .to_encoded_point(false)
+            .as_bytes()
+            .try_into()
+            .unwrap()
     }
 
     /// Decodes the bytes into the public key.
-    /// Expects the bytes to be of compressed representation.
+    /// Expects the bytes to be of uncompressed representation.
     ///
     /// Panics if the encoding can't be done in a constant time.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, CryptoError> {
@@ -153,7 +157,7 @@ impl Serialize for Secp256k1PublicKey {
         if serializer.is_human_readable() {
             serializer.serialize_str(&hex::encode(self.as_bytes()))
         } else {
-            let compact_pk = serde_utils::CompressedPublicKey(self.as_bytes());
+            let compact_pk = serde_utils::UncompressedPublicKey(self.as_bytes());
             serializer.serialize_newtype_struct("Secp256k1PublicKey", &compact_pk)
         }
     }
@@ -171,7 +175,7 @@ impl<'de> Deserialize<'de> for Secp256k1PublicKey {
         } else {
             #[derive(Deserialize)]
             #[serde(rename = "Secp256k1PublicKey")]
-            struct PublicKey(serde_utils::CompressedPublicKey);
+            struct PublicKey(serde_utils::UncompressedPublicKey);
             let compact = PublicKey::deserialize(deserializer)?;
             Ok(Secp256k1PublicKey::from_bytes(&compact.0 .0).map_err(serde::de::Error::custom)?)
         }
@@ -210,8 +214,8 @@ impl fmt::Debug for Secp256k1PublicKey {
 impl BcsHashable<'_> for Secp256k1PublicKey {}
 
 impl WitType for Secp256k1PublicKey {
-    const SIZE: u32 = <(u64, u64, u64, u64, u8) as WitType>::SIZE;
-    type Layout = <(u64, u64, u64, u64, u8) as WitType>::Layout;
+    const SIZE: u32 = <(u64, u64, u64, u64, u64, u64, u64, u64, u8) as WitType>::SIZE;
+    type Layout = <(u64, u64, u64, u64, u64, u64, u64, u64, u8) as WitType>::Layout;
     type Dependencies = HList![];
 
     fn wit_type_name() -> Cow<'static, str> {
@@ -225,7 +229,11 @@ impl WitType for Secp256k1PublicKey {
             "        part2: u64,\n",
             "        part3: u64,\n",
             "        part4: u64,\n",
-            "        part5: u8\n",
+            "        part5: u64,\n",
+            "        part6: u64,\n",
+            "        part7: u64,\n",
+            "        part8: u64,\n",
+            "        part9: u8\n",
             "    }\n",
         )
         .into()
@@ -241,8 +249,8 @@ impl WitLoad for Secp256k1PublicKey {
         Instance: InstanceWithMemory,
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
-        let (part1, part2, part3, part4, part5) = WitLoad::load(memory, location)?;
-        Ok(Self::from((part1, part2, part3, part4, part5)))
+        let parts = WitLoad::load(memory, location)?;
+        Ok(Self::from_parts(parts))
     }
 
     fn lift_from<Instance>(
@@ -253,8 +261,8 @@ impl WitLoad for Secp256k1PublicKey {
         Instance: InstanceWithMemory,
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
-        let (part1, part2, part3, part4, part5) = WitLoad::lift_from(flat_layout, memory)?;
-        Ok(Self::from((part1, part2, part3, part4, part5)))
+        let parts = WitLoad::lift_from(flat_layout, memory)?;
+        Ok(Self::from_parts(parts))
     }
 }
 
@@ -268,8 +276,7 @@ impl WitStore for Secp256k1PublicKey {
         Instance: InstanceWithMemory,
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
-        let (part1, part2, part3, part4, part5) = (*self).into();
-        (part1, part2, part3, part4, part5).store(memory, location)
+        self.into_parts().store(memory, location)
     }
 
     fn lower<Instance>(
@@ -280,32 +287,43 @@ impl WitStore for Secp256k1PublicKey {
         Instance: InstanceWithMemory,
         <Instance::Runtime as Runtime>::Memory: RuntimeMemory<Instance>,
     {
-        let (part1, part2, part3, part4, part5) = (*self).into();
-        (part1, part2, part3, part4, part5).lower(memory)
+        self.into_parts().lower(memory)
     }
 }
 
-impl From<(u64, u64, u64, u64, u8)> for Secp256k1PublicKey {
-    fn from((part1, part2, part3, part4, part5): (u64, u64, u64, u64, u8)) -> Self {
+/// The tuple of integers making up a public key's bytes in its WIT representation.
+type PublicKeyParts = (u64, u64, u64, u64, u64, u64, u64, u64, u8);
+
+impl Secp256k1PublicKey {
+    fn from_parts(parts: PublicKeyParts) -> Self {
+        let (part1, part2, part3, part4, part5, part6, part7, part8, part9) = parts;
         let mut bytes = [0u8; SECP256K1_PUBLIC_KEY_SIZE];
         bytes[0..8].copy_from_slice(&part1.to_be_bytes());
         bytes[8..16].copy_from_slice(&part2.to_be_bytes());
         bytes[16..24].copy_from_slice(&part3.to_be_bytes());
         bytes[24..32].copy_from_slice(&part4.to_be_bytes());
-        bytes[32] = part5;
+        bytes[32..40].copy_from_slice(&part5.to_be_bytes());
+        bytes[40..48].copy_from_slice(&part6.to_be_bytes());
+        bytes[48..56].copy_from_slice(&part7.to_be_bytes());
+        bytes[56..64].copy_from_slice(&part8.to_be_bytes());
+        bytes[64] = part9;
         Self::from_bytes(&bytes).unwrap()
     }
-}
 
-impl From<Secp256k1PublicKey> for (u64, u64, u64, u64, u8) {
-    fn from(key: Secp256k1PublicKey) -> Self {
-        let bytes = key.as_bytes();
+    fn into_parts(self) -> PublicKeyParts {
+        let bytes = self.as_bytes();
         let part1 = u64::from_be_bytes(bytes[0..8].try_into().unwrap());
         let part2 = u64::from_be_bytes(bytes[8..16].try_into().unwrap());
         let part3 = u64::from_be_bytes(bytes[16..24].try_into().unwrap());
         let part4 = u64::from_be_bytes(bytes[24..32].try_into().unwrap());
-        let part5 = bytes[32];
-        (part1, part2, part3, part4, part5)
+        let part5 = u64::from_be_bytes(bytes[32..40].try_into().unwrap());
+        let part6 = u64::from_be_bytes(bytes[40..48].try_into().unwrap());
+        let part7 = u64::from_be_bytes(bytes[48..56].try_into().unwrap());
+        let part8 = u64::from_be_bytes(bytes[56..64].try_into().unwrap());
+        let part9 = bytes[64];
+        (
+            part1, part2, part3, part4, part5, part6, part7, part8, part9,
+        )
     }
 }
 
@@ -503,7 +521,9 @@ mod serde_utils {
     #[serde_as]
     #[derive(Serialize, Deserialize)]
     #[serde(transparent)]
-    pub struct CompressedPublicKey(#[serde_as(as = "[_; 33]")] pub [u8; SECP256K1_PUBLIC_KEY_SIZE]);
+    pub struct UncompressedPublicKey(
+        #[serde_as(as = "[_; 65]")] pub [u8; SECP256K1_PUBLIC_KEY_SIZE],
+    );
 }
 
 #[cfg(with_testing)]
@@ -593,7 +613,7 @@ mod tests {
         let bytes = key_in.as_bytes();
         assert!(
             bytes.len() == SECP256K1_PUBLIC_KEY_SIZE,
-            "::to_bytes() should return compressed representation"
+            "::to_bytes() should return uncompressed representation"
         );
         let key_out = Secp256k1PublicKey::from_bytes(&bytes).unwrap();
         assert_eq!(key_in, key_out);

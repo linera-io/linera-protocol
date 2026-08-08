@@ -56,10 +56,10 @@ mod metrics {
     use std::sync::LazyLock;
 
     use linera_base::prometheus_util::{
-        exponential_bucket_interval, register_histogram_vec, register_int_counter_vec,
-        register_int_gauge_vec,
+        exponential_bucket_interval, register_gauge_vec, register_histogram_vec,
+        register_int_counter_vec,
     };
-    use prometheus::{HistogramVec, IntCounterVec, IntGaugeVec};
+    use prometheus::{GaugeVec, HistogramVec, IntCounterVec};
 
     pub static CLAIM_REQUESTS_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
@@ -124,10 +124,10 @@ mod metrics {
         )
     });
 
-    pub static FAUCET_BALANCE: LazyLock<IntGaugeVec> = LazyLock::new(|| {
-        register_int_gauge_vec(
+    pub static FAUCET_BALANCE: LazyLock<GaugeVec> = LazyLock::new(|| {
+        register_gauge_vec(
             "faucet_balance_amount",
-            "Current balance of the faucet chain",
+            "Current balance of the faucet chain, in tokens",
             &[],
         )
     });
@@ -813,13 +813,9 @@ where
         let balance = self.client.local_balance().await?;
 
         #[cfg(with_metrics)]
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "faucet balance metric — i64 is the prometheus gauge type"
-        )]
         metrics::FAUCET_BALANCE
             .with_label_values(&[])
-            .set(u128::from(balance) as i64);
+            .set(f64::from(balance));
 
         let total_amount = requests
             .iter()

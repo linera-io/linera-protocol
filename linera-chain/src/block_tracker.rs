@@ -7,7 +7,7 @@ use custom_debug_derive::Debug;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency;
 use linera_base::{
-    data_types::{Amount, Blob, BlockHeight, Event, OracleResponse, Timestamp},
+    data_types::{Amount, ArithmeticError, Blob, BlockHeight, Event, OracleResponse, Timestamp},
     ensure,
     identifiers::{AccountOwner, BlobId, ChainId, StreamId},
 };
@@ -18,12 +18,12 @@ use linera_execution::{
     TransactionTracker,
 };
 use linera_views::context::Context;
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 #[cfg(with_metrics)]
 use crate::chain::metrics;
 use crate::{
-    chain::EMPTY_BLOCK_SIZE,
+    chain::{BlockExecutionPhase, EMPTY_BLOCK_SIZE},
     data_types::{
         IncomingBundle, MessageAction, OperationResult, PostedMessage, ProposedBlock, Transaction,
     },
@@ -35,6 +35,10 @@ use crate::{
 #[derive(Debug)]
 pub struct BlockExecutionTracker<'resources, 'blobs> {
     chain_id: ChainId,
+    /// The protocol phase this block is executed in (staging a proposal, validating a
+    /// received proposal, or executing a confirmed certificate). Recorded on execution
+    /// spans and used to label execution metrics.
+    phase: BlockExecutionPhase,
     block_height: BlockHeight,
     timestamp: Timestamp,
     authenticated_owner: Option<AccountOwner>,
@@ -78,6 +82,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         local_time: Timestamp,
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         proposal: &ProposedBlock,
+        phase: BlockExecutionPhase,
     ) -> Result<Self, ChainError> {
         resource_controller
             .track_block_size(EMPTY_BLOCK_SIZE)
@@ -85,6 +90,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
 
         Ok(Self {
             chain_id: proposal.chain_id,
+            phase,
             block_height: proposal.height,
             timestamp: proposal.timestamp,
             authenticated_owner: proposal.authenticated_owner,
@@ -114,6 +120,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id,
         block_height = %self.block_height,
+        phase = self.phase.as_str(),
         transaction_index = %self.transaction_index,
         transaction_type = %transaction.as_ref(),
     ))]
@@ -145,6 +152,11 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     ))
                     .await?;
                 }
+                let progress = chain.system.progress.get_mut();
+                progress.num_incoming_bundles = progress
+                    .num_incoming_bundles
+                    .checked_add(1)
+                    .ok_or(ArithmeticError::Overflow)?;
             }
             Transaction::ExecuteOperation(operation) => {
                 self.resource_controller_mut()
@@ -153,7 +165,10 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     .track_block_size_of(&operation)
                     .with_execution_context(chain_execution_context)?;
                 #[cfg(with_metrics)]
-                let _operation_latency = metrics::OPERATION_EXECUTION_LATENCY.measure_latency_us();
+                let operation_latency =
+                    metrics::OPERATION_EXECUTION_LATENCY.with_label_values(&[self.phase.as_str()]);
+                #[cfg(with_metrics)]
+                let _operation_latency = operation_latency.measure_latency_us();
                 let context = OperationContext {
                     chain_id: self.chain_id,
                     height: self.block_height,
@@ -171,12 +186,25 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     .await?
                     .track_operation(operation)
                     .with_execution_context(chain_execution_context)?;
+                let progress = chain.system.progress.get_mut();
+                progress.num_operations = progress
+                    .num_operations
+                    .checked_add(1)
+                    .ok_or(ArithmeticError::Overflow)?;
             }
         }
 
         let txn_outcome = txn_tracker
             .into_outcome()
             .with_execution_context(chain_execution_context)?;
+        let progress = chain.system.progress.get_mut();
+        progress.num_outgoing_messages = progress
+            .num_outgoing_messages
+            .checked_add(
+                u32::try_from(txn_outcome.outgoing_messages.len())
+                    .map_err(|_| ArithmeticError::Overflow)?,
+            )
+            .ok_or(ArithmeticError::Overflow)?;
         self.process_txn_outcome(txn_outcome, &mut chain.system, chain_execution_context)
             .await?;
         Ok(())
@@ -220,11 +248,13 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         C::Extra: ExecutionRuntimeContext,
     {
         #[cfg(with_metrics)]
-        let _message_latency = metrics::MESSAGE_EXECUTION_LATENCY.measure_latency_us();
+        let message_latency =
+            metrics::MESSAGE_EXECUTION_LATENCY.with_label_values(&[self.phase.as_str()]);
+        #[cfg(with_metrics)]
+        let _message_latency = message_latency.measure_latency_us();
         let context = MessageContext {
             chain_id: self.chain_id,
             origin: incoming_bundle.origin,
-            origin_certificate_hash: incoming_bundle.bundle.certificate_hash,
             origin_timestamp: incoming_bundle.bundle.timestamp,
             is_bouncing: posted_message.is_bouncing(),
             height: self.block_height,
@@ -264,6 +294,11 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                         origin: incoming_bundle.origin,
                         posted_message: Box::new(posted_message.clone()),
                     }
+                );
+                debug!(
+                    chain_id = %self.chain_id,
+                    origin = %incoming_bundle.origin,
+                    "Rejecting incoming message"
                 );
                 let mut actor =
                     ExecutionStateActor::new(chain, txn_tracker, self.resource_controller);
@@ -501,7 +536,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         assert_eq!(self.blobs.len(), expected_outcomes_count);
 
         #[cfg(with_metrics)]
-        crate::chain::metrics::track_block_metrics(&self.resource_controller.tracker);
+        crate::chain::metrics::track_block_metrics(&self.resource_controller.tracker, self.phase);
 
         let resource_tracker = self.resource_controller.tracker;
 

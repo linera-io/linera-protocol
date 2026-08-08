@@ -246,6 +246,7 @@ StreamUpdate:
     - stream_id:
         TYPENAME: StreamId
     - previous_index: U32
+    - first_index: U32
     - next_index: U32
 StreamId:
   STRUCT:
