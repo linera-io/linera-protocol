@@ -4,7 +4,7 @@
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::Debug,
-    sync::{Arc, LazyLock, OnceLock},
+    sync::{Arc, OnceLock},
 };
 
 use async_trait::async_trait;
@@ -705,6 +705,8 @@ impl Clock for TestClock {
     }
 
     fn instant(&self) -> Instant {
+        use std::sync::LazyLock;
+
         // Derived from the same simulated time as `current_time`, so the two cannot
         // disagree. All test clocks share one baseline, so equal simulated times map to
         // equal instants. Saturating keeps this total for absurdly distant times; it is
