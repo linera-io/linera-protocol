@@ -893,6 +893,16 @@ where
         let block = certificate.block();
         let (chain_id, height) = (block.header.chain_id, block.header.height);
 
+        // The destination is already past this block, so it has nothing to learn from it. Without
+        // this the block would be sent anyway: the catch-up below finds an empty range and returns
+        // the destination's own height, which is not *below* the block, so the send goes ahead.
+        // That costs a serialization and a signature verification per destination for nothing —
+        // and re-executing a chain (`reset_and_reexecute_chain`) re-queues its entire history, so
+        // the waste would be the whole chain times the committee rather than a stray block.
+        if destination_next_height.is_some_and(|next| next > height) {
+            return Ok(destination_next_height.expect("just checked that it is set"));
+        }
+
         let next_height = if destination_next_height == Some(height) {
             height
         } else {

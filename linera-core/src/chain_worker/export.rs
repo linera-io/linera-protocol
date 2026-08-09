@@ -19,6 +19,7 @@
 
 use std::{
     collections::{BTreeMap, HashMap},
+    iter,
     sync::{Arc, Mutex},
 };
 
@@ -212,6 +213,11 @@ struct ExportedBlock {
     /// The chain carrying the epoch events, needed when a destination does not yet know the
     /// committee that signed the certificate.
     admin_chain_id: ChainId,
+    /// When the worker queued this block, so that `EXPORT_LATENCY` covers the wait as well as
+    /// the sending. The queue is where the delay shows up once export falls behind, which is
+    /// exactly when the metric is worth reading.
+    #[cfg(with_metrics)]
+    queued_at: Instant,
 }
 
 /// The chain worker's end of its export task.
@@ -241,6 +247,8 @@ impl ChainExporter {
             blobs,
             committee,
             admin_chain_id,
+            #[cfg(with_metrics)]
+            queued_at: Instant::now(),
         };
         match self.blocks.send(block) {
             Ok(()) => {
@@ -365,8 +373,11 @@ where
                     #[cfg(with_metrics)]
                     metrics::QUEUE_SIZE.dec();
                     #[cfg(with_metrics)]
-                    let _latency = metrics::EXPORT_LATENCY.measure_latency();
+                    let queued_at = block.queued_at;
                     self.export(block).await;
+                    #[cfg(with_metrics)]
+                    metrics::EXPORT_LATENCY
+                        .finish_measurement(queued_at.elapsed().as_secs_f64() * 1000.0);
                 }
                 // The chain worker dropped its end.
                 Ok(None) => break,
@@ -550,15 +561,29 @@ where
             return;
         }
 
-        let nodes = match self.node_provider.make_nodes_from_list(missing) {
-            Ok(nodes) => nodes.collect::<Vec<_>>(),
-            Err(error) => {
-                // Leaves the destinations we already have untouched, and tries again on the next
-                // block; a committee we cannot resolve at all is a configuration problem.
-                warn!(%error, "Cannot reach the committee to export blocks to");
-                return;
-            }
-        };
+        // One validator at a time, because resolving them as a batch fails the whole batch on the
+        // first bad address: a single malformed committee entry would then stop this chain
+        // exporting to *any* validator, and would keep doing so on every later block. The
+        // validators we can reach are worth reaching even when one of them is misconfigured.
+        let nodes = missing
+            .into_iter()
+            .filter_map(|(validator, address)| {
+                match self
+                    .node_provider
+                    .make_nodes_from_list(iter::once((validator, address.clone())))
+                {
+                    Ok(nodes) => nodes.into_iter().next(),
+                    Err(error) => {
+                        warn!(
+                            %validator, %address, %error,
+                            "Cannot reach a committee member to export blocks to; \
+                             continuing with the others",
+                        );
+                        None
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
 
         let acknowledged = self
             .progress

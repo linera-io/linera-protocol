@@ -4975,3 +4975,90 @@ where
     );
     Ok(())
 }
+
+/// A block the destination already has is not sent again.
+///
+/// The guard matters because re-execution replays history: `reset_and_reexecute_chain` pushes
+/// every block of the chain back through the worker, and each one reaches export with the
+/// destination already far ahead of it. Without the check those all go out — the catch-up finds
+/// nothing to do and returns the destination's own height, which is not *below* the block, so the
+/// send proceeds — costing a serialization and a signature verification per block per validator.
+///
+/// Taking the destination offline is what makes this observable: skipping it succeeds precisely
+/// because nothing is sent, whereas any attempt to contact it fails.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_send_block_skips_a_block_the_destination_already_has<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use crate::{
+        local_node::LocalNodeClient, remote_node::RemoteNode, updater::RemoteNodeUpdater,
+        worker::WorkerState, ChainWorkerConfig,
+    };
+
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = sender.chain_id();
+
+    for _ in 0..4 {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+    let tip = sender.chain_info().await?.next_block_height;
+    assert_eq!(tip, BlockHeight(4));
+    // Every validator followed along, so validator 3 is fully caught up.
+    assert_eq!(builder.next_block_height(3, chain_id).await, tip);
+
+    let storage = builder.validator_storage(0);
+    let hash = storage
+        .read_certificate_hashes_by_heights(chain_id, &[BlockHeight(0)])
+        .await?
+        .into_iter()
+        .next()
+        .flatten()
+        .expect("the chain has a block at height 0");
+    let certificate = storage
+        .read_certificate(hash)
+        .await?
+        .expect("the certificate at height 0 is in storage");
+
+    // From here the destination answers nothing at all, so reaching for it is an error.
+    builder.set_fault_type([3], FaultType::Offline);
+    let node = builder.node(3);
+    let mut updater = RemoteNodeUpdater {
+        remote_node: RemoteNode {
+            public_key: node.name(),
+            node,
+        },
+        local_node: LocalNodeClient::new(WorkerState::new(
+            storage,
+            ChainWorkerConfig::default(),
+            None,
+        )),
+        admin_chain_id: builder.admin_chain_id(),
+        certificate_upload_batch_size: 100,
+        sync_consensus_rounds: false,
+        max_admin_catch_up_blocks: Some(100),
+    };
+
+    // Re-offer an old block, exactly as a re-execution would.
+    let reached = updater
+        .send_block(&certificate, &[], Some(tip), 100)
+        .await?;
+    assert_eq!(
+        reached, tip,
+        "the destination's height must be reported back"
+    );
+    Ok(())
+}
