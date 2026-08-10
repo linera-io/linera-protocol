@@ -2,7 +2,7 @@
 name = "linera-spec"
 description = "Correctness specification of the Linera microchain consensus protocol."
 readme = "README.md"
-publish = false
+documentation = "https://docs.rs/linera-spec/latest/linera_spec/"
 
 authors.workspace = true
 edition.workspace = true

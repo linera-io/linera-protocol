@@ -12,3 +12,6 @@ This crate exists so that a single index can link to all of them — it depends 
 ```bash
 cargo doc -p linera-spec --open
 ```
+
+Published so that the specification is readable without cloning the repository, at
+<https://docs.rs/linera-spec/latest/linera_spec/>.
