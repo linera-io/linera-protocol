@@ -362,15 +362,16 @@ where
                         } else {
                             vote.round < certificate.round
                         },
-                    // The fast-round authorization is what makes this a *retry* of the block
-                    // we confirmed rather than a fresh proposal that merely repeats its
-                    // contents; without one there is also no evidence to reconstruct the
-                    // fast locking block from.
+                    // An authorization from an *earlier* round is what makes this a retry of
+                    // the block we confirmed, rather than a fresh proposal that merely
+                    // repeats its contents; a fresh proposal carries none, or one for its
+                    // own round. Without a retry there is also no evidence to reconstruct
+                    // the fast locking block from.
                     None =>
                         vote.round.is_fast()
-                            && proposal
-                                .owner_authorization
-                                .is_some_and(|authorization| authorization.round.is_fast())
+                            && proposal.owner_authorization.is_some_and(|authorization| {
+                                authorization.round.is_fast() && authorization.round < new_round
+                            })
                             && vote.value().matches_proposed_block(new_block),
                 },
                 ChainError::HasIncompatibleConfirmedVote(new_block.height, vote.round)

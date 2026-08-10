@@ -63,19 +63,23 @@ pub trait ValidatorVote {}
 /// outcome-less content, in the round it was signed for) and a [`ValidatedBlockCertificate`].
 /// The three retry shapes are:
 ///
-/// * neither field set: a **fresh proposal**, carrying no outcome; the proposer's own signature
-///   doubles as the authorization;
-/// * an [`OwnerAuthorization`] in [`Round::Fast`](linera_base::data_types::Round::Fast) and no
-///   certificate: a **fast retry**, re-proposing a block first proposed in the fast round,
-///   carrying the super owner's original signature and no outcome;
+/// * no certificate, and either no [`OwnerAuthorization`] or one for the proposal's *own*
+///   round: a **fresh proposal**, carrying no outcome. The proposer's own signature doubles as
+///   the authorization when the field is absent; when it is present, the owner signed the block
+///   for this round and someone else is proposing it;
+/// * an [`OwnerAuthorization`] in [`Round::Fast`](linera_base::data_types::Round::Fast),
+///   strictly below the proposal's round, and no certificate: a **fast retry**, re-proposing a
+///   block first proposed in the fast round, carrying the super owner's original signature and
+///   no outcome;
 /// * a [`ValidatedBlockCertificate`]: a **regular retry**, re-proposing a block that was already
 ///   validated, carrying that certificate and the outcome it certifies, plus the block's
 ///   original authorization.
 ///
 /// [`BlockProposal::check_invariants`] enforces that exactly these three shapes are well-formed,
-/// that a retry's round is *strictly greater* than the round it retries, and that a regular
-/// retry's certificate certifies exactly the block and outcome being re-proposed. The
-/// specification uses all three facts.
+/// that an authorization is never for a *later* round than the proposal carrying it — so a
+/// retry's round is strictly greater than the round it retries — and that a regular retry's
+/// certificate certifies exactly the block and outcome being re-proposed. The specification uses
+/// all three facts.
 ///
 /// [`BlockProposal`]: crate::data_types::BlockProposal
 /// [`BlockProposal::check_invariants`]: crate::data_types::BlockProposal::check_invariants

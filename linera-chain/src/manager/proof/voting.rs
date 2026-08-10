@@ -155,7 +155,7 @@ pub trait ValidationRoundStrictlyIncreases: ProposalGate {}
 /// validator casts a validation vote for block `B` in round `r`, and let `(A, p)` be the value
 /// of its [`confirmed_vote`] immediately before. Then `p` is defined only if the proposal is a
 /// retry — carrying a [`ValidatedBlockCertificate`], or an [`OwnerAuthorization`] from
-/// [`Round::Fast`] — and:
+/// [`Round::Fast`] *strictly below* the proposal's own round — and:
 ///
 /// * if the proposal is a **regular retry** carrying a certificate `c` (necessarily a valid
 ///   [`ValidatedBlockCertificate`] for `B`, in a round `c.round < r`), then
@@ -190,7 +190,8 @@ pub trait ValidationRoundStrictlyIncreases: ProposalGate {}
 ///         },
 ///     None =>
 ///         vote.round.is_fast()
-///             && proposal.owner_authorization.is_some_and(|a| a.round.is_fast())
+///             && proposal.owner_authorization
+///                 .is_some_and(|a| a.round.is_fast() && a.round < new_round)
 ///             && vote.value().matches_proposed_block(new_block),
 /// }
 /// ```
@@ -242,12 +243,14 @@ pub trait NoValidationInFastRound: VoteConstructionSites {}
 /// * the [`validated_vote`] guard `ensure!(new_round > vote.round)` is likewise unsatisfiable,
 ///   so [`validated_vote`] was `None`;
 /// * for [`confirmed_vote`], [`BlockProposal::check_invariants`] forces a fast-round proposal to
-///   carry neither retry field — an [`OwnerAuthorization`] requires
-///   `content.round > authorization.round ≥ Round::Fast` and a certificate requires
-///   `content.round > certificate.round ≥ Round::Fast` — so the `ensure!` of
-///   [`UnlockingRequiresHigherCertificate`] takes the certificate-less arm, whose
-///   `owner_authorization` conjunct is then false, and would reject. Hence [`confirmed_vote`]
-///   was `None`.
+///   be a *retry* of neither: [`BlockProposal::check_invariants`] requires
+///   `content.round ≥ authorization.round`, so at `content.round == Round::Fast` — the minimum
+///   — any [`OwnerAuthorization`] is for the fast round itself, i.e. it authorizes this very
+///   proposal rather than an earlier one; and a certificate would require
+///   `content.round > certificate.round ≥ Round::Fast`, which is unsatisfiable. So the `ensure!`
+///   of [`UnlockingRequiresHigherCertificate`] takes the certificate-less arm, whose
+///   `authorization.round < new_round` conjunct is then false, and would reject. Hence
+///   [`confirmed_vote`] was `None`.
 ///
 /// For the post-state: with no certificate carried and `round.is_fast()`, the second arm of
 /// the `if`/`else` chain in [`ChainManager::create_vote`] runs `update_locking(LockingBlock::Fast(

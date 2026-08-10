@@ -1083,11 +1083,12 @@ impl BlockProposal {
     /// retries.
     pub fn check_invariants(&self) -> Result<(), &'static str> {
         if let Some(authorization) = &self.owner_authorization {
-            // An explicit authorization means this proposal retries the round that
-            // authorization was signed for: a fast-round proposal, or a validated block.
+            // The authorization is either for this very proposal — the owner signed the
+            // block for this round, and someone else is proposing it — or for an earlier
+            // round, making this a retry of that round. It can never be for a later one.
             ensure!(
-                self.content.round > authorization.round,
-                "The new proposal's round must be greater than the round it retries"
+                self.content.round >= authorization.round,
+                "The authorization's round must not be later than the proposal's"
             );
         }
         match (&self.validated_certificate, &self.content.outcome) {
