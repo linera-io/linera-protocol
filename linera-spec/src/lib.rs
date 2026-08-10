@@ -36,20 +36,20 @@
 //! The proofs live next to the code they are about, but they are written to be read in this
 //! order, and each statement cites only statements above it.
 //!
-//! | | section | where |
-//! |---|---|---|
-//! | 1 | System model | [`linera_chain::manager::proof::model`] |
-//! | 2 | Fault and network assumptions | [`linera_chain::manager::proof::model`], then [`linera_core::proof::assumptions`] |
-//! | 3 | Protocol objects and definitions | [`linera_chain::data_types::proof::objects`] |
-//! | 4 | Quorum properties | [`linera_chain::data_types::proof::quorum`] |
-//! | 5 | Voting rules | [`linera_chain::manager::proof::voting`] |
-//! | 6 | Locking and certificate invariants | [`linera_chain::manager::proof::rounds`], then [`linera_chain::manager::proof::locking`] |
-//! | 7 | Commit rule | [`linera_chain::manager::proof::commit`] |
-//! | 8 | Safety proof | [`linera_chain::manager::proof::safety`] |
-//! | 9 | Accountability | [`linera_chain::justification::proof`] |
-//! | 10 | Pacemaker and view changes | [`linera_chain::manager::proof::pacemaker`] |
-//! | 11 | Progress lemmas | [`linera_core::proof::progress`] |
-//! | 12 | Liveness proof | [`linera_core::proof::liveness`] |
+//! | section | where |
+//! |---|---|
+//! | System model | [`linera_chain::manager::proof::model`] |
+//! | Fault and network assumptions | [`linera_chain::manager::proof::model`], then [`linera_core::proof::assumptions`] |
+//! | Protocol objects and definitions | [`linera_chain::data_types::proof::objects`] |
+//! | Quorum properties | [`linera_chain::data_types::proof::quorum`] |
+//! | Voting rules | [`linera_chain::manager::proof::voting`] |
+//! | Locking and certificate invariants | [`linera_chain::manager::proof::rounds`], then [`linera_chain::manager::proof::locking`] |
+//! | Commit rule | [`linera_chain::manager::proof::commit`] |
+//! | Safety proof | [`linera_chain::manager::proof::safety`] |
+//! | Accountability | [`linera_chain::justification::proof`] |
+//! | Pacemaker and view changes | [`linera_chain::manager::proof::pacemaker`] |
+//! | Progress lemmas | [`linera_core::proof::progress`] |
+//! | Liveness proof | [`linera_core::proof::liveness`] |
 //!
 //! # How to read a statement
 //!
@@ -70,10 +70,9 @@
 //! (`rustdoc::broken_intra_doc_links`, denied in CI), acyclicity of the dependency graph
 //! (`rustc`, `E0391`), and a rendered, clickable dependency list on each statement's page. There
 //! is deliberately no numbering: names are stable under insertion, and a stale citation is a
-//! build failure rather than a silently wrong cross reference.
-//!
-//! The section numbers in the table above are a reading aid only — they appear nowhere in the
-//! source, so inserting a section renumbers nothing.
+//! build failure rather than a silently wrong cross reference. The same goes for the sections
+//! above — they are ordered, not numbered, so adding or splitting one renames nothing and
+//! invalidates no reference.
 //!
 //! # The safety/liveness split
 //!
