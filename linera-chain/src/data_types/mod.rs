@@ -2,6 +2,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Data types exchanged while proposing, voting on, and confirming blocks.
+//!
+//! The correctness specification's vocabulary — what a validator signs, what a proposal and a
+//! certificate are — and the quorum properties that everything else rests on are stated and
+//! proved in [`proof`]. See [`crate::spec`] for the intended reading order.
+
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     sync::Arc,
@@ -40,6 +46,7 @@ use crate::{
 };
 
 pub mod metadata;
+pub mod proof;
 
 pub use metadata::*;
 
