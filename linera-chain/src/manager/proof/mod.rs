@@ -5,8 +5,9 @@
 //! safety theorem.
 //!
 //! This is the chain-crate half of the specification; the progress and liveness half lives in
-//! `linera_core::proof`, which cites into here. [`crate::spec`] gives the reading order across
-//! both and explains the conventions.
+//! `linera_core::proof`, which cites into here, and accountability lives in
+//! [`crate::justification::proof`]. The `linera-spec` crate gives the reading order across all
+//! of them and explains the conventions.
 //!
 //! # Layout
 //!

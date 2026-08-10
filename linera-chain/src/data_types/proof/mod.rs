@@ -8,7 +8,7 @@
 //! Nothing here depends on the chain manager, so the manager's voting, locking, commit, safety
 //! and pacemaker results ([`crate::manager::proof`]) may all cite these freely.
 //!
-//! See [`crate::spec`] for the full reading order and for the conventions governing statement
+//! The `linera-spec` crate gives the full reading order and the conventions governing statement
 //! names, proof obligations and dependency edges.
 
 pub mod objects;

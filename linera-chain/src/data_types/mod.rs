@@ -6,7 +6,7 @@
 //!
 //! The correctness specification's vocabulary — what a validator signs, what a proposal and a
 //! certificate are — and the quorum properties that everything else rests on are stated and
-//! proved in [`proof`]. See [`crate::spec`] for the intended reading order.
+//! proved in [`proof`]. The `linera-spec` crate gives the intended reading order.
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},

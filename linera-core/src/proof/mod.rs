@@ -13,7 +13,7 @@
 //! | [`progress`] | the individual steps a correct driver can force after GST |
 //! | [`liveness`] | the liveness theorems, and what they exclude |
 //!
-//! See [`crate::spec`] for the reading order across both crates.
+//! The `linera-spec` crate gives the reading order across both crates.
 //!
 //! # Why liveness lives in this crate
 //!
