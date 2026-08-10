@@ -984,10 +984,8 @@ where
             let storage = storage_builder.build().await?;
             let config = ChainWorkerConfig {
                 nickname: format!("Node {i}"),
-                // A chain worker owns its export task, so it has to outlive a single request for
-                // the task to accumulate anything. Without a TTL no keep-alive task is spawned
-                // and the worker — and its export task — is dropped as soon as the request that
-                // loaded it returns.
+                // A chain worker owns its export task, so without a TTL it is dropped — with the
+                // task — as soon as the request that loaded it returns.
                 ttl: block_export.is_some().then(|| Duration::from_secs(60)),
                 ..ChainWorkerConfig::default()
             }

@@ -145,23 +145,12 @@ where
     pub admin_chain_id: ChainId,
     pub certificate_upload_batch_size: u64,
     /// Whether to also bring the remote node's *consensus round* up to ours once its height
-    /// matches, by pushing the proposal, locking certificate or timeout certificate that
-    /// justifies the later round.
-    ///
-    /// The client wants this: it is trying to drive a chain forward. Block export does not — its
-    /// job is to make another validator hold the blocks we hold, and pushing consensus evidence
-    /// on top of that is participation in consensus rather than replication of it. Export
-    /// therefore leaves this off and only ever moves heights.
+    /// matches. The client wants this; export does not — pushing consensus evidence is taking
+    /// part in consensus rather than replicating it, so export only ever moves heights.
     pub sync_consensus_rounds: bool,
-    /// Caps how many admin-chain blocks are replayed in one go when a destination turns out not
-    /// to know the committee that signed a certificate.
-    ///
-    /// `None` replays as far as needed, which is what the client wants: it is trying to get one
-    /// certificate accepted and will wait. Block export sets a bound, because that replay happens
-    /// inside a single export round — a validator admitted to a network with a long admin-chain
-    /// history would otherwise hold up every other destination, and every later block of the
-    /// chain being exported, for as long as the whole replay takes. Bounded, it converges over
-    /// rounds instead, exactly like the per-chain catch-up.
+    /// Caps the admin-chain blocks replayed when a destination does not know the committee that
+    /// signed a certificate. `None` replays as far as needed, which is what the client wants;
+    /// export bounds it because the replay happens inside one export round.
     pub max_admin_catch_up_blocks: Option<u64>,
 }
 
@@ -376,10 +365,8 @@ where
         fields(chain_id = %certificate.block().header.chain_id)
     )]
     /// Sends a single confirmed certificate, uploading its missing dependencies and retrying.
-    ///
-    /// Blobs the validator reports missing are taken from `held` when present there, and read from
-    /// storage otherwise. Callers that already hold the block's blobs in memory pass them so that
-    /// publishing a blob — where the validator is missing it by definition — costs no read.
+    /// Missing blobs come from `held` when present and from storage otherwise, so a caller that
+    /// already holds them — publishing a blob, say — costs no read.
     async fn send_confirmed_certificate(
         &mut self,
         certificate: &CacheArc<GenericCertificate<ConfirmedBlock>>,
@@ -817,19 +804,11 @@ where
         }
     }
 
-    /// Sends the validator the blocks of `chain_id` it is missing below `target_next_height`,
-    /// at most `max_blocks` of them, and returns the height it reports afterwards.
-    ///
-    /// Bounded on purpose. A validator that has just joined the committee knows nothing of a chain
-    /// and reports height 0, so an unbounded catch-up on a chain with a long history would occupy
-    /// the caller for as long as it takes to replay all of it — during which every other
-    /// destination, and every later block of this chain, waits. Sending a bounded chunk lets the
-    /// caller come back to it, so a far-behind validator converges over several rounds instead of
-    /// blocking everything once.
-    ///
-    /// `destination_next_height` is what we believe the validator holds. `None`, or a value that
-    /// disagrees with reality, costs one [`ChainInfoQuery`] to establish the truth — which is also
-    /// what discovers that a new validator is at 0.
+    /// Sends up to `max_blocks` of the blocks of `chain_id` the validator is missing below
+    /// `target_next_height`, returning the height it reports afterwards. Bounded so a validator
+    /// that just joined converges over rounds instead of blocking every other destination once.
+    /// `destination_next_height` is what we believe it holds; `None` or a stale value costs one
+    /// [`ChainInfoQuery`] to establish the truth.
     pub async fn send_missing_blocks(
         &mut self,
         chain_id: ChainId,
@@ -868,21 +847,12 @@ where
         Ok(next_height)
     }
 
-    /// Pushes a block the caller already holds to the validator, first closing up to `max_catch_up`
-    /// of any gap below it, and returns the height the validator reports afterwards.
+    /// Pushes a block the caller already holds, first closing up to `max_catch_up` of any gap
+    /// below it, and returns the height the validator reports afterwards.
     ///
-    /// `certificate` and `blobs` are a block the caller holds in memory — the block a chain worker
-    /// has just executed — so when the validator is already contiguous this costs a single request
-    /// and no read from storage.
-    ///
-    /// `destination_next_height` is the height we believe the validator to be at. When it is
-    /// exactly this block's height the block is contiguous there and is sent with no preceding
-    /// query. Otherwise the validator is queried and the gap is closed, up to `max_catch_up`
-    /// blocks; the held block is sent only once the gap is gone, since a block landing above a gap
-    /// is silently preprocessed and never advances the tip.
-    ///
-    /// The returned height is the validator's own, rather than an assumed `height + 1`, so a
-    /// validator that could not close its gap reports the truth and is queried again next time.
+    /// The held block is sent only once the gap is gone: one landing above a gap is silently
+    /// preprocessed and never advances the tip. The returned height is the validator's own rather
+    /// than an assumed `height + 1`, so one that could not close its gap reports the truth.
     pub async fn send_block(
         &mut self,
         certificate: &CacheArc<GenericCertificate<ConfirmedBlock>>,
@@ -893,12 +863,9 @@ where
         let block = certificate.block();
         let (chain_id, height) = (block.header.chain_id, block.header.height);
 
-        // The destination is already past this block, so it has nothing to learn from it. Without
-        // this the block would be sent anyway: the catch-up below finds an empty range and returns
-        // the destination's own height, which is not *below* the block, so the send goes ahead.
-        // That costs a serialization and a signature verification per destination for nothing —
-        // and re-executing a chain (`reset_and_reexecute_chain`) re-queues its entire history, so
-        // the waste would be the whole chain times the committee rather than a stray block.
+        // Already past this block. Without the check it is sent anyway: the catch-up below finds
+        // an empty range and returns the destination's own height, which is not *below* the
+        // block. `reset_and_reexecute_chain` re-queues a whole chain, so this is not marginal.
         if destination_next_height.is_some_and(|next| next > height) {
             return Ok(destination_next_height.expect("just checked that it is set"));
         }
@@ -922,11 +889,8 @@ where
         Ok(info.next_block_height)
     }
 
-    /// Collects the given blobs, taking each from `held` if it is there and reading the rest from
-    /// storage.
-    ///
-    /// The certificate is confirmed, so every blob it requires must be available; one that is in
-    /// neither place is reported back as still missing.
+    /// Collects the given blobs, taking each from `held` if present and the rest from storage.
+    /// The certificate is confirmed, so one found in neither place is reported still missing.
     async fn resolve_blobs(
         &self,
         blob_ids: &[BlobId],

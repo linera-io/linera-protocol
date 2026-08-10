@@ -319,15 +319,11 @@ where
     /// that tracks all chains and never filters.
     pub outbox_index_tracked_hash: RegisterView<C, Option<CryptoHash>>,
 
-    // A *lower* bound, not an exact record: the export task reports progress asynchronously, so
-    // blocks pushed since the last save are missing here, and a crash loses the reports that were
-    // never folded in. That is deliberate — re-sending a block the destination already has is
-    // skipped by an integer comparison before signature verification, whereas *under*-sending
-    // would leave a permanent gap.
-    /// The height of the highest block of this chain that has been pushed to each of the other
-    /// committee validators. A validator with no entry has not been exported to yet, and is
-    /// queried before the first push. Validators that leave the committee are pruned, so this
-    /// stays bounded by the committee size.
+    // A lower bound, not an exact record: progress is reported asynchronously, so a crash loses
+    // whatever was not folded in. Deliberate — a re-sent block the destination already has is
+    // skipped on an integer compare, whereas under-sending would leave a permanent gap.
+    /// The highest block of this chain pushed to each other committee validator. A validator with
+    /// no entry is queried before its first push; ones that leave the committee are pruned.
     pub exported_heights: RegisterView<C, NonCanonicalBTreeMap<ValidatorPublicKey, BlockHeight>>,
 }
 

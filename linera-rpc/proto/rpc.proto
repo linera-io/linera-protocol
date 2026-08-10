@@ -12,13 +12,10 @@ service NotifierService {
 
 // A service run by the proxy which forwards a shard's requests to another validator.
 //
-// Shards must not have a route to the internet: they hold the validator's secret key, so the
-// proxy is the only component that opens outbound connections. A shard exporting a block it has
-// just executed sends each request here instead, naming the validator it is meant for, and the
-// proxy performs it on the shard's behalf and returns the answer.
-//
-// Deliberately limited to the operations block export needs, so that reaching this service does
-// not confer the ability to make the proxy issue arbitrary requests to arbitrary validators.
+// Shards hold the validator's secret key, so the proxy is the only component that opens outbound
+// connections. A shard names the validator its request is meant for and the proxy performs it.
+// Limited to the operations block export needs, so reaching this service does not confer the
+// ability to make the proxy issue arbitrary requests.
 service ValidatorRelay {
   // Forward a lite certificate to another validator.
   rpc RelayLiteCertificate(RelayLiteCertificateRequest) returns (ChainInfoResult);

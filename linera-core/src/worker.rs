@@ -897,11 +897,9 @@ where
         }
     }
 
-    /// Installs the factory that creates each chain worker's block-export task, so that the
-    /// blocks this worker executes are pushed to the other validators in the committee.
-    ///
-    /// Must be called before any chain worker is created: workers capture the factory as they are
-    /// loaded, so one created earlier would never export.
+    /// Installs the factory that creates each chain worker's block-export task. Must be called
+    /// before any chain worker is created: workers capture the factory as they load, so one
+    /// created earlier would never export.
     pub fn with_chain_exporter_factory(
         mut self,
         factory: ChainExporterFactory<StorageClient>,

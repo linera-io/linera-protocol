@@ -93,9 +93,7 @@ mod metrics {
         )
     });
     /// Requests this proxy has carried to another validator on behalf of one of its shards.
-    ///
-    /// Shards have no route to the internet, so this counting up is what shows that
-    /// validator-to-validator traffic is flowing, and through the relay rather than around it.
+    /// Shards have no internet route, so this is what shows the traffic goes through the relay.
     pub static RELAYED_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
             "proxy_relayed_request_count",
@@ -231,14 +229,9 @@ struct GrpcProxyInner<S> {
     tls: TlsConfig,
     storage: S,
     id: usize,
-    /// The validator addresses this proxy is willing to relay to, and the next epoch it has yet
-    /// to learn about.
-    ///
-    /// Relaying exists so that shards — which hold the validator secret key — never open outbound
-    /// connections themselves. That is only worth anything if the proxy will not dial wherever it
-    /// is told: without this, anything able to reach the internal port could use the proxy to
-    /// reach an arbitrary host. Membership of some committee is the right test, because those are
-    /// exactly the validators block export has any business talking to.
+    /// The validator addresses this proxy will relay to, and the next epoch it has yet to learn.
+    /// Without this, anything able to reach the internal port could use the proxy to dial an
+    /// arbitrary host, defeating the point of keeping shards off the internet.
     relay_destinations: Arc<tokio::sync::RwLock<RelayDestinations>>,
 }
 
@@ -302,11 +295,8 @@ where
     }
 
     /// Whether this proxy will relay to `address`, i.e. whether it belongs to a validator in any
-    /// committee this proxy can see.
-    ///
-    /// Epochs are scanned forward from wherever the last scan stopped, so a validator admitted
-    /// after startup is picked up on the first request naming it, and the scan is not repeated for
-    /// addresses already known.
+    /// committee it can see. Epochs are scanned forward from the last scan, so a validator
+    /// admitted after startup is picked up on the first request naming it.
     async fn is_relay_destination(&self, address: &str) -> bool {
         if self
             .0
@@ -337,10 +327,8 @@ where
         destinations.addresses.contains(address)
     }
 
-    /// Returns a client for the validator a relayed request names.
-    ///
-    /// Relayed requests are forwarded as they arrived, without being decoded into their Rust
-    /// types and re-encoded: the proxy is carrying the shard's request, not making its own.
+    /// Returns a client for the validator a relayed request names. Requests are forwarded as they
+    /// arrived, without decoding into Rust types: the proxy carries the shard's request.
     async fn peer(
         &self,
         destination: &str,
@@ -1080,17 +1068,9 @@ where
     }
 }
 
-/// Performs, on behalf of this validator's shards, the requests they need to send to other
-/// validators.
-///
-/// Shards hold the validator's secret key and so must not be able to open outbound connections;
-/// the proxy is the one component that may. Each method here dials the validator named in the
-/// request and returns its answer verbatim, so that the shard sees exactly what it would have
-/// seen had it made the call itself — including the peer's errors, which the export logic
-/// depends on to decide what to send next.
-///
-/// Served only on the internal listener, and deliberately limited to the four requests block
-/// export makes.
+/// Performs, on behalf of this validator's shards, the requests they must send to other
+/// validators, returning each answer verbatim — including the peer's errors, which export depends
+/// on. Served only on the internal listener, limited to the four requests block export makes.
 #[async_trait]
 impl<S> ValidatorRelay for GrpcProxy<S>
 where

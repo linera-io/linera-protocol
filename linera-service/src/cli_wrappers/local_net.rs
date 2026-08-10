@@ -1086,10 +1086,8 @@ impl LocalNet {
 
 #[cfg(with_testing)]
 impl LocalNet {
-    /// Kills one proxy of the given validator, leaving its other proxies and shards running.
-    ///
-    /// Used to check that traffic which was relayed through that proxy moves to another one
-    /// rather than being stranded.
+    /// Kills one proxy of the given validator, leaving its other proxies and shards running, to
+    /// check that traffic relayed through it moves to another rather than being stranded.
     pub async fn kill_proxy(&mut self, validator: usize, proxy_id: usize) -> Result<()> {
         self.running_validators
             .get_mut(&validator)

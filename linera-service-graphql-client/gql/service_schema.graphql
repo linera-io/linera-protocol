@@ -447,10 +447,8 @@ type ChainStateExtendedView {
 	"""
 	outboxIndexTrackedHash: CryptoHash
 	"""
-	The height of the highest block of this chain that has been pushed to each of the other
-	committee validators. A validator with no entry has not been exported to yet, and is
-	queried before the first push. Validators that leave the committee are pruned, so this
-	stays bounded by the committee size.
+	The highest block of this chain pushed to each other committee validator. A validator with
+	no entry is queried before its first push; ones that leave the committee are pruned.
 	"""
 	exportedHeights: JSONObject!
 }

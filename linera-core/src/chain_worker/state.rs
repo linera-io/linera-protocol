@@ -1168,16 +1168,10 @@ where
         ))
     }
 
-    /// Hands the block just executed to this chain's export task, which pushes it to the other
-    /// validators in the committee, and folds the task's progress into the chain state so that
-    /// the save that follows persists it.
-    ///
-    /// Returns as soon as the block is queued: the pushes themselves happen on the export task,
-    /// off the block-execution path. Does nothing if the server did not enable block export.
-    ///
-    /// Never fails the block. Export is replication, not consensus: a block we cannot export is
-    /// still a block this validator has executed and committed, so a problem here is logged and
-    /// the block stands.
+    /// Queues the block just executed for export and folds the task's progress into the chain
+    /// state, for the save that follows to persist. Returns as soon as it is queued, and does
+    /// nothing if export is disabled. Never fails the block: export is replication, not
+    /// consensus, so a problem here is logged and the block stands.
     async fn export_block(
         &mut self,
         certificate: &CacheArc<ConfirmedBlockCertificate>,

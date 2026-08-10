@@ -4597,12 +4597,8 @@ where
 
 /// A validator that missed blocks is caught up by export alone, while the chain is idle.
 ///
-/// This isolates the mechanism deliberately. One validator is offline while the chain produces
-/// blocks, then comes back — and then *nothing else happens*: no further blocks, and the client is
-/// never asked to do anything, so it has no reason to talk to that validator. The only thing that
-/// can close the gap is the export tasks noticing a lagging destination with an empty queue. That
-/// is the same path a validator joining a long-lived chain takes, where it reports height 0 and
-/// has to be replayed the whole history.
+/// After the validator comes back, *nothing else happens* — no blocks, no client traffic — so the
+/// only thing that can close the gap is the export task noticing a lagging destination.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[test_log::test(tokio::test)]
 async fn test_export_catches_a_lagging_validator_up_while_idle<B>(
@@ -4655,9 +4651,7 @@ where
 
 /// A destination that is unreachable must not stall export to the rest of the committee.
 ///
-/// The failing validator is the one this asserts *around*: the others still receive every block,
-/// and the exporter records progress only for them, so one dead peer degrades to a gap in
-/// `exported_heights` rather than to a stalled chain.
+/// One dead peer must degrade to a gap in `exported_heights`, not to a stalled chain.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[test_log::test(tokio::test)]
 async fn test_export_survives_an_unreachable_destination<B>(
@@ -4687,11 +4681,9 @@ where
             .unwrap_ok_committed();
     }
 
-    // Validator 0 has three peers and one of them is down, so exactly two should ever be
-    // recorded: export keeps flowing to the reachable ones, and the dead one is simply absent
-    // rather than taking the chain's export down with it. Identifying *which* peer is down is
-    // deliberately avoided — `set_fault_type` indexes creation order while the committee map is
-    // ordered by public key, and the count is the property that matters anyway.
+    // Three peers, one down, so exactly two are ever recorded. Which one is down is deliberately
+    // not asserted: `set_fault_type` indexes creation order, the committee map is keyed by public
+    // key, and the count is the property that matters.
     let mut exported = BTreeMap::new();
     for _ in 0..40 {
         exported = builder.exported_heights(0, chain_id).await;
@@ -4715,10 +4707,8 @@ where
 /// One catch-up round sends at most `max_catch_up_blocks`, and the next round picks up where it
 /// left off.
 ///
-/// This is the arithmetic the bound exists for, asserted directly rather than through the export
-/// loop's timing: a round is capped, and capping it does not lose the remainder. A test that only
-/// checked eventual convergence would pass just as well with the bound ignored entirely, since
-/// ignoring it converges in one round.
+/// Asserted directly rather than through the export loop's timing, because a convergence-only
+/// test passes just as well with the bound ignored — ignoring it converges in one round.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[test_log::test(tokio::test)]
 async fn test_catch_up_sends_at_most_the_bound_per_round<B>(
@@ -4815,10 +4805,8 @@ where
 /// A validator behind by more blocks than one round may send is still caught up, over several
 /// rounds, by the idle export loop alone.
 ///
-/// The bound is what keeps a freshly-joined validator's backfill from monopolising a chain's
-/// export, so the thing that must not happen is for it to also stop the backfill short. Here the
-/// backlog is several times the bound and nothing else is running: no new blocks, no client
-/// traffic. Only the export loop repeating bounded rounds can close the gap.
+/// The bound must not also stop the backfill short. The backlog is several times the bound and
+/// nothing else is running, so only the export loop repeating rounds can close the gap.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[test_log::test(tokio::test)]
 async fn test_export_catches_up_a_backlog_larger_than_the_bound<B>(
@@ -4879,11 +4867,9 @@ where
 
 /// `max_admin_catch_up_blocks` bounds the admin-chain replay, and leaving it unset does not.
 ///
-/// Export sets it because `update_admin_chain` runs *inside* one export round: replaying a long
-/// admin chain there would stall that chain's export behind an unrelated backfill. The client
-/// leaves it unset, because it is blocking on this one certificate being accepted and must not
-/// give up partway. Both branches are asserted here, since the bounded one is a behaviour change
-/// that must not leak into the client's path.
+/// Export bounds it because `update_admin_chain` runs inside one export round; the client must
+/// not, since it is blocking on one certificate. Both branches are asserted, because the bounded
+/// one is a behaviour change that must not leak into the client's path.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[test_log::test(tokio::test)]
 async fn test_admin_chain_catch_up_is_bounded_only_for_export<B>(
@@ -4978,14 +4964,9 @@ where
 
 /// A block the destination already has is not sent again.
 ///
-/// The guard matters because re-execution replays history: `reset_and_reexecute_chain` pushes
-/// every block of the chain back through the worker, and each one reaches export with the
-/// destination already far ahead of it. Without the check those all go out — the catch-up finds
-/// nothing to do and returns the destination's own height, which is not *below* the block, so the
-/// send proceeds — costing a serialization and a signature verification per block per validator.
-///
-/// Taking the destination offline is what makes this observable: skipping it succeeds precisely
-/// because nothing is sent, whereas any attempt to contact it fails.
+/// `reset_and_reexecute_chain` replays a chain's whole history, and without the guard every block
+/// goes back out. Taking the destination offline is what makes it observable: skipping succeeds
+/// precisely because nothing is sent.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[test_log::test(tokio::test)]
 async fn test_send_block_skips_a_block_the_destination_already_has<B>(

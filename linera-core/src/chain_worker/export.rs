@@ -3,19 +3,16 @@
 
 //! Pushing executed blocks to the other validators in the committee.
 //!
-//! Each chain worker owns one export task. When the worker executes a block it hands the
-//! certificate and the block's blobs — both already in memory — to that task, which pushes them to
-//! every other validator in the chain's current committee. This is the validator-to-validator
-//! dissemination that makes each validator a complete replica: consensus itself only guarantees
-//! that a quorum holds any given block.
+//! Each chain worker owns one export task and hands it every block it executes — certificate and
+//! blobs, both already in memory. This is the dissemination that makes each validator a complete
+//! replica; consensus alone only guarantees that a quorum holds any given block.
 //!
-//! One task per chain worker rather than one per process: thousands of chains through a single
-//! task would serialize them, and a per-chain task gets per-chain height ordering for free, since
-//! it finishes one block before taking the next off its queue.
+//! One task per chain worker rather than per process: a single task would serialize thousands of
+//! chains, and a per-chain task gets height ordering for free.
 //!
-//! The queue is unbounded. Dropping a block would leave a gap in the destination that nothing ever
-//! repairs, which is the failure mode this design exists to remove; a queue that grows is a
-//! performance problem instead, and [`metrics::QUEUE_SIZE`] is there to see it.
+//! The queue is unbounded, because dropping a block would leave a gap nothing repairs — the very
+//! failure this design removes. A growing queue is a performance problem instead; see
+//! [`metrics::QUEUE_SIZE`].
 
 use std::{
     collections::{BTreeMap, HashMap},
@@ -56,10 +53,8 @@ mod metrics {
     };
     use prometheus::{Histogram, HistogramVec, IntGauge};
 
-    /// Blocks waiting to be exported, across every chain worker in this process.
-    ///
-    /// The queue is unbounded, so this is how a chain that produces blocks faster than they can be
-    /// pushed becomes visible instead of silently losing them.
+    /// Blocks waiting to be exported, across every chain worker in this process. The queue is
+    /// unbounded, so this is how a chain producing faster than it can push becomes visible.
     pub static QUEUE_SIZE: LazyLock<IntGauge> = LazyLock::new(|| {
         register_int_gauge(
             "block_export_queue_size",
@@ -68,9 +63,6 @@ mod metrics {
     });
 
     /// Time from a block being queued to it having been pushed to every destination.
-    ///
-    /// This is the export cost per block, including the serialization and signature work that
-    /// shares a runtime thread with block execution on a single-threaded shard.
     pub static EXPORT_LATENCY: LazyLock<Histogram> = LazyLock::new(|| {
         register_histogram(
             "block_export_latency",
@@ -107,47 +99,26 @@ pub struct BlockExportConfig {
     /// How many certificates are read from storage and pushed per batch when catching a
     /// destination up.
     pub certificate_upload_batch_size: u64,
-    /// How long a destination is skipped after a failed push, doubling up to `max_retry_delay`
-    /// while it keeps failing.
-    ///
-    /// A destination that is down must not stall export for the rest of the committee, and must
-    /// not cost a full round trip on every block either. Skipping it leaves its cursor stale, so
-    /// the first push that does go through queries it and fills in whatever it missed.
-    ///
-    /// This is a coarser layer than the transport's own per-request retries: those decide whether
-    /// one call is worth attempting again, this decides whether the destination is worth
-    /// attempting at all right now.
+    /// How long a destination is skipped after a failed push, doubling up to `max_retry_delay`.
+    /// Coarser than the transport's per-request retries: those decide whether one call is worth
+    /// repeating, this decides whether the destination is worth attempting at all right now.
     pub retry_delay: Duration,
     /// The longest a failing destination is skipped for.
     pub max_retry_delay: Duration,
-    /// How long the task waits for a new block before spending a round on catching up whichever
-    /// destinations are behind.
-    ///
-    /// Live blocks always win: catching up only happens when nothing has arrived for this long,
-    /// and only one round per interval, so it can never crowd out export or spin. Together with
-    /// `max_catch_up_blocks` this sets the backfill rate — blocks per interval — so the two should
-    /// be tuned as a pair; a shorter interval with a proportionally smaller bound keeps the same
-    /// throughput while returning to live blocks sooner.
+    /// How long the task waits for a new block before spending a round catching up destinations
+    /// that are behind. With `max_catch_up_blocks` this sets the backfill rate, so tune them
+    /// together.
     pub idle_catch_up_interval: Duration,
-    /// How many missing blocks are pushed to one destination in a single round.
-    ///
-    /// A validator that has just joined the committee knows nothing of a chain and reports height
-    /// 0, so on a chain with a long history the catch-up is arbitrarily large. Doing it in bounded
-    /// rounds keeps one far-behind destination from holding up every other destination and every
-    /// later block of the chain; the remainder is picked up on subsequent rounds, including while
-    /// the chain is idle.
-    ///
-    /// The bound is what a live block may have to wait behind, so it is deliberately small: the
-    /// backfill rate is set by how often rounds happen, not by how much each one does.
+    /// How many missing blocks are pushed to one destination per round. Deliberately small: it
+    /// bounds what a live block may wait behind, and a validator that just joined reports height
+    /// 0, so its catch-up is otherwise arbitrarily large.
     pub max_catch_up_blocks: u64,
 }
 
 impl BlockExportConfig {
-    /// Rejects values that would make export misbehave rather than merely perform badly.
-    ///
-    /// Checked once at startup so a typo fails the validator immediately, instead of surfacing
-    /// later as a panic mid-export, a task spinning a core, or gaps that are silently never
-    /// repaired.
+    /// Rejects values that would make export misbehave rather than merely perform badly. Checked
+    /// at startup, so a typo fails fast instead of surfacing as a panic, a spinning task, or gaps
+    /// that are never repaired.
     pub fn check(&self) -> Result<(), String> {
         if self.certificate_upload_batch_size == 0 {
             // `slice::chunks(0)` panics.
@@ -193,11 +164,8 @@ pub struct ChainExportSetup<S: Storage> {
     pub exported_heights: BTreeMap<ValidatorPublicKey, BlockHeight>,
 }
 
-/// Creates the export task for one chain worker.
-///
-/// The transport is type-erased behind this alias: `linera-core` knows how to export a block, but
-/// only the server binary knows how to reach another validator, so it installs a factory that
-/// closes over its node provider.
+/// Creates the export task for one chain worker. Type-erased because only the server binary knows
+/// how to reach another validator.
 pub type ChainExporterFactory<S> = Arc<dyn Fn(ChainExportSetup<S>) -> ChainExporter + Send + Sync>;
 
 /// A block a chain worker has executed, on its way to the other validators.
@@ -223,11 +191,9 @@ struct ExportedBlock {
 /// The chain worker's end of its export task.
 pub struct ChainExporter {
     blocks: mpsc::UnboundedSender<ExportedBlock>,
-    /// The highest height each validator has acknowledged, written by the export task and folded
-    /// into the chain's `exported_heights` by the worker when it next saves.
-    ///
-    /// Progress travels this way rather than back through the worker so that the worker stays the
-    /// only writer of its own chain state, and so that export costs no extra database write.
+    /// The highest height each validator has acknowledged, folded into the chain's
+    /// `exported_heights` by the worker on its next save. Travels this way so the worker stays the
+    /// only writer of its own chain state, and export costs no extra database write.
     progress: Arc<Mutex<BTreeMap<ValidatorPublicKey, BlockHeight>>>,
 }
 
@@ -280,10 +246,9 @@ impl ChainExporter {
     }
 }
 
-/// Spawns the export task for one chain worker and returns the worker's end of it.
-///
-/// The task runs until the returned [`ChainExporter`] is dropped, which happens when the chain
-/// worker is dropped — so an idle chain costs neither a task nor a connection.
+/// Spawns the export task for one chain worker and returns the worker's end of it. The task runs
+/// until the returned [`ChainExporter`] is dropped with its worker, so an idle chain costs neither
+/// a task nor a connection.
 pub fn spawn_chain_exporter<S, P>(
     setup: ChainExportSetup<S>,
     node_provider: Arc<P>,
@@ -381,22 +346,17 @@ where
                 }
                 // The chain worker dropped its end.
                 Ok(None) => break,
-                // Nothing arrived for a while. If a destination is still behind — a validator
-                // that joined the committee partway through a long chain, say — close some more
-                // of its gap rather than waiting for the chain to produce another block, which
-                // it may never do. At most one round per interval, so a destination that cannot
-                // be caught up costs a bounded trickle rather than a spin.
+                // Nothing arrived for a while: close more of a lagging destination's gap rather
+                // than waiting for a block the chain may never produce. One round per interval,
+                // so a destination that cannot be caught up trickles rather than spins.
                 Err(_) => self.catch_up_round().await,
             }
         }
         debug!("Chain worker dropped; stopping block export");
     }
 
-    /// Brings the destination set in line with the chain's committee as the local worker sees it
-    /// right now, rather than as of the last block exported.
-    ///
-    /// Asked of the worker rather than read from the chain view directly: the worker owns that
-    /// view while it is running, and loading it here would race with it.
+    /// Brings the destination set in line with the committee as the worker sees it now. Asked of
+    /// the worker rather than read from the chain view, which the worker owns while running.
     async fn sync_destinations_from_local_node(&mut self) {
         let query = ChainInfoQuery::new(self.chain_id).with_committees();
         let info = match self.local_node.handle_chain_info_query(query).await {
@@ -418,18 +378,9 @@ where
         self.sync_destinations_with(&committee, admin_chain_id);
     }
 
-    /// Remakes the node of every destination whose last push failed.
-    ///
-    /// The transport may be relaying through one of several proxies and a destination keeps
-    /// whichever it was handed, so a failure may mean nothing worse than a dead proxy. Remaking
-    /// the node draws the next one from the rotation, so a bad proxy is stepped over on the very
-    /// next attempt instead of being retried; if the destination itself is down, the fresh proxy
-    /// fails too and the backoff below still applies. The failure count and backoff are kept
-    /// across the rebuild for exactly that reason — rotating proxies must not become a way to
-    /// hammer a validator that is simply offline.
-    ///
-    /// Runs before every catch-up round as well as on every new block: a destination that fell
-    /// behind while the chain was idle would otherwise never get a second chance at a connection.
+    /// Remakes the node of every destination whose last push failed, drawing the next proxy from
+    /// the rotation so a dead proxy is stepped over rather than retried. Keeps the failure count
+    /// and backoff, so this cannot become a way to hammer a validator that is simply offline.
     fn refresh_stuck_destinations(&mut self) {
         let stuck = self
             .destinations
@@ -507,10 +458,8 @@ where
     }
 
     /// Records how far each destination acknowledged, for the worker to persist on its next save.
-    ///
-    /// The heights are what the validators themselves reported, so they are facts rather than
-    /// assumptions: one that could not close its gap keeps a low cursor here and is picked up
-    /// again next round.
+    /// These are heights the validators reported themselves, so one that could not close its gap
+    /// keeps a low cursor and is picked up again next round.
     fn record_progress(&self, results: Vec<(ValidatorPublicKey, Option<BlockHeight>)>) {
         let mut progress = self
             .progress
@@ -561,10 +510,8 @@ where
             return;
         }
 
-        // One validator at a time, because resolving them as a batch fails the whole batch on the
-        // first bad address: a single malformed committee entry would then stop this chain
-        // exporting to *any* validator, and would keep doing so on every later block. The
-        // validators we can reach are worth reaching even when one of them is misconfigured.
+        // One at a time: resolving as a batch fails the whole batch on the first bad address,
+        // which would stop this chain exporting to *any* validator, on every later block.
         let nodes = missing
             .into_iter()
             .filter_map(|(validator, address)| {
@@ -670,10 +617,8 @@ where
         self.record_outcome(result, height, now, config)
     }
 
-    /// Whether this destination is, as far as we know, below `target`.
-    ///
-    /// An unknown height counts as behind: it is what a failed send leaves behind, and assuming
-    /// such a destination is up to date is how one silently stops being exported to.
+    /// Whether this destination is, as far as we know, below `target`. An unknown height counts
+    /// as behind: that is what a failed send leaves, and assuming otherwise strands it silently.
     fn is_behind(&self, target: BlockHeight) -> bool {
         self.next_height.is_none_or(|next| next < target)
     }
@@ -683,10 +628,8 @@ where
         self.retry_at.is_none_or(|retry_at| retry_at <= now)
     }
 
-    /// Pushes one bounded chunk of the blocks this validator is missing below `target`.
-    ///
-    /// Used while nothing is queued, so that a validator which joined partway through a long chain
-    /// converges without waiting for the chain to produce more blocks.
+    /// Pushes one bounded chunk of the blocks this validator is missing below `target`, so one
+    /// that joined partway through a long chain converges without waiting for new blocks.
     async fn catch_up(
         &mut self,
         chain_id: ChainId,
@@ -711,14 +654,9 @@ where
             .await;
         let outcome = self.record_outcome(result, target, now, config);
 
-        // A round can *succeed* and still advance nothing: storage need not hold the missing
-        // heights, since a chain we merely *receive* from is stored only at its message-bearing
-        // blocks. Without backing off here the caller would call straight back in, and a
-        // destination we can never finish catching up would spin the task at full tilt.
-        //
-        // Only the success path needs this. A failed round has already been backed off inside
-        // `record_outcome`, and doing it again here would double-count the failure and escalate
-        // the delay twice as fast as configured.
+        // A round can succeed and advance nothing, since a chain we merely receive from is
+        // stored only at its message-bearing blocks; without backing off, a destination we can
+        // never finish would spin the task. Success only: `record_outcome` handles failures.
         if let Some(reached) = outcome {
             let advanced = previous.is_none_or(|before| reached > before);
             if !advanced {

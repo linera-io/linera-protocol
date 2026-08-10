@@ -3,19 +3,14 @@
 
 //! Reaching other validators through this validator's own proxy.
 //!
-//! Shards must not have a route to the internet: they hold the validator's secret key, so the
-//! proxy is the only component that should open outbound connections. A shard that needs to talk
-//! to another validator — which today means a chain worker exporting a block it has just executed
-//! — sends its request to the proxy's existing internal port instead, naming the validator it is
-//! meant for, and the proxy performs it and returns the answer.
+//! Shards hold the validator's secret key, so the proxy is the only component that should open
+//! outbound connections. A shard needing another validator — today, a chain worker exporting a
+//! block — sends its request to the proxy's existing internal port naming the intended validator,
+//! and the proxy performs it and returns the answer.
 //!
 //! [`RelayClient`] therefore implements [`ValidatorNode`] only for the operations block export
-//! uses. Everything else is refused rather than silently doing something else, because a caller
-//! reaching for them through a relay is a mistake, not a fallback.
-//!
-//! Retries are deliberately absent: the caller (the chain worker's export task) already backs off
-//! per destination, and a second layer of retries underneath it would multiply the delays it is
-//! trying to control.
+//! uses; the rest are refused rather than silently doing something else. Retries are absent by
+//! design, since the export task already backs off per destination.
 
 use std::{
     collections::BTreeMap,
@@ -63,10 +58,9 @@ fn unsupported(operation: &str) -> NodeError {
 /// A validator reached through this validator's proxy.
 #[derive(Clone)]
 pub struct RelayClient {
-    /// The destination validator's address exactly as the committee spells it, e.g.
-    /// `grpc:host:port`. Sent with every request so the proxy knows where to forward it, and kept
-    /// in the committee's own form so the proxy resolves it the same way any other consumer of
-    /// the committee would.
+    /// The destination validator's address as the committee spells it, e.g. `grpc:host:port`.
+    /// Kept in the committee's own form so the proxy resolves it the way any other consumer
+    /// would.
     destination: String,
     /// The same validator as a URL, used only to name it in logs and metrics.
     address: String,
@@ -87,11 +81,9 @@ impl RelayClient {
                     error: format!("failed to unmarshal response: {error}"),
                 })?)
             }
-            // bincode, matching the encoding the validator used and this field's own note in
-            // the proto. Decoding it correctly is load-bearing rather than cosmetic: the
-            // recovery paths dispatch on the *variant* — `EventsNotFound` pushes the admin
-            // chain, `BlobsNotFound` uploads blobs — so a mangled error silently disables them
-            // and leaves the destination stuck forever.
+            // bincode, matching what the validator used. Load-bearing: the recovery paths
+            // dispatch on the *variant* — `EventsNotFound` pushes the admin chain,
+            // `BlobsNotFound` uploads blobs — so a mangled error silently disables them.
             api::chain_info_result::Inner::Error(error) => Err(bincode::deserialize(&error)
                 .map_err(|error| NodeError::GrpcError {
                     error: format!("failed to unmarshal error message: {error}"),
@@ -305,21 +297,16 @@ pub struct RelayNodeProvider {
     /// The internal addresses of this validator's proxies — the same ones the shards already
     /// send notifications to.
     relay_addresses: Vec<String>,
-    /// Round-robin cursor over `relay_addresses`.
-    ///
-    /// Each request goes through exactly one proxy — relaying a block through more than one
-    /// would only duplicate it — but successive nodes are handed different proxies, so export
-    /// egress is spread rather than landing entirely on one. Shared across clones so that every
-    /// chain worker in the process draws from the same rotation.
+    /// Round-robin cursor over `relay_addresses`. Each request goes through exactly one proxy,
+    /// but successive nodes draw different ones so egress is spread. Shared across clones, so
+    /// every chain worker in the process uses one rotation.
     next: Arc<AtomicUsize>,
     pool: GrpcConnectionPool,
 }
 
 impl RelayNodeProvider {
-    /// Creates a provider that relays through the given proxies, in rotation.
-    ///
-    /// Panics if `relay_addresses` is empty: with no proxy to relay through there is no way to
-    /// reach another validator, and a shard must not open the connection itself.
+    /// Creates a provider that relays through the given proxies, in rotation. Panics if
+    /// `relay_addresses` is empty: a shard must not open the connection itself.
     pub fn new(relay_addresses: Vec<String>, options: NodeOptions) -> Self {
         assert!(
             !relay_addresses.is_empty(),

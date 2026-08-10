@@ -131,11 +131,8 @@ impl ServerContext {
         (state, shard_id, shard.clone())
     }
 
-    /// Builds the factory that gives each chain worker its export task.
-    ///
-    /// The provider is built once and shared across chain workers, so a peer costs one pooled
-    /// connection rather than one per chain. Which provider depends on
-    /// [`BlockExportTransport`]; see there for the trade-off.
+    /// Builds the factory that gives each chain worker its export task. The provider is built
+    /// once and shared, so a peer costs one pooled connection rather than one per chain.
     fn chain_exporter_factory<S>(
         &self,
         export_config: BlockExportConfig,
@@ -146,13 +143,9 @@ impl ServerContext {
         S: Storage + Clone + Send + Sync + 'static,
     {
         let own_public_key = self.server_config.validator_secret.public();
-        // Both arms are handed the destination's committee address and differ only in who dials
-        // it, so the export task itself is identical either way.
-        //
-        // In neither arm do the retry fields of `node_options` take effect: the relay pool drops
-        // them, and the direct provider is given them as zero. Retrying is the export task's job,
-        // and it backs off per destination — a second retry loop underneath would multiply the
-        // delay before a failing validator is set aside.
+        // Both arms get the destination's committee address and differ only in who dials it. In
+        // neither do the retry fields of `node_options` take effect — the relay pool drops them,
+        // the direct provider gets zeros — because retrying is the export task's job.
         match transport {
             BlockExportTransport::Relay => {
                 let internal_network = &self.server_config.internal_network;
@@ -578,10 +571,8 @@ enum ServerCommand {
         #[arg(long, value_delimiter = ',')]
         recovery_whitelist: Option<Vec<ChainId>>,
 
-        /// Push each block this validator executes to the other validators in the committee, so
-        /// that every validator ends up holding every chain rather than only the quorum that
-        /// signed each block. The pushes go out through this validator's proxy; shards never
-        /// connect to another validator themselves.
+        /// Push each block this validator executes to the other committee validators, so every
+        /// validator holds every chain rather than only the quorum that signed each block.
         #[arg(
             long,
             default_value_t = false,
@@ -820,11 +811,9 @@ async fn run(options: ServerOptions) {
                 reset_on_corrupted_chain_state_mins,
                 recovery_whitelist: recovery_whitelist.map(HashSet::from_iter),
                 block_export_config: export_blocks_to_committee.then(|| {
-                    // A chain's export task lives inside its chain worker, so it is dropped when
-                    // the worker expires. A backoff longer than that TTL would never elapse: the
-                    // task would be gone before the destination came up for retry, and that
-                    // destination would then only be reconsidered if the chain produced another
-                    // block — exactly what the idle catch-up exists to avoid depending on.
+                    // The export task dies with its chain worker, so a backoff longer than the
+                    // worker TTL would never elapse — the destination would then only be
+                    // reconsidered if the chain produced another block.
                     let max_retry_delay = block_export_max_retry_delay.min(chain_worker_ttl);
                     if max_retry_delay != block_export_max_retry_delay {
                         warn!(

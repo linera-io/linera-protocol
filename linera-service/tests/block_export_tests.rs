@@ -3,21 +3,17 @@
 
 //! End-to-end coverage of in-worker block export over a real network.
 //!
-//! The unit tests in `linera-core` drive the export task against in-process validators, so they
-//! say nothing about the transport. This exercises the part they cannot: real `linera-server`
-//! shards, real proxies, real gRPC, and — the point of the whole arrangement — shards that reach
-//! the other validators only by going through their own proxy.
+//! The `linera-core` unit tests drive the export task against in-process validators, so they say
+//! nothing about the transport. This covers what they cannot: real shards, proxies and gRPC.
 //!
 //! ```text
 //! cargo test -p linera-service --test block_export_tests --features storage-service,metrics \
 //!     -- --ignored
 //! ```
 //!
-//! The `metrics` feature is required: the assertions read the proxies' metrics endpoint, and
-//! `cargo test` rebuilds the binaries the harness spawns using whatever features the test command
-//! names. Like the other integration suites, each test takes `INTEGRATION_TEST_GUARD`, because
-//! every network derives its ports from the same `test_offset_port()` base and two of them at once
-//! collide.
+//! `metrics` is required because the assertions read the proxies' metrics endpoint, and `cargo
+//! test` rebuilds the spawned binaries with whatever features the command names. Each test takes
+//! `INTEGRATION_TEST_GUARD`: every network derives its ports from the same `test_offset_port()`.
 
 #![cfg(any(feature = "scylladb", feature = "storage-service"))]
 
@@ -38,12 +34,9 @@ use linera_service::{
 };
 use test_case::test_case;
 
-/// The number of requests the proxy of `validator` reports having carried to other validators on
-/// behalf of its shards.
-///
-/// Zero unless block export actually went through the relay, which is what makes this worth
-/// asserting on: every validator ends up holding every block either way, because the client talks
-/// to all of them, so the blocks alone prove nothing about the path they took.
+/// Requests the proxy of `validator` reports carrying to other validators for its shards. Worth
+/// asserting on because the client talks to every validator anyway, so the blocks arriving prove
+/// nothing about the path they took.
 async fn relayed_requests(net: &LocalNet, validator: usize) -> Result<u64> {
     let port = net.proxy_metrics_port(validator, 0);
     let metrics = reqwest::get(format!("http://127.0.0.1:{port}/metrics"))
@@ -119,10 +112,8 @@ async fn test_block_export_through_the_proxy(database: Database, network: Networ
 /// A validator admitted to the committee after a chain already has history is brought up to date
 /// by export alone.
 ///
-/// This is the case the cursor cannot short-circuit: the newcomer has never heard of the chain, so
-/// it answers a height query with 0 rather than an error, and every block has to be replayed to it
-/// through the relay. Catch-up is bounded per round on purpose, so what this asserts is that it
-/// *converges*, not that it happens in one shot.
+/// The newcomer has never heard of the chain, so it answers a height query with 0 and every block
+/// is replayed. Catch-up is bounded per round, so this asserts convergence, not one-shot.
 #[ignore]
 #[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
 #[test_log::test(tokio::test)]
@@ -192,9 +183,8 @@ async fn test_export_catches_up_a_newly_added_validator(
 
 /// Export keeps flowing when one of this validator's proxies dies.
 ///
-/// A destination is handed one proxy from the rotation and keeps it, so without the rebuild-on-
-/// failure path a dead proxy would strand every destination assigned to it — silently, since the
-/// other proxies would carry on and the chain would still look healthy from most angles.
+/// A destination keeps the proxy it was handed, so without the rebuild-on-failure path a dead
+/// proxy strands every destination assigned to it — silently, since the chain still looks healthy.
 #[ignore]
 #[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
 #[test_log::test(tokio::test)]
@@ -259,9 +249,8 @@ async fn test_export_survives_a_dead_proxy(database: Database, network: Network)
 
 /// The proxy refuses to relay to a host that is not in any committee.
 ///
-/// Relaying exists so that shards — which hold the validator secret key — never open outbound
-/// connections. That only buys anything if the proxy will not dial wherever it is told, so this
-/// asserts the refusal directly rather than inferring it from export working.
+/// Relaying only buys anything if the proxy will not dial wherever it is told, so this asserts
+/// the refusal directly rather than inferring it from export working.
 #[ignore]
 #[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
 #[test_log::test(tokio::test)]
@@ -315,14 +304,9 @@ async fn test_relay_refuses_a_non_committee_destination(
 /// With `--block-export-transport direct`, shards reach the other validators themselves and the
 /// proxy carries nothing.
 ///
-/// This is the escape hatch for the case we cannot predict from the code: relaying every exported
-/// block puts load on this validator's own proxy, and if that turns out to be too expensive an
-/// operator needs a way to take the proxy out of the path. The assertion is the exact mirror of
-/// `test_block_export_through_the_proxy` — same blocks arriving everywhere, but the relay counters
-/// stay at zero — so the two together pin down which path each setting actually takes.
-///
-/// Note the trade-off this buys: shards hold the validator secret key, so sending directly means
-/// giving them outbound access to the other validators.
+/// The exact mirror of `test_block_export_through_the_proxy` — same blocks everywhere, but the
+/// relay counters stay at zero — so the two together pin down which path each setting takes. The
+/// trade-off: shards hold the validator secret key, so direct means giving them outbound access.
 #[ignore]
 #[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
 #[test_log::test(tokio::test)]
