@@ -2468,10 +2468,14 @@ where
         // An explicit authorization is only accepted on retries — of a fast-round block
         // or of a validated block. A fresh proposal must be signed by the authenticated
         // owner themselves: without an explicit authorization, the proposal signature
-        // doubles as the authorization, so the check above enforces exactly that.
+        // doubles as the authorization, so the check above enforces exactly that. An
+        // authorization for the proposal's *own* round is not a retry: accepting one would
+        // let a different owner propose a block on the authenticated owner's behalf.
         if let Some(authorization) = &proposal.owner_authorization {
+            let retries_fast_round =
+                authorization.round.is_fast() && authorization.round < content.round;
             ensure!(
-                authorization.round.is_fast() || validated_certificate.is_some(),
+                retries_fast_round || validated_certificate.is_some(),
                 WorkerError::InvalidSigner(owner)
             );
         }

@@ -822,6 +822,55 @@ where
     Ok(())
 }
 
+/// An explicit authorization is evidence of an *earlier* proposal. One for the proposal's own
+/// round would let a third party propose a block on the authenticated owner's behalf, which
+/// this PR does not allow — even though the signature itself is perfectly valid.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_handle_block_proposal_authorization_for_own_round<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let sender_owner = signer.generate_new().into();
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_signer_owners(&signer);
+    let chain_1 = env
+        .add_root_chain(1, sender_owner, Amount::from_tokens(5))
+        .await
+        .id();
+    let chain_2 = env
+        .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ZERO)
+        .await
+        .id();
+    let proposal = make_first_block(chain_1)
+        .with_simple_transfer(chain_2, Amount::ONE)
+        .with_authenticated_owner(Some(sender_owner))
+        .into_first_proposal(sender_owner, &signer)
+        .await
+        .unwrap();
+    // The proposal's own signature *is* a valid authorization for its own round, so this
+    // attaches genuine evidence — it is just not evidence of a retry.
+    let authorization = OwnerAuthorization {
+        round: proposal.content.round,
+        signature: proposal.signature,
+    };
+    let proposal = proposal.with_owner_authorization(Some(authorization));
+    assert!(authorization
+        .verify_proposed_block(proposal.content.block.clone())
+        .is_ok());
+    assert_matches!(
+        env.executing_worker()
+            .handle_block_proposal(proposal)
+            .await
+            .0,
+        Err(WorkerError::InvalidSigner(_))
+    );
+    Ok(())
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
