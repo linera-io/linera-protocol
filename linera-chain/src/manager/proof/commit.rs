@@ -114,6 +114,16 @@ pub trait TipAdvancesOnlyOnValidCertificate {}
 ///   `certificate.check(&committee)`. The induction hypothesis at that strictly lower round
 ///   supplies the correct validator that executed `B`. ∎
 ///
+/// **All eight outputs, not just the state.** [`BlockHeader`] commits to each component of the
+/// outcome separately — [`state_hash`], [`messages_hash`], [`events_hash`], [`blobs_hash`],
+/// [`oracle_responses_hash`], [`operation_results_hash`], [`previous_message_blocks_hash`] and
+/// [`previous_event_blocks_hash`] — and this lemma covers all of them, since the correct validator
+/// computed the whole [`BlockExecutionOutcome`]. That matters because the components differ
+/// sharply in reach: `state_hash` is local to the chain, whereas `messages` and `events` leave it
+/// and are consumed by other chains, and `blobs` are content-addressed
+/// ([`BlobId`](linera_base::identifiers::BlobId) is a hash of the content) and so are the only
+/// component that is self-verifying without any execution at all.
+///
 /// **What this does not give.** The correct validator executed the proposal, but the execution
 /// *replays* whatever oracle answers it recorded; a later re-execution of the confirmed block
 /// feeds `outcome.oracle_responses` back in rather than re-deriving them. So the lemma certifies
@@ -127,9 +137,70 @@ pub trait TipAdvancesOnlyOnValidCertificate {}
 /// [`BlockExecutionOutcome`]: crate::data_types::BlockExecutionOutcome
 /// [`BlockProposal::check_invariants`]: crate::data_types::BlockProposal::check_invariants
 /// [`OriginalProposal::Regular`]: crate::data_types::OriginalProposal::Regular
+/// [`BlockHeader`]: crate::block::BlockHeader
+/// [`state_hash`]: crate::block::BlockHeader::state_hash
+/// [`messages_hash`]: crate::block::BlockHeader::messages_hash
+/// [`events_hash`]: crate::block::BlockHeader::events_hash
+/// [`blobs_hash`]: crate::block::BlockHeader::blobs_hash
+/// [`oracle_responses_hash`]: crate::block::BlockHeader::oracle_responses_hash
+/// [`operation_results_hash`]: crate::block::BlockHeader::operation_results_hash
+/// [`previous_message_blocks_hash`]: crate::block::BlockHeader::previous_message_blocks_hash
+/// [`previous_event_blocks_hash`]: crate::block::BlockHeader::previous_event_blocks_hash
 /// [`MaxByzantineWeight`]: crate::manager::proof::model::MaxByzantineWeight
 /// [`AccountabilityScope`]: crate::justification::proof::AccountabilityScope
 pub trait CertifiedBlockWasExecuted:
     CertificateCarriesCorrectVote + ProposalGate + MaxByzantineWeight + CommitRestsOnValidation
 {
 }
+
+/// **Lemma (Incoming bundles are matched against the validator's own inbox).** A correct
+/// validator casts a validation or fast-confirmation vote for a block only if every
+/// [`IncomingBundle`] the block consumes is already present in its own inbox for that origin, and
+/// is *equal* to the bundle it holds there.
+///
+/// *Code correspondence.*
+///
+/// | | |
+/// |---|---|
+/// | transition | `ChainStateView::remove_bundles_from_inboxes`, called from `ChainWorkerState::try_handle_block_proposal` with `must_be_present = true` |
+/// | reads | the chain's inboxes, the block's timestamp and incoming bundles |
+/// | writes | the inboxes (rolled back before voting — `try_handle_block_proposal` calls `chain.rollback()`) |
+/// | precondition | none beyond [`ProposalGate`] |
+///
+/// *Proof.* `try_handle_block_proposal` calls
+/// `remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())` before executing
+/// and voting. For each bundle that helper calls `Inbox::remove_bundle` and, because
+/// `must_be_present` is set, rejects with [`ChainError::MissingCrossChainUpdate`] unless it
+/// returned `true` — which happens only on the branch that found a bundle already in
+/// `added_bundles` and checked `bundle == &previous_bundle`. So a bundle the validator has not
+/// received, or one that differs in any field from what it received, blocks the vote. ∎
+///
+/// **The flag is deliberately not set when applying a certified block.**
+/// `ChainWorkerState::execute_contiguous_block` passes `must_be_present = false`, so a bundle that
+/// has not arrived yet is recorded in `removed_bundles` and reconciled when it does. That is the
+/// right asymmetry — by then a quorum has already voted, and this lemma has done its work at
+/// voting time — but it means the guarantee lives in the *proposal* path only.
+///
+/// **What populates the inbox decides what this is worth.** Bundles enter through
+/// `ChainWorkerState::process_cross_chain_update`, fed by the *same validator's* worker for the
+/// sending chain. That worker derives them from the sending block's `messages` field, and whether
+/// that field is the validator's own work depends on how it processed the sender:
+///
+/// * if it **executed** the sender's block, `execute_contiguous_block` re-executed it and rejected
+///   a mismatch against the certificate ([`CertifiedBlockWasExecuted`] and the note there), so the
+///   bundles are self-derived;
+/// * if it only **preprocessed** the sender's block, `preprocess_certified_block` updated outboxes
+///   and event streams *without executing*, so the bundles are taken from the sender's certificate
+///   at face value.
+///
+/// So cross-chain integrity degrades with how much of the chain graph each validator executes —
+/// a deployment property, not a protocol one. Under [`MaxByzantineWeight`] this is still sound,
+/// since [`CertifiedBlockWasExecuted`] guarantees *some* correct validator executed the sending
+/// block; above the fault bound it is not, and the resulting damage is not confined to one chain
+/// (see [`AccountabilityScope`]).
+///
+/// [`IncomingBundle`]: crate::data_types::IncomingBundle
+/// [`ChainError::MissingCrossChainUpdate`]: crate::ChainError::MissingCrossChainUpdate
+/// [`MaxByzantineWeight`]: crate::manager::proof::model::MaxByzantineWeight
+/// [`AccountabilityScope`]: crate::justification::proof::AccountabilityScope
+pub trait IncomingBundlesAreSelfDerived: ProposalGate + CertifiedBlockWasExecuted {}

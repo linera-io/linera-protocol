@@ -32,7 +32,9 @@
 use crate::{
     data_types::proof::quorum::{CertificateEmbedsQuorum, Intersection, ThresholdArithmetic},
     manager::proof::{
-        commit::{CertifiedBlockWasExecuted, CommitRestsOnValidation},
+        commit::{
+            CertifiedBlockWasExecuted, CommitRestsOnValidation, IncomingBundlesAreSelfDerived,
+        },
         locking::{
             ConfirmedVoteRoundMonotone, OneConfirmationVotePerRound, OneValidationVotePerRound,
             SafetyStateRecovery,
@@ -454,18 +456,34 @@ pub trait AccountableSafety:
 ///   `linera_core::proof::assumptions::CorrectValidatorAvailability` is an assumption rather than
 ///   something enforced.
 ///
-/// * **Incorrect execution is not attributable.** Nothing in [`EquivocationProof`] relates a
-///   block's [`ProposedBlock`] to its [`BlockExecutionOutcome`]. A validator that votes for
-///   exactly one block per round, with a sound chain, but whose block carries a fabricated
-///   `state_hash`, yields no proof at all. What the implementation has instead is *local
-///   detection*: `ChainWorkerState::execute_contiguous_block` re-executes the block and rejects a
-///   mismatch with [`ChainError::CorruptedChainState`]. That is unilateral — the detecting node
-///   holds nothing transferable, and any peer must redo the work — and it is incomplete in three
-///   ways: the certificate's `oracle_responses` are *replayed* into the re-execution rather than
+/// * **Incorrect execution is not attributable, and its effects are not confined to one chain.**
+///   Nothing in [`EquivocationProof`] relates a block's [`ProposedBlock`] to its
+///   [`BlockExecutionOutcome`]. A validator that votes for exactly one block per round, with a
+///   sound chain, but whose block carries a fabricated outcome, yields no proof at all.
+///
+///   This is worse than it first looks, because the outcome is eight separately committed
+///   components ([`CertifiedBlockWasExecuted`]) and they differ sharply in reach. A wrong
+///   `state_hash` stays on the chain. A wrong `messages` or `events` field *leaves* it: the
+///   bundles are delivered into other chains' inboxes and consumed by their blocks, and the events
+///   are read across chains through `OracleResponse::Event`. Those downstream blocks are then
+///   themselves properly certified and are evidence of nobody's fault. So even a hypothetical
+///   fraud proof would convict one block's executors while leaving a transitively corrupted
+///   subgraph standing — and since Linera finalizes on confirmation rather than after a challenge
+///   window, none of it can be reverted. Of the eight, only `blobs` are self-verifying, being
+///   content-addressed.
+///
+///   What the implementation has instead is *local detection*:
+///   `ChainWorkerState::execute_contiguous_block` re-executes the block and rejects a mismatch
+///   with [`ChainError::CorruptedChainState`]. That is unilateral — the detecting node holds
+///   nothing transferable, and any peer must redo the work — and it is incomplete in three ways:
+///   the certificate's `oracle_responses` are *replayed* into the re-execution rather than
 ///   re-derived, so a fabricated oracle answer reproduces the same state hash and is never caught;
-///   `preprocess_certified_block` does not execute at all; and the `execution_state_cache` hit
-///   path skips re-execution. The property that does protect against a bad outcome is
-///   [`CertifiedBlockWasExecuted`], and unlike everything else in this module it needs
+///   `preprocess_certified_block` does not execute at all, taking `messages` and `events` from the
+///   certificate; and the `execution_state_cache` hit path skips re-execution.
+///
+///   The properties that do protect against a bad outcome are [`CertifiedBlockWasExecuted`] and,
+///   for the cross-chain component, [`IncomingBundlesAreSelfDerived`]. Unlike everything else in
+///   this module both need
 ///   [`MaxByzantineWeight`](crate::manager::proof::model::MaxByzantineWeight): validity degrades
 ///   above the fault bound with no forensic residue, whereas agreement degrades with one.
 ///
@@ -478,10 +496,13 @@ pub trait AccountableSafety:
 /// [`BlockExecutionOutcome`]: crate::data_types::BlockExecutionOutcome
 /// [`ChainError::CorruptedChainState`]: crate::ChainError::CorruptedChainState
 /// [`extract_equivocations`]: crate::justification::extract_equivocations
+/// [`CertifiedBlockWasExecuted`]: crate::manager::proof::commit::CertifiedBlockWasExecuted
+/// [`IncomingBundlesAreSelfDerived`]: crate::manager::proof::commit::IncomingBundlesAreSelfDerived
 pub trait AccountabilityScope:
     AccountableSafety
     + DoubleValidationCompleteness
     + CertifiedBlockWasExecuted
+    + IncomingBundlesAreSelfDerived
     + CommitRestsOnValidation
 {
 }
