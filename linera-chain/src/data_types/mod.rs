@@ -1079,8 +1079,17 @@ impl BlockProposal {
     }
 
     /// Checks that the validated certificate, if present, matches the proposal and
-    /// comes from an earlier round.
+    /// comes from an earlier round, and that a retry happens strictly after the round it
+    /// retries.
     pub fn check_invariants(&self) -> Result<(), &'static str> {
+        if let Some(authorization) = &self.owner_authorization {
+            // An explicit authorization means this proposal retries the round that
+            // authorization was signed for: a fast-round proposal, or a validated block.
+            ensure!(
+                self.content.round > authorization.round,
+                "The new proposal's round must be greater than the round it retries"
+            );
+        }
         match (&self.validated_certificate, &self.content.outcome) {
             (None, None) => {}
             (None, Some(_)) | (Some(_), None) => {

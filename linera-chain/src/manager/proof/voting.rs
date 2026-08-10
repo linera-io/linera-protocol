@@ -153,8 +153,9 @@ pub trait ValidationRoundStrictlyIncreases: ProposalGate {}
 
 /// **Lemma (A validation vote past a lock needs a higher certificate).** Suppose a correct
 /// validator casts a validation vote for block `B` in round `r`, and let `(A, p)` be the value
-/// of its [`confirmed_vote`] immediately before. Then `p` is defined only if the proposal
-/// carried an [`OriginalProposal`], and:
+/// of its [`confirmed_vote`] immediately before. Then `p` is defined only if the proposal is a
+/// retry — carrying a [`ValidatedBlockCertificate`], or an [`OwnerAuthorization`] from
+/// [`Round::Fast`] — and:
 ///
 /// * if the proposal is a **regular retry** carrying a certificate `c` (necessarily a valid
 ///   [`ValidatedBlockCertificate`] for `B`, in a round `c.round < r`), then
@@ -172,7 +173,7 @@ pub trait ValidationRoundStrictlyIncreases: ProposalGate {}
 /// | | |
 /// |---|---|
 /// | transition | [`ChainManager::check_proposed_block`], final `ensure!` |
-/// | reads | [`confirmed_vote`], `proposal.original_proposal` |
+/// | reads | [`confirmed_vote`], `proposal.validated_certificate`, `proposal.owner_authorization` |
 /// | writes | nothing |
 /// | precondition | the proposal passed `check_invariants`, `check_signature` and — for a regular retry — `certificate.check(committee)`, all in `try_handle_block_proposal` |
 ///
@@ -180,22 +181,24 @@ pub trait ValidationRoundStrictlyIncreases: ProposalGate {}
 /// [`ChainManager::check_proposed_block`] held. With `vote = (A, p)` it evaluates
 ///
 /// ```text
-/// match proposal.original_proposal.as_ref() {
-///     None => false,
-///     Some(OriginalProposal::Regular { certificate }) =>
+/// match proposal.validated_certificate.as_ref() {
+///     Some(certificate) =>
 ///         if vote.value().matches_proposed_block(new_block) {
 ///             vote.round <= certificate.round
 ///         } else {
 ///             vote.round < certificate.round
 ///         },
-///     Some(OriginalProposal::Fast(_)) =>
-///         vote.round.is_fast() && vote.value().matches_proposed_block(new_block),
+///     None =>
+///         vote.round.is_fast()
+///             && proposal.owner_authorization.is_some_and(|a| a.round.is_fast())
+///             && vote.value().matches_proposed_block(new_block),
 /// }
 /// ```
 ///
-/// which is the case distinction claimed. That the retried certificate is *valid* and certifies
-/// exactly `B` comes from the caller: `try_handle_block_proposal` calls
-/// `certificate.check(&committee)?` on the `Regular` arm, and
+/// which is the case distinction claimed: a fresh proposal carries neither field, so both arms
+/// evaluate to `false`. That the retried certificate is *valid* and certifies exactly `B` comes
+/// from the caller: `try_handle_block_proposal` calls
+/// `certificate.check(&committee)?` when one is carried, and
 /// [`BlockProposal::check_invariants`] — also called there — requires
 /// `certificate.check_value(&ValidatedBlock::new(outcome.with(block)))`, i.e. the certificate
 /// certifies the very block being proposed, and `content.round > certificate.round`. ∎
@@ -205,7 +208,7 @@ pub trait ValidationRoundStrictlyIncreases: ProposalGate {}
 ///
 /// [`ChainManager::check_proposed_block`]: crate::manager::ChainManager::check_proposed_block
 /// [`confirmed_vote`]: field@crate::manager::ChainManager::confirmed_vote
-/// [`OriginalProposal`]: crate::data_types::OriginalProposal
+/// [`OwnerAuthorization`]: crate::data_types::OwnerAuthorization
 /// [`ValidatedBlockCertificate`]: crate::types::ValidatedBlockCertificate
 /// [`BlockProposal::check_invariants`]: crate::data_types::BlockProposal::check_invariants
 /// [`ProposedBlock`]: crate::data_types::ProposedBlock
@@ -239,13 +242,15 @@ pub trait NoValidationInFastRound: VoteConstructionSites {}
 /// * the [`validated_vote`] guard `ensure!(new_round > vote.round)` is likewise unsatisfiable,
 ///   so [`validated_vote`] was `None`;
 /// * for [`confirmed_vote`], [`BlockProposal::check_invariants`] forces a fast-round proposal to
-///   have `original_proposal == None` — a `Fast` original requires `content.round > Round::Fast`
-///   and a `Regular` original requires `content.round > certificate.round ≥ Round::Fast` — so
-///   the `ensure!` of [`UnlockingRequiresHigherCertificate`] takes the `None => false` arm and
-///   would reject. Hence [`confirmed_vote`] was `None`.
+///   carry neither retry field — an [`OwnerAuthorization`] requires
+///   `content.round > authorization.round ≥ Round::Fast` and a certificate requires
+///   `content.round > certificate.round ≥ Round::Fast` — so the `ensure!` of
+///   [`UnlockingRequiresHigherCertificate`] takes the certificate-less arm, whose
+///   `owner_authorization` conjunct is then false, and would reject. Hence [`confirmed_vote`]
+///   was `None`.
 ///
-/// For the post-state: with `original_proposal == None` and `round.is_fast()`, the third arm of
-/// the `match` in [`ChainManager::create_vote`] runs `update_locking(LockingBlock::Fast(
+/// For the post-state: with no certificate carried and `round.is_fast()`, the second arm of
+/// the `if`/`else` chain in [`ChainManager::create_vote`] runs `update_locking(LockingBlock::Fast(
 /// proposal.clone()), …)` under `self.locking_block.get().is_none()`, which we just established,
 /// so the lock is installed on the proposal being confirmed. ∎
 ///
@@ -253,6 +258,7 @@ pub trait NoValidationInFastRound: VoteConstructionSites {}
 /// [`ChainManager::create_vote`]: crate::manager::ChainManager::create_vote
 /// [`ChainManager::check_proposed_block`]: crate::manager::ChainManager::check_proposed_block
 /// [`BlockProposal::check_invariants`]: crate::data_types::BlockProposal::check_invariants
+/// [`OwnerAuthorization`]: crate::data_types::OwnerAuthorization
 /// [`LockingBlock::Fast`]: crate::manager::LockingBlock::Fast
 /// [`locking_block`]: crate::manager::ChainManager::locking_block
 /// [`validated_vote`]: field@crate::manager::ChainManager::validated_vote

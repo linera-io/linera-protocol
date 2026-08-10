@@ -103,8 +103,8 @@ pub trait TipAdvancesOnlyOnValidCertificate {}
 ///             else { self.execute_block(…).await? };
 /// ```
 ///
-/// and [`BlockProposal::check_invariants`] admits a carried `outcome` only together with an
-/// [`OriginalProposal::Regular`] certificate. So:
+/// and [`BlockProposal::check_invariants`] admits a carried `outcome` only together with a
+/// [`ValidatedBlockCertificate`]. So:
 ///
 /// * a **fresh** proposal and a **fast retry** both carry `outcome: None` and are therefore
 ///   executed by `v` itself — the base case;
@@ -136,7 +136,6 @@ pub trait TipAdvancesOnlyOnValidCertificate {}
 /// [`ProposedBlock`]: crate::data_types::ProposedBlock
 /// [`BlockExecutionOutcome`]: crate::data_types::BlockExecutionOutcome
 /// [`BlockProposal::check_invariants`]: crate::data_types::BlockProposal::check_invariants
-/// [`OriginalProposal::Regular`]: crate::data_types::OriginalProposal::Regular
 /// [`BlockHeader`]: crate::block::BlockHeader
 /// [`state_hash`]: crate::block::BlockHeader::state_hash
 /// [`messages_hash`]: crate::block::BlockHeader::messages_hash

@@ -33,11 +33,12 @@ use crate::{
 
 /// **Lemma (A fast retry cannot change the block).** Let a block `A` be confirmed in
 /// [`Round::Fast`], and let a correct validator later cast a validation vote for a block `B` on a
-/// proposal whose [`OriginalProposal::Fast`] retries `A`'s proposal. Then `B = A`.
+/// proposal whose fast-round [`OwnerAuthorization`] retries `A`'s proposal. Then `B = A`.
 ///
 /// *Proof.* By [`UnlockingRequiresHigherCertificate`], the fast-retry arm of
 /// [`ChainManager::check_proposed_block`] accepts only if the validator's stored confirmation
-/// vote is in the fast round and its value satisfies `matches_proposed_block(new_block)`. That
+/// vote is in the fast round, the proposal carries a fast-round [`OwnerAuthorization`], and its
+/// value satisfies `matches_proposed_block(new_block)`. That
 /// predicate compares the [`ProposedBlock`] components only — chain, epoch, transactions,
 /// height, timestamp, authenticated owner, parent hash — so it leaves open that `A` and `B`
 /// share a proposal but differ in [`BlockExecutionOutcome`], which by [`ConflictingBlocks`]
@@ -61,7 +62,7 @@ use crate::{
 ///
 /// [`Round::Fast`]: linera_base::data_types::Round::Fast
 /// [`Round::multi_leader`]: linera_base::data_types::Round::multi_leader
-/// [`OriginalProposal::Fast`]: crate::data_types::OriginalProposal::Fast
+/// [`OwnerAuthorization`]: crate::data_types::OwnerAuthorization
 /// [`ChainManager::check_proposed_block`]: crate::manager::ChainManager::check_proposed_block
 /// [`ProposedBlock`]: crate::data_types::ProposedBlock
 /// [`BlockExecutionOutcome`]: crate::data_types::BlockExecutionOutcome
@@ -77,9 +78,9 @@ pub trait FastRetryPreservesBlock:
 /// `p < t < s`.
 ///
 /// *Proof.* By [`UnlockingRequiresHigherCertificate`], with a stored confirmation vote present
-/// the proposal must carry an [`OriginalProposal`], and:
+/// the proposal must be a retry, and:
 ///
-/// * a fresh proposal (`None`) is rejected;
+/// * a fresh proposal, carrying neither retry field, is rejected;
 /// * a fast retry requires `A` to match `B`'s proposal, which by [`FastRetryPreservesBlock`]
 ///   forces `A = B`, contradicting the hypothesis;
 /// * a regular retry carries a certificate `c` which — by the caller's `certificate.check(&
@@ -94,7 +95,6 @@ pub trait FastRetryPreservesBlock:
 /// confirmation — which lets the induction step down into a strictly smaller round.
 ///
 /// [`ValidatedBlockCertificate`]: crate::types::ValidatedBlockCertificate
-/// [`OriginalProposal`]: crate::data_types::OriginalProposal
 /// [`BlockProposal::check_invariants`]: crate::data_types::BlockProposal::check_invariants
 pub trait UnlockingJustification:
     UnlockingRequiresHigherCertificate + FastRetryPreservesBlock

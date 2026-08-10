@@ -58,16 +58,19 @@ pub trait ValidatorVote {}
 
 /// **Definition (Proposal).** A *proposal* is a [`BlockProposal`]: an owner's signature over a
 /// [`ProposalContent`] — a [`ProposedBlock`], a [`Round`](linera_base::data_types::Round) and an
-/// optional [`BlockExecutionOutcome`] — plus an optional [`OriginalProposal`] recording which
-/// earlier attempt it retries. The three retry shapes are:
+/// optional [`BlockExecutionOutcome`] — plus two independent optional fields recording which
+/// earlier attempt it retries: an [`OwnerAuthorization`] (the chain owner's signature over the
+/// outcome-less content, in the round it was signed for) and a [`ValidatedBlockCertificate`].
+/// The three retry shapes are:
 ///
-/// * `original_proposal == None`: a **fresh proposal**, carrying no outcome;
-/// * [`OriginalProposal::Fast`]: a **fast retry**, re-proposing a block first proposed in
-///   [`Round::Fast`](linera_base::data_types::Round::Fast), carrying the super owner's original
-///   signature and no outcome;
-/// * [`OriginalProposal::Regular`]: a **regular retry**, re-proposing a block that already
-///   carries a [`ValidatedBlockCertificate`], carrying that certificate and the outcome it
-///   certifies.
+/// * neither field set: a **fresh proposal**, carrying no outcome; the proposer's own signature
+///   doubles as the authorization;
+/// * an [`OwnerAuthorization`] in [`Round::Fast`](linera_base::data_types::Round::Fast) and no
+///   certificate: a **fast retry**, re-proposing a block first proposed in the fast round,
+///   carrying the super owner's original signature and no outcome;
+/// * a [`ValidatedBlockCertificate`]: a **regular retry**, re-proposing a block that was already
+///   validated, carrying that certificate and the outcome it certifies, plus the block's
+///   original authorization.
 ///
 /// [`BlockProposal::check_invariants`] enforces that exactly these three shapes are well-formed,
 /// that a retry's round is *strictly greater* than the round it retries, and that a regular
@@ -79,9 +82,7 @@ pub trait ValidatorVote {}
 /// [`ProposalContent`]: crate::data_types::ProposalContent
 /// [`ProposedBlock`]: crate::data_types::ProposedBlock
 /// [`BlockExecutionOutcome`]: crate::data_types::BlockExecutionOutcome
-/// [`OriginalProposal`]: crate::data_types::OriginalProposal
-/// [`OriginalProposal::Fast`]: crate::data_types::OriginalProposal::Fast
-/// [`OriginalProposal::Regular`]: crate::data_types::OriginalProposal::Regular
+/// [`OwnerAuthorization`]: crate::data_types::OwnerAuthorization
 /// [`ValidatedBlockCertificate`]: crate::types::ValidatedBlockCertificate
 pub trait SignedProposal {}
 
