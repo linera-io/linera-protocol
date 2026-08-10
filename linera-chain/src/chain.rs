@@ -67,7 +67,12 @@ use linera_base::prometheus_util::MeasureLatency;
 /// Every path that executes a block must name its phase explicitly: there is no `Default`,
 /// so a new caller cannot compile without choosing one, and no execution can land in an
 /// unlabeled or silently-mislabeled bucket.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+///
+/// The label strings are derived from the variant names in `snake_case`; they are part of the
+/// metrics wire format, so `metrics_label_values_are_stable` pins them against an accidental
+/// variant rename.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
 pub enum BlockExecutionPhase {
     /// A block proposer staging (building) its own block (`stage_block_execution`).
     StageProposal,
@@ -78,13 +83,52 @@ pub enum BlockExecutionPhase {
     HandleConfirmed,
 }
 
-impl BlockExecutionPhase {
-    /// The Prometheus `phase` label value for this execution phase.
-    pub fn as_str(self) -> &'static str {
+/// What a call to [`ChainStateView::execute_block`] is doing, carrying exactly the inputs that
+/// are legal for that phase.
+///
+/// Bundling the phase together with the replayed oracle responses and the bundle-execution
+/// policy makes the illegal combinations unrepresentable: only [`StageProposal`] may choose a
+/// policy (and thus `AutoRetry`), and only [`HandleConfirmed`] carries oracle responses to
+/// replay — so "replay oracle responses while auto-retrying" cannot be constructed.
+///
+/// [`StageProposal`]: BlockExecution::StageProposal
+/// [`HandleConfirmed`]: BlockExecution::HandleConfirmed
+pub enum BlockExecution {
+    /// A proposer staging (building) its own block. The bundle-failure policy is caller-chosen
+    /// (and may be `AutoRetry`); oracle responses are computed fresh, never replayed.
+    StageProposal {
+        /// How to handle failing bundles while building the proposal.
+        policy: BundleExecutionPolicy,
+    },
+    /// A validator validating a received block proposal. Bundles must abort on failure (the
+    /// proposal is fixed) and oracle responses are computed fresh.
+    HandleProposal,
+    /// A validator executing a confirmed certificate before committing it. Bundles must abort
+    /// on failure and the certificate's recorded oracle responses are replayed for determinism.
+    HandleConfirmed {
+        /// The oracle responses recorded in the certificate, replayed to reproduce the outcome.
+        oracle_responses: Vec<Vec<OracleResponse>>,
+    },
+}
+
+impl BlockExecution {
+    /// The protocol phase this execution represents, used to label execution metrics and spans.
+    pub fn phase(&self) -> BlockExecutionPhase {
         match self {
-            BlockExecutionPhase::StageProposal => "stage_proposal",
-            BlockExecutionPhase::HandleProposal => "handle_proposal",
-            BlockExecutionPhase::HandleConfirmed => "handle_confirmed",
+            BlockExecution::StageProposal { .. } => BlockExecutionPhase::StageProposal,
+            BlockExecution::HandleProposal => BlockExecutionPhase::HandleProposal,
+            BlockExecution::HandleConfirmed { .. } => BlockExecutionPhase::HandleConfirmed,
+        }
+    }
+
+    /// Splits into the oracle responses to replay (if any) and the bundle-execution policy.
+    fn into_oracle_and_policy(self) -> (Option<Vec<Vec<OracleResponse>>>, BundleExecutionPolicy) {
+        match self {
+            BlockExecution::StageProposal { policy } => (None, policy),
+            BlockExecution::HandleProposal => (None, BundleExecutionPolicy::committed()),
+            BlockExecution::HandleConfirmed { oracle_responses } => {
+                (Some(oracle_responses), BundleExecutionPolicy::committed())
+            }
         }
     }
 }
@@ -212,7 +256,7 @@ pub(crate) mod metrics {
         tracker: &ResourceTracker,
         phase: super::BlockExecutionPhase,
     ) {
-        let phase = &[phase.as_str()];
+        let phase: &[&str] = &[phase.into()];
         NUM_BLOCKS_EXECUTED.with_label_values(phase).inc();
         WASM_FUEL_USED_PER_BLOCK
             .with_label_values(phase)
@@ -857,18 +901,9 @@ where
         exec_policy: BundleExecutionPolicy,
         phase: BlockExecutionPhase,
     ) -> Result<(BlockExecutionOutcome, ResourceTracker, HashSet<ChainId>), ChainError> {
-        // AutoRetry is incompatible with replaying oracle responses because discarding or
-        // rejecting bundles would change which transactions execute.
-        if !matches!(&exec_policy.on_failure, BundleFailurePolicy::Abort) {
-            assert!(
-                replaying_oracle_responses.is_none(),
-                "Cannot use AutoRetry policy when replaying oracle responses"
-            );
-        }
-
         #[cfg(with_metrics)]
         let block_execution_latency =
-            metrics::BLOCK_EXECUTION_LATENCY.with_label_values(&[phase.as_str()]);
+            metrics::BLOCK_EXECUTION_LATENCY.with_label_values(&[phase.into()]);
         #[cfg(with_metrics)]
         let _execution_latency = block_execution_latency.measure_latency_us();
         chain.system.timestamp.set(block.timestamp);
@@ -1097,7 +1132,7 @@ where
         let state_hash = {
             #[cfg(with_metrics)]
             let state_hash_latency =
-                metrics::STATE_HASH_COMPUTATION_LATENCY.with_label_values(&[phase.as_str()]);
+                metrics::STATE_HASH_COMPUTATION_LATENCY.with_label_values(&[phase.into()]);
             #[cfg(with_metrics)]
             let _hash_latency = state_hash_latency.measure_latency_us();
             chain.crypto_hash_mut().await?
@@ -1151,7 +1186,6 @@ where
     /// - After `max_failures` failed bundles, all remaining message bundles are discarded.
     ///
     /// The block may be modified to reflect the actual executed transactions.
-    #[expect(clippy::too_many_arguments)]
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %block.height
@@ -1162,9 +1196,7 @@ where
         local_time: Timestamp,
         round: Option<u32>,
         published_blobs: &[Blob],
-        replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-        policy: BundleExecutionPolicy,
-        phase: BlockExecutionPhase,
+        execution: BlockExecution,
     ) -> Result<
         (
             ProposedBlock,
@@ -1221,6 +1253,8 @@ where
             mandatory_apps_need_accepted_message,
         )?;
 
+        let phase = execution.phase();
+        let (replaying_oracle_responses, policy) = execution.into_oracle_and_policy();
         Self::execute_block_inner(
             &mut self.execution_state,
             &self.confirmed_log,
