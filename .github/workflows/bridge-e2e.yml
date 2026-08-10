@@ -5,7 +5,7 @@ on:
   merge_group:
   workflow_dispatch:
   push:
-    branches: [ 'testnet_*' ]
+    branches: [ main, 'testnet_*' ]
 
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
@@ -80,6 +80,7 @@ jobs:
         with:
           context: .
           file: ./docker/Dockerfile
+          target: tests
           tags: linera-test
           load: true
           build-args: |
@@ -99,11 +100,6 @@ jobs:
           tags: |
             linera-bridge:latest
             ${{ github.event_name == 'push' && format('{0}/linera-bridge:{1}', env.GCP_REGISTRY, github.ref_name) || '' }}
-
-      - name: Push bridge image to registry
-        if: steps.build-bridge.outcome == 'success' && github.event_name == 'push'
-        run: |
-          docker push "${GCP_REGISTRY}/linera-bridge:${{ github.ref_name }}"
 
       - name: Build evm-bridge Wasm module
         run: cargo build --locked --release --target wasm32-unknown-unknown

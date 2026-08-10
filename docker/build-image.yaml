@@ -14,6 +14,11 @@ steps:
         "${_IMAGE_NAME_LONG_COMMIT}",
         "-f",
         "docker/Dockerfile",
+        # docker/Dockerfile now requires an explicit --target; without one the
+        # guard stage fails the build. `runtime` is the all-three-binaries
+        # image this config has always produced.
+        "--target",
+        "tests",
         ".",
         "--build-arg",
         "git_commit=${_GIT_COMMIT}",

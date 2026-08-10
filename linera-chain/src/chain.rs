@@ -564,9 +564,8 @@ where
         hash: CryptoHash,
     ) -> Result<(), ChainError> {
         self.block_hashes.insert(&height, hash)?;
-        let next = self.next_height_to_preprocess.get_mut();
-        if *next <= height {
-            *next = height.try_add_one()?;
+        if *self.next_height_to_preprocess.get() <= height {
+            self.next_height_to_preprocess.set(height.try_add_one()?);
         }
         Ok(())
     }

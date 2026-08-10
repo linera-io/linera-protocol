@@ -675,8 +675,6 @@ pub struct MessageContext {
     pub chain_id: ChainId,
     /// The chain ID where the message originated from.
     pub origin: ChainId,
-    /// The hash of the certified block on the origin chain that sent the message.
-    pub origin_certificate_hash: CryptoHash,
     /// The timestamp of the block on the origin chain that sent the message.
     pub origin_timestamp: Timestamp,
     /// Whether the message was rejected by the original receiver and is now bouncing back.

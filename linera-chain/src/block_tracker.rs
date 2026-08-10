@@ -18,7 +18,7 @@ use linera_execution::{
     TransactionTracker,
 };
 use linera_views::context::Context;
-use tracing::{debug, instrument};
+use tracing::instrument;
 
 #[cfg(with_metrics)]
 use crate::chain::metrics;
@@ -255,7 +255,6 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         let context = MessageContext {
             chain_id: self.chain_id,
             origin: incoming_bundle.origin,
-            origin_certificate_hash: incoming_bundle.bundle.certificate_hash,
             origin_timestamp: incoming_bundle.bundle.timestamp,
             is_bouncing: posted_message.is_bouncing(),
             height: self.block_height,
@@ -295,11 +294,6 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                         origin: incoming_bundle.origin,
                         posted_message: Box::new(posted_message.clone()),
                     }
-                );
-                debug!(
-                    chain_id = %self.chain_id,
-                    origin = %incoming_bundle.origin,
-                    "Rejecting incoming message"
                 );
                 let mut actor =
                     ExecutionStateActor::new(chain, txn_tracker, self.resource_controller);

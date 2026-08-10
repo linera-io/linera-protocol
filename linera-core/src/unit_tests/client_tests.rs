@@ -2535,6 +2535,135 @@ where
     Ok(())
 }
 
+/// The updater must signal `LocalNodeLagging` — rather than pushing chain information —
+/// when a validator rejects a proposal because it is *ahead* of the proposal's round or
+/// height.
+///
+/// Drives a `RemoteNodeUpdater` directly. A full client cannot reach this state without
+/// clock skew: whenever validators advanced by timeout, the shared clock has also expired
+/// the client's own round, so the client requests a timeout certificate before ever
+/// proposing at the stale round.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_stale_proposal_signals_local_node_lagging<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use linera_chain::test::{make_first_block, BlockTestExt as _};
+
+    use crate::{
+        local_node::LocalNodeClient,
+        remote_node::RemoteNode,
+        test_utils::NodeProvider,
+        updater::{CommunicateAction, RemoteNodeUpdater},
+        worker::WorkerState,
+        ChainWorkerConfig,
+    };
+
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let client = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let chain_id = client.chain_id();
+    let owner0 = client.identity().await.unwrap();
+    let owner1: AccountOwner = builder.signer.generate_new().into();
+
+    // Set up a multi-owner chain with single-leader rounds only.
+    let owners = [(owner0, 100), (owner1, 100)];
+    let ownership = ChainOwnership::multiple(owners, 0, TimeoutConfig::default());
+    client.change_ownership(ownership).await.unwrap();
+    let info = client.chain_info().await.unwrap();
+
+    // Advance the validators by two rounds, recording each round's leader: proposals must
+    // be signed by their round's leader for the round check to even be reached. The stale
+    // proposal targets the intermediate round rather than `SingleLeader(0)`, whose
+    // obsolete proposals are rejected with `InsufficientRound` instead of `WrongRound`.
+    let client2 = builder
+        .make_client(chain_id, None, BlockHeight::ZERO)
+        .await?;
+    client2.synchronize_from_validators().await?;
+    let manager = client2.chain_info().await.unwrap().manager;
+    clock.set(manager.round_timeout.unwrap());
+    client2.request_leader_timeout().await.unwrap();
+    let manager = client2.chain_info().await.unwrap().manager;
+    let (stale_round, stale_leader) = (manager.current_round, manager.leader.unwrap());
+    assert_matches!(stale_round, Round::SingleLeader(n) if n >= 1);
+    clock.set(manager.round_timeout.unwrap());
+    client2.request_leader_timeout().await.unwrap();
+    let manager = client2.chain_info().await.unwrap().manager;
+    let (validator_round, validator_leader) = (manager.current_round, manager.leader.unwrap());
+
+    // Drive the updater directly against an honest validator (validator 0 is the faulty
+    // one). An empty local node is enough: a validator that is ahead must produce the
+    // signal before anything is read from the local node.
+    let state = WorkerState::new(
+        builder.make_storage().await?,
+        ChainWorkerConfig::default(),
+        None,
+    );
+    let node = builder.node(1);
+    let mut updater =
+        RemoteNodeUpdater::<crate::environment::Impl<B::Storage, NodeProvider<B::Storage>>> {
+            remote_node: RemoteNode {
+                public_key: node.name(),
+                node,
+            },
+            local_node: LocalNodeClient::new(state),
+            admin_chain_id: builder.admin_chain_id(),
+            certificate_upload_batch_size: 100,
+        };
+    let submit = |proposal| {
+        let (clock_skew_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        CommunicateAction::SubmitBlock {
+            proposal: Box::new(proposal),
+            blob_ids: vec![],
+            clock_skew_sender,
+        }
+    };
+
+    // A proposal in an older round than the validator's: `WrongRound`, validator ahead.
+    let mut block = make_first_block(chain_id);
+    block.height = info.next_block_height;
+    block.previous_block_hash = info.block_hash;
+    block.timestamp = clock.current_time();
+    let proposal = block
+        .clone()
+        .into_proposal_with_round(stale_leader, &builder.signer, stale_round)
+        .await?;
+    let result = updater.send_chain_update(submit(proposal)).await;
+    assert_matches!(
+        result,
+        Err(chain_client::Error::LocalNodeLagging { chain_id: id, error })
+            if id == chain_id && matches!(*error, NodeError::WrongRound(round) if round == validator_round)
+    );
+
+    // A proposal at an older height than the validator's: `UnexpectedBlockHeight`,
+    // validator ahead.
+    block.height = BlockHeight::ZERO;
+    block.previous_block_hash = None;
+    let proposal = block
+        .into_proposal_with_round(validator_leader, &builder.signer, validator_round)
+        .await?;
+    let result = updater.send_chain_update(submit(proposal)).await;
+    assert_matches!(
+        result,
+        Err(chain_client::Error::LocalNodeLagging { chain_id: id, error })
+            if id == chain_id
+                && matches!(
+                    *error,
+                    NodeError::UnexpectedBlockHeight {
+                        expected_block_height: BlockHeight(1),
+                        found_block_height: BlockHeight(0),
+                    }
+                )
+    );
+
+    Ok(())
+}
+
 /// Exercises the lazy locking-block fetch on proposal rejection.
 ///
 /// Sets up a state where validators 2 and 3 hold a `Regular` locking block at

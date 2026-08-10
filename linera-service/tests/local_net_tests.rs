@@ -158,7 +158,11 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     client.query_validators(None).await?;
     client.query_validators(Some(chain_1)).await?;
 
-    if matches!(network, Network::Grpc) {
+    // The faucet's node learns about committee changes via notifications.
+    // Notification subscriptions are connection-oriented — the server streams them
+    // back over a held-open connection — so they work over gRPC and TCP but not
+    // over UDP.
+    if !matches!(network, Network::Udp) {
         assert!(
             eventually(|| async { faucet.current_validators().await.unwrap().len() == 6 }).await
         );
@@ -169,7 +173,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         .remove_validator(&net.validator_keys(4).unwrap().0)
         .await?;
     net.remove_validator(4)?;
-    if matches!(network, Network::Grpc) {
+    if !matches!(network, Network::Udp) {
         assert!(
             eventually(|| async { faucet.current_validators().await.unwrap().len() == 5 }).await
         )
@@ -256,7 +260,10 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         );
     }
 
-    if matches!(network, Network::Grpc) {
+    // A fresh client joins via the faucet after epochs 0-2 have been revoked and the
+    // original validators are gone: it trusts the faucet for the current committee
+    // and synchronizes the admin chain from it.
+    if !matches!(network, Network::Udp) {
         let client = net.make_client().await;
         client.wallet_init(Some(&faucet)).await?;
         let (chain_id, _owner) = client.request_chain(&faucet, true).await?;
