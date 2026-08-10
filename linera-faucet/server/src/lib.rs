@@ -178,6 +178,29 @@ mod metrics {
     });
 }
 
+/// Refusal messages returned by the claim paths. Shared as constants because the
+/// front-door checks in `do_claim`/`do_daily_claim` and the batch-time re-validation
+/// in `validate_request` both produce them, and the metrics side classifies a
+/// refusal by exact message (see `refusal_label`) so each request is counted
+/// exactly once, under the right `result` label, at the point its response is
+/// received.
+const DAILY_DISABLED_MSG: &str = "Daily claims are not enabled on this faucet";
+const DAILY_NO_CHAIN_MSG: &str = "You must claim a chain before making daily claims";
+const DAILY_LIMIT_MSG: &str = "You have already claimed tokens for this period";
+const DUPLICATE_CHAIN_MSG: &str = "This user already has a chain";
+
+/// Maps a refusal error to its `faucet_claim_requests_total` result label, or
+/// `None` if the error is a genuine failure rather than a refusal.
+#[cfg(with_metrics)]
+fn refusal_label(error: &Error) -> Option<&'static str> {
+    match error.message.as_str() {
+        DAILY_NO_CHAIN_MSG => Some("daily_no_chain"),
+        DAILY_LIMIT_MSG => Some("daily_limit"),
+        DUPLICATE_CHAIN_MSG => Some("duplicate"),
+        _ => None,
+    }
+}
+
 /// Returns an HTML response constructing the GraphiQL web page for the given URI.
 pub(crate) async fn graphiql(uri: axum::http::Uri) -> impl axum::response::IntoResponse {
     axum::response::Html(
@@ -494,9 +517,13 @@ where
 
         #[cfg(with_metrics)]
         {
+            // Refusals detected during batch validation (e.g. a duplicate that
+            // raced past the front-door check) arrive here as errors; classify
+            // them by message so they are counted once, under their own label.
             let label = match &response {
                 PendingResponse::Initial(Ok(_)) => "success",
-                _ => "error",
+                PendingResponse::Initial(Err(error)) => refusal_label(error).unwrap_or("error"),
+                PendingResponse::Daily(_) => "error",
             };
             metrics::CLAIM_REQUESTS_TOTAL
                 .with_label_values(&[label])
@@ -511,16 +538,27 @@ where
     }
 
     async fn do_daily_claim(&self, owner: AccountOwner) -> Result<ClaimOutcome, Error> {
+        // Each early return below is a *refusal*, not a failure, and must be counted
+        // under its own `result` label: these paths return before the queue round-trip
+        // that increments `CLAIM_REQUESTS_TOTAL`, so without the explicit counters
+        // refusals are invisible in metrics (they only appear as unlabelled
+        // `claim_latency_ms{result="error"}` observations).
         if self.daily_claim_amount == Amount::ZERO {
-            return Err(Error::new("Daily claims are not enabled on this faucet"));
+            #[cfg(with_metrics)]
+            metrics::CLAIM_REQUESTS_TOTAL
+                .with_label_values(&["daily_disabled"])
+                .inc();
+            return Err(Error::new(DAILY_DISABLED_MSG));
         }
 
         // The user must have done the initial claim first.
-        let initial_claim = self
-            .faucet_storage
-            .initial_claim(&owner)
-            .await?
-            .ok_or_else(|| Error::new("You must claim a chain before making daily claims"))?;
+        let Some(initial_claim) = self.faucet_storage.initial_claim(&owner).await? else {
+            #[cfg(with_metrics)]
+            metrics::CLAIM_REQUESTS_TOTAL
+                .with_label_values(&["daily_no_chain"])
+                .inc();
+            return Err(Error::new(DAILY_NO_CHAIN_MSG));
+        };
 
         let now = self.storage.clock().current_time();
         let period = current_daily_period(initial_claim.timestamp.micros(), now.micros());
@@ -531,9 +569,11 @@ where
             .unwrap_or(0);
 
         if period <= last_period {
-            return Err(Error::new(
-                "You have already claimed tokens for this period",
-            ));
+            #[cfg(with_metrics)]
+            metrics::CLAIM_REQUESTS_TOTAL
+                .with_label_values(&["daily_limit"])
+                .inc();
+            return Err(Error::new(DAILY_LIMIT_MSG));
         }
 
         self.enqueue_daily_request(
@@ -584,9 +624,13 @@ where
 
         #[cfg(with_metrics)]
         {
+            // Daily refusals that raced past the front-door check are refused
+            // during batch validation and arrive here; classify them by message
+            // so they land under daily_limit/daily_no_chain, not "error".
             let label = match &response {
                 PendingResponse::Daily(Ok(_)) => "success",
-                _ => "error",
+                PendingResponse::Daily(Err(error)) => refusal_label(error).unwrap_or("error"),
+                PendingResponse::Initial(_) => "error",
             };
             metrics::CLAIM_REQUESTS_TOTAL
                 .with_label_values(&[label])
@@ -765,9 +809,7 @@ where
             let initial_claim = match self.faucet_storage.initial_claim(&request.owner).await {
                 Ok(Some(record)) => record,
                 Ok(None) => {
-                    return Err(Error::new(
-                        "You must claim a chain before making daily claims",
-                    ));
+                    return Err(Error::new(DAILY_NO_CHAIN_MSG));
                 }
                 Err(err) => {
                     tracing::error!("Database error: {err}");
@@ -785,19 +827,16 @@ where
                 .unwrap_or(0);
 
             if period <= last_period {
-                return Err(Error::new(
-                    "You have already claimed tokens for this period",
-                ));
+                return Err(Error::new(DAILY_LIMIT_MSG));
             }
         } else {
             match self.faucet_storage.get_chain_id(&request.owner).await {
                 Ok(None) => {}
                 Ok(Some(_)) => {
-                    #[cfg(with_metrics)]
-                    metrics::CLAIM_REQUESTS_TOTAL
-                        .with_label_values(&["duplicate"])
-                        .inc();
-                    return Err(Error::new("This user already has a chain"));
+                    // Not counted here: the requester side classifies this
+                    // refusal by message and counts it once as "duplicate"
+                    // (counting at both sites double-counted the request).
+                    return Err(Error::new(DUPLICATE_CHAIN_MSG));
                 }
                 Err(err) => {
                     tracing::error!("Database error: {err}");
