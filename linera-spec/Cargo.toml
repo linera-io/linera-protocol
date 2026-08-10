@@ -18,3 +18,9 @@ workspace = true
 linera-chain.workspace = true
 linera-core.workspace = true
 linera-execution.workspace = true
+
+[package.metadata.cargo-machete]
+# This crate deliberately contains no code: these dependencies exist so that the specification
+# index can resolve intra-doc links into the crates that hold the statements. rustdoc needs them
+# declared; nothing references them from Rust source, so `cargo machete` cannot see the use.
+ignored = ["linera-chain", "linera-core", "linera-execution"]
