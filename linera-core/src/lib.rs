@@ -4,9 +4,9 @@
 
 //! This module defines the core Linera protocol.
 //!
-//! The consensus protocol it drives is specified and proved correct in [`spec`], which indexes
-//! both halves of the argument: safety in `linera_chain`, and progress and liveness in
-//! [`proof`], next to the client code that discharges them.
+//! The consensus protocol it drives is specified and proved correct in the `linera-spec` crate,
+//! which indexes both halves of the argument: safety and accountability in `linera_chain`, and
+//! progress and liveness in [`proof`], next to the client code that discharges them.
 
 #![recursion_limit = "256"]
 #![deny(missing_docs)]
@@ -28,7 +28,6 @@ pub mod node;
 pub mod notifier;
 pub mod proof;
 mod remote_node;
-pub mod spec;
 /// Helpers for writing tests against the core protocol.
 #[cfg(with_testing)]
 #[path = "unit_tests/test_utils.rs"]

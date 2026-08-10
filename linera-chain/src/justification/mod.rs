@@ -42,7 +42,7 @@
 //! [`ProofSoundness`](proof::ProofSoundness) (no correct validator is convictable),
 //! [`ConflictCompleteness`](proof::ConflictCompleteness) (a conflict convicts a validity
 //! threshold), and [`AccountableSafety`](proof::AccountableSafety) combining them with the safety
-//! theorem. See [`crate::spec`] for the reading order.
+//! theorem. The `linera-spec` crate gives the reading order.
 //!
 //! [`VoteValue`]: crate::data_types::VoteValue
 

@@ -1,0 +1,20 @@
+[package]
+name = "linera-spec"
+description = "Correctness specification of the Linera microchain consensus protocol."
+readme = "README.md"
+publish = false
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+linera-chain.workspace = true
+linera-core.workspace = true
+linera-execution.workspace = true
