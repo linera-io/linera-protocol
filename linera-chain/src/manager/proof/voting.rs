@@ -272,6 +272,49 @@ pub trait FastConfirmationNeedsEmptyLock:
 {
 }
 
+/// **Lemma (A reconstructed fast lock is genuine).** When [`ChainManager::create_vote`] installs a
+/// [`LockingBlock::Fast`] rebuilt from a proposal's [`OwnerAuthorization`] — its third branch,
+/// reached for a proposal with no certificate in a non-fast round — the reconstructed proposal is
+/// one a super owner really signed in [`Round::Fast`].
+///
+/// This matters because a [`LockingBlock::Fast`] is re-proposable: clients read it out of
+/// [`ChainManagerInfo::requested_locking`] and propose it again (see
+/// `linera_core::proof::progress::LockRecovery`). A lock planted by a non-owner would be handed
+/// back to the network as a block to retry.
+///
+/// *Proof.* The branch runs under `!round.is_fast()`, no `validated_certificate`, and
+/// `authorization.round.is_fast()`, where `authorization` comes from
+/// [`BlockProposal::owner_authorization`] — the *method*, which returns the explicit field if set
+/// and otherwise synthesizes one for the proposal's own round. A synthesized authorization has
+/// the proposal's round, which is not fast in this branch, so only an explicit field reaches the
+/// install. By [`ProposalGate`], `ChainWorkerState::try_handle_block_proposal` has already run,
+/// and for that field it:
+///
+/// * called `authorization.verify_proposed_block(block.clone())`, which rebuilds
+///   `ProposalContent { block, round: authorization.round, outcome: None }` and verifies the
+///   signature over it — the very content the branch reconstructs, since
+///   `authorization.round == Round::Fast` here; and
+/// * required the recovered signer to be in `ownership.super_owners`, guarded by exactly the same
+///   `authorization.round.is_fast()` condition.
+///
+/// So the installed [`LockingBlock::Fast`] carries a signature that a super owner produced over
+/// that block in the fast round. ∎
+///
+/// **Where this is fragile.** Both checks live in `linera-core`, keyed on a round test that is
+/// duplicated — once in the worker, once in the manager — with nothing tying the two together. The
+/// previous encoding made the coupling structural, since the super-owner check sat inside the
+/// `OriginalProposal::Fast` match arm that also carried the signature. Dropping either check, or
+/// letting them disagree about what counts as a fast authorization, lets any owner plant a fast
+/// lock.
+///
+/// [`ChainManager::create_vote`]: crate::manager::ChainManager::create_vote
+/// [`LockingBlock::Fast`]: crate::manager::LockingBlock::Fast
+/// [`OwnerAuthorization`]: crate::data_types::OwnerAuthorization
+/// [`BlockProposal::owner_authorization`]: crate::data_types::BlockProposal::owner_authorization
+/// [`ChainManagerInfo::requested_locking`]: crate::manager::ChainManagerInfo::requested_locking
+/// [`Round::Fast`]: linera_base::data_types::Round::Fast
+pub trait FastLockReconstruction: ProposalGate + VoteConstructionSites {}
+
 /// **Lemma (A non-fast confirmation requires a validated certificate in the same round).** If a
 /// correct validator casts a confirmation vote for block `A` in a round `r` other than
 /// [`Round::Fast`](linera_base::data_types::Round::Fast), then a [`ValidatedBlockCertificate`]

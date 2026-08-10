@@ -63,6 +63,13 @@ use crate::{
 /// proposal. Both are re-proposable: a client reads the lock out of
 /// [`ChainManagerInfo::requested_locking`] and re-proposes it in a higher round.
 ///
+/// A [`LockingBlock::Fast`] may be stored directly, from a fast-round proposal, or rebuilt from a
+/// later proposal's [`OwnerAuthorization`]; [`FastLockReconstruction`] shows the rebuilt one is
+/// equally genuine.
+///
+/// [`OwnerAuthorization`]: crate::data_types::OwnerAuthorization
+/// [`FastLockReconstruction`]: crate::manager::proof::voting::FastLockReconstruction
+///
 /// [`ChainManager::locking_block`]: crate::manager::ChainManager::locking_block
 /// [`LockingBlock::round`]: crate::manager::LockingBlock::round
 /// [`LockingBlock::Regular`]: crate::manager::LockingBlock::Regular

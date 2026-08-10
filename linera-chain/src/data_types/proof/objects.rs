@@ -75,11 +75,29 @@ pub trait ValidatorVote {}
 ///   validated, carrying that certificate and the outcome it certifies, plus the block's
 ///   original authorization.
 ///
-/// [`BlockProposal::check_invariants`] enforces that exactly these three shapes are well-formed,
-/// that an authorization is never for a *later* round than the proposal carrying it — so a
-/// retry's round is strictly greater than the round it retries — and that a regular retry's
-/// certificate certifies exactly the block and outcome being re-proposed. The specification uses
-/// all three facts.
+/// The three shapes are enforced in *two* places, and the split matters because only the first
+/// travels with the type:
+///
+/// * [`BlockProposal::check_invariants`] requires `content.round >= authorization.round` — so an
+///   authorization is never for a *later* round than the proposal carrying it — that a carried
+///   outcome accompanies a certificate and vice versa, and that a regular retry satisfies
+///   `content.round > certificate.round` and certifies exactly the block and outcome being
+///   re-proposed.
+/// * `ChainWorkerState::try_handle_block_proposal` rejects an explicit [`OwnerAuthorization`]
+///   that is neither a fast retry nor accompanied by a certificate:
+///
+///   ```text
+///   let retries_fast_round = authorization.round.is_fast() && authorization.round < content.round;
+///   ensure!(retries_fast_round || validated_certificate.is_some(), WorkerError::InvalidSigner(owner));
+///   ```
+///
+///   Without it, a fourth shape — an explicit authorization for a non-fast *earlier* round, with
+///   no certificate — passes `check_invariants`. Note this is also where the fast retry's round
+///   becomes *strictly* greater than the round it retries: `check_invariants` alone only gives
+///   `>=`, and strictness for a regular retry comes from `content.round > certificate.round`.
+///
+/// This is another instance of the pattern [`ProposalGate`] records: the guard lives at the call
+/// site rather than in the type, so a new caller must reproduce it.
 ///
 /// [`BlockProposal`]: crate::data_types::BlockProposal
 /// [`BlockProposal::check_invariants`]: crate::data_types::BlockProposal::check_invariants
@@ -88,6 +106,7 @@ pub trait ValidatorVote {}
 /// [`BlockExecutionOutcome`]: crate::data_types::BlockExecutionOutcome
 /// [`OwnerAuthorization`]: crate::data_types::OwnerAuthorization
 /// [`ValidatedBlockCertificate`]: crate::types::ValidatedBlockCertificate
+/// [`ProposalGate`]: crate::manager::proof::voting::ProposalGate
 pub trait SignedProposal {}
 
 /// **Definition (Certificate).** A *certificate* is a [`GenericCertificate<T>`] together with

@@ -88,6 +88,13 @@ pub trait CorrectValidator {}
 /// conflict. This is deliberate: they lead to different chain states, so agreement must exclude
 /// them, and the exclusion is discharged by [`DeterministicExecution`].
 ///
+/// The struct carries a third field, [`Block::owner_authorization`], which is deliberately
+/// *outside* the block's identity: it is excluded from [`Block::hash`], and `Block`'s `PartialEq`
+/// and `Hash` impls exclude it too, so the same block re-proposed in a later round under a
+/// different but equally valid authorization is the same block. Because equality and hashing
+/// agree, "distinct [`Block`]s have distinct hashes" in [`UnforgeableSignatures`] remains exact,
+/// and no statement below needs to mention the field.
+///
 /// Ancestry needs no separate definition here: [`ChainTipState::verify_block_chaining`] requires
 /// a proposal's height to equal the tip's next height and its `previous_block_hash` to equal the
 /// tip's block hash, so the committed blocks of a chain form a hash-linked list, one per height.
@@ -100,6 +107,9 @@ pub trait CorrectValidator {}
 /// [`ProposedBlock`]: crate::data_types::ProposedBlock
 /// [`BlockExecutionOutcome`]: crate::data_types::BlockExecutionOutcome
 /// [`ChainTipState::verify_block_chaining`]: crate::ChainTipState::verify_block_chaining
+/// [`Block::owner_authorization`]: crate::block::Block::owner_authorization
+/// [`Block::hash`]: crate::block::Block::hash
+/// [`UnforgeableSignatures`]: self::UnforgeableSignatures
 pub trait ConflictingBlocks {}
 
 /// **Assumption (Maximum Byzantine weight).** In the committee governing a chain's epoch, the
