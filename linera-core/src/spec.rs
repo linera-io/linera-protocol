@@ -13,6 +13,10 @@
 //! * **Safety** — [`CommitAgreement`]: for any chain and height, all valid confirmed block
 //!   certificates certify the same block. No synchrony, availability or fairness assumption is
 //!   used; only [`MaxByzantineWeight`] and the cryptographic and persistence assumptions.
+//! * **Accountability** — [`AccountableSafety`]: if agreement *does* fail, the two conflicting
+//!   certificates alone convict validators of weight at least `validity_threshold` — more than
+//!   [`MaxByzantineWeight`] permits — and no correct validator is ever convictable. It assumes
+//!   strictly less than safety does, since it must hold precisely where safety does not.
 //! * **Liveness** — [`UnboundedProgress`]: with an active correct client and after GST, every
 //!   correct reachable validator's [`ChainTipState::next_block_height`] grows without bound.
 //!
@@ -31,6 +35,7 @@
 //! | 6 | Locking and certificate invariants | [`linera_chain::manager::proof::rounds`], then [`linera_chain::manager::proof::locking`] |
 //! | 7 | Commit rule | [`linera_chain::manager::proof::commit`] |
 //! | 8 | Safety proof | [`linera_chain::manager::proof::safety`] |
+//! | 8b | Accountability | [`linera_chain::justification::proof`] |
 //! | 9 | Pacemaker and view changes | [`linera_chain::manager::proof::pacemaker`] |
 //! | 10 | Progress lemmas | [`proof::progress`] |
 //! | 11 | Liveness proof | [`proof::liveness`] |
@@ -106,6 +111,7 @@
 //!
 //! [`CommitAgreement`]: linera_chain::manager::proof::safety::CommitAgreement
 //! [`UnboundedProgress`]: crate::proof::liveness::UnboundedProgress
+//! [`AccountableSafety`]: linera_chain::justification::proof::AccountableSafety
 //! [`ChainTipState::next_block_height`]: linera_chain::ChainTipState::next_block_height
 //! [`MaxByzantineWeight`]: linera_chain::manager::proof::model::MaxByzantineWeight
 //! [`DeterministicExecution`]: linera_chain::manager::proof::model::DeterministicExecution

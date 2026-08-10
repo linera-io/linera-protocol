@@ -237,34 +237,24 @@ pub trait UniqueChain:
 {
 }
 
-/// **Corollary (Agreement failure is attributable).** If [`CommitAgreement`] is ever violated —
-/// two valid [`ConfirmedBlockCertificate`]s for conflicting blocks at one height — then
-/// [`extract_equivocations`], applied to the two certificates reduced to
-/// [`JustifiedConfirmation`]s, returns proofs naming validators of total weight at least
-/// [`validity_threshold`], each of which passes [`EquivocationProof::check`].
+/// **Corollary (Agreement failure is attributable).** The converse of [`CommitAgreement`]: when
+/// it fails, the failure is not silent. Two conflicting confirmed certificates are self-contained
+/// evidence convicting validators of at least
+/// [`validity_threshold`](linera_execution::committee::Committee::validity_threshold) weight, and
+/// no correct validator is ever convictable.
 ///
-/// *Proof sketch, and its status.* This is not a consequence of the results above but a
-/// *converse* to them, and it is proved in [`crate::justification`] rather than here; the
-/// argument is the case analysis recorded on [`extract_equivocations`] (equal rounds ⇒ a
-/// double-vote across the two confirmation quorums; unequal rounds ⇒ either a link of the higher
-/// block's justification chain whose unlocking window straddles the lower confirmation, or a
-/// first-round attestation contradicted by the lower confirmation). Each case blames a full
-/// quorum intersection, which by [`Intersection`] has weight at least
-/// [`validity_threshold`].
+/// This is stated and proved in [`crate::justification::proof`] rather than here, because its
+/// assumption base is deliberately *weaker*: it must hold precisely when
+/// [`MaxByzantineWeight`](crate::manager::proof::model::MaxByzantineWeight) has failed, which is
+/// the one regime this module says nothing about. See
+/// [`AccountableSafety`](crate::justification::proof::AccountableSafety) for the theorem and
+/// [`AccountabilityScope`](crate::justification::proof::AccountabilityScope) for what it excludes
+/// — notably that incorrect block execution is *not* attributable.
 ///
-/// It is stated here because it explains *why* certificates carry an unlocking round
-/// ([`UnlockingRound`]) and a justification chain at all, given that
-/// [`CommitAgreement`] does not use them: they buy accountability, not agreement. Its
-/// preconditions are correspondingly weaker — it must hold even when
-/// [`MaxByzantineWeight`](crate::manager::proof::model::MaxByzantineWeight) fails, since that is
-/// the only case in which it has anything to do.
+/// It is worth stating here nonetheless, because it explains why certificates carry an unlocking
+/// round ([`UnlockingRound`]) and a justification chain at all, given that [`CommitAgreement`]
+/// uses neither: they buy accountability, not agreement.
 ///
-/// [`ConfirmedBlockCertificate`]: crate::types::ConfirmedBlockCertificate
-/// [`extract_equivocations`]: crate::justification::extract_equivocations
-/// [`JustifiedConfirmation`]: crate::justification::JustifiedConfirmation
-/// [`EquivocationProof::check`]: crate::justification::EquivocationProof::check
-/// [`validity_threshold`]: linera_execution::committee::Committee::validity_threshold
-/// [`Intersection`]: crate::data_types::proof::quorum::Intersection
 /// [`UnlockingRound`]: crate::data_types::proof::objects::UnlockingRound
 pub trait Accountability {}
 

@@ -28,12 +28,15 @@
 //! | 6 | Locking and certificate invariants | [`manager::proof::rounds`], then [`manager::proof::locking`] |
 //! | 7 | Commit rule | [`manager::proof::commit`] |
 //! | 8 | Safety proof | [`manager::proof::safety`] |
+//! | 8b | Accountability | [`justification::proof`] |
 //! | 9 | Pacemaker and view changes | [`manager::proof::pacemaker`] |
 //! | 10 | Progress lemmas | `linera_core::proof::progress` |
 //! | 11 | Liveness proof | `linera_core::proof::liveness` |
 //!
-//! The two headline results are [`CommitAgreement`] — at most one block is ever committed per
-//! chain and height — and `linera_core::proof::liveness::UnboundedProgress`.
+//! The three headline results are [`CommitAgreement`] — at most one block is ever committed per
+//! chain and height — [`AccountableSafety`], which says that if agreement *does* fail the
+//! certificates themselves convict validators of more weight than the fault bound permits, and
+//! `linera_core::proof::liveness::UnboundedProgress`.
 //!
 //! # How to read a statement
 //!
@@ -81,14 +84,18 @@
 //! not cover:
 //!
 //! * **State-transition correctness** — that executing the agreed blocks yields the right state.
-//!   [`DeterministicExecution`] is assumed, not proved.
+//!   [`DeterministicExecution`] is assumed, not proved. What the protocol does guarantee is
+//!   [`CertifiedBlockWasExecuted`]: every certified block was executed by at least one correct
+//!   validator. Unlike agreement, this degrades above the fault bound with no forensic residue —
+//!   incorrect execution is not attributable, as [`AccountabilityScope`] records.
 //! * **Cross-chain messaging** — inboxes, outboxes and delivery are outside consensus; the
 //!   relevant guarantee is that each chain's own block sequence is unique, which
 //!   [`UniqueChain`] provides.
 //! * **Committee reconfiguration** — epoch changes are agreed *by* this protocol on the admin
 //!   chain; [`EpochAgreement`] records what is assumed about them.
-//! * **Fault attribution** — a converse property, proved in [`crate::justification`] and stated
-//!   here as [`Accountability`].
+//! * **Fault attribution** — a *converse* property rather than an omission: it is proved in
+//!   [`justification::proof`], on a deliberately weaker assumption base, since it must hold
+//!   exactly when the fault bound has failed.
 //!
 //! [`manager::proof::model`]: crate::manager::proof::model
 //! [`manager::proof::voting`]: crate::manager::proof::voting
@@ -101,7 +108,10 @@
 //! [`data_types::proof::quorum`]: crate::data_types::proof::quorum
 //! [`CommitAgreement`]: crate::manager::proof::safety::CommitAgreement
 //! [`UniqueChain`]: crate::manager::proof::safety::UniqueChain
-//! [`Accountability`]: crate::manager::proof::safety::Accountability
+//! [`justification::proof`]: crate::justification::proof
+//! [`AccountableSafety`]: crate::justification::proof::AccountableSafety
+//! [`AccountabilityScope`]: crate::justification::proof::AccountabilityScope
+//! [`CertifiedBlockWasExecuted`]: crate::manager::proof::commit::CertifiedBlockWasExecuted
 //! [`FastRetryPreservesBlock`]: crate::manager::proof::safety::FastRetryPreservesBlock
 //! [`ProposalGate`]: crate::manager::proof::voting::ProposalGate
 //! [`VoteConstructionSites`]: crate::manager::proof::voting::VoteConstructionSites

@@ -9,7 +9,10 @@
 
 use crate::{
     data_types::proof::quorum::CertificateCarriesCorrectVote,
-    manager::proof::voting::ConfirmationNeedsValidatedCertificate,
+    manager::proof::{
+        model::MaxByzantineWeight,
+        voting::{ConfirmationNeedsValidatedCertificate, ProposalGate},
+    },
 };
 
 /// **Definition (Committed block).** A block `B` at height `h` of a chain is *committed* when a
@@ -76,3 +79,57 @@ pub trait CommitRestsOnValidation:
 /// [`ConfirmedBlockCertificate`]: crate::types::ConfirmedBlockCertificate
 /// [`check`]: crate::types::ConfirmedBlockCertificate::check
 pub trait TipAdvancesOnlyOnValidCertificate {}
+
+/// **Lemma (Every certified block was executed by a correct validator).** If a valid
+/// [`ValidatedBlockCertificate`] for a block `B` exists, then some correct validator executed
+/// `B`'s [`ProposedBlock`] itself and obtained `B`'s [`BlockExecutionOutcome`]. The same follows
+/// for a [`ConfirmedBlockCertificate`] outside the fast round, by
+/// [`CommitRestsOnValidation`]; inside the fast round it holds directly, a fast proposal carrying
+/// no outcome.
+///
+/// This is what stands between the protocol and a committed block whose outcome is fabricated.
+/// It is *not* accountability: a validator that votes for a mis-executed block leaves no
+/// extractable proof (see [`AccountabilityScope`]). And unlike the results in
+/// [`crate::justification::proof`], it needs [`MaxByzantineWeight`] — so validity, unlike
+/// agreement, degrades above the fault bound with no forensic residue.
+///
+/// *Proof.* Induction on the certificate's round, well founded because rounds are totally
+/// ordered. By [`CertificateCarriesCorrectVote`] some correct validator `v` cast a validation vote
+/// for `B` in that round, so by [`ProposalGate`] it ran `ChainWorkerState::try_handle_block_proposal`
+/// to acceptance on a proposal for `B`. That function computes the block as
+///
+/// ```text
+/// let block = if let Some(outcome) = outcome { outcome.clone().with(proposal.content.block.clone()) }
+///             else { self.execute_block(…).await? };
+/// ```
+///
+/// and [`BlockProposal::check_invariants`] admits a carried `outcome` only together with an
+/// [`OriginalProposal::Regular`] certificate. So:
+///
+/// * a **fresh** proposal and a **fast retry** both carry `outcome: None` and are therefore
+///   executed by `v` itself — the base case;
+/// * a **regular retry** is not re-executed, but `check_invariants` requires its certificate to
+///   satisfy `certificate.check_value(&ValidatedBlock::new(outcome.with(block)))`, i.e. to certify
+///   exactly this `B`, and `content.round > certificate.round`; the caller verified it with
+///   `certificate.check(&committee)`. The induction hypothesis at that strictly lower round
+///   supplies the correct validator that executed `B`. ∎
+///
+/// **What this does not give.** The correct validator executed the proposal, but the execution
+/// *replays* whatever oracle answers it recorded; a later re-execution of the confirmed block
+/// feeds `outcome.oracle_responses` back in rather than re-deriving them. So the lemma certifies
+/// that the outcome follows from the proposal *and those oracle answers*, not that the answers
+/// were truthful. Oracle results are attested by quorum, which is inherent — they are not
+/// reproducible functions of the chain state.
+///
+/// [`ValidatedBlockCertificate`]: crate::types::ValidatedBlockCertificate
+/// [`ConfirmedBlockCertificate`]: crate::types::ConfirmedBlockCertificate
+/// [`ProposedBlock`]: crate::data_types::ProposedBlock
+/// [`BlockExecutionOutcome`]: crate::data_types::BlockExecutionOutcome
+/// [`BlockProposal::check_invariants`]: crate::data_types::BlockProposal::check_invariants
+/// [`OriginalProposal::Regular`]: crate::data_types::OriginalProposal::Regular
+/// [`MaxByzantineWeight`]: crate::manager::proof::model::MaxByzantineWeight
+/// [`AccountabilityScope`]: crate::justification::proof::AccountabilityScope
+pub trait CertifiedBlockWasExecuted:
+    CertificateCarriesCorrectVote + ProposalGate + MaxByzantineWeight + CommitRestsOnValidation
+{
+}

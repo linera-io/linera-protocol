@@ -36,7 +36,17 @@
 //! confirmation votes, or the two confirmation quorums intersect in validators that contradicted
 //! themselves. See [`extract_equivocations`].
 //!
+//! # Correctness specification
+//!
+//! The accountability guarantees this module provides are stated and proved in [`proof`]:
+//! [`ProofSoundness`](proof::ProofSoundness) (no correct validator is convictable),
+//! [`ConflictCompleteness`](proof::ConflictCompleteness) (a conflict convicts a validity
+//! threshold), and [`AccountableSafety`](proof::AccountableSafety) combining them with the safety
+//! theorem. See [`crate::spec`] for the reading order.
+//!
 //! [`VoteValue`]: crate::data_types::VoteValue
+
+pub mod proof;
 
 use std::collections::BTreeMap;
 
@@ -962,5 +972,5 @@ fn signature_of(
 }
 
 #[cfg(test)]
-#[path = "unit_tests/justification_tests.rs"]
+#[path = "../unit_tests/justification_tests.rs"]
 mod justification_tests;
