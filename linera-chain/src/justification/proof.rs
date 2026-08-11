@@ -30,7 +30,9 @@
 //! [`Committee::validity_threshold`]: linera_execution::committee::Committee::validity_threshold
 
 use crate::{
-    data_types::proof::quorum::{CertificateEmbedsQuorum, Intersection, ThresholdArithmetic},
+    data_types::proof::quorum::{
+        CertificateEmbedsQuorum, CertificateSignaturesVerify, Intersection, ThresholdArithmetic,
+    },
     manager::proof::{
         commit::{
             CertifiedBlockWasExecuted, CommitRestsOnValidation, IncomingBundlesAreSelfDerived,
@@ -326,8 +328,9 @@ pub trait ChainTilesRounds {}
 ///
 /// * **`r = s`.** `double_confirm` walks the intersection of the two confirmation quorums, which
 ///   by [`Intersection`] has weight at least `f⁺`, emitting a [`DoubleVote`] for each member. Each
-///   is accepted: the blocks differ, the chain and height agree, and both signatures were taken
-///   from verified quorums.
+///   is accepted: the blocks differ, the chain and height agree, and by
+///   [`CertificateSignaturesVerify`] both extracted signatures verify individually — which is
+///   what [`EquivocationProof::check`] re-checks.
 /// * **`r < s` and the higher certificate carries a chain.** By [`ChainTilesRounds`] some link's
 ///   window contains `r`, i.e. `link.round > r` and its unlocking round is `≤ r` — precisely
 ///   `walk_chain`'s guard. That link is a quorum, so its intersection with the lower confirmation
@@ -356,8 +359,14 @@ pub trait ChainTilesRounds {}
 /// [`LockViolation`]: crate::justification::EquivocationProof::LockViolation
 /// [`FirstRoundViolation`]: crate::justification::EquivocationProof::FirstRoundViolation
 /// [`LiteCertificate::check`]: crate::types::LiteCertificate::check
+/// [`CertificateSignaturesVerify`]: crate::data_types::proof::quorum::CertificateSignaturesVerify
 pub trait ConflictCompleteness:
-    ChainTilesRounds + SoundChain + Intersection + CertificateEmbedsQuorum + ThresholdArithmetic
+    ChainTilesRounds
+    + SoundChain
+    + Intersection
+    + CertificateEmbedsQuorum
+    + CertificateSignaturesVerify
+    + ThresholdArithmetic
 {
 }
 
@@ -394,8 +403,9 @@ pub trait ChainAuditability: SoundChain + CertificateEmbedsQuorum {}
 ///
 /// *Proof.* By [`CertificateEmbedsQuorum`] both signature sets are quorums; by [`Intersection`]
 /// their intersection has weight at least `f⁺`; `double_vote` emits a proof for each member, with
-/// `kind = Validated` and the round both share. Each is accepted, the blocks differing and the
-/// chain and height agreeing. ∎
+/// `kind = Validated` and the round both share. Each is accepted: the blocks differ, the chain and
+/// height agree, and by [`CertificateSignaturesVerify`] the extracted signatures verify
+/// individually. ∎
 ///
 /// This is the accountability counterpart of
 /// [`UniqueValidatedBlockPerRound`](crate::manager::proof::locking::UniqueValidatedBlockPerRound):
@@ -407,8 +417,9 @@ pub trait ChainAuditability: SoundChain + CertificateEmbedsQuorum {}
 /// [`extract_double_validations`]: crate::justification::extract_double_validations
 /// [`DoubleVote`]: crate::justification::EquivocationProof::DoubleVote
 /// [`Committee::validity_threshold`]: linera_execution::committee::Committee::validity_threshold
+/// [`CertificateSignaturesVerify`]: crate::data_types::proof::quorum::CertificateSignaturesVerify
 pub trait DoubleValidationCompleteness:
-    Intersection + CertificateEmbedsQuorum + ThresholdArithmetic
+    Intersection + CertificateEmbedsQuorum + CertificateSignaturesVerify + ThresholdArithmetic
 {
 }
 

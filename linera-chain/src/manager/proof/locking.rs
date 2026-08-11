@@ -41,7 +41,10 @@
 //! [`ManagerSafetySnapshot::restore`]: crate::manager::ManagerSafetySnapshot::restore
 
 use crate::{
-    data_types::proof::quorum::{CertificateCarriesCorrectVote, CorrectValidatorInIntersection},
+    data_types::proof::quorum::{
+        CertificateCarriesCorrectVote, CertificateEmbedsQuorum, CorrectSignerCastItsVote,
+        CorrectValidatorInIntersection,
+    },
     manager::proof::{
         model::{ConsensusInstance, DurablePersistence, EpochAgreement},
         rounds::{CurrentRoundMonotone, RoundFloor, VoteRoundBelowCurrentRound},
@@ -271,15 +274,21 @@ pub trait OneConfirmationVotePerRound:
 /// [`EpochAgreement`] they are judged against the same committee, so by
 /// [`CertificateEmbedsQuorum`] their signer sets are two quorums of it, and by
 /// [`CorrectValidatorInIntersection`] some correct validator `v` signed both. By
-/// [`CertificateCarriesCorrectVote`], `v` cast validation votes for `B₁` and for `B₂`, both in
+/// [`CorrectSignerCastItsVote`], `v` cast validation votes for `B₁` and for `B₂`, both in
 /// round `s`. By [`OneValidationVotePerRound`], `B₁ = B₂`. ∎
+///
+/// The pointwise [`CorrectSignerCastItsVote`] is essential here, and its existential counterpart
+/// [`CertificateCarriesCorrectVote`] would not do: the latter yields *some* correct signer of
+/// each certificate, with no reason the two are the same validator, whereas the contradiction
+/// needs the one the intersection handed us.
 ///
 /// [`ValidatedBlockCertificate`]: crate::types::ValidatedBlockCertificate
 /// [`CertificateEmbedsQuorum`]: crate::data_types::proof::quorum::CertificateEmbedsQuorum
 pub trait UniqueValidatedBlockPerRound:
     OneValidationVotePerRound
     + CorrectValidatorInIntersection
-    + CertificateCarriesCorrectVote
+    + CertificateEmbedsQuorum
+    + CorrectSignerCastItsVote
     + EpochAgreement
 {
 }
