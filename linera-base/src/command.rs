@@ -161,12 +161,9 @@ impl CommandExt for tokio::process::Command {
             .wait_with_output()
             .await
             .with_context(|| self.description())?;
-        // `stderr` is inherited, so `output.stderr` is always empty here: report where the
-        // child's diagnostics actually went instead of an empty capture.
         ensure!(
             output.status.success(),
-            "{}: got non-zero error code {}. The command's stderr was inherited by this \
-             process; see the output above for its diagnostics.",
+            "{}: got non-zero error code {}",
             self.description(),
             output.status,
         );
