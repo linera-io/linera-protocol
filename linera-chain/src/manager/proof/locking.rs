@@ -277,11 +277,6 @@ pub trait OneConfirmationVotePerRound:
 /// [`CorrectSignerCastItsVote`], `v` cast validation votes for `B₁` and for `B₂`, both in
 /// round `s`. By [`OneValidationVotePerRound`], `B₁ = B₂`. ∎
 ///
-/// The pointwise [`CorrectSignerCastItsVote`] is essential here, and its existential counterpart
-/// [`CertificateCarriesCorrectVote`] would not do: the latter yields *some* correct signer of
-/// each certificate, with no reason the two are the same validator, whereas the contradiction
-/// needs the one the intersection handed us.
-///
 /// [`ValidatedBlockCertificate`]: crate::types::ValidatedBlockCertificate
 /// [`CertificateEmbedsQuorum`]: crate::data_types::proof::quorum::CertificateEmbedsQuorum
 pub trait UniqueValidatedBlockPerRound:

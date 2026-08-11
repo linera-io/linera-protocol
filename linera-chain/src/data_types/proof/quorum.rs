@@ -84,9 +84,7 @@ pub trait CorrectValidatorInIntersection: Intersection + MaxByzantineWeight {}
 /// [`Committee::quorum_threshold`] with [`ChainError::CertificateRequiresQuorum`], establishing
 /// `w(S) ≥ q`. Those three are precisely [`Quorum`]. ∎
 ///
-/// This says nothing about the signatures themselves; that is [`CertificateSignaturesVerify`],
-/// kept apart because the two halves are consumed by different arguments and rest on different
-/// things.
+/// The signatures themselves are [`CertificateSignaturesVerify`].
 ///
 /// [`LiteCertificate::check`]: crate::types::LiteCertificate::check
 /// [`ChainError::CertificateValidatorReuse`]: crate::ChainError::CertificateValidatorReuse
@@ -152,10 +150,8 @@ pub trait CertificateSignaturesVerify {}
 /// valid for a committee and a *correct* validator `v` is among its signers, then `v` itself cast
 /// a vote with `c`'s exact signed payload.
 ///
-/// This is the *pointwise* form, about a validator identified by other means — in practice by
-/// [`CorrectValidatorInIntersection`]. It is what every quorum-intersection argument in the
-/// specification actually uses. [`CertificateCarriesCorrectVote`] is the weaker existential form,
-/// which names no particular validator and so cannot discharge those arguments.
+/// The validator is identified by other means — in practice by
+/// [`CorrectValidatorInIntersection`]. [`CertificateCarriesCorrectVote`] is the existential form.
 ///
 /// *Proof.* By [`CertificateSignaturesVerify`], `v`'s signature verifies over `c`'s payload. By
 /// [`UnforgeableSignatures`] no party without `v`'s secret key produces a signature that verifies
@@ -176,11 +172,10 @@ pub trait CorrectSignerCastItsVote:
 /// certificate valid for its committee there is at least one *correct* validator that itself cast
 /// a vote with that certificate's exact signed payload.
 ///
-/// This is the *existential* form. It turns "a certificate exists" into "a correct validator
-/// executed the code path that produces this vote", and thereby lets the local implementation
-/// properties of [`crate::manager::proof::voting`] constrain what certificates can exist at all.
-/// Where an argument needs a *particular* validator — every quorum-intersection argument — use
-/// [`CorrectSignerCastItsVote`] instead.
+/// This turns "a certificate exists" into "a correct validator executed the code path that
+/// produces this vote", and thereby lets the local implementation properties of
+/// [`crate::manager::proof::voting`] constrain what certificates can exist at all. An argument
+/// about a *particular* validator needs [`CorrectSignerCastItsVote`].
 ///
 /// *Proof.* By [`CertificateEmbedsQuorum`] the signers form a quorum, of weight at least `q`. By
 /// [`ThresholdArithmetic`], `q ≥ (N + f⁺)/2 ≥ f⁺`, using `N ≥ f⁺ = ⌈N/3⌉`. By
