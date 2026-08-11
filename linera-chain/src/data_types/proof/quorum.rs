@@ -72,21 +72,30 @@ pub trait Intersection: ThresholdArithmetic {}
 /// intersection cannot consist of faulty validators alone. ∎
 pub trait CorrectValidatorInIntersection: Intersection + MaxByzantineWeight {}
 
-/// **Lemma (A valid certificate embeds a quorum).** If [`LiteCertificate::check`] returns `Ok`
-/// for a certificate `c` against a committee, then the signers of `c.signatures` form a
-/// [`Quorum`] of that committee.
+/// **Lemma (A valid certificate embeds a quorum).** If a certificate `c` verifies against a
+/// committee, then the signers of `c.signatures` form a [`Quorum`] of that committee.
 ///
-/// *Proof.* [`LiteCertificate::check`] passes `c.signatures` to the crate-private helper
-/// `check_signatures`, which (1) rejects a repeated signer with
+/// *Proof.* There are two verification entry points, and both funnel into the crate-private
+/// helper `check_signatures`: [`LiteCertificate::check`], which the two block certificate types
+/// delegate to, and [`GenericCertificate::check`], which is what a
+/// [`TimeoutCertificate`] — a type alias for `GenericCertificate<Timeout>` — resolves to. Each
+/// builds the same [`SignedVotePayload`] and passes it with `c.signatures` to that helper, which
+/// (1) rejects a repeated signer with
 /// [`ChainError::CertificateValidatorReuse`], establishing pairwise distinctness; (2) rejects any
 /// signer whose [`Committee::weight`] is `0` with [`ChainError::InvalidSigner`], establishing
 /// committee membership; and (3) accumulates the signers' weights and rejects a total below
 /// [`Committee::quorum_threshold`] with [`ChainError::CertificateRequiresQuorum`], establishing
-/// `w(S) ≥ q`. Those three are precisely [`Quorum`]. ∎
+/// `w(S) ≥ q`. Those three are precisely [`Quorum`]. The accumulation cannot overflow: step (1)
+/// establishes distinctness before step (3) adds, so the total is bounded by the committee's own
+/// `total_votes`, which [`Committee::new`] rejects on overflow. ∎
 ///
 /// The signatures themselves are [`CertificateSignaturesVerify`].
 ///
 /// [`LiteCertificate::check`]: crate::types::LiteCertificate::check
+/// [`GenericCertificate::check`]: crate::types::GenericCertificate::check
+/// [`TimeoutCertificate`]: crate::types::TimeoutCertificate
+/// [`SignedVotePayload`]: super::objects::SignedVotePayload
+/// [`Committee::new`]: linera_execution::committee::Committee::new
 /// [`ChainError::CertificateValidatorReuse`]: crate::ChainError::CertificateValidatorReuse
 /// [`ChainError::InvalidSigner`]: crate::ChainError::InvalidSigner
 /// [`ChainError::CertificateRequiresQuorum`]: crate::ChainError::CertificateRequiresQuorum
@@ -94,17 +103,18 @@ pub trait CorrectValidatorInIntersection: Intersection + MaxByzantineWeight {}
 /// [`Committee::quorum_threshold`]: linera_execution::committee::Committee::quorum_threshold
 pub trait CertificateEmbedsQuorum {}
 
-/// **Lemma (Every signature on a valid certificate verifies).** If [`LiteCertificate::check`]
-/// returns `Ok` for a certificate `c`, then *each individual* signer of `c.signatures` holds a
-/// signature that verifies over the single [`SignedVotePayload`]
+/// **Lemma (Every signature on a valid certificate verifies).** If a certificate `c` verifies
+/// against a committee — through either entry point named in [`CertificateEmbedsQuorum`] — then
+/// *each individual* signer of `c.signatures` holds a signature that verifies over the single
+/// [`SignedVotePayload`]
 ///
 /// ```text
 /// (c.value.value_hash, c.round, c.value.kind, c.unlocking_round, c.first_round,
 ///  c.justification_commitment)
 /// ```
 ///
-/// *Proof.* [`LiteCertificate::check`] constructs exactly that
-/// [`VoteValue`](crate::data_types::VoteValue) and passes it, with `c.signatures`, to
+/// *Proof.* Both entry points construct exactly that
+/// [`VoteValue`](crate::data_types::VoteValue) and pass it, with `c.signatures`, to
 /// `check_signatures`, whose final step calls `ValidatorSignature::verify_batch` and propagates
 /// any failure. For [`ValidatorSignature`] — an alias of `Secp256k1Signature` — that function is
 /// a loop of individual verifications returning on the first failure:

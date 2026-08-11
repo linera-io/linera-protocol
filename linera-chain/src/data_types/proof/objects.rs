@@ -89,6 +89,11 @@ pub trait SignedProposal {}
 /// the [`JustificationChain`] its wrapper carries. The three instantiations are
 /// [`ValidatedBlockCertificate`], [`ConfirmedBlockCertificate`] and [`TimeoutCertificate`].
 ///
+/// The names invite a conflation worth pre-empting: [`ConfirmedBlock`] and [`ValidatedBlock`] are
+/// the certified *values*, wrappers around a [`Block`] carrying no signatures. Their names record
+/// the role the value plays — the thing `Confirmed` or `Validated` votes are cast on — not a
+/// property the value can attest to. Confirmation lives in the certificate.
+///
 /// A certificate is **valid for a committee** when [`LiteCertificate::check`] returns `Ok` for
 /// it. Both block certificate types delegate their `check` to that one function, so it is the
 /// single place where a certificate's signatures, its justification chain, and the binding
@@ -100,6 +105,9 @@ pub trait SignedProposal {}
 /// [`JustificationChain`]: crate::justification::JustificationChain
 /// [`ValidatedBlockCertificate`]: crate::types::ValidatedBlockCertificate
 /// [`ConfirmedBlockCertificate`]: crate::types::ConfirmedBlockCertificate
+/// [`ConfirmedBlock`]: crate::block::ConfirmedBlock
+/// [`ValidatedBlock`]: crate::block::ValidatedBlock
+/// [`Block`]: crate::block::Block
 /// [`TimeoutCertificate`]: crate::types::TimeoutCertificate
 /// [`LiteCertificate::check`]: crate::types::LiteCertificate::check
 /// [`CertificateEmbedsQuorum`]: super::quorum::CertificateEmbedsQuorum
