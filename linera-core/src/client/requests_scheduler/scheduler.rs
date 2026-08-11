@@ -309,13 +309,11 @@ impl<Env: Environment> RequestsScheduler<Env> {
 
     /// Downloads the blobs with the given IDs using the streaming `download_blobs` RPC.
     ///
-    /// Tries peers in shuffled order: each peer is asked for the IDs that are still
-    /// missing after previous peers' attempts. The remote stream yields blobs in
-    /// requested order; partial progress is preserved across peers when a stream
-    /// errors mid-way (e.g. the validator is missing one of the IDs).
+    /// Tries peers in shuffled order, asking each only for the IDs still missing, so
+    /// partial progress survives a stream that ends early.
     ///
-    /// Returns `Ok(None)` if any blob could not be retrieved from any peer.
-    /// Returns `Err` only if every peer attempt failed before returning a single blob.
+    /// Returns `Ok(None)` if any blob could not be retrieved from any peer, and `Err`
+    /// only if every peer failed before yielding a single blob.
     #[instrument(level = "trace", skip_all)]
     pub async fn download_blobs(
         &self,
@@ -385,16 +383,12 @@ impl<Env: Environment> RequestsScheduler<Env> {
         Ok(None)
     }
 
-    /// Streams blobs from a single peer, accepting any blob whose ID is in the
-    /// pending set. The server is allowed to skip blobs it does not have, so
-    /// the caller cannot assume a strict 1:1 correspondence with the request.
-    /// Returns whatever blobs the peer yielded and the error, if any, that
-    /// ended the stream.
+    /// Streams the pending blobs from one peer, returning what it yielded and the error,
+    /// if any, that ended the stream. The server may skip blobs it does not have, so the
+    /// response is not 1:1 with the request.
     ///
-    /// `timeout` bounds the wait for the stream to open and for each subsequent
-    /// item — it detects a stalled peer without cancelling a transfer that is
-    /// still making progress. Updates the peer's EMA metrics; an attempt counts
-    /// as failed if it errored, stalled, or the peer sent an unexpected blob.
+    /// `hedge_delay` bounds the wait for the stream to open and for each subsequent item,
+    /// so a stalled peer is abandoned without cancelling a transfer still making progress.
     async fn stream_blobs_from_peer(
         &self,
         peer: RemoteNode<Env::ValidatorNode>,
