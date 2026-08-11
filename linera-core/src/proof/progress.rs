@@ -267,10 +267,13 @@ pub trait ProposalAccepted:
 /// is the retried certificate's `full_justification`. ∎
 ///
 /// Note the blob preconditions: a validator missing a blob the proposal requires answers
-/// `WorkerError::BlobsNotFound` instead of voting, and the driver uploads the blobs and retries
-/// (`Client::submit_block_proposal`'s retry on `BlobsNotFound`). This is bounded work — the blob
-/// set is fixed by the proposal — so it does not affect the argument beyond a constant number of
-/// extra round trips.
+/// `WorkerError::BlobsNotFound` instead of voting. That does not cost a round. The retry is
+/// *per-validator*, inside `RemoteNodeUpdater::send_block_proposal`'s loop: the arm matching
+/// `BlobsNotFound | InactiveChain` sends the proposal's published blobs with `send_pending_blobs`
+/// and re-submits to that validator alone, so the other validators' votes are unaffected and the
+/// quorum round is not restarted. It terminates because the loop drains its `blob_ids` — the set
+/// is fixed by the proposal and each pass takes it with `mem::take`. So the `2Δ` bound above
+/// absorbs it as a constant factor rather than an extra round of the protocol.
 ///
 /// [`ValidatedBlockCertificate`]: linera_chain::types::ValidatedBlockCertificate
 /// [`ChainManager::create_vote`]: linera_chain::manager::ChainManager::create_vote
