@@ -10,6 +10,7 @@
 //! | module | contents |
 //! |---|---|
 //! | [`assumptions`] | synchrony, availability, leader fairness, timeout growth, reachability |
+//! | [`durability`] | what survives a crash, a restart, or a replay |
 //! | [`progress`] | the individual steps a correct driver can force after GST |
 //! | [`liveness`] | the liveness theorems, and what they exclude |
 //!
@@ -24,5 +25,6 @@
 //! here keeps every statement next to the code that discharges it.
 
 pub mod assumptions;
+pub mod durability;
 pub mod liveness;
 pub mod progress;

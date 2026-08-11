@@ -179,7 +179,8 @@ pub trait UnforgeableSignatures {}
 ///
 /// Without this, a crash could lose the record of a vote and let the validator vote again,
 /// breaking [`OneValidationVotePerRound`] and [`OneConfirmationVotePerRound`], which are the
-/// only places where the assumption is consumed. A validator that violates it is faulty in the
+/// only places where the assumption is consumed. It is one half of a discipline whose other half
+/// — that an effect already persisted is never *lost* — is `linera_core::proof::durability`. A validator that violates it is faulty in the
 /// sense of [`CorrectValidator`], and is counted against [`MaxByzantineWeight`].
 ///
 /// [`OneValidationVotePerRound`]: crate::manager::proof::locking::OneValidationVotePerRound
@@ -191,18 +192,51 @@ pub trait DurablePersistence {}
 /// mutually exclusive and each runs to completion: no two of them interleave their reads and
 /// writes of the same [`ChainManager`](crate::manager::ChainManager).
 ///
-/// This is enforced, not hoped for: `linera_core::worker::WorkerState` routes every mutating
-/// request for a chain through `chain_write`, which holds a per-chain write lock for the whole
-/// transition, and the manager is `!Sync`-by-construction behind that guard. The specification
-/// relies on it whenever it reasons about "the state immediately before" a vote — for instance
-/// in [`UnlockingJustification`], where the guard evaluated by
+/// Exclusivity has two halves, and only the second is in this repository's control.
+///
+/// *Within a worker process*, `linera_core::worker::WorkerState` routes every mutating request
+/// for a chain through `chain_write`, which holds a per-chain write lock for the whole transition,
+/// and the manager is `!Sync`-by-construction behind that guard.
+///
+/// *Across the processes of one validator*, there is at most one worker per chain because shard
+/// assignment is static: `ValidatorInternalNetworkPreConfig::get_shard_id` in `linera-rpc` is a
+/// pure function of the validator's public key, the
+/// chain id and `shards.len()`, with no leases and no handoff. All shards share one backing store,
+/// so this is what keeps two processes from writing the same chain's keys.
+///
+/// The specification relies on the composition whenever it reasons about "the state immediately
+/// before" a vote — for instance in [`UnlockingJustification`], where the guard evaluated by
 /// [`ChainManager::check_proposed_block`] must still describe the state when
 /// [`ChainManager::create_vote`] runs a few statements later.
+///
+/// **Residual obligation.** The second half holds only while `shards.len()` is stable and worker
+/// processes do not overlap. Changing the shard count re-partitions every chain, and a rolling
+/// restart that runs a replacement alongside its predecessor puts two processes on the same
+/// chain; in both cases they compute the same owner and write the same shared keys. Nothing in
+/// the code detects either, so this is a deployment obligation, not an enforced invariant.
 ///
 /// [`UnlockingJustification`]: crate::manager::proof::safety::UnlockingJustification
 /// [`ChainManager::check_proposed_block`]: crate::manager::ChainManager::check_proposed_block
 /// [`ChainManager::create_vote`]: crate::manager::ChainManager::create_vote
 pub trait SerializedChainState {}
+
+/// **Assumption (Atomic persistence).** A `save()` either takes effect in full or not at all: the
+/// storage backend applies the batch of writes for a chain atomically, so a crash never leaves a
+/// chain's state partially updated.
+///
+/// [`DurablePersistence`] is about *when* state is written; this is about the write being
+/// indivisible. Every invariant in [`crate::manager::proof::locking`] is stated over a state
+/// reached by whole transitions, so a torn write would put the manager in a state no transition
+/// produces — for instance a [`confirmed_vote`](field@crate::manager::ChainManager::confirmed_vote)
+/// stored without the [`locking_block`](crate::manager::ChainManager::locking_block) that
+/// [`ConfirmationOnlyInCurrentRound`] installs before it.
+///
+/// It also underpins the mirror property in `linera_core::proof::durability`: re-deriving a
+/// worker's undelivered effects after a restart is only meaningful if the state they are derived
+/// from is itself consistent.
+///
+/// [`ConfirmationOnlyInCurrentRound`]: crate::manager::proof::voting::ConfirmationOnlyInCurrentRound
+pub trait StorageAtomicity {}
 
 /// **Assumption (Deterministic execution).** For a fixed chain state at a height, a fixed
 /// [`ProposedBlock`], a fixed set of published blobs and a fixed multi-leader round argument,

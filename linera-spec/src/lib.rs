@@ -50,6 +50,7 @@
 //! | Pacemaker and view changes | [`linera_chain::manager::proof::pacemaker`] |
 //! | Progress lemmas | [`linera_core::proof::progress`] |
 //! | Liveness proof | [`linera_core::proof::liveness`] |
+//! | Crash and deployment obligations | [`linera_core::proof::durability`] |
 //!
 //! # How to read a statement
 //!
