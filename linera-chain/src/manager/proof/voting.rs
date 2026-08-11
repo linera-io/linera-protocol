@@ -301,11 +301,9 @@ pub trait FastConfirmationNeedsEmptyLock:
 /// that block in the fast round. ∎
 ///
 /// **Where this is fragile.** Both checks live in `linera-core`, keyed on a round test that is
-/// duplicated — once in the worker, once in the manager — with nothing tying the two together. The
-/// previous encoding made the coupling structural, since the super-owner check sat inside the
-/// `OriginalProposal::Fast` match arm that also carried the signature. Dropping either check, or
-/// letting them disagree about what counts as a fast authorization, lets any owner plant a fast
-/// lock.
+/// duplicated — once in the worker, once in the manager — with nothing tying the two together.
+/// Dropping either check, or letting them disagree about what counts as a fast authorization,
+/// lets any owner plant a fast lock.
 ///
 /// [`ChainManager::create_vote`]: crate::manager::ChainManager::create_vote
 /// [`LockingBlock::Fast`]: crate::manager::LockingBlock::Fast
