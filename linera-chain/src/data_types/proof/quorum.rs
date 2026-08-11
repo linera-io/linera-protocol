@@ -64,7 +64,7 @@ pub trait ThresholdArithmetic {}
 /// [`ThresholdArithmetic`]. ∎
 pub trait Intersection: ThresholdArithmetic {}
 
-/// **Corollary (A correct validator lies in every quorum intersection).** Any two quorums of the
+/// **Lemma (A correct validator lies in every quorum intersection).** Any two quorums of the
 /// same committee share at least one correct validator.
 ///
 /// *Proof.* By [`Intersection`] the intersection has weight at least `f⁺`. By
@@ -178,7 +178,7 @@ pub trait CorrectSignerCastItsVote:
 {
 }
 
-/// **Corollary (Every valid certificate carries a correct validator's vote).** For every
+/// **Lemma (Every valid certificate carries a correct validator's vote).** For every
 /// certificate valid for its committee there is at least one *correct* validator that itself cast
 /// a vote with that certificate's exact signed payload.
 ///
