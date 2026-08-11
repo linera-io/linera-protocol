@@ -1186,7 +1186,13 @@ where
             .chain(read_blobs.into_values())
             .map(|blob| self.storage.cache_blob(blob))
             .collect();
-        export.export(certificate.clone(), blobs, epoch, committee.clone());
+        export.export(
+            certificate.clone(),
+            blobs,
+            epoch,
+            committee.clone(),
+            (**self.chain.exported_heights.get()).clone(),
+        );
 
         // Fold in what the queue has recorded so far — which never includes the block we just
         // queued. Merged by maximum: the queue drops a chain's progress once it converges, and an

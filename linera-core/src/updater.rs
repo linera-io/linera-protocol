@@ -795,7 +795,7 @@ where
         }
     }
 
-    pub(crate) async fn update_admin_chain(&mut self) -> Result<(), chain_client::Error> {
+    async fn update_admin_chain(&mut self) -> Result<(), chain_client::Error> {
         let local_admin_info = self.local_node.chain_info(self.admin_chain_id).await?;
         let admin_chain_id = self.admin_chain_id;
         let target = local_admin_info.next_block_height;

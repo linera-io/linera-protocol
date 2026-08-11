@@ -719,9 +719,8 @@ pub struct WorkerState<StorageClient: Storage> {
     /// corrupted chain. The RPC server layer installs this; without it, we fall
     /// back to dispatching locally through `handle_cross_chain_request`.
     outbound_cross_chain_sender: Option<OutboundCrossChainSender>,
-    /// Creates each chain worker's block-export task. The server binary installs this, since it
-    /// is the only layer that knows how to reach another validator; without it, executed blocks
-    /// are not pushed to the rest of the committee.
+    /// The process-wide export queue, installed by the server binary — the only layer that
+    /// knows how to reach another validator. `None` means blocks are not exported.
     block_export: Option<BlockExportHandle>,
 }
 

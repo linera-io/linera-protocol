@@ -133,12 +133,18 @@ async fn test_export_catches_up_a_newly_added_validator(
     let (mut net, client) = config.instantiate().await?;
     let chain = client.default_chain().expect("client has no default chain");
 
-    // History the newcomer will have to be told about in full.
+    // History the newcomer will have to be told about in full — on the client's chain, and on a
+    // second chain that stays completely idle from here on. The idle one is the harder case:
+    // nothing after the admission ever touches it, so only the export queue's own bookkeeping
+    // can tell the newcomer it exists.
     for _ in 0..3 {
         client
             .transfer_with_silent_logs(1.into(), chain, chain)
             .await?;
     }
+    let (idle_chain, _) = client
+        .open_chain(chain, None, linera_base::data_types::Amount::from_tokens(1))
+        .await?;
 
     // Bring up a fifth validator and admit it. It starts knowing nothing of this chain.
     net.generate_validator_config(4).await?;
@@ -160,12 +166,24 @@ async fn test_export_catches_up_a_newly_added_validator(
         .info
         .next_block_height;
 
+    let idle_target = net
+        .validator_client(0)?
+        .handle_chain_info_query(ChainInfoQuery::new(idle_chain))
+        .await?
+        .info
+        .next_block_height;
+
     for _ in 0..60 {
         let info = net
             .validator_client(4)?
             .handle_chain_info_query(ChainInfoQuery::new(chain))
             .await?;
-        if info.info.next_block_height >= target {
+        let idle_info = net
+            .validator_client(4)?
+            .handle_chain_info_query(ChainInfoQuery::new(idle_chain))
+            .await?;
+        if info.info.next_block_height >= target && idle_info.info.next_block_height >= idle_target
+        {
             net.terminate().await?;
             return Ok(());
         }

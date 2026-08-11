@@ -48,11 +48,11 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{Blob, BlockHeight, Epoch},
-    identifiers::{BlobId, ChainId},
+    identifiers::{BlobId, ChainId, EventId, StreamId},
     time::{timer::timeout, Duration, Instant},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
-use linera_execution::committee::Committee;
+use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
 use linera_storage::{Arc as CacheArc, Storage};
 use tokio::sync::mpsc;
 use tracing::{debug, instrument, warn};
@@ -70,9 +70,9 @@ mod metrics {
 
     use linera_base::prometheus_util::{
         exponential_bucket_interval, exponential_bucket_latencies, register_histogram,
-        register_histogram_vec, register_int_counter, register_int_gauge,
+        register_histogram_vec, register_int_counter, register_int_gauge, register_int_gauge_vec,
     };
-    use prometheus::{Histogram, HistogramVec, IntCounter, IntGauge};
+    use prometheus::{Histogram, HistogramVec, IntCounter, IntGauge, IntGaugeVec};
 
     /// Blocks waiting in the export queue.
     pub static QUEUE_SIZE: LazyLock<IntGauge> = LazyLock::new(|| {
@@ -120,12 +120,11 @@ mod metrics {
     });
 
     /// How many concurrent sends each destination is currently allowed.
-    pub static DESTINATION_WINDOW: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
+    pub static DESTINATION_WINDOW: LazyLock<IntGaugeVec> = LazyLock::new(|| {
+        register_int_gauge_vec(
             "block_export_destination_window",
-            "AIMD in-flight window per destination validator, sampled at each change",
+            "AIMD in-flight window per destination validator",
             &["validator"],
-            exponential_bucket_interval(1.0, 1_024.0),
         )
     });
 
@@ -144,7 +143,9 @@ mod metrics {
 /// Configuration for pushing executed blocks to the other committee validators.
 #[derive(Clone, Debug)]
 pub struct BlockExportConfig {
-    /// How many certificates are read from storage per catch-up read.
+    /// How many certificates are read from storage per catch-up read. Smaller than the
+    /// client's 500: a chunk lives inside one send job, and `max_catch_up_blocks` bounds the
+    /// round anyway.
     pub certificate_upload_batch_size: u64,
     /// How many blocks the export queue holds before dropping new ones for catch-up to repair.
     pub queue_size: usize,
@@ -241,6 +242,9 @@ struct ExportedBlock {
     /// in this block is exported to immediately.
     epoch: Epoch,
     committee: Arc<Committee>,
+    /// The persisted `exported_heights` of the chain, seeding cursors on its first block this
+    /// process so a restart re-sends at most one block per destination instead of a history.
+    exported_heights: BTreeMap<ValidatorPublicKey, BlockHeight>,
     /// Blob payload bytes, counted at enqueue so the dequeue can decrement the same amount.
     #[cfg(with_metrics)]
     blob_bytes: i64,
@@ -252,6 +256,7 @@ struct ExportedBlock {
 pub struct BlockExportHandle {
     blocks: mpsc::Sender<ExportedBlock>,
     progress: SharedProgress,
+    tips: SharedTips,
 }
 
 impl Clone for BlockExportHandle {
@@ -259,6 +264,7 @@ impl Clone for BlockExportHandle {
         BlockExportHandle {
             blocks: self.blocks.clone(),
             progress: self.progress.clone(),
+            tips: self.tips.clone(),
         }
     }
 }
@@ -268,16 +274,32 @@ impl Clone for BlockExportHandle {
 /// when a chain converges, so this holds lagging chains only.
 type SharedProgress = Arc<Mutex<HashMap<ChainId, BTreeMap<ValidatorPublicKey, BlockHeight>>>>;
 
+/// The height after each chain's newest announced block. Written on every `export` call before
+/// the queue is tried, so a block the full queue drops still raises the repair target the tick
+/// measures destinations against.
+type SharedTips = Arc<Mutex<HashMap<ChainId, BlockHeight>>>;
+
 impl BlockExportHandle {
     /// Queues a block for export and returns immediately. A full queue drops the block — never
-    /// blocks the worker — and the queue's catch-up re-sends it from storage.
+    /// blocks the worker — and the tip announced below is what lets catch-up re-send it from
+    /// storage. `exported_heights` seeds the chain's cursors on its first block this process.
     pub(crate) fn export(
         &self,
         certificate: CacheArc<ConfirmedBlockCertificate>,
         blobs: Vec<CacheArc<Blob>>,
         epoch: Epoch,
         committee: Arc<Committee>,
+        exported_heights: BTreeMap<ValidatorPublicKey, BlockHeight>,
     ) {
+        // Announced before the queue is tried: a dropped block must still raise the repair
+        // target, or a chain whose *last* block was dropped would never be repaired at all.
+        {
+            let header = &certificate.block().header;
+            let tip = header.height.try_add_one().unwrap_or(BlockHeight::MAX);
+            let mut tips = self.tips.lock().expect("tips mutex is never poisoned");
+            let entry = tips.entry(header.chain_id).or_insert(tip);
+            *entry = (*entry).max(tip);
+        }
         #[cfg(with_metrics)]
         let blob_bytes = blobs
             .iter()
@@ -288,6 +310,7 @@ impl BlockExportHandle {
             blobs,
             epoch,
             committee,
+            exported_heights,
             #[cfg(with_metrics)]
             blob_bytes,
             #[cfg(with_metrics)]
@@ -355,6 +378,7 @@ where
 {
     let (blocks, receiver) = mpsc::channel(config.queue_size);
     let progress: SharedProgress = Arc::default();
+    let tips: SharedTips = Arc::default();
 
     let task = BlockExportQueue {
         storage,
@@ -363,13 +387,22 @@ where
         own_public_key,
         latest_epoch: None,
         committee: None,
+        committee_dirty: false,
+        admin_chain_id: None,
+        ticks_until_scan: 0,
         chains: HashMap::new(),
         destinations: HashMap::new(),
         progress: progress.clone(),
+        tips: tips.clone(),
+        draining: false,
     };
     linera_base::Task::spawn(task.run(receiver)).forget();
 
-    BlockExportHandle { blocks, progress }
+    BlockExportHandle {
+        blocks,
+        progress,
+        tips,
+    }
 }
 
 /// What we know of one chain: its tip, and each destination's position below it. Kept while some
@@ -403,6 +436,9 @@ struct ChainDest {
 struct DestState<N> {
     node: N,
     address: String,
+    /// Bumped whenever this state is rebuilt, so a send started against a previous incarnation
+    /// cannot corrupt the new one's accounting when it completes.
+    generation: u64,
     /// Sends currently running against this destination, over all chains.
     in_flight: usize,
     /// How many concurrent sends the AIMD control currently allows: +1 per success up to the
@@ -440,10 +476,25 @@ where
     /// newcomer, and current committee members need every chain regardless of its epoch.
     latest_epoch: Option<Epoch>,
     committee: Option<Arc<Committee>>,
+    /// Set when `committee` changed and the destination set has not been rebuilt yet, so the
+    /// rebuild runs per committee change rather than per block.
+    committee_dirty: bool,
+    /// The admin chain, read from the network description once, for the silent epoch probe.
+    admin_chain_id: Option<ChainId>,
+    /// Ticks until the next storage scan for a committee no block has carried yet.
+    ticks_until_scan: u32,
     chains: HashMap<ChainId, ChainRecord>,
     destinations: HashMap<ValidatorPublicKey, DestState<P::Node>>,
     progress: SharedProgress,
+    /// The highest height each chain has announced, written by every `export` call — including
+    /// ones the full queue dropped — so a dropped block still moves the repair target.
+    tips: SharedTips,
+    /// True once every handle is dropped: completions may finish, nothing new starts.
+    draining: bool,
 }
+
+/// How many ticks apart the queue probes storage for committees no block has announced.
+const TICKS_PER_COMMITTEE_SCAN: u32 = 10;
 
 impl<S, P> BlockExportQueue<S, P>
 where
@@ -451,28 +502,44 @@ where
     P: ValidatorNodeProvider,
     P::Node: Clone + Send + 'static,
 {
-    /// Exports blocks until every handle is dropped, interleaving catch-up while idle.
+    /// Exports blocks until every handle is dropped, ticking every `idle_catch_up_interval`
+    /// whether or not sends are in flight — backoff expiry and gap repair must not wait for a
+    /// process-wide lull that a busy validator never has.
     #[instrument(level = "debug", skip_all)]
     async fn run(mut self, mut receiver: mpsc::Receiver<ExportedBlock>) {
+        /// What woke the loop, decided inside the select so its borrows end before handling.
+        enum Wake {
+            Done(JobDone),
+            Block(Option<ExportedBlock>),
+            Tick,
+        }
         let mut jobs = FuturesUnordered::new();
         loop {
-            if jobs.is_empty() {
+            let wake = if jobs.is_empty() {
                 match timeout(self.config.idle_catch_up_interval, receiver.recv()).await {
-                    Ok(Some(block)) => self.on_block(block, &mut jobs),
-                    Ok(None) => break,
-                    Err(_) => self.tick(&mut jobs).await,
+                    Ok(received) => Wake::Block(received),
+                    Err(_) => Wake::Tick,
                 }
             } else {
-                tokio::select! {
-                    Some(done) = jobs.next() => self.on_done(done, &mut jobs),
-                    received = receiver.recv() => match received {
-                        Some(block) => self.on_block(block, &mut jobs),
-                        None => break,
-                    },
+                // `futures::select_biased` rather than `tokio::select`, which does not compile
+                // for the web target. Completions first, then fresh blocks, then the tick.
+                futures::select_biased! {
+                    done = jobs.next() => Wake::Done(done.expect("jobs is not empty")),
+                    received = receiver.recv().fuse() => Wake::Block(received),
+                    _ = linera_base::time::timer::sleep(self.config.idle_catch_up_interval)
+                        .fuse() => Wake::Tick,
                 }
+            };
+            match wake {
+                Wake::Done(done) => self.on_done(done, &mut jobs),
+                Wake::Block(Some(block)) => self.on_block(block, &mut jobs),
+                Wake::Block(None) => break,
+                Wake::Tick => self.tick(&mut jobs).await,
             }
         }
-        // The workers are gone; let in-flight sends finish rather than cutting them off.
+        // The workers are gone. Let in-flight sends finish, without starting new ones — every
+        // completion would otherwise drain more catch-up work and hold shutdown open.
+        self.draining = true;
         while let Some(done) = jobs.next().await {
             self.on_done(done, &mut jobs);
         }
@@ -494,15 +561,34 @@ where
         if self.latest_epoch.is_none_or(|epoch| block.epoch > epoch) {
             self.latest_epoch = Some(block.epoch);
             self.committee = Some(block.committee.clone());
+            self.committee_dirty = true;
         }
-        self.sync_destinations();
+        // Per committee change, not per block: the rebuild walks every tracked chain.
+        if self.committee_dirty || self.destinations.is_empty() {
+            self.sync_destinations();
+        }
 
         let now = Instant::now();
         let tip = height.try_add_one().unwrap_or(BlockHeight::MAX);
         let record = self.chains.entry(chain_id).or_insert_with(|| ChainRecord {
             tip: BlockHeight::ZERO,
             last_activity: now,
-            dests: BTreeMap::new(),
+            // Seeded from what the chain last persisted: at worst one block per destination is
+            // re-offered and skipped, instead of one query per destination per restart.
+            dests: block
+                .exported_heights
+                .iter()
+                .filter_map(|(validator, height)| {
+                    let next = height.try_add_one().ok()?;
+                    Some((
+                        *validator,
+                        ChainDest {
+                            next_height: Some(next),
+                            ..ChainDest::default()
+                        },
+                    ))
+                })
+                .collect(),
         });
         record.tip = record.tip.max(tip);
         record.last_activity = now;
@@ -554,13 +640,25 @@ where
     /// Folds one finished send back into the destination's and the chain's state.
     fn on_done(
         &mut self,
-        (chain_id, validator, outcome): JobDone,
+        (chain_id, validator, generation, outcome): JobDone,
         jobs: &mut FuturesUnordered<JobFuture>,
     ) {
         let now = Instant::now();
         let Some(dest) = self.destinations.get_mut(&validator) else {
             return; // The validator left the committee while its send was in flight.
         };
+        if dest.generation != generation {
+            // The send ran against a previous incarnation of this destination; its slot was
+            // never counted here and its result must not touch the fresh state.
+            if let Some(chain_dest) = self
+                .chains
+                .get_mut(&chain_id)
+                .and_then(|record| record.dests.get_mut(&validator))
+            {
+                chain_dest.in_flight = false;
+            }
+            return;
+        }
         dest.in_flight = dest.in_flight.saturating_sub(1);
 
         if let Some(record) = self.chains.get_mut(&chain_id) {
@@ -570,7 +668,10 @@ where
                 match &outcome {
                     SendOutcome::Reached(next_height) => {
                         let advanced = chain_dest.next_height.is_none_or(|n| *next_height > n);
-                        chain_dest.next_height = Some(*next_height);
+                        // Only ever forward: a stale response must not drag the cursor back.
+                        if advanced {
+                            chain_dest.next_height = Some(*next_height);
+                        }
                         if advanced {
                             chain_dest.failures = 0;
                             chain_dest.retry_at = None;
@@ -584,13 +685,15 @@ where
                                 &self.config,
                             );
                         }
-                        if let Ok(acked) = next_height.try_sub_one() {
-                            self.progress
-                                .lock()
-                                .expect("progress mutex is never poisoned")
-                                .entry(chain_id)
-                                .or_default()
-                                .insert(validator, acked);
+                        if advanced {
+                            if let Ok(acked) = next_height.try_sub_one() {
+                                self.progress
+                                    .lock()
+                                    .expect("progress mutex is never poisoned")
+                                    .entry(chain_id)
+                                    .or_default()
+                                    .insert(validator, acked);
+                            }
                         }
                         dest.failures = 0;
                         dest.retry_at = None;
@@ -639,14 +742,29 @@ where
                 #[cfg(with_metrics)]
                 metrics::DESTINATION_WINDOW
                     .with_label_values(&[&dest.address])
-                    .observe(dest.window as f64);
+                    .set(dest.window as i64);
             }
         }
 
+        if self.draining {
+            return;
+        }
+        // A pair that advanced but is still behind continues on the next free slot rather than
+        // waiting for a tick — multi-round catch-up must not depend on a process-wide lull.
         let dest = self
             .destinations
             .get_mut(&validator)
             .expect("checked above");
+        if let Some(record) = self.chains.get_mut(&chain_id) {
+            let tip = record.tip;
+            if let Some(chain_dest) = record.dests.get_mut(&validator) {
+                let behind = chain_dest.next_height.is_none_or(|next| next < tip);
+                if behind && !chain_dest.queued && !chain_dest.in_flight {
+                    chain_dest.queued = true;
+                    dest.ready.push_back(chain_id);
+                }
+            }
+        }
         Self::drain_ready(
             &mut self.chains,
             &self.storage,
@@ -660,39 +778,77 @@ where
 
     /// An idle moment: pick up committee changes from storage and requeue expired backoffs.
     async fn tick(&mut self, jobs: &mut FuturesUnordered<JobFuture>) {
-        // Scan forward for committees this process has not seen via blocks — how a validator
-        // admitted while every chain is idle still becomes a destination.
-        let mut next = self
-            .latest_epoch
-            .map_or(0, |epoch| epoch.0.saturating_add(1));
-        while let Ok(Some(committee)) = self.storage.get_or_load_committee(Epoch(next)).await {
-            self.latest_epoch = Some(Epoch(next));
-            self.committee = Some(committee);
-            next = next.saturating_add(1);
+        let now = Instant::now();
+        // Occasionally scan storage for committees no block has carried — how a validator
+        // admitted while every chain is idle still becomes a destination. On its own cadence
+        // because the probe reads storage, and ticks now fire even under load.
+        if self.ticks_until_scan == 0 {
+            self.ticks_until_scan = TICKS_PER_COMMITTEE_SCAN;
+            self.scan_committees().await;
+        } else {
+            self.ticks_until_scan -= 1;
         }
-        self.sync_destinations();
+        if self.committee_dirty || (self.destinations.is_empty() && self.committee.is_some()) {
+            self.sync_destinations();
+        }
+
+        // Fold announced tips in: this is what repairs a block the full queue dropped, and what
+        // creates the record when even a chain's first block was dropped.
+        {
+            let tips = self
+                .tips
+                .lock()
+                .expect("tips mutex is never poisoned")
+                .clone();
+            for (chain_id, tip) in tips {
+                let record = self.chains.entry(chain_id).or_insert_with(|| ChainRecord {
+                    tip: BlockHeight::ZERO,
+                    last_activity: now,
+                    dests: BTreeMap::new(),
+                });
+                record.tip = record.tip.max(tip);
+            }
+        }
+        // Every current destination gets a cursor on every tracked chain, so a validator that
+        // joined after a chain's last block is still caught up on it.
+        for record in self.chains.values_mut() {
+            for validator in self.destinations.keys() {
+                record.dests.entry(*validator).or_default();
+            }
+        }
 
         // Forget chains that converged and stayed quiet past the retention window, so memory
         // tracks recent and lagging chains rather than every chain ever seen. The grace window
         // is what lets the chain's worker fold the final heights in before they vanish.
-        let now = Instant::now();
+        // Convergence is judged against the *current* destination set — an empty one (a
+        // single-validator committee) is trivially converged, not immortal.
         let retention = self.config.converged_chain_retention;
-        let progress = &self.progress;
+        let destinations = &self.destinations;
+        let mut forgotten = Vec::new();
         self.chains.retain(|chain_id, record| {
-            let converged = !record.dests.is_empty()
-                && record.dests.values().all(|chain_dest| {
+            let converged = destinations.keys().all(|validator| {
+                record.dests.get(validator).is_some_and(|chain_dest| {
                     !chain_dest.in_flight && chain_dest.next_height == Some(record.tip)
-                });
+                })
+            });
             if converged && now.duration_since(record.last_activity) > retention {
-                progress
-                    .lock()
-                    .expect("progress mutex is never poisoned")
-                    .remove(chain_id);
+                forgotten.push(*chain_id);
                 false
             } else {
                 true
             }
         });
+        if !forgotten.is_empty() {
+            let mut progress = self
+                .progress
+                .lock()
+                .expect("progress mutex is never poisoned");
+            let mut tips = self.tips.lock().expect("tips mutex is never poisoned");
+            for chain_id in &forgotten {
+                progress.remove(chain_id);
+                tips.remove(chain_id);
+            }
+        }
 
         // Requeue everything whose backoff expired and is still behind.
         for (chain_id, record) in &mut self.chains {
@@ -728,18 +884,90 @@ where
         }
     }
 
+    /// Scans storage forward for committees newer than any block has announced, probing the
+    /// epoch event directly so a missing next epoch — the steady state — stays silent.
+    async fn scan_committees(&mut self) {
+        if self.admin_chain_id.is_none() {
+            self.admin_chain_id = match self.storage.read_network_description().await {
+                Ok(Some(description)) => Some(description.admin_chain_id),
+                Ok(None) => return,
+                Err(error) => {
+                    debug!(%error, "Cannot read the network description to scan for committees");
+                    return;
+                }
+            };
+        }
+        let Some(admin_chain_id) = self.admin_chain_id else {
+            return;
+        };
+        loop {
+            let next = self
+                .latest_epoch
+                .map_or(0, |epoch| epoch.0.saturating_add(1));
+            let event_present = if next == 0 {
+                // Epoch 0 comes from the genesis blob, not an event; only `get_or_load` knows.
+                Ok(true)
+            } else {
+                self.storage
+                    .read_event(EventId {
+                        chain_id: admin_chain_id,
+                        stream_id: StreamId::system(EPOCH_STREAM_NAME),
+                        index: next,
+                    })
+                    .await
+                    .map(|found| found.is_some())
+            };
+            match event_present {
+                Ok(true) => match self.storage.get_or_load_committee(Epoch(next)).await {
+                    Ok(Some(committee)) => {
+                        self.latest_epoch = Some(Epoch(next));
+                        self.committee = Some(committee);
+                        self.committee_dirty = true;
+                    }
+                    Ok(None) | Err(_) => return,
+                },
+                Ok(false) => return,
+                Err(error) => {
+                    debug!(%error, "Cannot probe for a new committee");
+                    return;
+                }
+            }
+        }
+    }
+
     /// Brings the destination set in line with the latest committee: adds joiners, drops
     /// leavers, and re-resolves a changed address.
     fn sync_destinations(&mut self) {
         let Some(committee) = &self.committee else {
             return;
         };
+        self.committee_dirty = false;
+        let mut generation = self
+            .destinations
+            .values()
+            .map(|dest| dest.generation)
+            .max()
+            .unwrap_or(0);
+        let mut rebuilt = Vec::new();
         self.destinations.retain(|validator, dest| {
-            committee
+            let keep = committee
                 .validators()
                 .get(validator)
-                .is_some_and(|state| state.network_address == dest.address)
+                .is_some_and(|state| state.network_address == dest.address);
+            if !keep {
+                rebuilt.push(*validator);
+            }
+            keep
         });
+        // A dropped DestState takes its ready list with it, so clear the queued marks that
+        // pointed into it — a queued pair is invisible to every requeue path.
+        for record in self.chains.values_mut() {
+            for validator in &rebuilt {
+                if let Some(chain_dest) = record.dests.get_mut(validator) {
+                    chain_dest.queued = false;
+                }
+            }
+        }
         for (validator, address) in committee.validator_addresses() {
             if Some(validator) == self.own_public_key || self.destinations.contains_key(&validator)
             {
@@ -753,11 +981,13 @@ where
             {
                 Ok(mut nodes) => {
                     if let Some((_, node)) = nodes.next() {
+                        generation += 1;
                         self.destinations.insert(
                             validator,
                             DestState {
                                 node,
                                 address: address.to_owned(),
+                                generation,
                                 in_flight: 0,
                                 window: self.config.max_in_flight_per_destination,
                                 retry_at: None,
@@ -786,8 +1016,9 @@ where
     }
 }
 
-/// The result of one send job: which pair it was for, and how it went.
-type JobDone = (ChainId, ValidatorPublicKey, SendOutcome);
+/// The result of one send job: which pair it was for, under which destination generation, and
+/// how it went.
+type JobDone = (ChainId, ValidatorPublicKey, u64, SendOutcome);
 
 /// One send in flight, boxed so jobs from different call sites share a queue.
 #[cfg(not(web))]
@@ -818,6 +1049,7 @@ where
         chain_dest.in_flight = true;
         chain_dest.queued = false;
         dest.in_flight += 1;
+        let generation = dest.generation;
         let mut sender = BlockSender {
             remote_node: RemoteNode {
                 public_key: validator,
@@ -859,7 +1091,7 @@ where
                 Err(error) if is_chain_scoped(&error) => SendOutcome::ChainScoped(error),
                 Err(error) => SendOutcome::DestinationScoped(error),
             };
-            (chain_id, validator, outcome)
+            (chain_id, validator, generation, outcome)
         };
         #[cfg(not(web))]
         jobs.push(job.boxed());
@@ -913,6 +1145,9 @@ fn is_chain_scoped(error: &chain_client::Error) -> bool {
                 | NodeError::BlobsNotFound(_)
                 | NodeError::InactiveChain(_)
         ) | chain_client::Error::ReadCertificatesError(_)
+            // Our own storage failing to read is nobody's health signal; halving the
+            // destination's window for it would punish the wrong side.
+            | chain_client::Error::ViewError(_)
     )
 }
 

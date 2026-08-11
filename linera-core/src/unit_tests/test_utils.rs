@@ -1015,8 +1015,8 @@ where
             let storage = storage_builder.build().await?;
             let config = ChainWorkerConfig {
                 nickname: format!("Node {i}"),
-                // A chain worker owns its export task, so without a TTL it is dropped — with the
-                // task — as soon as the request that loaded it returns.
+                // Export folds progress into the chain state when the worker next saves, so
+                // give workers a lifetime instead of dropping them after every request.
                 ttl: chain_worker_ttl
                     .or_else(|| block_export.is_some().then(|| Duration::from_secs(60))),
                 ..ChainWorkerConfig::default()
