@@ -115,6 +115,10 @@ pub trait CurrentRoundMonotone: RoundFloor + ConsensusInstance {}
 /// [`RoundOrder`]: crate::manager::proof::model::RoundOrder
 /// [`ConfirmationOnlyInCurrentRound`]: crate::manager::proof::voting::ConfirmationOnlyInCurrentRound
 pub trait VoteRoundBelowCurrentRound:
-    VoteConstructionSites + ProposalGate + RoundFloor + CurrentRoundMonotone
+    VoteConstructionSites
+    + ProposalGate
+    + RoundFloor
+    + CurrentRoundMonotone
+    + crate::manager::proof::voting::ConfirmationOnlyInCurrentRound
 {
 }

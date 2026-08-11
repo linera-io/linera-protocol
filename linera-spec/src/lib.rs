@@ -74,6 +74,21 @@
 //! above — they are ordered, not numbered, so adding or splitting one renames nothing and
 //! invalidates no reference.
 //!
+//! Each statement opens with one of six labels, all of which mean something on their own:
+//!
+//! | label | carries a proof | meaning |
+//! |---|---|---|
+//! | **Definition** | no | fixes a term, and pins it to the Rust it denotes |
+//! | **Assumption** | no | something the implementation does not establish and a deployment must supply |
+//! | **Invariant** | yes | holds in every reachable state, proved by induction over transitions |
+//! | **Lemma** | yes | a proved statement |
+//! | **Theorem** | yes | one of the results the specification exists to establish |
+//! | **Remark** / **Caveat** | no | an observation or a limitation, asserting nothing new |
+//!
+//! None of them is *relational*: nothing is labelled by what it follows from. These pages are
+//! reached from anywhere by link, so there is no preceding result for a label to refer back to —
+//! and the supertrait list already names what a statement follows from, exactly and checkably.
+//!
 //! # The safety/liveness split
 //!
 //! The two arguments are deliberately disjoint in their assumptions, and the module layout

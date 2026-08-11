@@ -113,12 +113,14 @@ pub trait SignedProposal {}
 /// the [`JustificationChain`] its wrapper carries. The three instantiations are
 /// [`ValidatedBlockCertificate`], [`ConfirmedBlockCertificate`] and [`TimeoutCertificate`].
 ///
-/// A certificate is **valid for a committee** when [`LiteCertificate::check`] returns `Ok` for
-/// it. Both block certificate types delegate their `check` to that one function, so it is the
-/// single place where a certificate's signatures, its justification chain, and the binding
-/// between the two are verified. Unless said otherwise, "certificate" in this specification
+/// A certificate is **valid for a committee** when its `check` returns `Ok`. Both block
+/// certificate types delegate to [`LiteCertificate::check`], which verifies the signatures, the
+/// justification chain, and the binding between the two; [`TimeoutCertificate`], being a
+/// [`GenericCertificate`] alias, uses [`GenericCertificate::check`], which verifies the
+/// signatures and carries no chain. Unless said otherwise, "certificate" in this specification
 /// means one that is valid for the committee of its epoch; what that buys us is
-/// [`CertificateEmbedsQuorum`] and [`CertificateCarriesCorrectVote`].
+/// [`CertificateEmbedsQuorum`], [`CertificateSignaturesVerify`] and
+/// [`CertificateCarriesCorrectVote`].
 ///
 /// [`GenericCertificate<T>`]: crate::types::GenericCertificate
 /// [`JustificationChain`]: crate::justification::JustificationChain
@@ -126,6 +128,9 @@ pub trait SignedProposal {}
 /// [`ConfirmedBlockCertificate`]: crate::types::ConfirmedBlockCertificate
 /// [`TimeoutCertificate`]: crate::types::TimeoutCertificate
 /// [`LiteCertificate::check`]: crate::types::LiteCertificate::check
+/// [`GenericCertificate`]: crate::types::GenericCertificate
+/// [`GenericCertificate::check`]: crate::types::GenericCertificate::check
+/// [`CertificateSignaturesVerify`]: super::quorum::CertificateSignaturesVerify
 /// [`CertificateEmbedsQuorum`]: super::quorum::CertificateEmbedsQuorum
 /// [`CertificateCarriesCorrectVote`]: super::quorum::CertificateCarriesCorrectVote
 pub trait Certificate {}

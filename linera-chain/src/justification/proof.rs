@@ -30,7 +30,9 @@
 //! [`Committee::validity_threshold`]: linera_execution::committee::Committee::validity_threshold
 
 use crate::{
-    data_types::proof::quorum::{CertificateEmbedsQuorum, Intersection, ThresholdArithmetic},
+    data_types::proof::quorum::{
+        CertificateEmbedsQuorum, CertificateSignaturesVerify, Intersection, ThresholdArithmetic,
+    },
     manager::proof::{
         commit::{
             CertifiedBlockWasExecuted, CommitRestsOnValidation, IncomingBundlesAreSelfDerived,
@@ -55,17 +57,31 @@ use crate::{
 /// committee. There are four shapes, and each exhibits a pair of `v`'s own signatures — or, for
 /// [`InvalidJustification`], a single signature plus the opening it commits to.
 ///
-/// **The committee matters.** [`EquivocationProof::check`] judges the exhibited signatures against
-/// whatever [`Committee`] the auditor supplies, and [`InvalidJustification`] in particular asks
-/// whether an opening was a quorum *of that committee*. A vote is honest relative to the committee
-/// of the epoch it was cast in, so throughout this module a proof is understood to be adjudicated
-/// against that committee. Judging a vote against a different epoch's committee could convict a
-/// correct validator, and nothing in [`EquivocationProof::check`] prevents an auditor from doing
-/// so — the epoch is not carried in the proof.
+/// **What `check` establishes, and what it does not.** Signatures are verified against the
+/// [`ValidatorPublicKey`] carried *in the proof*, not against anything looked up in the committee.
+/// Of the four arms, only [`InvalidJustification`] consults the `committee` argument at all — to
+/// judge whether the opening was a quorum of it. So [`LockViolation`], [`DoubleVote`] and
+/// [`FirstRoundViolation`] are committee-independent: their verdicts hold whatever committee is
+/// supplied, and indeed whether or not the named validator belongs to one.
+///
+/// For [`InvalidJustification`] the committee does matter, and a vote is honest only relative to
+/// the committee of the epoch it was cast in; that epoch is not carried in the proof, so an
+/// auditor supplying a different epoch's committee could convict a correct validator. Throughout
+/// this module such a proof is understood to be adjudicated against the right one.
+///
+/// No arm checks committee membership or weight. An accepted proof therefore says "this key
+/// equivocated", not "this committee member equivocated": turning a set of proofs into a weight
+/// is the consumer's job, and [`ConflictCompleteness`] states its threshold about the set
+/// [`extract_equivocations`] returns, whose members are committee signers by construction.
 ///
 /// [`EquivocationProof`]: crate::justification::EquivocationProof
 /// [`EquivocationProof::check`]: crate::justification::EquivocationProof::check
 /// [`InvalidJustification`]: crate::justification::EquivocationProof::InvalidJustification
+/// [`LockViolation`]: crate::justification::EquivocationProof::LockViolation
+/// [`DoubleVote`]: crate::justification::EquivocationProof::DoubleVote
+/// [`FirstRoundViolation`]: crate::justification::EquivocationProof::FirstRoundViolation
+/// [`ValidatorPublicKey`]: linera_base::crypto::ValidatorPublicKey
+/// [`extract_equivocations`]: crate::justification::extract_equivocations
 /// [`Committee`]: linera_execution::committee::Committee
 pub trait MisbehaviourProof {}
 
@@ -257,7 +273,11 @@ pub trait InvalidJustificationSoundness:
 /// Note what this does *not* assume: no [`MaxByzantineWeight`], no synchrony, no bound on how many
 /// other validators misbehaved. Soundness is a statement about one validator's own signatures, so
 /// it survives arbitrary corruption of everyone else — which is what makes a conviction meaningful
-/// in the regime where accountability is invoked.
+/// in the regime where accountability is invoked. For three of the four variants it does not even
+/// depend on the committee ([`MisbehaviourProof`]); only the [`InvalidJustification`] case needs
+/// the right one.
+///
+/// [`InvalidJustification`]: crate::justification::EquivocationProof::InvalidJustification
 ///
 /// [`EquivocationProof::check`]: crate::justification::EquivocationProof::check
 /// [`CorrectValidator`]: crate::manager::proof::model::CorrectValidator
@@ -326,8 +346,9 @@ pub trait ChainTilesRounds {}
 ///
 /// * **`r = s`.** `double_confirm` walks the intersection of the two confirmation quorums, which
 ///   by [`Intersection`] has weight at least `f⁺`, emitting a [`DoubleVote`] for each member. Each
-///   is accepted: the blocks differ, the chain and height agree, and both signatures were taken
-///   from verified quorums.
+///   is accepted: the blocks differ, the chain and height agree, and by
+///   [`CertificateSignaturesVerify`] both extracted signatures verify individually — which is
+///   what [`EquivocationProof::check`] re-checks.
 /// * **`r < s` and the higher certificate carries a chain.** By [`ChainTilesRounds`] some link's
 ///   window contains `r`, i.e. `link.round > r` and its unlocking round is `≤ r` — precisely
 ///   `walk_chain`'s guard. That link is a quorum, so its intersection with the lower confirmation
@@ -339,7 +360,11 @@ pub trait ChainTilesRounds {}
 ///   the intersection of the two confirmation quorums — weight at least `f⁺` — emitting a
 ///   [`FirstRoundViolation`] for each, accepted since `earlier_round = r < s = attested_round`.
 ///
-/// In every case the blamed set is a full quorum intersection. ∎
+/// In every case the blamed set is a full quorum intersection — which is where the weight claim
+/// comes from: its members are signers of a verified certificate, hence committee members of
+/// nonzero weight by [`CertificateEmbedsQuorum`]. [`EquivocationProof::check`] itself establishes
+/// no membership or weight ([`MisbehaviourProof`]), so a consumer tallying the threshold must read
+/// the weights from the committee. ∎
 ///
 /// *Depends on the shared-committee hypothesis.* [`Intersection`] compares quorums of one
 /// committee; [`extract_equivocations`] checks only the chain and height, not the epoch, so two
@@ -356,8 +381,14 @@ pub trait ChainTilesRounds {}
 /// [`LockViolation`]: crate::justification::EquivocationProof::LockViolation
 /// [`FirstRoundViolation`]: crate::justification::EquivocationProof::FirstRoundViolation
 /// [`LiteCertificate::check`]: crate::types::LiteCertificate::check
+/// [`CertificateSignaturesVerify`]: crate::data_types::proof::quorum::CertificateSignaturesVerify
 pub trait ConflictCompleteness:
-    ChainTilesRounds + SoundChain + Intersection + CertificateEmbedsQuorum + ThresholdArithmetic
+    ChainTilesRounds
+    + SoundChain
+    + Intersection
+    + CertificateEmbedsQuorum
+    + CertificateSignaturesVerify
+    + ThresholdArithmetic
 {
 }
 
@@ -394,8 +425,9 @@ pub trait ChainAuditability: SoundChain + CertificateEmbedsQuorum {}
 ///
 /// *Proof.* By [`CertificateEmbedsQuorum`] both signature sets are quorums; by [`Intersection`]
 /// their intersection has weight at least `f⁺`; `double_vote` emits a proof for each member, with
-/// `kind = Validated` and the round both share. Each is accepted, the blocks differing and the
-/// chain and height agreeing. ∎
+/// `kind = Validated` and the round both share. Each is accepted: the blocks differ, the chain and
+/// height agree, and by [`CertificateSignaturesVerify`] the extracted signatures verify
+/// individually. ∎
 ///
 /// This is the accountability counterpart of
 /// [`UniqueValidatedBlockPerRound`](crate::manager::proof::locking::UniqueValidatedBlockPerRound):
@@ -407,8 +439,9 @@ pub trait ChainAuditability: SoundChain + CertificateEmbedsQuorum {}
 /// [`extract_double_validations`]: crate::justification::extract_double_validations
 /// [`DoubleVote`]: crate::justification::EquivocationProof::DoubleVote
 /// [`Committee::validity_threshold`]: linera_execution::committee::Committee::validity_threshold
+/// [`CertificateSignaturesVerify`]: crate::data_types::proof::quorum::CertificateSignaturesVerify
 pub trait DoubleValidationCompleteness:
-    Intersection + CertificateEmbedsQuorum + ThresholdArithmetic
+    Intersection + CertificateEmbedsQuorum + CertificateSignaturesVerify + ThresholdArithmetic
 {
 }
 

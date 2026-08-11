@@ -12,7 +12,8 @@
 //!
 //! These are the only results in the specification that reason about weights arithmetically.
 //! Everything above this module consumes them through [`CorrectValidatorInIntersection`],
-//! [`CertificateCarriesCorrectVote`] and [`CorrectValidatorsFormQuorum`].
+//! [`CorrectSignerCastItsVote`], [`CertificateCarriesCorrectVote`] and
+//! [`CorrectValidatorsFormQuorum`].
 //!
 //! [`Committee`]: linera_execution::committee::Committee
 //! [`Committee::total_votes`]: linera_execution::committee::Committee::total_votes
@@ -20,7 +21,7 @@
 //! [`Committee::validity_threshold`]: linera_execution::committee::Committee::validity_threshold
 //! [`Committee::weight`]: linera_execution::committee::Committee::weight
 
-use crate::manager::proof::model::{MaxByzantineWeight, UnforgeableSignatures};
+use crate::manager::proof::model::{CorrectValidator, MaxByzantineWeight, UnforgeableSignatures};
 
 /// **Definition (Quorum).** A *quorum* of a committee is a set `S` of pairwise distinct
 /// committee members with `w(S) ≥ q`.
@@ -63,7 +64,7 @@ pub trait ThresholdArithmetic {}
 /// [`ThresholdArithmetic`]. ∎
 pub trait Intersection: ThresholdArithmetic {}
 
-/// **Corollary (A correct validator lies in every quorum intersection).** Any two quorums of the
+/// **Lemma (A correct validator lies in every quorum intersection).** Any two quorums of the
 /// same committee share at least one correct validator.
 ///
 /// *Proof.* By [`Intersection`] the intersection has weight at least `f⁺`. By
@@ -71,34 +72,30 @@ pub trait Intersection: ThresholdArithmetic {}
 /// intersection cannot consist of faulty validators alone. ∎
 pub trait CorrectValidatorInIntersection: Intersection + MaxByzantineWeight {}
 
-/// **Lemma (A valid certificate embeds a quorum of votes).** If [`LiteCertificate::check`]
-/// returns `Ok` for a certificate `c` against a committee, then the signers of `c.signatures`
-/// form a [`Quorum`] of that committee, and each of them holds a valid signature over the single
-/// [`SignedVotePayload`]
+/// **Lemma (A valid certificate embeds a quorum).** If a certificate `c` verifies against a
+/// committee, then the signers of `c.signatures` form a [`Quorum`] of that committee.
 ///
-/// ```text
-/// (c.value.value_hash, c.round, c.value.kind, c.unlocking_round, c.first_round,
-///  c.justification_commitment)
-/// ```
+/// *Proof.* There are two verification entry points, and both funnel into the crate-private
+/// helper `check_signatures`: [`LiteCertificate::check`], which the two block certificate types
+/// delegate to, and [`GenericCertificate::check`], which is what a
+/// [`TimeoutCertificate`] — a type alias for `GenericCertificate<Timeout>` — resolves to. Each
+/// builds the same [`SignedVotePayload`] and passes it with `c.signatures` to that helper, which
+/// (1) rejects a repeated signer with
+/// [`ChainError::CertificateValidatorReuse`], establishing pairwise distinctness; (2) rejects any
+/// signer whose [`Committee::weight`] is `0` with [`ChainError::InvalidSigner`], establishing
+/// committee membership; and (3) accumulates the signers' weights and rejects a total below
+/// [`Committee::quorum_threshold`] with [`ChainError::CertificateRequiresQuorum`], establishing
+/// `w(S) ≥ q`. Those three are precisely [`Quorum`]. The accumulation cannot overflow: step (1)
+/// establishes distinctness before step (3) adds, so the total is bounded by the committee's own
+/// `total_votes`, which [`Committee::new`] rejects on overflow. ∎
 ///
-/// *Proof.* [`LiteCertificate::check`] constructs exactly that
-/// [`VoteValue`](crate::data_types::VoteValue) and passes it, with `c.signatures`, to the
-/// crate-private helper `check_signatures`. That function, in order:
-///
-/// 1. rejects a repeated signer with [`ChainError::CertificateValidatorReuse`], establishing
-///    pairwise distinctness;
-/// 2. rejects any signer whose [`Committee::weight`] is `0` with
-///    [`ChainError::InvalidSigner`], establishing committee membership;
-/// 3. accumulates the signers' weights and rejects a total below
-///    [`Committee::quorum_threshold`] with [`ChainError::CertificateRequiresQuorum`],
-///    establishing `w(S) ≥ q`;
-/// 4. verifies every signature against the payload with `ValidatorSignature::verify_batch`,
-///    propagating any failure.
-///
-/// Steps 1–3 are precisely [`Quorum`]; step 4 is the signature claim. ∎
+/// The signatures themselves are [`CertificateSignaturesVerify`].
 ///
 /// [`LiteCertificate::check`]: crate::types::LiteCertificate::check
+/// [`GenericCertificate::check`]: crate::types::GenericCertificate::check
+/// [`TimeoutCertificate`]: crate::types::TimeoutCertificate
 /// [`SignedVotePayload`]: super::objects::SignedVotePayload
+/// [`Committee::new`]: linera_execution::committee::Committee::new
 /// [`ChainError::CertificateValidatorReuse`]: crate::ChainError::CertificateValidatorReuse
 /// [`ChainError::InvalidSigner`]: crate::ChainError::InvalidSigner
 /// [`ChainError::CertificateRequiresQuorum`]: crate::ChainError::CertificateRequiresQuorum
@@ -106,21 +103,96 @@ pub trait CorrectValidatorInIntersection: Intersection + MaxByzantineWeight {}
 /// [`Committee::quorum_threshold`]: linera_execution::committee::Committee::quorum_threshold
 pub trait CertificateEmbedsQuorum {}
 
-/// **Corollary (Every valid certificate carries a correct validator's vote).** For every
-/// certificate valid for its committee there is at least one *correct* validator that itself
-/// cast a vote with that certificate's exact signed payload.
+/// **Lemma (Every signature on a valid certificate verifies).** If a certificate `c` verifies
+/// against a committee — through either entry point named in [`CertificateEmbedsQuorum`] — then
+/// *each individual* signer of `c.signatures` holds a signature that verifies over the single
+/// [`SignedVotePayload`]
 ///
-/// This is the workhorse that turns "a certificate exists" into "a correct validator executed
-/// the code path that produces this vote", and thereby lets the local implementation properties
-/// of [`crate::manager::proof::voting`] constrain what certificates can exist at all.
+/// ```text
+/// (c.value.value_hash, c.round, c.value.kind, c.unlocking_round, c.first_round,
+///  c.justification_commitment)
+/// ```
+///
+/// *Proof.* Both entry points construct exactly that
+/// [`VoteValue`](crate::data_types::VoteValue) and pass it, with `c.signatures`, to
+/// `check_signatures`, whose final step calls `ValidatorSignature::verify_batch` and propagates
+/// any failure. For [`ValidatorSignature`] — an alias of `Secp256k1Signature` — that function is
+/// a loop of individual verifications returning on the first failure:
+///
+/// ```text
+/// for (author, signature) in votes {
+///     signature.verify_inner::<T>(prehash, *author)?;
+/// }
+/// ```
+///
+/// so acceptance of the whole is acceptance of each. ∎
+///
+/// **This is a property of the signature scheme, not of `check_signatures`.** The inference "the
+/// batch verified, therefore this particular signature verified" is a tautology only for a loop.
+/// `Ed25519Signature::verify_batch` — present in the crate, and marked unused in consensus — is a
+/// genuine batch scheme that differs in two ways:
+///
+/// * its soundness is *probabilistic*: it draws a random 128-bit scalar per signature and checks
+///   one aggregate equation, so an invalid signature survives with negligible but nonzero
+///   probability;
+/// * it does not accept the same set as single verification. `VerifyingKey::verify_strict`
+///   rejects small-order components explicitly and the batch path does not, and `ed25519-dalek`'s
+///   own documentation describes a malleability under which a mutated signature passes the batch
+///   though it "will not pass single signature verification".
+///
+/// Switching [`ValidatorSignature`] to such a scheme would leave
+/// [`CertificateCarriesCorrectVote`] standing — it needs only that *some* signature was produced
+/// by a correct validator — while silently invalidating this lemma and everything pointwise built
+/// on it. [`ConflictCompleteness`] is the sharp end: it extracts signatures out of certificates
+/// and re-verifies them *individually* through [`EquivocationProof::check`], so a batch/single
+/// divergence would make [`extract_equivocations`] emit proofs that verification rejects,
+/// breaking accountability completeness exactly where it is needed.
+///
+/// [`LiteCertificate::check`]: crate::types::LiteCertificate::check
+/// [`SignedVotePayload`]: super::objects::SignedVotePayload
+/// [`ValidatorSignature`]: linera_base::crypto::ValidatorSignature
+/// [`ConflictCompleteness`]: crate::justification::proof::ConflictCompleteness
+/// [`EquivocationProof::check`]: crate::justification::EquivocationProof::check
+/// [`extract_equivocations`]: crate::justification::extract_equivocations
+pub trait CertificateSignaturesVerify {}
+
+/// **Lemma (A correct signer of a valid certificate cast its vote).** If a certificate `c` is
+/// valid for a committee and a *correct* validator `v` is among its signers, then `v` itself cast
+/// a vote with `c`'s exact signed payload.
+///
+/// The validator is identified by other means — in practice by
+/// [`CorrectValidatorInIntersection`]. [`CertificateCarriesCorrectVote`] is the existential form.
+///
+/// *Proof.* By [`CertificateSignaturesVerify`], `v`'s signature verifies over `c`'s payload. By
+/// [`UnforgeableSignatures`] no party without `v`'s secret key produces a signature that verifies
+/// for `v`, so `v` produced it. By [`CorrectValidator`], a correct validator's signatures are
+/// produced only by this code driven through its public entry points, so producing that signature
+/// means casting that vote. ∎
+///
+/// Note what this does *not* need: no [`MaxByzantineWeight`], no [`ThresholdArithmetic`], no
+/// [`Quorum`]. The hypothesis already hands us the validator, so none of the weight machinery is
+/// involved — which is why this form, unlike the existential one, is available to
+/// [`crate::justification::proof`], where the fault bound is assumed *not* to hold.
+pub trait CorrectSignerCastItsVote:
+    CertificateSignaturesVerify + UnforgeableSignatures + CorrectValidator
+{
+}
+
+/// **Lemma (Every valid certificate carries a correct validator's vote).** For every
+/// certificate valid for its committee there is at least one *correct* validator that itself cast
+/// a vote with that certificate's exact signed payload.
+///
+/// This turns "a certificate exists" into "a correct validator executed the code path that
+/// produces this vote", and thereby lets the local implementation properties of
+/// [`crate::manager::proof::voting`] constrain what certificates can exist at all. An argument
+/// about a *particular* validator needs [`CorrectSignerCastItsVote`].
 ///
 /// *Proof.* By [`CertificateEmbedsQuorum`] the signers form a quorum, of weight at least `q`. By
 /// [`ThresholdArithmetic`], `q ≥ (N + f⁺)/2 ≥ f⁺`, using `N ≥ f⁺ = ⌈N/3⌉`. By
-/// [`MaxByzantineWeight`] faulty validators hold at most `f⁺ − 1`, so some signer is correct. By
-/// [`UnforgeableSignatures`] its signature cannot have been produced by anyone else, so that
-/// correct validator signed the payload itself. ∎
+/// [`MaxByzantineWeight`] faulty validators hold at most `f⁺ − 1`, so some signer is correct.
+/// Apply [`CorrectSignerCastItsVote`] to it. ∎
 pub trait CertificateCarriesCorrectVote:
-    CertificateEmbedsQuorum + ThresholdArithmetic + MaxByzantineWeight + UnforgeableSignatures
+    CorrectSignerCastItsVote + CertificateEmbedsQuorum + ThresholdArithmetic + MaxByzantineWeight
 {
 }
 
