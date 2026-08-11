@@ -69,7 +69,6 @@ use crate::{
     },
     client::{ChainModes, ListeningMode},
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
-    local_node::LocalNodeClient,
     notifier::Notifier,
 };
 
@@ -1112,6 +1111,19 @@ where
         .forget();
     }
 
+    /// Returns how many chain workers are currently resident in memory. Used to assert that
+    /// workers expire at their TTL — a task that keeps touching one holds it forever.
+    #[cfg(with_testing)]
+    pub fn resident_chain_worker_count(&self) -> usize {
+        self.chain_workers
+            .pin()
+            .iter()
+            .filter(
+                |(_, future)| matches!(future.peek(), Some(Ok(weak)) if weak.strong_count() > 0),
+            )
+            .count()
+    }
+
     /// Evicts a poisoned chain worker from the cache, but only if the entry still
     /// points to the same instance. This avoids removing a fresh replacement that
     /// another task may have already loaded.
@@ -1289,7 +1301,6 @@ where
             service_runtime_endpoint,
             service_runtime_task,
             self.chain_exporter_factory.clone(),
-            LocalNodeClient::new(self.clone()),
         )
         .await?;
 

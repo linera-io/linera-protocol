@@ -12,7 +12,7 @@ use std::{
 use futures::{future, Future, StreamExt};
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{Blob, BlockHeight, Round, TimeDelta},
+    data_types::{BlockHeight, Round, TimeDelta},
     ensure,
     identifiers::{BlobId, BlobType, ChainId, StreamId},
     time::{timer::timeout, Duration, Instant},
@@ -144,14 +144,6 @@ where
     pub local_node: LocalNodeClient<S>,
     pub admin_chain_id: ChainId,
     pub certificate_upload_batch_size: u64,
-    /// Whether to also bring the remote node's *consensus round* up to ours once its height
-    /// matches. The client wants this; export does not — pushing consensus evidence is taking
-    /// part in consensus rather than replicating it, so export only ever moves heights.
-    pub sync_consensus_rounds: bool,
-    /// Caps the admin-chain blocks replayed when a destination does not know the committee that
-    /// signed a certificate. `None` replays as far as needed, which is what the client wants;
-    /// export bounds it because the replay happens inside one export round.
-    pub max_admin_catch_up_blocks: Option<u64>,
 }
 
 impl<S: Storage + Clone, N: Clone> Clone for RemoteNodeUpdater<S, N> {
@@ -161,8 +153,6 @@ impl<S: Storage + Clone, N: Clone> Clone for RemoteNodeUpdater<S, N> {
             local_node: self.local_node.clone(),
             admin_chain_id: self.admin_chain_id,
             certificate_upload_batch_size: self.certificate_upload_batch_size,
-            sync_consensus_rounds: self.sync_consensus_rounds,
-            max_admin_catch_up_blocks: self.max_admin_catch_up_blocks,
         }
     }
 }
@@ -365,12 +355,9 @@ where
         fields(chain_id = %certificate.block().header.chain_id)
     )]
     /// Sends a single confirmed certificate, uploading its missing dependencies and retrying.
-    /// Missing blobs come from `held` when present and from storage otherwise, so a caller that
-    /// already holds them — publishing a blob, say — costs no read.
     async fn send_confirmed_certificate(
         &mut self,
         certificate: &CacheArc<GenericCertificate<ConfirmedBlock>>,
-        held: &[CacheArc<Blob>],
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let mut result = self
@@ -398,7 +385,11 @@ where
                     // The validator is missing the blobs required by the certificate.
                     self.remote_node
                         .check_blobs_not_found(certificate, &blob_ids)?;
-                    let blobs = self.resolve_blobs(&blob_ids, held).await?;
+                    let blobs = self
+                        .local_node
+                        .read_blobs_from_storage(&blob_ids)
+                        .await?
+                        .ok_or(NodeError::BlobsNotFound(blob_ids))?;
                     self.remote_node
                         .node
                         .upload_blobs(blobs.into_iter().map(CacheArc::into_std).collect())
@@ -804,125 +795,10 @@ where
         }
     }
 
-    /// Sends up to `max_blocks` of the blocks of `chain_id` the validator is missing below
-    /// `target_next_height`, returning the height it reports afterwards. Bounded so a validator
-    /// that just joined converges over rounds instead of blocking every other destination once.
-    /// `destination_next_height` is what we believe it holds; `None` or a stale value costs one
-    /// [`ChainInfoQuery`] to establish the truth.
-    pub async fn send_missing_blocks(
-        &mut self,
-        chain_id: ChainId,
-        target_next_height: BlockHeight,
-        destination_next_height: Option<BlockHeight>,
-        max_blocks: u64,
-    ) -> Result<BlockHeight, chain_client::Error> {
-        let delivery = CrossChainMessageDelivery::NonBlocking;
-        let mut next_height = match destination_next_height {
-            Some(height) => height,
-            None => {
-                let query = ChainInfoQuery::new(chain_id);
-                self.remote_node
-                    .handle_chain_info_query(query)
-                    .await?
-                    .next_block_height
-            }
-        };
-
-        let last = target_next_height
-            .0
-            .min(next_height.0.saturating_add(max_blocks));
-        let heights = (next_height.0..last).map(BlockHeight).collect::<Vec<_>>();
-        let batch_size = self.certificate_upload_batch_size as usize;
-        for chunk in heights.chunks(batch_size) {
-            let certificates = self
-                .read_certificates_for_heights(chain_id, chunk.to_vec())
-                .await?;
-            for certificate in certificates {
-                let info = self
-                    .send_confirmed_certificate(&certificate, &[], delivery)
-                    .await?;
-                next_height = info.next_block_height;
-            }
-        }
-        Ok(next_height)
-    }
-
-    /// Pushes a block the caller already holds, first closing up to `max_catch_up` of any gap
-    /// below it, and returns the height the validator reports afterwards.
-    ///
-    /// The held block is sent only once the gap is gone: one landing above a gap is silently
-    /// preprocessed and never advances the tip. The returned height is the validator's own rather
-    /// than an assumed `height + 1`, so one that could not close its gap reports the truth.
-    pub async fn send_block(
-        &mut self,
-        certificate: &CacheArc<GenericCertificate<ConfirmedBlock>>,
-        blobs: &[CacheArc<Blob>],
-        destination_next_height: Option<BlockHeight>,
-        max_catch_up: u64,
-    ) -> Result<BlockHeight, chain_client::Error> {
-        let block = certificate.block();
-        let (chain_id, height) = (block.header.chain_id, block.header.height);
-
-        // Already past this block. Without the check it is sent anyway: the catch-up below finds
-        // an empty range and returns the destination's own height, which is not *below* the
-        // block. `reset_and_reexecute_chain` re-queues a whole chain, so this is not marginal.
-        if destination_next_height.is_some_and(|next| next > height) {
-            return Ok(destination_next_height.expect("just checked that it is set"));
-        }
-
-        let next_height = if destination_next_height == Some(height) {
-            height
-        } else {
-            self.send_missing_blocks(chain_id, height, destination_next_height, max_catch_up)
-                .await?
-        };
-
-        // Still below this block: the gap was larger than one chunk, so leave the rest for the
-        // next round rather than sending a block that would only be preprocessed.
-        if next_height < height {
-            return Ok(next_height);
-        }
-
-        let info = self
-            .send_confirmed_certificate(certificate, blobs, CrossChainMessageDelivery::NonBlocking)
-            .await?;
-        Ok(info.next_block_height)
-    }
-
-    /// Collects the given blobs, taking each from `held` if present and the rest from storage.
-    /// The certificate is confirmed, so one found in neither place is reported still missing.
-    async fn resolve_blobs(
-        &self,
-        blob_ids: &[BlobId],
-        held: &[CacheArc<Blob>],
-    ) -> Result<Vec<CacheArc<Blob>>, chain_client::Error> {
-        let mut blobs = Vec::with_capacity(blob_ids.len());
-        let mut to_read = Vec::new();
-        for blob_id in blob_ids {
-            match held.iter().find(|blob| blob.id() == *blob_id) {
-                Some(blob) => blobs.push(blob.clone()),
-                None => to_read.push(*blob_id),
-            }
-        }
-        if to_read.is_empty() {
-            return Ok(blobs);
-        }
-        let read = self.local_node.read_blobs_from_storage(&to_read).await?;
-        blobs.extend(read.ok_or(NodeError::BlobsNotFound(to_read))?);
-        Ok(blobs)
-    }
-
     pub(crate) async fn update_admin_chain(&mut self) -> Result<(), chain_client::Error> {
         let local_admin_info = self.local_node.chain_info(self.admin_chain_id).await?;
         let admin_chain_id = self.admin_chain_id;
         let target = local_admin_info.next_block_height;
-        // Bounded for block export: this runs inside one export round, so replaying an entire
-        // admin chain here would stall that chain's whole export. Unbounded for the client, which
-        // is waiting on this one certificate being accepted.
-        if let Some(max_blocks) = self.max_admin_catch_up_blocks {
-            Box::pin(self.send_missing_blocks(admin_chain_id, target, None, max_blocks)).await?;
-            return Ok(());
-        }
         Box::pin(self.send_chain_information(
             admin_chain_id,
             target,
@@ -995,12 +871,7 @@ where
 
         // Phase 2: Round synchronization (if needed)
         // Height synchronization is complete. Now check if we need to synchronize
-        // the consensus round at this height. Consumers that only replicate blocks — block
-        // export — stop here: everything above this point moves heights, everything below it
-        // takes part in consensus.
-        if !self.sync_consensus_rounds {
-            return Ok(());
-        }
+        // the consensus round at this height.
         let (remote_height, remote_round) = (info.next_block_height, info.manager.current_round);
         let query = ChainInfoQuery::new(chain_id).with_manager_values();
         let local_info = match self.local_node.handle_chain_info_query(query).await {
@@ -1059,7 +930,7 @@ where
 
         // Optimistically try sending just the last certificate
         let info = match self
-            .send_confirmed_certificate(&certificate, &[], delivery)
+            .send_confirmed_certificate(&certificate, delivery)
             .await
         {
             Ok(info) => info,
@@ -1089,7 +960,7 @@ where
                 .await?;
 
             for certificate in certificates {
-                self.send_confirmed_certificate(&certificate, &[], delivery)
+                self.send_confirmed_certificate(&certificate, delivery)
                     .await?;
             }
         }
@@ -1328,7 +1199,7 @@ where
                 // Send each certificate
                 for certificate in certificates {
                     updater
-                        .send_confirmed_certificate(&certificate, &[], delivery)
+                        .send_confirmed_certificate(&certificate, delivery)
                         .await?;
                 }
 

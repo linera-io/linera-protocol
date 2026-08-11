@@ -55,7 +55,6 @@ use crate::{
     },
     client::{ChainModes, ListeningMode},
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
-    local_node::LocalNodeClient,
     worker::{BatchRequest, NetworkActions, Notification, Reason, WorkerError},
 };
 
@@ -135,9 +134,6 @@ where
     poisoned: bool,
     /// Creates this chain's export task, if the server enabled block export.
     export_factory: Option<ChainExporterFactory<StorageClient>>,
-    /// Read access to this process's chains, which the export task needs for the few chain-level
-    /// queries it cannot answer from the certificate partitions.
-    local_node: LocalNodeClient<StorageClient>,
     /// This chain's export task, spawned the first time the chain executes a block so that
     /// chains we only ever receive from cost nothing.
     exporter: Option<ChainExporter>,
@@ -204,7 +200,6 @@ where
         service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
         service_runtime_task: Option<web_thread_pool::Task<()>>,
         export_factory: Option<ChainExporterFactory<StorageClient>>,
-        local_node: LocalNodeClient<StorageClient>,
     ) -> Result<Self, WorkerError> {
         let chain = storage.load_chain(chain_id).await?;
 
@@ -222,7 +217,6 @@ where
             knows_chain_is_active: false,
             poisoned: false,
             export_factory,
-            local_node,
             exporter: None,
         })
     }
@@ -1182,7 +1176,7 @@ where
             return;
         };
         // The committee *after* applying the block: a validator that this very block admits has to
-        // be exported to from now on, starting with the admin-chain block that admitted it.
+        // be exported to from now on.
         let committee = match self.chain.current_committee().await {
             Ok((_, committee)) => committee,
             Err(error) => {
@@ -1190,18 +1184,12 @@ where
                 return;
             }
         };
-        let Some(admin_chain_id) = *self.chain.execution_state.system.admin_chain_id.get() else {
-            // An active chain always knows its admin chain, and `current_committee` above has
-            // already established that this one is active.
-            warn!("Not exporting a block of a chain that has no admin chain");
-            return;
-        };
 
         let exporter = match &self.exporter {
             Some(exporter) => exporter,
             None => self.exporter.insert(export_factory(ChainExportSetup {
                 chain_id: self.chain.chain_id(),
-                local_node: self.local_node.clone(),
+                storage: self.storage.clone(),
                 exported_heights: self.chain.exported_heights.get().clone().into(),
             })),
         };
@@ -1213,12 +1201,7 @@ where
             .chain(read_blobs.into_values())
             .map(|blob| self.storage.cache_blob(blob))
             .collect();
-        exporter.export(
-            certificate.clone(),
-            blobs,
-            committee.clone(),
-            admin_chain_id,
-        );
+        exporter.export(certificate.clone(), blobs, committee.clone());
 
         // Record what the task has acknowledged so far — which never includes the block we just
         // queued, and after a stall may not have moved at all. Only mark the register dirty when

@@ -905,7 +905,15 @@ where
         with_faulty_validators: usize,
         signer: TestSigner,
     ) -> Result<Self, anyhow::Error> {
-        Self::build(storage_builder, count, with_faulty_validators, signer, None).await
+        Self::build(
+            storage_builder,
+            count,
+            with_faulty_validators,
+            signer,
+            None,
+            None,
+        )
+        .await
     }
 
     /// Creates a test setup like [`TestBuilder::new`], in which every validator also pushes the
@@ -922,6 +930,27 @@ where
             with_faulty_validators,
             signer,
             Some(Self::test_block_export_config()),
+            None,
+        )
+        .await
+    }
+
+    /// Creates a test setup like [`TestBuilder::new_with_block_export`] with an explicit chain
+    /// worker TTL, for asserting that workers expire even while export is enabled.
+    pub async fn new_with_block_export_and_ttl(
+        storage_builder: B,
+        count: usize,
+        with_faulty_validators: usize,
+        signer: TestSigner,
+        chain_worker_ttl: Duration,
+    ) -> Result<Self, anyhow::Error> {
+        Self::build(
+            storage_builder,
+            count,
+            with_faulty_validators,
+            signer,
+            Some(Self::test_block_export_config()),
+            Some(chain_worker_ttl),
         )
         .await
     }
@@ -942,6 +971,7 @@ where
             with_faulty_validators,
             signer,
             Some(config),
+            None,
         )
         .await
     }
@@ -962,6 +992,7 @@ where
         with_faulty_validators: usize,
         mut signer: TestSigner,
         block_export: Option<crate::BlockExportConfig>,
+        chain_worker_ttl: Option<Duration>,
     ) -> Result<Self, anyhow::Error> {
         let mut validators = Vec::new();
         for _ in 0..count {
@@ -986,7 +1017,8 @@ where
                 nickname: format!("Node {i}"),
                 // A chain worker owns its export task, so without a TTL it is dropped — with the
                 // task — as soon as the request that loaded it returns.
-                ttl: block_export.is_some().then(|| Duration::from_secs(60)),
+                ttl: chain_worker_ttl
+                    .or_else(|| block_export.is_some().then(|| Duration::from_secs(60))),
                 ..ChainWorkerConfig::default()
             }
             .with_key_pair(Some(validator_keypair.secret_key));
@@ -1334,6 +1366,13 @@ where
         let guard = validator.client.lock().await;
         let chain = guard.state.chain_state_view(chain_id).await.unwrap();
         chain.exported_heights.get().clone().into()
+    }
+
+    /// Returns how many chain workers the validator at `index` currently has resident.
+    pub async fn resident_chain_workers(&self, index: usize) -> usize {
+        let validator = self.node_provider.all_nodes()[index].clone();
+        let guard = validator.client.lock().await;
+        guard.state.resident_chain_worker_count()
     }
 
     /// Returns the next block height the validator at `index` has for the given chain.

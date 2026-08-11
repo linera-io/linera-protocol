@@ -26,7 +26,7 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{Blob, BlockHeight},
-    identifiers::ChainId,
+    identifiers::{BlobId, ChainId},
     time::{timer::timeout, Duration, Instant},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
@@ -36,11 +36,10 @@ use tokio::sync::mpsc;
 use tracing::{debug, instrument, warn};
 
 use crate::{
+    client::chain_client,
     data_types::ChainInfoQuery,
-    local_node::LocalNodeClient,
-    node::{ValidatorNode, ValidatorNodeProvider},
+    node::{CrossChainMessageDelivery, NodeError, ValidatorNode, ValidatorNodeProvider},
     remote_node::RemoteNode,
-    updater::RemoteNodeUpdater,
 };
 
 #[cfg(with_metrics)]
@@ -156,10 +155,10 @@ impl Default for BlockExportConfig {
 pub struct ChainExportSetup<S: Storage> {
     /// The chain whose blocks this task exports.
     pub chain_id: ChainId,
-    /// Read access to the chains this process serves, used for the few chain-level queries that
-    /// the certificate partitions cannot answer — the admin chain's height, and block hashes for
-    /// certificates that predate the height index.
-    pub local_node: LocalNodeClient<S>,
+    /// Read access to this validator's storage, for certificates and blobs during catch-up.
+    /// Deliberately not a local node: going through one loads chain workers, and an export task
+    /// that touches a chain worker resets its TTL and keeps it resident forever.
+    pub storage: S,
     /// The heights already exported to each validator, as last persisted by the worker.
     pub exported_heights: BTreeMap<ValidatorPublicKey, BlockHeight>,
 }
@@ -176,11 +175,8 @@ struct ExportedBlock {
     /// storage cache's pointers, so queued blocks share the allocations rather than copying them.
     blobs: Vec<CacheArc<Blob>>,
     /// The chain's committee *after* the block was applied, so that a validator joining in this
-    /// block is exported to immediately, including the admin-chain block that admitted it.
+    /// block is exported to immediately.
     committee: Arc<Committee>,
-    /// The chain carrying the epoch events, needed when a destination does not yet know the
-    /// committee that signed the certificate.
-    admin_chain_id: ChainId,
     /// When the worker queued this block, so that `EXPORT_LATENCY` covers the wait as well as
     /// the sending. The queue is where the delay shows up once export falls behind, which is
     /// exactly when the metric is worth reading.
@@ -206,13 +202,11 @@ impl ChainExporter {
         certificate: CacheArc<ConfirmedBlockCertificate>,
         blobs: Vec<CacheArc<Blob>>,
         committee: Arc<Committee>,
-        admin_chain_id: ChainId,
     ) {
         let block = ExportedBlock {
             certificate,
             blobs,
             committee,
-            admin_chain_id,
             #[cfg(with_metrics)]
             queued_at: Instant::now(),
         };
@@ -269,12 +263,11 @@ where
     let task = ChainExportTask {
         chain_id: setup.chain_id,
         node_provider,
-        local_node: setup.local_node,
+        storage: setup.storage,
         config,
         own_public_key,
         destinations: HashMap::new(),
         chain_next_height: BlockHeight::ZERO,
-        admin_chain_id: None,
         progress: progress.clone(),
     };
     linera_base::Task::spawn(task.run(receiver)).forget();
@@ -284,7 +277,7 @@ where
 
 /// One destination validator, and what we believe it holds of this chain.
 struct Destination<S: Storage, N> {
-    updater: RemoteNodeUpdater<S, N>,
+    sender: BlockSender<S, N>,
     address: String,
     /// The next height the validator needs, or `None` when we have to ask it — before the first
     /// push, and after any failed one.
@@ -304,9 +297,7 @@ where
 {
     chain_id: ChainId,
     node_provider: Arc<P>,
-    /// Answers the chain-level queries the certificate partitions cannot, through the local
-    /// worker that owns the chain state views.
-    local_node: LocalNodeClient<S>,
+    storage: S,
     config: BlockExportConfig,
     own_public_key: Option<ValidatorPublicKey>,
     destinations: HashMap<ValidatorPublicKey, Destination<S, P::Node>>,
@@ -314,9 +305,6 @@ where
     /// be considered caught up. Used to keep catching a lagging destination up while the chain is
     /// idle, so that convergence does not depend on the chain producing more blocks.
     chain_next_height: BlockHeight,
-    /// The chain carrying the epoch events, learned from the first block exported. `None` until
-    /// then, which is also when there is nothing to catch anyone up on.
-    admin_chain_id: Option<ChainId>,
     /// The highest height each validator has acknowledged. Seeded from what the worker had
     /// persisted, so a destination we meet for the first time — after a restart, or after the
     /// chain worker was dropped and reloaded — starts from there instead of being queried.
@@ -355,29 +343,6 @@ where
         debug!("Chain worker dropped; stopping block export");
     }
 
-    /// Brings the destination set in line with the committee as the worker sees it now. Asked of
-    /// the worker rather than read from the chain view, which the worker owns while running.
-    async fn sync_destinations_from_local_node(&mut self) {
-        let query = ChainInfoQuery::new(self.chain_id).with_committees();
-        let info = match self.local_node.handle_chain_info_query(query).await {
-            Ok(response) => response.info,
-            Err(error) => {
-                debug!(%error, "Cannot read the committee while catching up");
-                return;
-            }
-        };
-        let Some(committee) = info
-            .requested_committees
-            .and_then(|committees| committees.into_iter().next_back().map(|(_, c)| c))
-        else {
-            return;
-        };
-        let Some(admin_chain_id) = self.admin_chain_id else {
-            return;
-        };
-        self.sync_destinations_with(&committee, admin_chain_id);
-    }
-
     /// Remakes the node of every destination whose last push failed, drawing the next proxy from
     /// the rotation so a dead proxy is stepped over rather than retried. Keeps the failure count
     /// and backoff, so this cannot become a way to hammer a validator that is simply offline.
@@ -391,16 +356,24 @@ where
         if stuck.is_empty() {
             return;
         }
-        let nodes = match self.node_provider.make_nodes_from_list(stuck) {
-            Ok(nodes) => nodes.collect::<Vec<_>>(),
-            Err(error) => {
-                warn!(%error, "Cannot rebuild connections to lagging validators");
-                return;
-            }
-        };
-        for (validator, node) in nodes {
-            if let Some(destination) = self.destinations.get_mut(&validator) {
-                destination.updater.remote_node.node = node;
+        // One at a time: a batch fails whole on the first bad address, and one unresolvable
+        // destination must not block reconnecting the others.
+        for (validator, address) in stuck {
+            match self
+                .node_provider
+                .make_nodes_from_list(iter::once((validator, address)))
+            {
+                Ok(nodes) => {
+                    if let (Some((_, node)), Some(destination)) = (
+                        nodes.into_iter().next(),
+                        self.destinations.get_mut(&validator),
+                    ) {
+                        destination.sender.remote_node.node = node;
+                    }
+                }
+                Err(error) => {
+                    warn!(%validator, %error, "Cannot rebuild the connection to a lagging validator");
+                }
             }
         }
     }
@@ -409,10 +382,10 @@ where
     ///
     /// Runs only when nothing is queued, so live blocks always take priority over backfill.
     async fn catch_up_round(&mut self) {
-        // Pick up committee changes too. A validator admitted while this chain happens to be idle
-        // would otherwise never become a destination at all — `sync_destinations` runs off an
-        // exported block, and there is no next block to carry the new committee.
-        self.sync_destinations_from_local_node().await;
+        // The destination set stays as of the last exported block. That loses nothing: a chain's
+        // own committee only changes when the chain executes a block (`CreateCommittee` and
+        // `ProcessNewEpoch` both mutate it in the executing block), so there is no committee
+        // change for an idle chain to discover.
         self.refresh_stuck_destinations();
         let now = Instant::now();
         let (config, chain_id, target) = (&self.config, self.chain_id, self.chain_next_height);
@@ -475,13 +448,12 @@ where
     /// Brings the destination set in line with the block's committee: adds validators that joined,
     /// drops those that left, and re-creates a node whose address changed.
     fn sync_destinations(&mut self, block: &ExportedBlock) {
-        self.admin_chain_id = Some(block.admin_chain_id);
-        self.sync_destinations_with(&block.committee, block.admin_chain_id);
+        self.sync_destinations_with(&block.committee);
     }
 
     /// Adds destinations for validators in `committee` we do not have, and drops those that have
     /// left it or changed address.
-    fn sync_destinations_with(&mut self, committee: &Committee, admin_chain_id: ChainId) {
+    fn sync_destinations_with(&mut self, committee: &Committee) {
         self.destinations.retain(|validator, destination| {
             committee
                 .validators()
@@ -545,17 +517,13 @@ where
             else {
                 continue;
             };
-            let updater = RemoteNodeUpdater {
+            let sender = BlockSender {
                 remote_node: RemoteNode {
                     public_key: validator,
                     node,
                 },
-                local_node: self.local_node.clone(),
-                admin_chain_id,
+                storage: self.storage.clone(),
                 certificate_upload_batch_size: self.config.certificate_upload_batch_size,
-                // Export replicates blocks; it does not take part in the destination's consensus.
-                sync_consensus_rounds: false,
-                max_admin_catch_up_blocks: Some(self.config.max_catch_up_blocks),
             };
             // Rebuilding a stuck destination keeps its failure count and retry time: only the
             // connection is replaced, so a validator that is itself down keeps backing off.
@@ -563,7 +531,7 @@ where
             self.destinations.insert(
                 validator,
                 Destination {
-                    updater,
+                    sender,
                     address,
                     // An acknowledged height was reported by the validator itself, so the block
                     // after it is the one the validator needs next.
@@ -606,7 +574,7 @@ where
 
         let height = block.certificate.block().header.height;
         let result = self
-            .updater
+            .sender
             .send_block(
                 &block.certificate,
                 &block.blobs,
@@ -643,8 +611,9 @@ where
         let _latency = send_latency.measure_latency();
 
         let previous = self.next_height;
+        let failures_before = self.failures;
         let result = self
-            .updater
+            .sender
             .send_missing_blocks(
                 chain_id,
                 target,
@@ -657,9 +626,12 @@ where
         // A round can succeed and advance nothing, since a chain we merely receive from is
         // stored only at its message-bearing blocks; without backing off, a destination we can
         // never finish would spin the task. Success only: `record_outcome` handles failures.
+        // Restore the pre-success failure count first — `record_outcome` just reset it, and a
+        // backoff computed from zero would never escalate past the base delay.
         if let Some(reached) = outcome {
             let advanced = previous.is_none_or(|before| reached > before);
             if !advanced {
+                self.failures = failures_before;
                 self.back_off(now, config);
             }
         }
@@ -714,5 +686,163 @@ where
             // We have no cursor, so we are about to query; report the gap as unknown-but-nonzero.
             None => 1,
         }
+    }
+}
+
+/// Sends this validator's blocks to one other validator, reading everything it needs from
+/// storage.
+///
+/// This is deliberately not [`crate::updater::RemoteNodeUpdater`]: that is the client's tool and
+/// holds a local node, and anything on the export path that reaches a chain worker resets its
+/// TTL. Blobs and certificates for committed blocks are always durable before export sees them
+/// (`write_blobs_and_certificate` precedes execution), so storage is sufficient.
+pub(crate) struct BlockSender<S, N> {
+    pub(crate) remote_node: RemoteNode<N>,
+    pub(crate) storage: S,
+    pub(crate) certificate_upload_batch_size: u64,
+}
+
+impl<S, N> BlockSender<S, N>
+where
+    S: Storage + Clone + 'static,
+    N: ValidatorNode + Clone + 'static,
+{
+    /// Pushes a block the caller already holds, first closing up to `max_catch_up` of any gap
+    /// below it, and returns the height the validator reports afterwards.
+    ///
+    /// The held block is sent only once the gap is gone: one landing above a gap is silently
+    /// preprocessed and never advances the tip.
+    pub(crate) async fn send_block(
+        &mut self,
+        certificate: &CacheArc<ConfirmedBlockCertificate>,
+        blobs: &[CacheArc<Blob>],
+        destination_next_height: Option<BlockHeight>,
+        max_catch_up: u64,
+    ) -> Result<BlockHeight, chain_client::Error> {
+        let block = certificate.block();
+        let (chain_id, height) = (block.header.chain_id, block.header.height);
+
+        let next_height = if destination_next_height == Some(height) {
+            height
+        } else {
+            self.send_missing_blocks(chain_id, height, destination_next_height, max_catch_up)
+                .await?
+        };
+        // Not exactly at this block: either the gap was larger than one chunk, or the validator
+        // is already past it — a re-executed chain re-offers its whole history — and in both
+        // cases sending would be waste, so report the truth instead.
+        if next_height != height {
+            return Ok(next_height);
+        }
+        let info = self.send_confirmed_certificate(certificate, blobs).await?;
+        Ok(info.next_block_height)
+    }
+
+    /// Sends up to `max_blocks` of the blocks of `chain_id` the validator is missing below
+    /// `target_next_height`, returning the height it reports afterwards.
+    ///
+    /// Bounded so a validator that just joined converges over rounds instead of blocking the
+    /// caller once. Heights whose certificates are not in storage are skipped — a chain we merely
+    /// receive from is stored only at its message-bearing blocks, and the destination
+    /// preprocesses above such gaps.
+    pub(crate) async fn send_missing_blocks(
+        &mut self,
+        chain_id: ChainId,
+        target_next_height: BlockHeight,
+        destination_next_height: Option<BlockHeight>,
+        max_blocks: u64,
+    ) -> Result<BlockHeight, chain_client::Error> {
+        let mut next_height = match destination_next_height {
+            Some(height) => height,
+            None => {
+                let query = ChainInfoQuery::new(chain_id);
+                self.remote_node
+                    .handle_chain_info_query(query)
+                    .await?
+                    .next_block_height
+            }
+        };
+        let last = target_next_height
+            .0
+            .min(next_height.0.saturating_add(max_blocks));
+        let heights = (next_height.0..last).map(BlockHeight).collect::<Vec<_>>();
+        for chunk in heights.chunks(self.certificate_upload_batch_size as usize) {
+            let certificates = self
+                .storage
+                .read_certificates_by_heights(chain_id, chunk)
+                .await?;
+            for certificate in certificates.into_iter().flatten() {
+                // The validator's own responses move the cursor, so skip anything it has since
+                // reported holding rather than re-sending it.
+                if certificate.block().header.height < next_height {
+                    continue;
+                }
+                let info = self.send_confirmed_certificate(&certificate, &[]).await?;
+                next_height = info.next_block_height;
+            }
+        }
+        Ok(next_height)
+    }
+
+    /// Sends one confirmed certificate, uploading blobs the validator reports missing.
+    ///
+    /// A missing *committee* (`EventsNotFound` for the epoch stream) is not recovered here: the
+    /// admin chain is a chain like any other, so its own export brings the destination up to
+    /// date, and this block succeeds on a later round. Replaying the admin chain from inside
+    /// another chain's push is how one export round used to stall on an unbounded foreign
+    /// history.
+    async fn send_confirmed_certificate(
+        &mut self,
+        certificate: &CacheArc<ConfirmedBlockCertificate>,
+        held: &[CacheArc<Blob>],
+    ) -> Result<Box<crate::data_types::ChainInfo>, chain_client::Error> {
+        let delivery = CrossChainMessageDelivery::NonBlocking;
+        let result = self
+            .remote_node
+            .handle_optimized_confirmed_certificate(certificate, delivery)
+            .await;
+        match result {
+            Err(NodeError::BlobsNotFound(blob_ids)) => {
+                self.remote_node
+                    .check_blobs_not_found(certificate, &blob_ids)?;
+                let blobs = self.resolve_blobs(&blob_ids, held).await?;
+                self.remote_node
+                    .node
+                    .upload_blobs(blobs.into_iter().map(CacheArc::into_std).collect())
+                    .await?;
+                Ok(self
+                    .remote_node
+                    .handle_confirmed_certificate(certificate.clone(), delivery)
+                    .await?)
+            }
+            result => Ok(result?),
+        }
+    }
+
+    /// Collects the given blobs, taking each from `held` if present and the rest from storage.
+    async fn resolve_blobs(
+        &self,
+        blob_ids: &[BlobId],
+        held: &[CacheArc<Blob>],
+    ) -> Result<Vec<CacheArc<Blob>>, chain_client::Error> {
+        let mut blobs = Vec::with_capacity(blob_ids.len());
+        let mut to_read = Vec::new();
+        for blob_id in blob_ids {
+            match held.iter().find(|blob| blob.id() == *blob_id) {
+                Some(blob) => blobs.push(blob.clone()),
+                None => to_read.push(*blob_id),
+            }
+        }
+        if to_read.is_empty() {
+            return Ok(blobs);
+        }
+        let read = self
+            .storage
+            .read_blobs(&to_read)
+            .await?
+            .into_iter()
+            .collect::<Option<Vec<_>>>();
+        blobs.extend(read.ok_or(NodeError::BlobsNotFound(to_read))?);
+        Ok(blobs)
     }
 }

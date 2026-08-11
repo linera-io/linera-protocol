@@ -2651,8 +2651,6 @@ where
         local_node: LocalNodeClient::new(state),
         admin_chain_id: builder.admin_chain_id(),
         certificate_upload_batch_size: 100,
-        sync_consensus_rounds: true,
-        max_admin_catch_up_blocks: None,
     };
     let submit = |proposal| {
         let (clock_skew_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -4717,10 +4715,7 @@ async fn test_catch_up_sends_at_most_the_bound_per_round<B>(
 where
     B: StorageBuilder,
 {
-    use crate::{
-        local_node::LocalNodeClient, remote_node::RemoteNode, updater::RemoteNodeUpdater,
-        worker::WorkerState, ChainWorkerConfig,
-    };
+    use crate::remote_node::RemoteNode;
 
     /// Small enough that the backlog below needs several rounds, and not a divisor of it, so a
     /// final short round is exercised too.
@@ -4750,24 +4745,16 @@ where
     builder.set_fault_type([3], FaultType::Honest);
     assert_eq!(builder.next_block_height(3, chain_id).await, BlockHeight(0));
 
-    // Drive the updater the way an export round does: at validator 3, reading the blocks out of a
-    // local node that has them (validator 0 stayed online throughout).
+    // Drive the sender the way an export round does: at validator 3, reading the blocks out of
+    // validator 0's storage (it stayed online throughout).
     let node = builder.node(3);
-    let state = WorkerState::new(
-        builder.validator_storage(0),
-        ChainWorkerConfig::default(),
-        None,
-    );
-    let mut updater = RemoteNodeUpdater {
+    let mut sender_task = crate::chain_worker::export::BlockSender {
         remote_node: RemoteNode {
             public_key: node.name(),
             node,
         },
-        local_node: LocalNodeClient::new(state),
-        admin_chain_id: builder.admin_chain_id(),
+        storage: builder.validator_storage(0),
         certificate_upload_batch_size: 100,
-        sync_consensus_rounds: false,
-        max_admin_catch_up_blocks: Some(MAX_CATCH_UP_BLOCKS),
     };
 
     // Round by round: each one advances by exactly the bound until the last, which sends only the
@@ -4777,7 +4764,7 @@ where
     while reached != Some(target) {
         let before = reached;
         reached = Some(
-            updater
+            sender_task
                 .send_missing_blocks(chain_id, target, reached, MAX_CATCH_UP_BLOCKS)
                 .await?,
         );
@@ -4865,103 +4852,6 @@ where
     );
 }
 
-/// `max_admin_catch_up_blocks` bounds the admin-chain replay, and leaving it unset does not.
-///
-/// Export bounds it because `update_admin_chain` runs inside one export round; the client must
-/// not, since it is blocking on one certificate. Both branches are asserted, because the bounded
-/// one is a behaviour change that must not leak into the client's path.
-#[test_case(MemoryStorageBuilder::default(); "memory")]
-#[test_log::test(tokio::test)]
-async fn test_admin_chain_catch_up_is_bounded_only_for_export<B>(
-    storage_builder: B,
-) -> anyhow::Result<()>
-where
-    B: StorageBuilder,
-{
-    use crate::{
-        local_node::LocalNodeClient, remote_node::RemoteNode, updater::RemoteNodeUpdater,
-        worker::WorkerState, ChainWorkerConfig,
-    };
-
-    const MAX_ADMIN_CATCH_UP_BLOCKS: u64 = 2;
-    const BACKLOG: usize = 7;
-
-    let signer = InMemorySigner::new(None);
-    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
-    // Root chain 0 is the admin chain, so these blocks land on the chain the bound governs.
-    let admin = builder.add_root_chain(0, Amount::from_tokens(4)).await?;
-    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
-    let admin_chain_id = builder.admin_chain_id();
-    assert_eq!(admin.chain_id(), admin_chain_id);
-
-    builder.set_fault_type([3], FaultType::Offline);
-    for _ in 0..BACKLOG {
-        admin
-            .transfer_to_account(
-                AccountOwner::CHAIN,
-                Amount::from_millis(1),
-                Account::chain(recipient.chain_id()),
-            )
-            .await
-            .unwrap_ok_committed();
-    }
-    let tip = admin.chain_info().await?.next_block_height;
-    assert_eq!(tip, BlockHeight(BACKLOG as u64));
-    builder.set_fault_type([3], FaultType::Honest);
-    assert_eq!(
-        builder.next_block_height(3, admin_chain_id).await,
-        BlockHeight(0)
-    );
-
-    let make_updater = |builder: &mut TestBuilder<B>, max_admin_catch_up_blocks, storage| {
-        let node = builder.node(3);
-        RemoteNodeUpdater {
-            remote_node: RemoteNode {
-                public_key: node.name(),
-                node,
-            },
-            local_node: LocalNodeClient::new(WorkerState::new(
-                storage,
-                ChainWorkerConfig::default(),
-                None,
-            )),
-            admin_chain_id,
-            certificate_upload_batch_size: 100,
-            sync_consensus_rounds: false,
-            max_admin_catch_up_blocks,
-        }
-    };
-
-    // Export's path: one call moves the admin chain forward by the bound and no further, so the
-    // export round it runs inside stays short.
-    let storage = builder.validator_storage(0);
-    let mut bounded = make_updater(&mut builder, Some(MAX_ADMIN_CATCH_UP_BLOCKS), storage);
-    bounded.update_admin_chain().await?;
-    assert_eq!(
-        builder.next_block_height(3, admin_chain_id).await,
-        BlockHeight(MAX_ADMIN_CATCH_UP_BLOCKS),
-        "a bounded admin catch-up should send exactly {MAX_ADMIN_CATCH_UP_BLOCKS} blocks",
-    );
-
-    // Repeating it keeps making progress rather than re-sending the same prefix forever.
-    bounded.update_admin_chain().await?;
-    assert_eq!(
-        builder.next_block_height(3, admin_chain_id).await,
-        BlockHeight(2 * MAX_ADMIN_CATCH_UP_BLOCKS),
-    );
-
-    // The client's path, unchanged: one call catches the whole chain up.
-    let storage = builder.validator_storage(0);
-    let mut unbounded = make_updater(&mut builder, None, storage);
-    unbounded.update_admin_chain().await?;
-    assert_eq!(
-        builder.next_block_height(3, admin_chain_id).await,
-        tip,
-        "an unbounded admin catch-up should not stop short",
-    );
-    Ok(())
-}
-
 /// A block the destination already has is not sent again.
 ///
 /// `reset_and_reexecute_chain` replays a chain's whole history, and without the guard every block
@@ -4975,10 +4865,7 @@ async fn test_send_block_skips_a_block_the_destination_already_has<B>(
 where
     B: StorageBuilder,
 {
-    use crate::{
-        local_node::LocalNodeClient, remote_node::RemoteNode, updater::RemoteNodeUpdater,
-        worker::WorkerState, ChainWorkerConfig,
-    };
+    use crate::remote_node::RemoteNode;
 
     let signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
@@ -5017,24 +4904,17 @@ where
     // From here the destination answers nothing at all, so reaching for it is an error.
     builder.set_fault_type([3], FaultType::Offline);
     let node = builder.node(3);
-    let mut updater = RemoteNodeUpdater {
+    let mut sender_task = crate::chain_worker::export::BlockSender {
         remote_node: RemoteNode {
             public_key: node.name(),
             node,
         },
-        local_node: LocalNodeClient::new(WorkerState::new(
-            storage,
-            ChainWorkerConfig::default(),
-            None,
-        )),
-        admin_chain_id: builder.admin_chain_id(),
+        storage,
         certificate_upload_batch_size: 100,
-        sync_consensus_rounds: false,
-        max_admin_catch_up_blocks: Some(100),
     };
 
     // Re-offer an old block, exactly as a re-execution would.
-    let reached = updater
+    let reached = sender_task
         .send_block(&certificate, &[], Some(tip), 100)
         .await?;
     assert_eq!(
@@ -5042,4 +4922,50 @@ where
         "the destination's height must be reported back"
     );
     Ok(())
+}
+
+/// A chain worker expires at its TTL even while block export is enabled.
+///
+/// The export machinery must never touch its own chain worker: a periodic touch resets the
+/// keep-alive clock, and a worker that is touched forever is resident forever — on a validator
+/// with many chains, that is unbounded memory growth and the TTL flag is a no-op.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_chain_workers_expire_while_export_is_enabled<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    const TTL: linera_base::time::Duration = linera_base::time::Duration::from_millis(500);
+
+    let signer = InMemorySigner::new(None);
+    let mut builder =
+        TestBuilder::new_with_block_export_and_ttl(storage_builder, 4, 0, signer, TTL).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_millis(1),
+            Account::chain(recipient.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+    assert!(builder.resident_chain_workers(0).await > 0);
+
+    // From here nothing touches any chain. Every worker must be gone within a few TTLs;
+    // the generous deadline keeps slow CI from flaking, not the assertion from biting.
+    for _ in 0..100 {
+        if builder.resident_chain_workers(0).await == 0 {
+            return Ok(());
+        }
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(100)).await;
+    }
+    panic!(
+        "{} chain workers still resident 10s after the last activity, with a TTL of 500ms — \
+         something in the export path is touching them",
+        builder.resident_chain_workers(0).await,
+    );
 }

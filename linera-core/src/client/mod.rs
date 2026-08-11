@@ -1310,8 +1310,6 @@ impl<Env: Environment> Client<Env> {
             local_node: self.local_node.clone(),
             admin_chain_id: self.admin_chain_id,
             certificate_upload_batch_size: self.options.certificate_upload_batch_size,
-            sync_consensus_rounds: true,
-            max_admin_catch_up_blocks: None,
         }
     }
 
