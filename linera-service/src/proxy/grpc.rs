@@ -297,34 +297,58 @@ where
     /// Whether this proxy will relay to `address`, i.e. whether it belongs to a validator in any
     /// committee it can see. Epochs are scanned forward from the last scan, so a validator
     /// admitted after startup is picked up on the first request naming it.
-    async fn is_relay_destination(&self, address: &str) -> bool {
-        if self
-            .0
-            .relay_destinations
-            .read()
-            .await
-            .addresses
-            .contains(address)
-        {
-            return true;
+    ///
+    /// `Err` means the scan itself failed and says nothing about the address, so the caller must
+    /// answer "try again", not "refused".
+    async fn is_relay_destination(&self, address: &str) -> Result<bool, ViewError> {
+        // How many epochs past the last loadable one to probe. An epoch can be temporarily
+        // unloadable (incomplete admin history) while later ones are present; without a probe the
+        // scan would stop at the hole forever, hiding every later committee.
+        const EPOCH_LOOKAHEAD: u32 = 8;
+
+        let (known, mut next_epoch) = {
+            let destinations = self.0.relay_destinations.read().await;
+            (
+                destinations.addresses.contains(address),
+                destinations.next_epoch,
+            )
+        };
+        if known {
+            return Ok(true);
         }
-        let mut destinations = self.0.relay_destinations.write().await;
-        // Another task may have refreshed while we waited for the lock.
-        if destinations.addresses.contains(address) {
-            return true;
-        }
-        while let Ok(Some(committee)) = self
-            .0
-            .storage
-            .get_or_load_committee(Epoch(destinations.next_epoch))
-            .await
-        {
-            for (_, validator_address) in committee.validator_addresses() {
-                destinations.addresses.insert(validator_address.to_owned());
+
+        // Scan outside any lock: `get_or_load_committee` reads storage, and holding the write
+        // lock across that would stall every concurrent `peer()` call, cached ones included.
+        let mut found = Vec::new();
+        let mut probe = next_epoch;
+        let mut contiguous = true;
+        while probe < next_epoch.saturating_add(EPOCH_LOOKAHEAD).max(next_epoch) {
+            match self.0.storage.get_or_load_committee(Epoch(probe)).await? {
+                Some(committee) => {
+                    found.extend(
+                        committee
+                            .validator_addresses()
+                            .map(|(_, address)| address.to_owned()),
+                    );
+                    if contiguous {
+                        // Everything up to here loaded, so the scan need never revisit it.
+                        next_epoch = probe + 1;
+                    }
+                    probe += 1;
+                }
+                // Not loadable (yet). Do not advance `next_epoch` past it — it may load later —
+                // but keep probing a bounded window so a hole cannot hide committees beyond it.
+                None => {
+                    contiguous = false;
+                    probe += 1;
+                }
             }
-            destinations.next_epoch += 1;
         }
-        destinations.addresses.contains(address)
+
+        let mut destinations = self.0.relay_destinations.write().await;
+        destinations.addresses.extend(found);
+        destinations.next_epoch = destinations.next_epoch.max(next_epoch);
+        Ok(destinations.addresses.contains(address))
     }
 
     /// Returns a client for the validator a relayed request names. Requests are forwarded as they
@@ -337,10 +361,20 @@ where
         let network = ValidatorPublicNetworkConfig::from_str(destination).map_err(|_| {
             Status::invalid_argument(format!("invalid destination validator: {destination}"))
         })?;
-        if !self.is_relay_destination(destination).await {
-            return Err(Status::permission_denied(format!(
-                "refusing to relay to {destination}: not a member of any known committee"
-            )));
+        match self.is_relay_destination(destination).await {
+            Ok(true) => {}
+            Ok(false) => {
+                return Err(Status::permission_denied(format!(
+                    "refusing to relay to {destination}: not a member of any known committee"
+                )));
+            }
+            // A scan failure says nothing about the destination; refusing here would disguise a
+            // storage problem as an authorization decision.
+            Err(error) => {
+                return Err(Status::unavailable(format!(
+                    "cannot verify the relay destination {destination} right now: {error}"
+                )));
+            }
         }
         // Counted only once the destination is accepted, so the metric measures relayed traffic
         // rather than rejected attempts.

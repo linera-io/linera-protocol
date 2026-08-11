@@ -336,10 +336,10 @@ impl Validator {
             "no proxy {proxy_id} to kill; this validator runs {}",
             self.proxies.len()
         );
-        self.proxies[proxy_id]
-            .kill()
-            .await
-            .context("killing validator proxy")
+        // Removed rather than killed in place, as `terminate_server` does: `terminate()` later
+        // kills whatever remains in the vec, and must not have to reason about dead entries.
+        let mut proxy = self.proxies.remove(proxy_id);
+        proxy.kill().await.context("killing validator proxy")
     }
 
     fn add_server(&mut self, server: Child) {

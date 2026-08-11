@@ -135,6 +135,14 @@ impl BlockExportConfig {
             // A failing destination would be retried without pause.
             return Err("block export retry delay must be greater than zero".into());
         }
+        if self.max_retry_delay.is_zero() {
+            // The cap would clamp every computed backoff to zero, same busy retry as above.
+            return Err("block export max retry delay must be greater than zero".into());
+        }
+        if self.retry_delay > self.max_retry_delay {
+            // The very first backoff would already exceed its own ceiling.
+            return Err("block export retry delay must not exceed the max retry delay".into());
+        }
         Ok(())
     }
 }
@@ -844,5 +852,48 @@ where
             .collect::<Option<Vec<_>>>();
         blobs.extend(read.ok_or(NodeError::BlobsNotFound(to_read))?);
         Ok(blobs)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every rejection in `check()` guards a distinct failure mode, so each invalid field must be
+    /// caught on its own — including `max_retry_delay`, whose zero used to slip through and turn
+    /// backoff into a busy retry.
+    #[test]
+    fn config_check_rejects_each_zero_knob() {
+        assert!(BlockExportConfig::default().check().is_ok());
+        let invalid = [
+            BlockExportConfig {
+                certificate_upload_batch_size: 0,
+                ..BlockExportConfig::default()
+            },
+            BlockExportConfig {
+                max_catch_up_blocks: 0,
+                ..BlockExportConfig::default()
+            },
+            BlockExportConfig {
+                idle_catch_up_interval: Duration::ZERO,
+                ..BlockExportConfig::default()
+            },
+            BlockExportConfig {
+                retry_delay: Duration::ZERO,
+                ..BlockExportConfig::default()
+            },
+            BlockExportConfig {
+                max_retry_delay: Duration::ZERO,
+                ..BlockExportConfig::default()
+            },
+            BlockExportConfig {
+                retry_delay: Duration::from_secs(120),
+                max_retry_delay: Duration::from_secs(60),
+                ..BlockExportConfig::default()
+            },
+        ];
+        for config in invalid {
+            assert!(config.check().is_err(), "accepted: {config:?}");
+        }
     }
 }

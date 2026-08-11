@@ -38,7 +38,7 @@ use tracing::{debug, instrument, Level};
 use super::{
     api::{self, validator_relay_client::ValidatorRelayClient},
     pool::GrpcConnectionPool,
-    transport, GrpcError,
+    transport, GrpcError, GRPC_MAX_MESSAGE_SIZE,
 };
 use crate::{
     config::ValidatorPublicNetworkConfig, node_provider::NodeOptions,
@@ -347,7 +347,9 @@ impl ValidatorNodeProvider for RelayNodeProvider {
         Ok(RelayClient {
             destination: address.to_owned(),
             address: network.http_address(),
-            client: ValidatorRelayClient::new(channel),
+            client: ValidatorRelayClient::new(channel)
+                .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
+                .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE),
         })
     }
 }
