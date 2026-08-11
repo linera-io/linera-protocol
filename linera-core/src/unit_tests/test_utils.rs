@@ -1024,15 +1024,13 @@ where
             .with_key_pair(Some(validator_keypair.secret_key));
             let mut state = WorkerState::new(storage.clone(), config, None);
             if let Some(export_config) = block_export.clone() {
-                let node_provider = Arc::new(node_provider.clone());
-                state = state.with_chain_exporter_factory(Arc::new(move |setup| {
-                    crate::spawn_chain_exporter(
-                        setup,
-                        node_provider.clone(),
-                        export_config.clone(),
-                        Some(validator_public_key),
-                    )
-                }));
+                let handle = crate::spawn_block_export_queue(
+                    storage.clone(),
+                    Arc::new(node_provider.clone()),
+                    export_config,
+                    Some(validator_public_key),
+                );
+                state = state.with_block_export(handle);
             }
             let mut validator = LocalValidatorClient::new(validator_public_key, state);
             if i < with_faulty_validators {

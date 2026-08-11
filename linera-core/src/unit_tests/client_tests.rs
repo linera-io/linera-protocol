@@ -4813,6 +4813,9 @@ where
         signer,
         crate::BlockExportConfig {
             max_catch_up_blocks: MAX_CATCH_UP_BLOCKS,
+            // A queue this small drops blocks under the burst below, so this also covers the
+            // drop-and-repair path: anything dropped must come back through catch-up.
+            queue_size: 2,
             ..TestBuilder::<B>::test_block_export_config()
         },
     )

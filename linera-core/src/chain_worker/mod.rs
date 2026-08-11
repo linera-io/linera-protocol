@@ -15,9 +15,6 @@ pub(crate) use self::state::CrossChainUpdateHelper;
 pub(crate) use self::state::{BlockOutcome, CrossChainUpdateResult, EventSubscriptionsResult};
 pub use self::{
     config::ChainWorkerConfig,
-    export::{
-        spawn_chain_exporter, BlockExportConfig, ChainExportSetup, ChainExporter,
-        ChainExporterFactory,
-    },
+    export::{spawn_block_export_queue, BlockExportConfig, BlockExportHandle},
     state::ProcessConfirmedBlockMode,
 };

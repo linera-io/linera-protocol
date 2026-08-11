@@ -49,9 +49,7 @@ use tracing::{debug, info, instrument, trace, warn};
 
 use crate::{
     chain_worker::{
-        export::{ChainExportSetup, ChainExporter, ChainExporterFactory},
-        handle::AtomicTimestamp,
-        ChainWorkerConfig, DeliveryNotifier,
+        export::BlockExportHandle, handle::AtomicTimestamp, ChainWorkerConfig, DeliveryNotifier,
     },
     client::{ChainModes, ListeningMode},
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -132,11 +130,8 @@ where
     /// Set to `true` if a database `save` failure has left storage potentially
     /// inconsistent.
     poisoned: bool,
-    /// Creates this chain's export task, if the server enabled block export.
-    export_factory: Option<ChainExporterFactory<StorageClient>>,
-    /// This chain's export task, spawned the first time the chain executes a block so that
-    /// chains we only ever receive from cost nothing.
-    exporter: Option<ChainExporter>,
+    /// The process-wide export queue, if the server enabled block export.
+    block_export: Option<BlockExportHandle>,
 }
 
 /// The result of processing a cross-chain update.
@@ -199,7 +194,7 @@ where
         chain_id: ChainId,
         service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
         service_runtime_task: Option<web_thread_pool::Task<()>>,
-        export_factory: Option<ChainExporterFactory<StorageClient>>,
+        block_export: Option<BlockExportHandle>,
     ) -> Result<Self, WorkerError> {
         let chain = storage.load_chain(chain_id).await?;
 
@@ -216,8 +211,7 @@ where
             delivery_notifier,
             knows_chain_is_active: false,
             poisoned: false,
-            export_factory,
-            exporter: None,
+            block_export,
         })
     }
 
@@ -1162,7 +1156,7 @@ where
         ))
     }
 
-    /// Queues the block just executed for export and folds the task's progress into the chain
+    /// Queues the block just executed for export and folds the queue's progress into the chain
     /// state, for the save that follows to persist. Returns as soon as it is queued, and does
     /// nothing if export is disabled. Never fails the block: export is replication, not
     /// consensus, so a problem here is logged and the block stands.
@@ -1172,26 +1166,17 @@ where
         published_blobs: Vec<Blob>,
         read_blobs: BTreeMap<BlobId, Blob>,
     ) {
-        let Some(export_factory) = self.export_factory.clone() else {
+        let Some(export) = self.block_export.clone() else {
             return;
         };
         // The committee *after* applying the block: a validator that this very block admits has to
         // be exported to from now on.
-        let committee = match self.chain.current_committee().await {
-            Ok((_, committee)) => committee,
+        let (epoch, committee) = match self.chain.current_committee().await {
+            Ok((epoch, committee)) => (epoch, committee),
             Err(error) => {
                 warn!(%error, "Not exporting a block of a chain with no current committee");
                 return;
             }
-        };
-
-        let exporter = match &self.exporter {
-            Some(exporter) => exporter,
-            None => self.exporter.insert(export_factory(ChainExportSetup {
-                chain_id: self.chain.chain_id(),
-                storage: self.storage.clone(),
-                exported_heights: self.chain.exported_heights.get().clone().into(),
-            })),
         };
 
         // Through the cache rather than `Arc::new`: these blobs are already in storage's cache
@@ -1201,14 +1186,22 @@ where
             .chain(read_blobs.into_values())
             .map(|blob| self.storage.cache_blob(blob))
             .collect();
-        exporter.export(certificate.clone(), blobs, committee.clone());
+        export.export(certificate.clone(), blobs, epoch, committee.clone());
 
-        // Record what the task has acknowledged so far — which never includes the block we just
-        // queued, and after a stall may not have moved at all. Only mark the register dirty when
-        // it actually changed, so a stalled export costs no writes.
-        let progress = exporter.progress(&committee);
-        if **self.chain.exported_heights.get() != progress {
-            self.chain.exported_heights.set(progress.into());
+        // Fold in what the queue has recorded so far — which never includes the block we just
+        // queued. Merged by maximum: the queue drops a chain's progress once it converges, and an
+        // empty read must not regress what an earlier save persisted.
+        let acknowledged = export.progress(self.chain.chain_id(), &committee);
+        let mut merged = std::collections::BTreeMap::new();
+        for validator in committee.validators().keys() {
+            let previous = self.chain.exported_heights.get().get(validator).copied();
+            let reported = acknowledged.get(validator).copied();
+            if let Some(height) = previous.max(reported) {
+                merged.insert(*validator, height);
+            }
+        }
+        if **self.chain.exported_heights.get() != merged {
+            self.chain.exported_heights.set(merged.into());
         }
     }
 

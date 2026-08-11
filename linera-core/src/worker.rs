@@ -64,7 +64,7 @@ impl<S: Storage> std::ops::Deref for ChainStateViewReadGuard<S> {
 pub(crate) use crate::chain_worker::EventSubscriptionsResult;
 use crate::{
     chain_worker::{
-        handle, state::ChainWorkerState, BlockOutcome, ChainExporterFactory, ChainWorkerConfig,
+        handle, state::ChainWorkerState, BlockExportHandle, BlockOutcome, ChainWorkerConfig,
         CrossChainUpdateResult, DeliveryNotifier, ProcessConfirmedBlockMode,
     },
     client::{ChainModes, ListeningMode},
@@ -722,7 +722,7 @@ pub struct WorkerState<StorageClient: Storage> {
     /// Creates each chain worker's block-export task. The server binary installs this, since it
     /// is the only layer that knows how to reach another validator; without it, executed blocks
     /// are not pushed to the rest of the committee.
-    chain_exporter_factory: Option<ChainExporterFactory<StorageClient>>,
+    block_export: Option<BlockExportHandle>,
 }
 
 /// Dispatcher for outbound cross-chain requests that handles the source-shard-to-
@@ -744,7 +744,7 @@ where
             chain_workers: self.chain_workers.clone(),
             chain_batches: self.chain_batches.clone(),
             outbound_cross_chain_sender: self.outbound_cross_chain_sender.clone(),
-            chain_exporter_factory: self.chain_exporter_factory.clone(),
+            block_export: self.block_export.clone(),
         }
     }
 }
@@ -892,18 +892,15 @@ where
             #[cfg_attr(web, expect(clippy::arc_with_non_send_sync))]
             chain_batches: Arc::new(papaya::HashMap::new()),
             outbound_cross_chain_sender: None,
-            chain_exporter_factory: None,
+            block_export: None,
         }
     }
 
-    /// Installs the factory that creates each chain worker's block-export task. Must be called
-    /// before any chain worker is created: workers capture the factory as they load, so one
-    /// created earlier would never export.
-    pub fn with_chain_exporter_factory(
-        mut self,
-        factory: ChainExporterFactory<StorageClient>,
-    ) -> Self {
-        self.chain_exporter_factory = Some(factory);
+    /// Installs the process-wide block export queue. Must be called before any chain worker is
+    /// created: workers capture the handle as they load, so one created earlier would never
+    /// export.
+    pub fn with_block_export(mut self, handle: BlockExportHandle) -> Self {
+        self.block_export = Some(handle);
         self
     }
 
@@ -1300,7 +1297,7 @@ where
             chain_id,
             service_runtime_endpoint,
             service_runtime_task,
-            self.chain_exporter_factory.clone(),
+            self.block_export.clone(),
         )
         .await?;
 

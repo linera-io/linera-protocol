@@ -11,8 +11,8 @@
 
 mod chain_worker;
 pub use chain_worker::{
-    spawn_chain_exporter, BlockExportConfig, ChainExportSetup, ChainExporter, ChainExporterFactory,
-    ChainWorkerConfig, ProcessConfirmedBlockMode,
+    spawn_block_export_queue, BlockExportConfig, BlockExportHandle, ChainWorkerConfig,
+    ProcessConfirmedBlockMode,
 };
 /// The high-level client for interacting with chains and validators.
 pub mod client;

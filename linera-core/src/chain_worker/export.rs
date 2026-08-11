@@ -3,29 +3,51 @@
 
 //! Pushing executed blocks to the other validators in the committee.
 //!
-//! Each chain worker owns one export task and hands it every block it executes — certificate and
-//! blobs, both already in memory. This is the dissemination that makes each validator a complete
-//! replica; consensus alone only guarantees that a quorum holds any given block.
+//! One queue task per server process. Chain workers hand it every block they execute —
+//! certificate and blobs, both already in memory — and it pushes them to the rest of the
+//! committee. This is the dissemination that makes each validator a complete replica; consensus
+//! alone only guarantees that a quorum holds any given block.
 //!
-//! One task per chain worker rather than per process: a single task would serialize thousands of
-//! chains, and a per-chain task gets height ordering for free.
+//! One task per *process* rather than per chain worker, for two reasons. Nothing on this path may
+//! touch a chain worker — a task that does resets the worker's keep-alive clock and keeps it
+//! resident forever — so everything here reads storage only. And destination state must be
+//! shared: with per-chain tasks, one unreachable validator is discovered, retried, and backed off
+//! independently by every chain, which at scale is thousands of connection attempts against a
+//! peer that may already be struggling. Here each destination has one connection, one backoff,
+//! and one AIMD window that all chains share: a success widens the window additively, a
+//! transport failure halves it, so the total in-flight load on a struggling peer shrinks
+//! exponentially while it struggles and recovers once it stops.
 //!
-//! The queue is unbounded, because dropping a block would leave a gap nothing repairs — the very
-//! failure this design removes. A growing queue is a performance problem instead; see
-//! [`metrics::QUEUE_SIZE`].
+//! Failures are scoped by what they say. A timeout or transport error is about the
+//! *destination*, so it halves the window and backs the destination off (and re-resolves its
+//! node, which rotates to the next proxy when the transport is relayed). An error like
+//! `EventsNotFound` is about one *chain* — the destination lacks the committee that signed the
+//! certificate — so it backs off only that chain-destination pair: the admin chain's own export
+//! is what will fix it, and must not be throttled by it.
+//!
+//! The queue is bounded, and a full queue drops the block rather than blocking the worker.
+//! Dropping is safe because it is *repaired*: the queue tracks each chain's tip against what
+//! every destination acknowledged, and closes any gap from storage during idle rounds. Per-chain
+//! height ordering is preserved by allowing at most one in-flight send per chain-destination
+//! pair.
+//!
+//! Chains converge and are forgotten: a record exists only while some destination is behind, so
+//! memory is bounded by lagging chains, not by every chain the process ever served. The
+//! work-list therefore covers chains seen since the process started — a validator that needs the
+//! full history of a chain that never produces blocks again is out of scope here.
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, VecDeque},
     iter,
     sync::{Arc, Mutex},
 };
 
-use futures::future;
+use futures::{stream::FuturesUnordered, FutureExt as _, StreamExt as _};
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{Blob, BlockHeight},
+    data_types::{Blob, BlockHeight, Epoch},
     identifiers::{BlobId, ChainId},
     time::{timer::timeout, Duration, Instant},
 };
@@ -48,24 +70,41 @@ mod metrics {
 
     use linera_base::prometheus_util::{
         exponential_bucket_interval, exponential_bucket_latencies, register_histogram,
-        register_histogram_vec, register_int_gauge,
+        register_histogram_vec, register_int_counter, register_int_gauge,
     };
-    use prometheus::{Histogram, HistogramVec, IntGauge};
+    use prometheus::{Histogram, HistogramVec, IntCounter, IntGauge};
 
-    /// Blocks waiting to be exported, across every chain worker in this process. The queue is
-    /// unbounded, so this is how a chain producing faster than it can push becomes visible.
+    /// Blocks waiting in the export queue.
     pub static QUEUE_SIZE: LazyLock<IntGauge> = LazyLock::new(|| {
         register_int_gauge(
             "block_export_queue_size",
-            "Blocks queued for export across all chain workers",
+            "Blocks queued for export in this process",
         )
     });
 
-    /// Time from a block being queued to it having been pushed to every destination.
+    /// Blob payload bytes held by queued blocks, since a block count alone hides the memory a
+    /// backlog of large blobs pins.
+    pub static QUEUE_BYTES: LazyLock<IntGauge> = LazyLock::new(|| {
+        register_int_gauge(
+            "block_export_queue_bytes",
+            "Blob bytes held by blocks queued for export in this process",
+        )
+    });
+
+    /// Blocks dropped because the queue was full. Each is repaired by a later catch-up round, so
+    /// this counting up means latency, not loss.
+    pub static DROPPED_BLOCKS: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "block_export_dropped_blocks",
+            "Blocks dropped from a full export queue, to be re-sent from storage",
+        )
+    });
+
+    /// Time from a block being queued to its sends being scheduled.
     pub static EXPORT_LATENCY: LazyLock<Histogram> = LazyLock::new(|| {
         register_histogram(
             "block_export_latency",
-            "Time (ms) to export one block to every destination, including time spent queued",
+            "Time (ms) a block waits in the export queue before its sends are scheduled",
             exponential_bucket_latencies(60_000.0),
         )
     });
@@ -77,6 +116,16 @@ mod metrics {
             "Time (ms) to push one block to one destination validator",
             &["validator"],
             exponential_bucket_latencies(60_000.0),
+        )
+    });
+
+    /// How many concurrent sends each destination is currently allowed.
+    pub static DESTINATION_WINDOW: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "block_export_destination_window",
+            "AIMD in-flight window per destination validator, sampled at each change",
+            &["validator"],
+            exponential_bucket_interval(1.0, 1_024.0),
         )
     });
 
@@ -95,16 +144,19 @@ mod metrics {
 /// Configuration for pushing executed blocks to the other committee validators.
 #[derive(Clone, Debug)]
 pub struct BlockExportConfig {
-    /// How many certificates are read from storage and pushed per batch when catching a
-    /// destination up.
+    /// How many certificates are read from storage per catch-up read.
     pub certificate_upload_batch_size: u64,
+    /// How many blocks the export queue holds before dropping new ones for catch-up to repair.
+    pub queue_size: usize,
+    /// The most concurrent sends one destination is ever allowed — the AIMD window's ceiling.
+    pub max_in_flight_per_destination: usize,
     /// How long a destination is skipped after a failed push, doubling up to `max_retry_delay`.
     /// Coarser than the transport's per-request retries: those decide whether one call is worth
     /// repeating, this decides whether the destination is worth attempting at all right now.
     pub retry_delay: Duration,
     /// The longest a failing destination is skipped for.
     pub max_retry_delay: Duration,
-    /// How long the task waits for a new block before spending a round catching up destinations
+    /// How long the queue waits for a new block before spending a round catching up destinations
     /// that are behind. With `max_catch_up_blocks` this sets the backfill rate, so tune them
     /// together.
     pub idle_catch_up_interval: Duration,
@@ -112,6 +164,10 @@ pub struct BlockExportConfig {
     /// bounds what a live block may wait behind, and a validator that just joined reports height
     /// 0, so its catch-up is otherwise arbitrarily large.
     pub max_catch_up_blocks: u64,
+    /// How long a converged chain's record is kept before being forgotten. Long enough for the
+    /// chain's worker to fold the final heights into `exported_heights` on its next save; after
+    /// it, a lost cursor costs one query to rebuild.
+    pub converged_chain_retention: Duration,
 }
 
 impl BlockExportConfig {
@@ -122,6 +178,14 @@ impl BlockExportConfig {
         if self.certificate_upload_batch_size == 0 {
             // `slice::chunks(0)` panics.
             return Err("block export batch size must be greater than zero".into());
+        }
+        if self.queue_size == 0 {
+            // Every block would be dropped and export would run on catch-up alone.
+            return Err("block export queue size must be greater than zero".into());
+        }
+        if self.max_in_flight_per_destination == 0 {
+            // No destination could ever be sent anything.
+            return Err("block export in-flight ceiling must be greater than zero".into());
         }
         if self.max_catch_up_blocks == 0 {
             // Every gap would stay open forever, silently.
@@ -143,6 +207,10 @@ impl BlockExportConfig {
             // The very first backoff would already exceed its own ceiling.
             return Err("block export retry delay must not exceed the max retry delay".into());
         }
+        if self.converged_chain_retention.is_zero() {
+            // The progress of a converged chain would be dropped before its worker folds it in.
+            return Err("block export converged-chain retention must be greater than zero".into());
+        }
         Ok(())
     }
 }
@@ -150,30 +218,17 @@ impl BlockExportConfig {
 impl Default for BlockExportConfig {
     fn default() -> Self {
         BlockExportConfig {
-            certificate_upload_batch_size: crate::client::DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
+            certificate_upload_batch_size: 100,
+            queue_size: 1024,
+            max_in_flight_per_destination: 8,
             retry_delay: Duration::from_secs(1),
             max_retry_delay: Duration::from_secs(60),
             idle_catch_up_interval: Duration::from_millis(200),
             max_catch_up_blocks: 200,
+            converged_chain_retention: Duration::from_secs(300),
         }
     }
 }
-
-/// Everything the export task needs that only the chain worker can supply.
-pub struct ChainExportSetup<S: Storage> {
-    /// The chain whose blocks this task exports.
-    pub chain_id: ChainId,
-    /// Read access to this validator's storage, for certificates and blobs during catch-up.
-    /// Deliberately not a local node: going through one loads chain workers, and an export task
-    /// that touches a chain worker resets its TTL and keeps it resident forever.
-    pub storage: S,
-    /// The heights already exported to each validator, as last persisted by the worker.
-    pub exported_heights: BTreeMap<ValidatorPublicKey, BlockHeight>,
-}
-
-/// Creates the export task for one chain worker. Type-erased because only the server binary knows
-/// how to reach another validator.
-pub type ChainExporterFactory<S> = Arc<dyn Fn(ChainExportSetup<S>) -> ChainExporter + Send + Sync>;
 
 /// A block a chain worker has executed, on its way to the other validators.
 struct ExportedBlock {
@@ -182,65 +237,100 @@ struct ExportedBlock {
     /// for a blob this very block publishes — is served without a read from storage. Held as the
     /// storage cache's pointers, so queued blocks share the allocations rather than copying them.
     blobs: Vec<CacheArc<Blob>>,
-    /// The chain's committee *after* the block was applied, so that a validator joining in this
-    /// block is exported to immediately.
+    /// The chain's epoch and committee *after* the block was applied, so that a validator joining
+    /// in this block is exported to immediately.
+    epoch: Epoch,
     committee: Arc<Committee>,
-    /// When the worker queued this block, so that `EXPORT_LATENCY` covers the wait as well as
-    /// the sending. The queue is where the delay shows up once export falls behind, which is
-    /// exactly when the metric is worth reading.
+    /// Blob payload bytes, counted at enqueue so the dequeue can decrement the same amount.
+    #[cfg(with_metrics)]
+    blob_bytes: i64,
     #[cfg(with_metrics)]
     queued_at: Instant,
 }
 
-/// The chain worker's end of its export task.
-pub struct ChainExporter {
-    blocks: mpsc::UnboundedSender<ExportedBlock>,
-    /// The highest height each validator has acknowledged, folded into the chain's
-    /// `exported_heights` by the worker on its next save. Travels this way so the worker stays the
-    /// only writer of its own chain state, and export costs no extra database write.
-    progress: Arc<Mutex<BTreeMap<ValidatorPublicKey, BlockHeight>>>,
+/// The chain workers' end of the export queue: hands blocks over and reads back progress.
+pub struct BlockExportHandle {
+    blocks: mpsc::Sender<ExportedBlock>,
+    progress: SharedProgress,
 }
 
-impl ChainExporter {
-    /// Queues a block for export, and returns without waiting for it to be sent.
-    ///
-    /// Never blocks and never drops: see the module documentation for why the queue is unbounded.
+impl Clone for BlockExportHandle {
+    fn clone(&self) -> Self {
+        BlockExportHandle {
+            blocks: self.blocks.clone(),
+            progress: self.progress.clone(),
+        }
+    }
+}
+
+/// The highest height each destination has acknowledged, per chain, written by the queue task
+/// and folded into each chain's `exported_heights` by its worker on save. Entries are removed
+/// when a chain converges, so this holds lagging chains only.
+type SharedProgress = Arc<Mutex<HashMap<ChainId, BTreeMap<ValidatorPublicKey, BlockHeight>>>>;
+
+impl BlockExportHandle {
+    /// Queues a block for export and returns immediately. A full queue drops the block — never
+    /// blocks the worker — and the queue's catch-up re-sends it from storage.
     pub(crate) fn export(
         &self,
         certificate: CacheArc<ConfirmedBlockCertificate>,
         blobs: Vec<CacheArc<Blob>>,
+        epoch: Epoch,
         committee: Arc<Committee>,
     ) {
+        #[cfg(with_metrics)]
+        let blob_bytes = blobs
+            .iter()
+            .map(|blob| blob.bytes().len() as i64)
+            .sum::<i64>();
         let block = ExportedBlock {
             certificate,
             blobs,
+            epoch,
             committee,
+            #[cfg(with_metrics)]
+            blob_bytes,
             #[cfg(with_metrics)]
             queued_at: Instant::now(),
         };
-        match self.blocks.send(block) {
+        match self.blocks.try_send(block) {
             Ok(()) => {
                 #[cfg(with_metrics)]
-                metrics::QUEUE_SIZE.inc();
+                {
+                    metrics::QUEUE_SIZE.inc();
+                    metrics::QUEUE_BYTES.add(blob_bytes);
+                }
             }
-            // The task runs until this sender is dropped, so it cannot be gone while we hold it.
-            Err(_) => {
-                warn!("Block export task stopped unexpectedly; blocks are no longer being exported")
+            Err(mpsc::error::TrySendError::Full(block)) => {
+                debug!(
+                    chain_id = %block.certificate.block().header.chain_id,
+                    height = %block.certificate.block().header.height,
+                    "Export queue full; dropping the block for catch-up to re-send",
+                );
+                #[cfg(with_metrics)]
+                metrics::DROPPED_BLOCKS.inc();
+            }
+            Err(mpsc::error::TrySendError::Closed(_)) => {
+                warn!("Block export queue stopped unexpectedly; blocks are no longer exported");
             }
         }
     }
 
-    /// Returns how far each validator has been exported to, restricted to `committee` so that
-    /// validators which have left it are pruned.
+    /// Returns how far each validator has been exported to on `chain_id`, restricted to
+    /// `committee` so that validators which left it are pruned.
     pub(crate) fn progress(
         &self,
+        chain_id: ChainId,
         committee: &Committee,
     ) -> BTreeMap<ValidatorPublicKey, BlockHeight> {
         let progress = self
             .progress
             .lock()
             .expect("progress mutex is never poisoned");
-        progress
+        let Some(chain_progress) = progress.get(&chain_id) else {
+            return BTreeMap::new();
+        };
+        chain_progress
             .iter()
             .filter(|(validator, _)| committee.validators().contains_key(*validator))
             .map(|(validator, height)| (*validator, *height))
@@ -248,453 +338,598 @@ impl ChainExporter {
     }
 }
 
-/// Spawns the export task for one chain worker and returns the worker's end of it. The task runs
-/// until the returned [`ChainExporter`] is dropped with its worker, so an idle chain costs neither
-/// a task nor a connection.
-pub fn spawn_chain_exporter<S, P>(
-    setup: ChainExportSetup<S>,
+/// Spawns the process-wide export queue task and returns the handle chain workers push to.
+///
+/// The task runs until every clone of the returned handle is dropped, and reads only from
+/// `storage` — never through a chain worker, whose TTL a touch would reset.
+pub fn spawn_block_export_queue<S, P>(
+    storage: S,
     node_provider: Arc<P>,
     config: BlockExportConfig,
     own_public_key: Option<ValidatorPublicKey>,
-) -> ChainExporter
+) -> BlockExportHandle
 where
     S: Storage + Clone + Send + Sync + 'static,
     P: ValidatorNodeProvider + Send + Sync + 'static,
     P::Node: Send + Sync,
 {
-    let (blocks, receiver) = mpsc::unbounded_channel();
-    // Seed the progress map with what the worker had already persisted, so that the first fold
-    // back into the chain state cannot regress it to nothing while the task has yet to send
-    // anything.
-    let progress = Arc::new(Mutex::new(setup.exported_heights.clone()));
+    let (blocks, receiver) = mpsc::channel(config.queue_size);
+    let progress: SharedProgress = Arc::default();
 
-    let task = ChainExportTask {
-        chain_id: setup.chain_id,
+    let task = BlockExportQueue {
+        storage,
         node_provider,
-        storage: setup.storage,
         config,
         own_public_key,
+        latest_epoch: None,
+        committee: None,
+        chains: HashMap::new(),
         destinations: HashMap::new(),
-        chain_next_height: BlockHeight::ZERO,
         progress: progress.clone(),
     };
     linera_base::Task::spawn(task.run(receiver)).forget();
 
-    ChainExporter { blocks, progress }
+    BlockExportHandle { blocks, progress }
 }
 
-/// One destination validator, and what we believe it holds of this chain.
-struct Destination<S: Storage, N> {
-    sender: BlockSender<S, N>,
-    address: String,
-    /// The next height the validator needs, or `None` when we have to ask it — before the first
-    /// push, and after any failed one.
+/// What we know of one chain: its tip, and each destination's position below it. Kept while some
+/// destination is behind, and for a grace window after convergence so the chain's worker can
+/// still fold the final heights into its state; then forgotten.
+struct ChainRecord {
+    /// The height after the chain's last known block: what a destination must reach to be
+    /// caught up.
+    tip: BlockHeight,
+    /// When this chain last saw a block or a completed send, for the convergence sweep.
+    last_activity: Instant,
+    dests: BTreeMap<ValidatorPublicKey, ChainDest>,
+}
+
+/// One chain's cursor at one destination.
+#[derive(Default)]
+struct ChainDest {
+    /// The next height the destination needs, or `None` when we have to ask it — before the
+    /// first push, and after any failed one.
     next_height: Option<BlockHeight>,
-    /// While this is in the future the validator is skipped; it failed recently.
+    in_flight: bool,
+    /// Whether this chain already sits in the destination's ready list, to keep it there once.
+    queued: bool,
+    /// Backoff for *chain-scoped* failures — the destination is healthy but cannot accept this
+    /// chain yet, e.g. it lacks the committee and the admin chain's export has not reached it.
     retry_at: Option<Instant>,
-    /// How many pushes to this destination have failed in a row, which sets how long the next
-    /// skip lasts.
     failures: u32,
 }
 
-/// The body of one chain's export task.
-struct ChainExportTask<S, P>
+/// One destination validator: its connection and the health state every chain shares.
+struct DestState<N> {
+    node: N,
+    address: String,
+    /// Sends currently running against this destination, over all chains.
+    in_flight: usize,
+    /// How many concurrent sends the AIMD control currently allows: +1 per success up to the
+    /// configured ceiling, halved per transport failure down to 1.
+    window: usize,
+    /// Backoff for *destination-scoped* failures: transport errors and timeouts.
+    retry_at: Option<Instant>,
+    failures: u32,
+    /// Chains with work for this destination, drained as the window allows.
+    ready: VecDeque<ChainId>,
+}
+
+/// How one send ended, scoped to what the error tells us about.
+enum SendOutcome {
+    /// The validator answered; its reported next height.
+    Reached(BlockHeight),
+    /// The failure is about this chain on this destination, not about the destination.
+    ChainScoped(chain_client::Error),
+    /// The failure is about the destination itself.
+    DestinationScoped(chain_client::Error),
+}
+
+/// The body of the process-wide export queue task.
+struct BlockExportQueue<S, P>
 where
     S: Storage,
     P: ValidatorNodeProvider,
 {
-    chain_id: ChainId,
-    node_provider: Arc<P>,
     storage: S,
+    node_provider: Arc<P>,
     config: BlockExportConfig,
     own_public_key: Option<ValidatorPublicKey>,
-    destinations: HashMap<ValidatorPublicKey, Destination<S, P::Node>>,
-    /// The height after the last block handed to this task: how far a destination must reach to
-    /// be considered caught up. Used to keep catching a lagging destination up while the chain is
-    /// idle, so that convergence does not depend on the chain producing more blocks.
-    chain_next_height: BlockHeight,
-    /// The highest height each validator has acknowledged. Seeded from what the worker had
-    /// persisted, so a destination we meet for the first time — after a restart, or after the
-    /// chain worker was dropped and reloaded — starts from there instead of being queried.
-    progress: Arc<Mutex<BTreeMap<ValidatorPublicKey, BlockHeight>>>,
+    /// The newest committee seen, from exported blocks and from scanning storage forward. Used
+    /// for the destination set of every chain: a chain's own committee cannot announce a
+    /// newcomer, and current committee members need every chain regardless of its epoch.
+    latest_epoch: Option<Epoch>,
+    committee: Option<Arc<Committee>>,
+    chains: HashMap<ChainId, ChainRecord>,
+    destinations: HashMap<ValidatorPublicKey, DestState<P::Node>>,
+    progress: SharedProgress,
 }
 
-impl<S, P> ChainExportTask<S, P>
+impl<S, P> BlockExportQueue<S, P>
 where
-    S: Storage + Clone + 'static,
+    S: Storage + Clone + Send + Sync + 'static,
     P: ValidatorNodeProvider,
-    P::Node: Clone + 'static,
+    P::Node: Clone + Send + 'static,
 {
-    /// Exports each block in turn, and returns when the chain worker has dropped its end.
-    #[instrument(level = "debug", skip_all, fields(chain_id = %self.chain_id))]
-    async fn run(mut self, mut receiver: mpsc::UnboundedReceiver<ExportedBlock>) {
+    /// Exports blocks until every handle is dropped, interleaving catch-up while idle.
+    #[instrument(level = "debug", skip_all)]
+    async fn run(mut self, mut receiver: mpsc::Receiver<ExportedBlock>) {
+        let mut jobs = FuturesUnordered::new();
         loop {
-            match timeout(self.config.idle_catch_up_interval, receiver.recv()).await {
-                Ok(Some(block)) => {
-                    #[cfg(with_metrics)]
-                    metrics::QUEUE_SIZE.dec();
-                    #[cfg(with_metrics)]
-                    let queued_at = block.queued_at;
-                    self.export(block).await;
-                    #[cfg(with_metrics)]
-                    metrics::EXPORT_LATENCY
-                        .finish_measurement(queued_at.elapsed().as_secs_f64() * 1000.0);
+            if jobs.is_empty() {
+                match timeout(self.config.idle_catch_up_interval, receiver.recv()).await {
+                    Ok(Some(block)) => self.on_block(block, &mut jobs),
+                    Ok(None) => break,
+                    Err(_) => self.tick(&mut jobs).await,
                 }
-                // The chain worker dropped its end.
-                Ok(None) => break,
-                // Nothing arrived for a while: close more of a lagging destination's gap rather
-                // than waiting for a block the chain may never produce. One round per interval,
-                // so a destination that cannot be caught up trickles rather than spins.
-                Err(_) => self.catch_up_round().await,
+            } else {
+                tokio::select! {
+                    Some(done) = jobs.next() => self.on_done(done, &mut jobs),
+                    received = receiver.recv() => match received {
+                        Some(block) => self.on_block(block, &mut jobs),
+                        None => break,
+                    },
+                }
             }
         }
-        debug!("Chain worker dropped; stopping block export");
+        // The workers are gone; let in-flight sends finish rather than cutting them off.
+        while let Some(done) = jobs.next().await {
+            self.on_done(done, &mut jobs);
+        }
+        debug!("All block export handles dropped; stopping the export queue");
     }
 
-    /// Remakes the node of every destination whose last push failed, drawing the next proxy from
-    /// the rotation so a dead proxy is stepped over rather than retried. Keeps the failure count
-    /// and backoff, so this cannot become a way to hammer a validator that is simply offline.
-    fn refresh_stuck_destinations(&mut self) {
-        let stuck = self
-            .destinations
-            .iter()
-            .filter(|(_, destination)| destination.failures > 0)
-            .map(|(validator, destination)| (*validator, destination.address.clone()))
-            .collect::<Vec<_>>();
-        if stuck.is_empty() {
-            return;
+    /// Folds a fresh block in: advances the chain's tip and fans out to every destination that
+    /// can take it now; the rest catch up from storage when their turn comes.
+    fn on_block(&mut self, block: ExportedBlock, jobs: &mut FuturesUnordered<JobFuture>) {
+        #[cfg(with_metrics)]
+        {
+            metrics::QUEUE_SIZE.dec();
+            metrics::QUEUE_BYTES.sub(block.blob_bytes);
+            metrics::EXPORT_LATENCY
+                .finish_measurement(block.queued_at.elapsed().as_secs_f64() * 1000.0);
         }
-        // One at a time: a batch fails whole on the first bad address, and one unresolvable
-        // destination must not block reconnecting the others.
-        for (validator, address) in stuck {
+        let header = &block.certificate.block().header;
+        let (chain_id, height) = (header.chain_id, header.height);
+        if self.latest_epoch.is_none_or(|epoch| block.epoch > epoch) {
+            self.latest_epoch = Some(block.epoch);
+            self.committee = Some(block.committee.clone());
+        }
+        self.sync_destinations();
+
+        let now = Instant::now();
+        let tip = height.try_add_one().unwrap_or(BlockHeight::MAX);
+        let record = self.chains.entry(chain_id).or_insert_with(|| ChainRecord {
+            tip: BlockHeight::ZERO,
+            last_activity: now,
+            dests: BTreeMap::new(),
+        });
+        record.tip = record.tip.max(tip);
+        record.last_activity = now;
+        let validators = self.destinations.keys().copied().collect::<Vec<_>>();
+        for validator in validators {
+            let record = self.chains.get_mut(&chain_id).expect("inserted above");
+            let chain_dest = record.dests.entry(validator).or_default();
+            let dest = self
+                .destinations
+                .get_mut(&validator)
+                .expect("iterating destinations");
+            let contiguous = chain_dest.next_height == Some(height);
+            let can_send_now = !chain_dest.in_flight
+                && chain_dest.retry_at.is_none_or(|at| at <= now)
+                && dest.retry_at.is_none_or(|at| at <= now)
+                && dest.in_flight < dest.window;
+            if contiguous && can_send_now {
+                // The fast path: the block is already in memory and the destination is ready,
+                // so no storage read at all.
+                Self::spawn_job(
+                    jobs,
+                    &self.storage,
+                    &self.config,
+                    chain_id,
+                    validator,
+                    dest,
+                    chain_dest,
+                    record.tip,
+                    Some((block.certificate.clone(), block.blobs.clone())),
+                );
+            } else if !chain_dest.queued {
+                chain_dest.queued = true;
+                dest.ready.push_back(chain_id);
+                if can_send_now {
+                    Self::drain_ready(
+                        &mut self.chains,
+                        &self.storage,
+                        &self.config,
+                        validator,
+                        dest,
+                        jobs,
+                        now,
+                    );
+                }
+            }
+        }
+    }
+
+    /// Folds one finished send back into the destination's and the chain's state.
+    fn on_done(
+        &mut self,
+        (chain_id, validator, outcome): JobDone,
+        jobs: &mut FuturesUnordered<JobFuture>,
+    ) {
+        let now = Instant::now();
+        let Some(dest) = self.destinations.get_mut(&validator) else {
+            return; // The validator left the committee while its send was in flight.
+        };
+        dest.in_flight = dest.in_flight.saturating_sub(1);
+
+        if let Some(record) = self.chains.get_mut(&chain_id) {
+            record.last_activity = now;
+            if let Some(chain_dest) = record.dests.get_mut(&validator) {
+                chain_dest.in_flight = false;
+                match &outcome {
+                    SendOutcome::Reached(next_height) => {
+                        let advanced = chain_dest.next_height.is_none_or(|n| *next_height > n);
+                        chain_dest.next_height = Some(*next_height);
+                        if advanced {
+                            chain_dest.failures = 0;
+                            chain_dest.retry_at = None;
+                        } else if *next_height < record.tip {
+                            // Answered but moved nothing — a gap our storage cannot fill — so
+                            // back this pair off rather than spinning on it.
+                            back_off(
+                                &mut chain_dest.failures,
+                                &mut chain_dest.retry_at,
+                                now,
+                                &self.config,
+                            );
+                        }
+                        if let Ok(acked) = next_height.try_sub_one() {
+                            self.progress
+                                .lock()
+                                .expect("progress mutex is never poisoned")
+                                .entry(chain_id)
+                                .or_default()
+                                .insert(validator, acked);
+                        }
+                        dest.failures = 0;
+                        dest.retry_at = None;
+                        dest.window =
+                            (dest.window + 1).min(self.config.max_in_flight_per_destination);
+                    }
+                    SendOutcome::ChainScoped(error) => {
+                        debug!(
+                            %chain_id, %validator, %error,
+                            "Destination cannot accept this chain yet; backing the pair off",
+                        );
+                        chain_dest.next_height = None;
+                        back_off(
+                            &mut chain_dest.failures,
+                            &mut chain_dest.retry_at,
+                            now,
+                            &self.config,
+                        );
+                    }
+                    SendOutcome::DestinationScoped(error) => {
+                        warn!(
+                            validator = %dest.address, %chain_id, %error,
+                            "Failed to export to a validator; backing it off and re-resolving",
+                        );
+                        chain_dest.next_height = None;
+                        dest.window = (dest.window / 2).max(1);
+                        back_off(&mut dest.failures, &mut dest.retry_at, now, &self.config);
+                        // Re-resolve so a relayed transport draws the next proxy from the
+                        // rotation; the backoff above still applies if the validator itself is
+                        // the problem.
+                        match self
+                            .node_provider
+                            .make_nodes_from_list(iter::once((validator, dest.address.clone())))
+                        {
+                            Ok(mut nodes) => {
+                                if let Some((_, node)) = nodes.next() {
+                                    dest.node = node;
+                                }
+                            }
+                            Err(error) => {
+                                warn!(%validator, %error, "Cannot re-resolve a failing destination");
+                            }
+                        }
+                    }
+                }
+                #[cfg(with_metrics)]
+                metrics::DESTINATION_WINDOW
+                    .with_label_values(&[&dest.address])
+                    .observe(dest.window as f64);
+            }
+        }
+
+        let dest = self
+            .destinations
+            .get_mut(&validator)
+            .expect("checked above");
+        Self::drain_ready(
+            &mut self.chains,
+            &self.storage,
+            &self.config,
+            validator,
+            dest,
+            jobs,
+            now,
+        );
+    }
+
+    /// An idle moment: pick up committee changes from storage and requeue expired backoffs.
+    async fn tick(&mut self, jobs: &mut FuturesUnordered<JobFuture>) {
+        // Scan forward for committees this process has not seen via blocks — how a validator
+        // admitted while every chain is idle still becomes a destination.
+        let mut next = self
+            .latest_epoch
+            .map_or(0, |epoch| epoch.0.saturating_add(1));
+        while let Ok(Some(committee)) = self.storage.get_or_load_committee(Epoch(next)).await {
+            self.latest_epoch = Some(Epoch(next));
+            self.committee = Some(committee);
+            next = next.saturating_add(1);
+        }
+        self.sync_destinations();
+
+        // Forget chains that converged and stayed quiet past the retention window, so memory
+        // tracks recent and lagging chains rather than every chain ever seen. The grace window
+        // is what lets the chain's worker fold the final heights in before they vanish.
+        let now = Instant::now();
+        let retention = self.config.converged_chain_retention;
+        let progress = &self.progress;
+        self.chains.retain(|chain_id, record| {
+            let converged = !record.dests.is_empty()
+                && record.dests.values().all(|chain_dest| {
+                    !chain_dest.in_flight && chain_dest.next_height == Some(record.tip)
+                });
+            if converged && now.duration_since(record.last_activity) > retention {
+                progress
+                    .lock()
+                    .expect("progress mutex is never poisoned")
+                    .remove(chain_id);
+                false
+            } else {
+                true
+            }
+        });
+
+        // Requeue everything whose backoff expired and is still behind.
+        for (chain_id, record) in &mut self.chains {
+            for (validator, chain_dest) in &mut record.dests {
+                let behind = chain_dest.next_height.is_none_or(|next| next < record.tip);
+                if behind
+                    && !chain_dest.in_flight
+                    && !chain_dest.queued
+                    && chain_dest.retry_at.is_none_or(|at| at <= now)
+                {
+                    if let Some(dest) = self.destinations.get_mut(validator) {
+                        chain_dest.queued = true;
+                        dest.ready.push_back(*chain_id);
+                    }
+                }
+            }
+        }
+        let validators = self.destinations.keys().copied().collect::<Vec<_>>();
+        for validator in validators {
+            let dest = self
+                .destinations
+                .get_mut(&validator)
+                .expect("iterating destinations");
+            Self::drain_ready(
+                &mut self.chains,
+                &self.storage,
+                &self.config,
+                validator,
+                dest,
+                jobs,
+                now,
+            );
+        }
+    }
+
+    /// Brings the destination set in line with the latest committee: adds joiners, drops
+    /// leavers, and re-resolves a changed address.
+    fn sync_destinations(&mut self) {
+        let Some(committee) = &self.committee else {
+            return;
+        };
+        self.destinations.retain(|validator, dest| {
+            committee
+                .validators()
+                .get(validator)
+                .is_some_and(|state| state.network_address == dest.address)
+        });
+        for (validator, address) in committee.validator_addresses() {
+            if Some(validator) == self.own_public_key || self.destinations.contains_key(&validator)
+            {
+                continue;
+            }
+            // One at a time: a batch fails whole on the first bad address, and one unresolvable
+            // validator must not keep every other one out of the destination set.
             match self
                 .node_provider
                 .make_nodes_from_list(iter::once((validator, address)))
             {
-                Ok(nodes) => {
-                    if let (Some((_, node)), Some(destination)) = (
-                        nodes.into_iter().next(),
-                        self.destinations.get_mut(&validator),
-                    ) {
-                        destination.sender.remote_node.node = node;
+                Ok(mut nodes) => {
+                    if let Some((_, node)) = nodes.next() {
+                        self.destinations.insert(
+                            validator,
+                            DestState {
+                                node,
+                                address: address.to_owned(),
+                                in_flight: 0,
+                                window: self.config.max_in_flight_per_destination,
+                                retry_at: None,
+                                failures: 0,
+                                ready: VecDeque::new(),
+                            },
+                        );
                     }
                 }
                 Err(error) => {
-                    warn!(%validator, %error, "Cannot rebuild the connection to a lagging validator");
+                    warn!(
+                        %validator, %address, %error,
+                        "Cannot resolve a committee member to export blocks to; \
+                         continuing with the others",
+                    );
                 }
             }
         }
-    }
-
-    /// Pushes one bounded chunk of missing blocks to every destination that is behind.
-    ///
-    /// Runs only when nothing is queued, so live blocks always take priority over backfill.
-    async fn catch_up_round(&mut self) {
-        // The destination set stays as of the last exported block. That loses nothing: a chain's
-        // own committee only changes when the chain executes a block (`CreateCommittee` and
-        // `ProcessNewEpoch` both mutate it in the executing block), so there is no committee
-        // change for an idle chain to discover.
-        self.refresh_stuck_destinations();
-        let now = Instant::now();
-        let (config, chain_id, target) = (&self.config, self.chain_id, self.chain_next_height);
-        let results = future::join_all(
-            self.destinations
-                .iter_mut()
-                .filter(|(_, destination)| destination.is_behind(target) && destination.is_due(now))
-                .map(|(validator, destination)| async move {
-                    (
-                        *validator,
-                        destination.catch_up(chain_id, target, now, config).await,
-                    )
-                }),
-        )
-        .await;
-        self.record_progress(results);
-    }
-
-    /// Pushes one block to every destination, concurrently, and records how far each got.
-    async fn export(&mut self, block: ExportedBlock) {
-        self.chain_next_height = block
-            .certificate
-            .block()
-            .header
-            .height
-            .try_add_one()
-            .unwrap_or(BlockHeight::MAX);
-        self.sync_destinations(&block);
-
-        // Push to every destination concurrently, but only move on to the next block once they
-        // have all answered: that is what gives each destination the blocks of this chain in
-        // height order.
-        let now = Instant::now();
-        let (config, block) = (&self.config, &block);
-        let results = future::join_all(self.destinations.iter_mut().map(
-            |(validator, destination)| async move {
-                (*validator, destination.send(block, now, config).await)
-            },
-        ))
-        .await;
-
-        self.record_progress(results);
-    }
-
-    /// Records how far each destination acknowledged, for the worker to persist on its next save.
-    /// These are heights the validators reported themselves, so one that could not close its gap
-    /// keeps a low cursor and is picked up again next round.
-    fn record_progress(&self, results: Vec<(ValidatorPublicKey, Option<BlockHeight>)>) {
-        let mut progress = self
-            .progress
-            .lock()
-            .expect("progress mutex is never poisoned");
-        for (validator, next_height) in results {
-            if let Some(Ok(height)) = next_height.map(BlockHeight::try_sub_one) {
-                progress.insert(validator, height);
-            }
-        }
-    }
-
-    /// Brings the destination set in line with the block's committee: adds validators that joined,
-    /// drops those that left, and re-creates a node whose address changed.
-    fn sync_destinations(&mut self, block: &ExportedBlock) {
-        self.sync_destinations_with(&block.committee);
-    }
-
-    /// Adds destinations for validators in `committee` we do not have, and drops those that have
-    /// left it or changed address.
-    fn sync_destinations_with(&mut self, committee: &Committee) {
-        self.destinations.retain(|validator, destination| {
-            committee
-                .validators()
-                .get(validator)
-                .is_some_and(|state| state.network_address == destination.address)
+        // A validator that left takes its cursors with it.
+        self.chains.retain(|_, record| {
+            record
+                .dests
+                .retain(|validator, _| self.destinations.contains_key(validator));
+            true
         });
+    }
+}
 
-        // A destination whose last push failed may be stuck behind a dead proxy, so rebuild its
-        // node alongside any validator we do not have yet.
-        let stuck = self
-            .destinations
-            .iter()
-            .filter(|(_, destination)| destination.failures > 0)
-            .map(|(validator, _)| *validator)
-            .collect::<Vec<_>>();
+/// The result of one send job: which pair it was for, and how it went.
+type JobDone = (ChainId, ValidatorPublicKey, SendOutcome);
 
-        let missing = committee
-            .validator_addresses()
-            .filter(|(validator, _)| {
-                Some(*validator) != self.own_public_key
-                    && (!self.destinations.contains_key(validator) || stuck.contains(validator))
-            })
-            .map(|(validator, address)| (validator, address.to_owned()))
-            .collect::<Vec<_>>();
-        if missing.is_empty() {
+/// One send in flight, boxed so jobs from different call sites share a queue.
+#[cfg(not(web))]
+type JobFuture = futures::future::BoxFuture<'static, JobDone>;
+#[cfg(web)]
+type JobFuture = futures::future::LocalBoxFuture<'static, JobDone>;
+
+impl<S, P> BlockExportQueue<S, P>
+where
+    S: Storage + Clone + Send + Sync + 'static,
+    P: ValidatorNodeProvider,
+    P::Node: Clone + Send + 'static,
+{
+    /// Starts one send for `(chain_id, validator)`: the held block when contiguous, catch-up
+    /// from storage otherwise.
+    #[expect(clippy::too_many_arguments)]
+    fn spawn_job(
+        jobs: &mut FuturesUnordered<JobFuture>,
+        storage: &S,
+        config: &BlockExportConfig,
+        chain_id: ChainId,
+        validator: ValidatorPublicKey,
+        dest: &mut DestState<P::Node>,
+        chain_dest: &mut ChainDest,
+        target: BlockHeight,
+        live: Option<(CacheArc<ConfirmedBlockCertificate>, Vec<CacheArc<Blob>>)>,
+    ) {
+        chain_dest.in_flight = true;
+        chain_dest.queued = false;
+        dest.in_flight += 1;
+        let mut sender = BlockSender {
+            remote_node: RemoteNode {
+                public_key: validator,
+                node: dest.node.clone(),
+            },
+            storage: storage.clone(),
+            certificate_upload_batch_size: config.certificate_upload_batch_size,
+        };
+        let cursor = chain_dest.next_height;
+        let max_catch_up = config.max_catch_up_blocks;
+        #[cfg(with_metrics)]
+        let address = dest.address.clone();
+        let job = async move {
+            #[cfg(with_metrics)]
+            let send_latency = metrics::SEND_LATENCY.with_label_values(&[&address]);
+            #[cfg(with_metrics)]
+            let _latency = send_latency.measure_latency();
+            #[cfg(with_metrics)]
+            metrics::DESTINATION_LAG
+                .with_label_values(&[&address])
+                .observe(match cursor {
+                    Some(next) => target.0.saturating_sub(next.0) as f64,
+                    None => 1.0,
+                });
+            let result = match live {
+                Some((certificate, blobs)) => {
+                    sender
+                        .send_block(&certificate, &blobs, cursor, max_catch_up)
+                        .await
+                }
+                None => {
+                    sender
+                        .send_missing_blocks(chain_id, target, cursor, max_catch_up)
+                        .await
+                }
+            };
+            let outcome = match result {
+                Ok(next_height) => SendOutcome::Reached(next_height),
+                Err(error) if is_chain_scoped(&error) => SendOutcome::ChainScoped(error),
+                Err(error) => SendOutcome::DestinationScoped(error),
+            };
+            (chain_id, validator, outcome)
+        };
+        #[cfg(not(web))]
+        jobs.push(job.boxed());
+        #[cfg(web)]
+        jobs.push(job.boxed_local());
+    }
+
+    /// Starts catch-up sends from this destination's ready list until its window is full.
+    fn drain_ready(
+        chains: &mut HashMap<ChainId, ChainRecord>,
+        storage: &S,
+        config: &BlockExportConfig,
+        validator: ValidatorPublicKey,
+        dest: &mut DestState<P::Node>,
+        jobs: &mut FuturesUnordered<JobFuture>,
+        now: Instant,
+    ) {
+        if dest.retry_at.is_some_and(|at| at > now) {
             return;
         }
-
-        // One at a time: resolving as a batch fails the whole batch on the first bad address,
-        // which would stop this chain exporting to *any* validator, on every later block.
-        let nodes = missing
-            .into_iter()
-            .filter_map(|(validator, address)| {
-                match self
-                    .node_provider
-                    .make_nodes_from_list(iter::once((validator, address.clone())))
-                {
-                    Ok(nodes) => nodes.into_iter().next(),
-                    Err(error) => {
-                        warn!(
-                            %validator, %address, %error,
-                            "Cannot reach a committee member to export blocks to; \
-                             continuing with the others",
-                        );
-                        None
-                    }
-                }
-            })
-            .collect::<Vec<_>>();
-
-        let acknowledged = self
-            .progress
-            .lock()
-            .expect("progress mutex is never poisoned")
-            .clone();
-        for (validator, node) in nodes {
-            let Some(address) = committee
-                .validators()
-                .get(&validator)
-                .map(|state| state.network_address.clone())
-            else {
+        while dest.in_flight < dest.window {
+            let Some(chain_id) = dest.ready.pop_front() else {
+                return;
+            };
+            let Some(record) = chains.get_mut(&chain_id) else {
+                continue; // Converged and dropped while queued.
+            };
+            let Some(chain_dest) = record.dests.get_mut(&validator) else {
                 continue;
             };
-            let sender = BlockSender {
-                remote_node: RemoteNode {
-                    public_key: validator,
-                    node,
-                },
-                storage: self.storage.clone(),
-                certificate_upload_batch_size: self.config.certificate_upload_batch_size,
-            };
-            // Rebuilding a stuck destination keeps its failure count and retry time: only the
-            // connection is replaced, so a validator that is itself down keeps backing off.
-            let previous = self.destinations.remove(&validator);
-            self.destinations.insert(
-                validator,
-                Destination {
-                    sender,
-                    address,
-                    // An acknowledged height was reported by the validator itself, so the block
-                    // after it is the one the validator needs next.
-                    next_height: acknowledged
-                        .get(&validator)
-                        .map(|height| BlockHeight(height.0.saturating_add(1))),
-                    retry_at: previous.as_ref().and_then(|d| d.retry_at),
-                    failures: previous.map_or(0, |d| d.failures),
-                },
+            chain_dest.queued = false;
+            let behind = chain_dest.next_height.is_none_or(|next| next < record.tip);
+            if chain_dest.in_flight || !behind || chain_dest.retry_at.is_some_and(|at| at > now) {
+                continue; // The tick that queued it has been overtaken; it requeues if needed.
+            }
+            Self::spawn_job(
+                jobs, storage, config, chain_id, validator, dest, chain_dest, record.tip, None,
             );
         }
     }
 }
 
-impl<S, N> Destination<S, N>
-where
-    S: Storage + Clone + 'static,
-    N: ValidatorNode + Clone + 'static,
-{
-    /// Pushes the block, along with any earlier ones this validator is missing, and returns the
-    /// validator's next block height afterwards — or `None` if it was skipped or failed.
-    async fn send(
-        &mut self,
-        block: &ExportedBlock,
-        now: Instant,
-        config: &BlockExportConfig,
-    ) -> Option<BlockHeight> {
-        if self.retry_at.is_some_and(|retry_at| now < retry_at) {
-            return None;
-        }
+/// Whether this failure is about one chain rather than about the destination. `EventsNotFound`
+/// is the destination lacking a committee — the admin chain's export fixes that, and must not be
+/// throttled by it; the others are gaps on our own side.
+fn is_chain_scoped(error: &chain_client::Error) -> bool {
+    matches!(
+        error,
+        chain_client::Error::RemoteNodeError(
+            NodeError::EventsNotFound(_)
+                | NodeError::BlobsNotFound(_)
+                | NodeError::InactiveChain(_)
+        ) | chain_client::Error::ReadCertificatesError(_)
+    )
+}
 
-        #[cfg(with_metrics)]
-        let send_latency = metrics::SEND_LATENCY.with_label_values(&[&self.address]);
-        #[cfg(with_metrics)]
-        let _latency = send_latency.measure_latency();
-        #[cfg(with_metrics)]
-        metrics::DESTINATION_LAG
-            .with_label_values(&[&self.address])
-            .observe(self.lag(block) as f64);
-
-        let height = block.certificate.block().header.height;
-        let result = self
-            .sender
-            .send_block(
-                &block.certificate,
-                &block.blobs,
-                self.next_height,
-                config.max_catch_up_blocks,
-            )
-            .await;
-        self.record_outcome(result, height, now, config)
-    }
-
-    /// Whether this destination is, as far as we know, below `target`. An unknown height counts
-    /// as behind: that is what a failed send leaves, and assuming otherwise strands it silently.
-    fn is_behind(&self, target: BlockHeight) -> bool {
-        self.next_height.is_none_or(|next| next < target)
-    }
-
-    /// Whether this destination's backoff, if any, has expired.
-    fn is_due(&self, now: Instant) -> bool {
-        self.retry_at.is_none_or(|retry_at| retry_at <= now)
-    }
-
-    /// Pushes one bounded chunk of the blocks this validator is missing below `target`, so one
-    /// that joined partway through a long chain converges without waiting for new blocks.
-    async fn catch_up(
-        &mut self,
-        chain_id: ChainId,
-        target: BlockHeight,
-        now: Instant,
-        config: &BlockExportConfig,
-    ) -> Option<BlockHeight> {
-        #[cfg(with_metrics)]
-        let send_latency = metrics::SEND_LATENCY.with_label_values(&[&self.address]);
-        #[cfg(with_metrics)]
-        let _latency = send_latency.measure_latency();
-
-        let previous = self.next_height;
-        let failures_before = self.failures;
-        let result = self
-            .sender
-            .send_missing_blocks(
-                chain_id,
-                target,
-                self.next_height,
-                config.max_catch_up_blocks,
-            )
-            .await;
-        let outcome = self.record_outcome(result, target, now, config);
-
-        // A round can succeed and advance nothing, since a chain we merely receive from is
-        // stored only at its message-bearing blocks; without backing off, a destination we can
-        // never finish would spin the task. Success only: `record_outcome` handles failures.
-        // Restore the pre-success failure count first — `record_outcome` just reset it, and a
-        // backoff computed from zero would never escalate past the base delay.
-        if let Some(reached) = outcome {
-            let advanced = previous.is_none_or(|before| reached > before);
-            if !advanced {
-                self.failures = failures_before;
-                self.back_off(now, config);
-            }
-        }
-        outcome
-    }
-
-    /// Folds the outcome of a push into this destination's cursor and backoff.
-    fn record_outcome(
-        &mut self,
-        result: Result<BlockHeight, crate::client::chain_client::Error>,
-        height: BlockHeight,
-        now: Instant,
-        config: &BlockExportConfig,
-    ) -> Option<BlockHeight> {
-        match result {
-            Ok(next_height) => {
-                self.next_height = Some(next_height);
-                self.retry_at = None;
-                self.failures = 0;
-                Some(next_height)
-            }
-            Err(error) => {
-                warn!(
-                    validator = %self.address, %height, %error,
-                    "Failed to export block; will query the validator before the next push",
-                );
-                // Forget the cursor: the next push must ask what this validator actually has
-                // rather than assume the block we just failed to send arrived.
-                self.next_height = None;
-                self.back_off(now, config);
-                None
-            }
-        }
-    }
-
-    /// Holds this destination off for a growing interval, capped by the configured maximum.
-    fn back_off(&mut self, now: Instant, config: &BlockExportConfig) {
-        let backoff = config
-            .retry_delay
-            .saturating_mul(1u32.checked_shl(self.failures).unwrap_or(u32::MAX))
-            .min(config.max_retry_delay);
-        self.retry_at = Some(now + backoff);
-        self.failures = self.failures.saturating_add(1);
-    }
-
-    /// How many blocks this validator is believed to be missing before the block being pushed.
-    #[cfg(with_metrics)]
-    fn lag(&self, block: &ExportedBlock) -> u64 {
-        let height = block.certificate.block().header.height;
-        match self.next_height {
-            Some(next_height) => height.0.saturating_sub(next_height.0),
-            // We have no cursor, so we are about to query; report the gap as unknown-but-nonzero.
-            None => 1,
-        }
-    }
+/// Escalating backoff shared by both scopes: doubles from `retry_delay` per consecutive failure,
+/// capped at `max_retry_delay`.
+fn back_off(
+    failures: &mut u32,
+    retry_at: &mut Option<Instant>,
+    now: Instant,
+    config: &BlockExportConfig,
+) {
+    let backoff = config
+        .retry_delay
+        .saturating_mul(1u32.checked_shl(*failures).unwrap_or(u32::MAX))
+        .min(config.max_retry_delay);
+    *retry_at = Some(now + backoff);
+    *failures = failures.saturating_add(1);
 }
 
 /// Sends this validator's blocks to one other validator, reading everything it needs from
@@ -871,6 +1106,14 @@ mod tests {
                 ..BlockExportConfig::default()
             },
             BlockExportConfig {
+                queue_size: 0,
+                ..BlockExportConfig::default()
+            },
+            BlockExportConfig {
+                max_in_flight_per_destination: 0,
+                ..BlockExportConfig::default()
+            },
+            BlockExportConfig {
                 max_catch_up_blocks: 0,
                 ..BlockExportConfig::default()
             },
@@ -891,9 +1134,41 @@ mod tests {
                 max_retry_delay: Duration::from_secs(60),
                 ..BlockExportConfig::default()
             },
+            BlockExportConfig {
+                converged_chain_retention: Duration::ZERO,
+                ..BlockExportConfig::default()
+            },
         ];
         for config in invalid {
             assert!(config.check().is_err(), "accepted: {config:?}");
         }
+    }
+
+    /// The backoff must escalate across consecutive failures — computing it from a reset counter
+    /// is how it once retried a hopeless destination at the base delay forever.
+    #[test]
+    fn back_off_escalates_and_caps() {
+        let config = BlockExportConfig {
+            retry_delay: Duration::from_millis(100),
+            max_retry_delay: Duration::from_millis(450),
+            ..BlockExportConfig::default()
+        };
+        let mut failures = 0;
+        let mut retry_at = None;
+        let now = Instant::now();
+        let mut delays = Vec::new();
+        for _ in 0..4 {
+            back_off(&mut failures, &mut retry_at, now, &config);
+            delays.push(retry_at.expect("set by back_off") - now);
+        }
+        assert_eq!(
+            delays,
+            [
+                Duration::from_millis(100),
+                Duration::from_millis(200),
+                Duration::from_millis(400),
+                Duration::from_millis(450),
+            ],
+        );
     }
 }
