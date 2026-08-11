@@ -193,12 +193,6 @@ pub trait LockPreservation:
 ///   [`ValidatedBlockCertificate`] for `B` in round `s`. By [`LockPreservation`], applied to the
 ///   commit of `A` in round `r` and to `s > r`, that certificate certifies `A`. Hence `B = A`. ∎
 ///
-/// The two cases look asymmetric in their use of [`CorrectValidatorInIntersection`], but only the
-/// first uses it *directly*: the second delegates to [`LockPreservation`], whose own proof opens
-/// with the same intersection step. Nor could the first case be folded into the second — the
-/// delegation route runs through [`CommitRestsOnValidation`], which says nothing about
-/// [`Round::Fast`], so `r = s = Round::Fast` would be left uncovered.
-///
 /// *In observable terms.* Combining with [`TipAdvancesOnlyOnValidCertificate`]: if any correct
 /// validator's [`ChainTipState`] records a block hash at height `h`, then no correct validator
 /// ever records a different hash at `h` — whatever the network does, and whatever the faulty
