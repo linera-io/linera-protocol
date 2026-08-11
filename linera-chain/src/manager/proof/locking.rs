@@ -46,7 +46,7 @@ use crate::{
         CorrectValidatorInIntersection,
     },
     manager::proof::{
-        model::{ConsensusInstance, DurablePersistence, EpochAgreement},
+        model::{ConsensusInstance, DurablePersistence, EpochAgreement, SerializedChainState},
         rounds::{CurrentRoundMonotone, RoundFloor, VoteRoundBelowCurrentRound},
         voting::{
             ConfirmationNeedsValidatedCertificate, ConfirmationOnlyInCurrentRound,
@@ -208,7 +208,11 @@ pub trait CastValidationRoundFloor:
 /// [`Outcome::Skip`]: crate::manager::Outcome::Skip
 /// [`SerializedChainState`]: crate::manager::proof::model::SerializedChainState
 pub trait OneValidationVotePerRound:
-    ProposalGate + CastValidationRoundFloor + ValidationRoundStrictlyIncreases + DurablePersistence
+    ProposalGate
+    + CastValidationRoundFloor
+    + ValidationRoundStrictlyIncreases
+    + DurablePersistence
+    + SerializedChainState
 {
 }
 
@@ -264,6 +268,7 @@ pub trait OneConfirmationVotePerRound:
     + LockRoundMonotone
     + RoundFloor
     + DurablePersistence
+    + SerializedChainState
 {
 }
 

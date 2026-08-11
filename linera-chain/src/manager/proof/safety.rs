@@ -27,8 +27,8 @@ use crate::{
         model::{ConflictingBlocks, DeterministicExecution, EpochAgreement},
         rounds::{CurrentRoundMonotone, VoteRoundBelowCurrentRound},
         voting::{
-            ConfirmationNeedsValidatedCertificate, FastConfirmationNeedsEmptyLock,
-            UnlockingRequiresHigherCertificate,
+            ConfirmationNeedsValidatedCertificate, ConfirmationOnlyInCurrentRound,
+            FastConfirmationNeedsEmptyLock, UnlockingRequiresHigherCertificate,
         },
     },
 };
@@ -168,6 +168,8 @@ pub trait LockPreservation:
     + CastValidationRoundFloor
     + FastConfirmationNeedsEmptyLock
     + ConfirmationNeedsValidatedCertificate
+    + ConfirmationOnlyInCurrentRound
+    + UnlockingRequiresHigherCertificate
     + VoteRoundBelowCurrentRound
     + CurrentRoundMonotone
     + CorrectValidatorInIntersection
