@@ -272,7 +272,7 @@ pub trait OneConfirmationVotePerRound:
 {
 }
 
-/// **Corollary (At most one validated block per round).** For a given chain and height, all
+/// **Lemma (At most one validated block per round).** For a given chain and height, all
 /// valid [`ValidatedBlockCertificate`]s certified in the same round certify the same block.
 ///
 /// *Proof.* Let two such certificates certify `B₁` and `B₂` in round `s`. By

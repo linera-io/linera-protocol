@@ -217,7 +217,7 @@ pub trait CommitAgreement:
 {
 }
 
-/// **Corollary (The committed chain is unique).** For each chain there is at most one sequence of
+/// **Theorem (The committed chain is unique).** For each chain there is at most one sequence of
 /// committed blocks: the committed blocks at heights `0, 1, 2, …` form a single hash-linked list,
 /// and any two correct validators' [`block_hashes`](crate::ChainStateView) agree wherever both
 /// are defined. In particular the committed prefixes observed by correct validators are always
@@ -245,7 +245,7 @@ pub trait UniqueChain:
 {
 }
 
-/// **Corollary (Agreement failure is attributable).** The converse of [`CommitAgreement`]: when
+/// **Remark (Agreement failure is attributable).** The converse of [`CommitAgreement`]: when
 /// it fails, the failure is not silent. Two conflicting confirmed certificates are self-contained
 /// evidence convicting validators of at least
 /// [`validity_threshold`](linera_execution::committee::Committee::validity_threshold) weight, and
