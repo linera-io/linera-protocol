@@ -60,13 +60,20 @@ pub trait CommitRestsOnValidation:
 /// epoch.
 ///
 /// *Proof.* The tip register is advanced in one place in `linera_chain::chain`, at the end of
-/// the private `ChainStateView::apply_confirmed_block` (`tip.next_block_height.
-/// try_add_assign_one()`), reached only from `ChainWorkerState::execute_contiguous_block` and
-/// `execute_block_with_checkpoint_restore`. Both are reached only through
+/// [`ChainStateView::apply_confirmed_block`] (`tip.next_block_height.try_add_assign_one()`).
+/// That method has a single call site in the workspace outside tests, in
+/// `ChainWorkerState::execute_contiguous_block`; `execute_block_with_checkpoint_restore` reaches
+/// it by delegating there after installing the snapshot. Both are reached only through
 /// `ChainWorkerState::process_confirmed_block`, whose every non-early-return path first
 /// evaluates `certificate.check(&committee)?` with `committee` fetched for `block.header.epoch`.
 /// The early returns — the `tip.next_block_height > height` skip and the `Preprocess` dispatch —
 /// do not advance the tip. ∎
+///
+/// **Where this is fragile.** [`ChainStateView::apply_confirmed_block`] is `pub`, on a type this
+/// crate re-exports, and it takes a [`ConfirmedBlock`] and no [`Committee`] — so it cannot verify
+/// anything, and nothing about its signature confines it to verified callers. The enumeration
+/// above holds by current usage, not by visibility. A new caller must perform the certificate
+/// check itself.
 ///
 /// Two paths deserve explicit mention because they weaken the *precondition* without weakening
 /// this lemma. `pre_checkpoint_block_trust` lets a hash recorded by an earlier checkpoint
@@ -77,6 +84,9 @@ pub trait CommitRestsOnValidation:
 ///
 /// [`ChainTipState::next_block_height`]: crate::ChainTipState::next_block_height
 /// [`ConfirmedBlockCertificate`]: crate::types::ConfirmedBlockCertificate
+/// [`ConfirmedBlock`]: crate::block::ConfirmedBlock
+/// [`ChainStateView::apply_confirmed_block`]: crate::ChainStateView::apply_confirmed_block
+/// [`Committee`]: linera_execution::committee::Committee
 /// [`check`]: crate::types::ConfirmedBlockCertificate::check
 pub trait TipAdvancesOnlyOnValidCertificate {}
 

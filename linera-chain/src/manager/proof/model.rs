@@ -118,11 +118,24 @@ pub trait MaxByzantineWeight {}
 ///
 /// This is what makes [`Intersection`] applicable to two certificates for the same height: two
 /// quorums of *different* committees need not intersect at all. It is close to enforced rather
-/// than assumed. A proposal is rejected unless `check_block_epoch` finds
-/// [`ProposedBlock::epoch`] equal to the chain's current epoch, and
-/// `ChainWorkerState::process_validated_block` and `process_confirmed_block` apply the same
-/// check to the certified block before verifying signatures against that epoch's committee. The
-/// chain's current epoch at height `h` is a function of the committed blocks below `h`, which
+/// than assumed, by two different mechanisms.
+///
+/// *Which committee judges a certificate* is a function of the block's own declared epoch, not of
+/// the judging node's state: `ChainWorkerState::process_confirmed_block` fetches
+/// `committee_for_epoch(block.header.epoch)` and verifies the certificate against that committee.
+/// Since [`ProposedBlock::epoch`] is covered by the block hash, two correct validators never
+/// disagree about which committee a given certificate is judged by. This is what the assumption
+/// needs, and it is unconditional.
+///
+/// *That the epoch is also the chain's current one* is enforced separately, by `check_block_epoch`,
+/// at three sites: `try_handle_block_proposal` before voting, `process_validated_block` before
+/// verifying the certificate, and `execute_contiguous_block` before applying a confirmed block.
+/// Note it is **not** applied in `process_confirmed_block` itself — deliberately, since a node
+/// catching up must accept certificates from earlier epochs — so a merely *preprocessed* block is
+/// never epoch-checked in this sense, which is consistent with preprocessing not advancing the tip
+/// ([`TipAdvancesOnlyOnValidCertificate`]).
+///
+/// The chain's current epoch at height `h` is a function of the committed blocks below `h`, which
 /// [`UniqueChain`] shows is unique — so the assumption is discharged for height `h` by the
 /// agreement result at heights below `h`, and the induction in [`UniqueChain`] is what makes
 /// that non-circular.
@@ -134,6 +147,7 @@ pub trait MaxByzantineWeight {}
 /// [`ProposedBlock::epoch`]: crate::data_types::ProposedBlock::epoch
 /// [`Intersection`]: crate::data_types::proof::quorum::Intersection
 /// [`UniqueChain`]: crate::manager::proof::safety::UniqueChain
+/// [`TipAdvancesOnlyOnValidCertificate`]: crate::manager::proof::commit::TipAdvancesOnlyOnValidCertificate
 pub trait EpochAgreement {}
 
 /// **Assumption (Cryptographic soundness).** [`ValidatorSignature`] is existentially unforgeable:
