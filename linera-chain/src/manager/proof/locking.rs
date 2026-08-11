@@ -41,7 +41,10 @@
 //! [`ManagerSafetySnapshot::restore`]: crate::manager::ManagerSafetySnapshot::restore
 
 use crate::{
-    data_types::proof::quorum::{CertificateCarriesCorrectVote, CorrectValidatorInIntersection},
+    data_types::proof::quorum::{
+        CertificateCarriesCorrectVote, CertificateEmbedsQuorum, CorrectSignerCastItsVote,
+        CorrectValidatorInIntersection,
+    },
     manager::proof::{
         model::{ConsensusInstance, DurablePersistence, EpochAgreement},
         rounds::{CurrentRoundMonotone, RoundFloor, VoteRoundBelowCurrentRound},
@@ -271,7 +274,7 @@ pub trait OneConfirmationVotePerRound:
 /// [`EpochAgreement`] they are judged against the same committee, so by
 /// [`CertificateEmbedsQuorum`] their signer sets are two quorums of it, and by
 /// [`CorrectValidatorInIntersection`] some correct validator `v` signed both. By
-/// [`CertificateCarriesCorrectVote`], `v` cast validation votes for `B₁` and for `B₂`, both in
+/// [`CorrectSignerCastItsVote`], `v` cast validation votes for `B₁` and for `B₂`, both in
 /// round `s`. By [`OneValidationVotePerRound`], `B₁ = B₂`. ∎
 ///
 /// [`ValidatedBlockCertificate`]: crate::types::ValidatedBlockCertificate
@@ -279,7 +282,8 @@ pub trait OneConfirmationVotePerRound:
 pub trait UniqueValidatedBlockPerRound:
     OneValidationVotePerRound
     + CorrectValidatorInIntersection
-    + CertificateCarriesCorrectVote
+    + CertificateEmbedsQuorum
+    + CorrectSignerCastItsVote
     + EpochAgreement
 {
 }

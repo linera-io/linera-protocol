@@ -14,7 +14,9 @@
 //! the protocol makes no progress at all.
 
 use crate::{
-    data_types::proof::quorum::{CertificateCarriesCorrectVote, CorrectValidatorInIntersection},
+    data_types::proof::quorum::{
+        CertificateEmbedsQuorum, CorrectSignerCastItsVote, CorrectValidatorInIntersection,
+    },
     manager::proof::{
         commit::{CommitRestsOnValidation, TipAdvancesOnlyOnValidCertificate},
         locking::{
@@ -22,7 +24,7 @@ use crate::{
             OneConfirmationVotePerRound, OneValidationVotePerRound, SafetyStateRecovery,
             UniqueValidatedBlockPerRound,
         },
-        model::{ConflictingBlocks, DeterministicExecution, EpochAgreement, UnforgeableSignatures},
+        model::{ConflictingBlocks, DeterministicExecution, EpochAgreement},
         rounds::{CurrentRoundMonotone, VoteRoundBelowCurrentRound},
         voting::{
             ConfirmationNeedsValidatedCertificate, FastConfirmationNeedsEmptyLock,
@@ -107,9 +109,10 @@ pub trait UnlockingJustification:
 ///
 /// *Proof.* Strong induction on `s ≥ r`. Assume the claim for all `t` with `r ≤ t < s`, and let
 /// `C'` be a valid [`ValidatedBlockCertificate`] for `B` in round `s`. By [`EpochAgreement`] the
-/// confirmed certificate and `C'` are judged against the same committee, so by
-/// [`CorrectValidatorInIntersection`] their signer sets share a correct validator `v`, and by
-/// [`CertificateCarriesCorrectVote`] and [`UnforgeableSignatures`] `v` itself cast both votes:
+/// confirmed certificate and `C'` are judged against the same committee; by
+/// [`CertificateEmbedsQuorum`] both signer sets are quorums of it, so by
+/// [`CorrectValidatorInIntersection`] they share a correct validator `v`, and by
+/// [`CorrectSignerCastItsVote`] `v` itself cast both votes:
 /// a confirmation vote for `A` in round `r` (call it **(a)**) and a validation vote for `B` in
 /// round `s` (call it **(b)**).
 ///
@@ -168,8 +171,8 @@ pub trait LockPreservation:
     + VoteRoundBelowCurrentRound
     + CurrentRoundMonotone
     + CorrectValidatorInIntersection
-    + CertificateCarriesCorrectVote
-    + UnforgeableSignatures
+    + CertificateEmbedsQuorum
+    + CorrectSignerCastItsVote
     + EpochAgreement
 {
 }
@@ -181,9 +184,11 @@ pub trait LockPreservation:
 /// *Proof.* Let valid confirmed certificates for `A` in round `r` and for `B` in round `s`
 /// exist, with `r ≤ s` after renaming.
 ///
-/// * If `r = s`: by [`EpochAgreement`] and [`CorrectValidatorInIntersection`] a correct validator
-///   signed both, and by [`CertificateCarriesCorrectVote`] cast confirmation votes for `A` and
-///   for `B` in round `r`. By [`OneConfirmationVotePerRound`], `A = B`.
+/// * If `r = s`: by [`EpochAgreement`] both are judged against the same committee, and by
+///   [`CertificateEmbedsQuorum`] their signer sets are quorums of it, so by
+///   [`CorrectValidatorInIntersection`] a correct validator `v` signed both. By
+///   [`CorrectSignerCastItsVote`], `v` cast confirmation votes for `A` and for `B` in round `r`.
+///   By [`OneConfirmationVotePerRound`], `A = B`.
 /// * If `r < s`: then `s` is not [`Round::Fast`], so [`CommitRestsOnValidation`] gives a valid
 ///   [`ValidatedBlockCertificate`] for `B` in round `s`. By [`LockPreservation`], applied to the
 ///   commit of `A` in round `r` and to `s > r`, that certificate certifies `A`. Hence `B = A`. ∎
@@ -202,7 +207,8 @@ pub trait CommitAgreement:
     + CommitRestsOnValidation
     + OneConfirmationVotePerRound
     + CorrectValidatorInIntersection
-    + CertificateCarriesCorrectVote
+    + CertificateEmbedsQuorum
+    + CorrectSignerCastItsVote
     + ConflictingBlocks
     + EpochAgreement
     + TipAdvancesOnlyOnValidCertificate
