@@ -99,6 +99,8 @@ use crate::{
     ChainError,
 };
 
+pub mod proof;
+
 /// The result of verifying a (valid) query.
 #[derive(Eq, PartialEq)]
 pub enum Outcome {

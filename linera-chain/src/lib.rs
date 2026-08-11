@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module manages the state of a Linera chain, including cross-chain communication.
+//!
+//! The consensus protocol implemented here is specified and proved correct in the `linera-spec`
+//! crate, whose statements live next to the code they describe in [`manager::proof`],
+//! [`data_types::proof`] and [`justification::proof`].
 
 #![deny(missing_docs)]
 
@@ -16,7 +20,6 @@ pub mod types {
 
 mod block_tracker;
 mod chain;
-/// Data types exchanged while proposing, voting on, and confirming blocks.
 pub mod data_types;
 mod inbox;
 pub mod justification;
@@ -26,7 +29,9 @@ mod pending_blobs;
 #[cfg(with_testing)]
 pub mod test;
 
-pub use chain::{BlockExecutionPhase, ChainIdSet, ChainStateView, ChainTipState, StreamCounts};
+pub use chain::{
+    BlockExecution, BlockExecutionPhase, ChainIdSet, ChainStateView, ChainTipState, StreamCounts,
+};
 use data_types::{MessageBundle, PostedMessage};
 use linera_base::{
     bcs,
