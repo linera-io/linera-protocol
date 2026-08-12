@@ -143,8 +143,13 @@ async fn test_export_catches_up_a_newly_added_validator(
             .await?;
     }
     let (idle_chain, _) = client
-        .open_chain(chain, None, linera_base::data_types::Amount::from_tokens(1))
+        .open_chain(chain, None, linera_base::data_types::Amount::from_tokens(2))
         .await?;
+    for _ in 0..2 {
+        client
+            .transfer_with_silent_logs(1.into(), idle_chain, chain)
+            .await?;
+    }
 
     // Bring up a fifth validator and admit it. It starts knowing nothing of this chain.
     net.generate_validator_config(4).await?;
@@ -165,37 +170,57 @@ async fn test_export_catches_up_a_newly_added_validator(
         .await?
         .info
         .next_block_height;
-
     let idle_target = net
         .validator_client(0)?
         .handle_chain_info_query(ChainInfoQuery::new(idle_chain))
         .await?
         .info
         .next_block_height;
+    assert!(
+        idle_target >= 2.into(),
+        "the idle chain needs history for its replay to be observable",
+    );
 
     for _ in 0..60 {
-        let info = net
+        // A query the newcomer cannot answer yet — it may not even hold a chain's description —
+        // is the transient this poll waits out, not a failure.
+        let height = net
             .validator_client(4)?
             .handle_chain_info_query(ChainInfoQuery::new(chain))
-            .await?;
-        let idle_info = net
+            .await
+            .map_or(linera_base::data_types::BlockHeight::ZERO, |response| {
+                response.info.next_block_height
+            });
+        let idle_height = net
             .validator_client(4)?
             .handle_chain_info_query(ChainInfoQuery::new(idle_chain))
-            .await?;
-        if info.info.next_block_height >= target && idle_info.info.next_block_height >= idle_target
-        {
+            .await
+            .map_or(linera_base::data_types::BlockHeight::ZERO, |response| {
+                response.info.next_block_height
+            });
+        if height >= target && idle_height >= idle_target {
             net.terminate().await?;
             return Ok(());
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
-    let info = net
+    let height = net
         .validator_client(4)?
         .handle_chain_info_query(ChainInfoQuery::new(chain))
-        .await?;
+        .await
+        .map_or(linera_base::data_types::BlockHeight::ZERO, |response| {
+            response.info.next_block_height
+        });
+    let idle_height = net
+        .validator_client(4)?
+        .handle_chain_info_query(ChainInfoQuery::new(idle_chain))
+        .await
+        .map_or(linera_base::data_types::BlockHeight::ZERO, |response| {
+            response.info.next_block_height
+        });
     panic!(
-        "the newly added validator did not catch up to {target}; it is at {}",
-        info.info.next_block_height,
+        "the newly added validator did not catch up: active chain {height}/{target}, \
+         idle chain {idle_height}/{idle_target}",
     );
 }
 
