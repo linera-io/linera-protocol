@@ -85,39 +85,60 @@ pub trait CertifiedBlockIsAvailable:
 /// [`BoundedRecovery`]: super::assumptions::BoundedRecovery
 pub trait BoundedCatchUp: CertifiedBlockIsAvailable + BoundedRecovery {}
 
-/// **Lemma (A proposer can supply its block's dependencies).** A correct client holding a block's
-/// blobs can get a proposal accepted even by validators that hold none of them, without waiting
-/// for those dependencies to reach the validators by any other route.
+/// **Lemma (Missing dependencies are recoverable).** When a validator cannot act on a proposal or
+/// a certificate because it lacks data, the missing data falls into a closed set of classes, and
+/// each has a route by which it arrives.
 ///
-/// Without this, block creation would be gated on dependency propagation: a chain could not
-/// publish a blob and use it, or act on a freshly received message, until every validator had
-/// independently caught up.
+/// This is what makes the retry loops in `linera_core::updater` converge rather than spin, and it
+/// is the substance behind [`ValidationQuorumForms`]'s claim that a step completes in `2Δ`: a
+/// straggler is not waited out, it is *supplied*.
 ///
-/// *Proof.* Each dependency kind has a push path, taken on demand when a validator reports it
-/// missing.
+/// *Proof.* The classes are exactly the errors those loops match, and the recovery route differs
+/// by where the data originates:
 ///
-/// * *Blobs.* `RemoteNodeUpdater::send_block_proposal` loops; its `BlobsNotFound | InactiveChain`
-///   arm sends the proposal's published blobs with `send_pending_blobs` and re-submits to that
-///   validator alone. The worker holds them in `pending_proposed_blobs` until the vote is cast.
-/// * *Incoming messages.* A validator that has not yet received a bundle the block consumes
-///   rejects with [`MissingCrossChainUpdate`] rather than voting — the strict half of
-///   [`IncomingBundlesAreSelfDerived`] — and the updater responds by pushing the sending chain's
-///   certificates, after which the bundle is derivable locally.
-/// * *Events.* `EventsNotFound` is answered by pushing the publishing chain, the admin chain
-///   included as a special case for epoch events.
+/// | class | what is missing | route |
+/// |---|---|---|
+/// | `BlobsNotFound` | a blob the block publishes or reads | pushed by the requester: `send_pending_blobs` on the proposal path, `upload_blobs` from local storage on the certificate path |
+/// | `BlocksNotFound` | ancestor block bytes a checkpoint trust-marked | pushed from the requester's storage |
+/// | `InactiveChain` | the chain does not exist at that validator | pushed with the chain's creation |
+/// | `WrongRound`, `UnexpectedBlockHeight` — validator behind | consensus state for this chain | pushed by `send_chain_information` |
+/// | `WrongRound`, `UnexpectedBlockHeight` — *requester* behind | nothing; the requester is wrong | pulled: `sync_remote_if_needed` reports [`LocalNodeLagging`] and the client synchronizes |
+/// | `MissingCrossChainUpdate` | an incoming bundle the block consumes | the **sending** chain's certificates |
+/// | `EventsNotFound` | an event the block read | the **publishing** chain's certificates; the admin chain is special-cased for epoch events |
 ///
-/// Each push is per-validator and re-submits only to that validator, so a straggler costs neither
-/// a new round nor the other validators' votes ([`ValidationQuorumForms`]). ∎
+/// The first five are *self-suppliable*: the requester holds the data by construction, because it
+/// built the block or already verified the certificate. Those classes cannot stall. ∎
 ///
-/// **Where this is bounded.** The pushes terminate because each is guarded by a "already sent"
-/// flag or by draining a fixed set: `send_block_proposal` takes its `blob_ids` with `mem::take`,
-/// and the certificate paths use `sent_blobs` / `sent_admin_chain` / `sent_blocks` latches. A
-/// validator that reports the same class of dependency missing twice is not retried again.
+/// **The last two are not, and that is where general liveness is weakest.** Their data originates
+/// on a *third* chain. A client that does not follow the sending or publishing chain cannot push
+/// what the validator is missing, and the push simply fails.
 ///
-/// [`MissingCrossChainUpdate`]: linera_chain::ChainError::MissingCrossChainUpdate
+/// There is a second, independent route for them, which is why this is a weakness rather than a
+/// hole: the validator's own worker for the sending chain populates the inbox as it processes that
+/// chain ([`IncomingBundlesAreSelfDerived`]), and events likewise arrive as the publishing chain
+/// is processed. So the data reaches the validator either because someone pushes it or because the
+/// validator catches up on the originating chain — and progress on *this* chain waits on whichever
+/// happens first.
+///
+/// Neither route is bounded by anything the specification currently states.
+/// [`ValidationQuorumForms`] assumes the proposal is accepted once every correct validator is in
+/// the round; for a block consuming a message from a chain that some validator has not yet
+/// processed, that is an additional condition, and no assumption in
+/// [`super::assumptions`] supplies it.
+///
+/// **Why the pushes terminate.** Each class carries a well-founded measure.
+/// `send_confirmed_certificate` latches `sent_admin_chain` / `sent_blobs` / `sent_blocks`, so each
+/// class is attempted once. `send_block_proposal` drains its `blob_ids` with `mem::take` and
+/// records `publisher_chain_ids_sent` per publishing chain. `MissingCrossChainUpdate` is the one
+/// that is not a latch: it retries per origin while the reported height strictly increases, which
+/// terminates because those heights are bounded by the sender's tip and a block has finitely many
+/// origins. A validator reporting the same class with no progress is not retried, so a dependency
+/// that nobody can supply surfaces as an error rather than looping.
+///
+/// [`LocalNodeLagging`]: crate::client::chain_client::Error::LocalNodeLagging
 /// [`IncomingBundlesAreSelfDerived`]: linera_chain::manager::proof::commit::IncomingBundlesAreSelfDerived
 /// [`ValidationQuorumForms`]: super::progress::ValidationQuorumForms
-pub trait ProposalDependenciesAreSuppliable:
+pub trait MissingDependenciesAreRecoverable:
     CorrectValidatorAvailability + EventualSynchrony
 {
 }
