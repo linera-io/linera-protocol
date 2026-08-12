@@ -59,6 +59,7 @@
 //! | Liveness proof | [`linera_core::proof::liveness`] |
 //! | Availability, crash recovery and catch-up | [`linera_core::proof::availability`] |
 //! | Client notifications | [`linera_core::proof::notifications`] |
+//! | What a checkpoint preserves | [`linera_chain::proof::checkpoints`] |
 //!
 //! # How to read a statement
 //!
