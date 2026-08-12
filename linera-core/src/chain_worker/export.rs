@@ -456,9 +456,9 @@ enum SendOutcome {
     /// The validator answered; its reported next height.
     Reached(BlockHeight),
     /// The failure is about this chain on this destination, not about the destination.
-    ChainScoped(chain_client::Error),
+    ChainScoped(Box<chain_client::Error>),
     /// The failure is about the destination itself.
-    DestinationScoped(chain_client::Error),
+    DestinationScoped(Box<chain_client::Error>),
 }
 
 /// The body of the process-wide export queue task.
@@ -1088,8 +1088,8 @@ where
             };
             let outcome = match result {
                 Ok(next_height) => SendOutcome::Reached(next_height),
-                Err(error) if is_chain_scoped(&error) => SendOutcome::ChainScoped(error),
-                Err(error) => SendOutcome::DestinationScoped(error),
+                Err(error) if is_chain_scoped(&error) => SendOutcome::ChainScoped(Box::new(error)),
+                Err(error) => SendOutcome::DestinationScoped(Box::new(error)),
             };
             (chain_id, validator, generation, outcome)
         };
