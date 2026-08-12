@@ -21,11 +21,11 @@ use linera_chain::{
     manager::proof::{
         commit::CommittedBlock,
         locking::{LockRoundMonotone, UniqueValidatedBlockPerRound},
-        pacemaker::{
+        rounds::CurrentRoundMonotone,
+        timeouts::{
             LeaderEligibility, RoundsWithoutTimeout, SingleLeaderRoundsNeedTimeout,
             TimeoutCertificateAdvancesRound, TimeoutVoteConditions,
         },
-        rounds::CurrentRoundMonotone,
         voting::{
             ConfirmationNeedsValidatedCertificate, ConfirmationOnlyInCurrentRound, ProposalGate,
             UnlockingRequiresHigherCertificate,

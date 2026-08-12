@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Pacemaker and view changes: how a height leaves a round it cannot finish in.
+//! Leaders, round timeouts, and how a height leaves a round it cannot finish in.
 //!
 //! Nothing here is needed for safety — [`CommitAgreement`] holds however rounds advance, and
 //! indeed whether or not they advance at all. These results exist to be consumed by the progress
@@ -9,7 +9,7 @@
 //! which means. The last statement, [`RoundsWithoutTimeout`], is a caveat rather than a
 //! guarantee, and is the main reason the liveness theorem is conditional in the way it is.
 //!
-//! **The pacemaker is not autonomous.** A validator never advances a round on its own initiative:
+//! **Round advancement is not autonomous.** A validator never advances a round on its own initiative:
 //! it signs a timeout vote only when a client asks it to, through
 //! `ChainInfoQuery::request_leader_timeout`, and it never proposes a block at all. Round
 //! advancement is therefore driven entirely from `linera_core::client`, which is why the
@@ -247,3 +247,46 @@ pub trait FallbackVote: TimeoutCertificateAdvancesRound + ConsensusInstance {}
 /// [`TimeoutConfig`]: linera_base::ownership::TimeoutConfig
 /// [`FastConfirmationNeedsEmptyLock`]: crate::manager::proof::voting::FastConfirmationNeedsEmptyLock
 pub trait RoundsWithoutTimeout: TimeoutVoteConditions + SingleLeaderRoundsNeedTimeout {}
+
+/// **Remark (In a multi-leader round, the round a validator is in is its own).** Above the fast
+/// round, the protocol has two ways to leave a round, and they differ in kind rather than only in
+/// trigger. A [`TimeoutCertificate`] is quorum-signed, compact, and convinces anyone who receives
+/// it. A skipped multi-leader round leaves no artifact at all: by
+/// [`SingleLeaderRoundsNeedTimeout`] it ends when *some owner* proposes higher, which is a
+/// unilateral act, and by [`RoundsWithoutTimeout`] no timeout certificate for it can ever exist.
+///
+/// Three consequences run through the rest of the specification.
+///
+/// *Correct validators legitimately disagree about the round.* A validator's
+/// [`current_round`](crate::manager::ChainManager::current_round) is a maximum over what it has
+/// happened to receive, so in the multi-leader regime two correct validators can sit in different
+/// rounds with neither being behind in any blameable sense. This is why
+/// [`ChainManager::check_proposed_block`] accepts `new_round >= current_round` there while
+/// demanding equality in single-leader and validator rounds — the weaker test is what makes
+/// disagreement survivable. It is also why the progress lemmas open by *assuming* every correct
+/// validator is in the same round: in this regime that is a real hypothesis, not a state the
+/// protocol reaches by itself.
+///
+/// *Catching a validator up costs more than a certificate.* A validator that missed the proposal
+/// which ended a round cannot be handed a proof of that fact, because none exists. It has to be
+/// sent the chain information itself — which is exactly why `WrongRound` appears as its own class,
+/// with its own push route, in `linera_core::proof::availability::MissingDependenciesAreRecoverable`,
+/// and why that class is the one where the *requester* may turn out to be the party that is
+/// behind. Were every round to end in a timeout certificate, that class would collapse to
+/// forwarding one certificate.
+///
+/// *Advancing the round and unlocking must key on different evidence.* Since one owner can raise
+/// the round, the round must never by itself license abandoning a lock — otherwise an owner could
+/// discard a locked block by proposing higher. So [`UnlockingRequiresHigherCertificate`] keys
+/// unlocking on a [`ValidatedBlockCertificate`] from a higher round, evidence that a quorum moved,
+/// and never on `current_round`. The two questions "which round am I in" and "what may I abandon"
+/// are deliberately kept apart, and the safety argument depends on their separation:
+/// [`SingleLeaderRoundsNeedTimeout`] makes the same point for the lock as a round *input*, where a
+/// [`LockingBlock::Regular`] raises the round only because it is itself quorum evidence.
+///
+/// [`TimeoutCertificate`]: crate::types::TimeoutCertificate
+/// [`ChainManager::check_proposed_block`]: crate::manager::ChainManager::check_proposed_block
+/// [`UnlockingRequiresHigherCertificate`]: crate::manager::proof::voting::UnlockingRequiresHigherCertificate
+/// [`ValidatedBlockCertificate`]: crate::types::ValidatedBlockCertificate
+/// [`LockingBlock::Regular`]: crate::manager::LockingBlock::Regular
+pub trait MultiLeaderRoundsAreLocal: SingleLeaderRoundsNeedTimeout + RoundsWithoutTimeout {}

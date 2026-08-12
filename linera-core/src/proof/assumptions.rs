@@ -108,7 +108,7 @@ pub trait BoundedRecovery {}
 /// [`Round::Validator`]: linera_base::data_types::Round::Validator
 /// [`ChainManager::fallback_owners`]: linera_chain::manager::ChainManager::fallback_owners
 /// [`ChainManager::reset`]: linera_chain::manager::ChainManager::reset
-/// [`TimeoutVoteConditions`]: linera_chain::manager::proof::pacemaker::TimeoutVoteConditions
+/// [`TimeoutVoteConditions`]: linera_chain::manager::proof::timeouts::TimeoutVoteConditions
 pub trait ActiveCorrectDriver {}
 
 /// **Assumption (Leader fairness).** The leader schedule selects the correct owner of
@@ -124,7 +124,7 @@ pub trait ActiveCorrectDriver {}
 ///
 /// [`SingleLeader`]: linera_base::data_types::Round::SingleLeader
 /// [`ChainOwnership::owners`]: linera_base::ownership::ChainOwnership::owners
-/// [`LeaderEligibility`]: linera_chain::manager::proof::pacemaker::LeaderEligibility
+/// [`LeaderEligibility`]: linera_chain::manager::proof::timeouts::LeaderEligibility
 pub trait LeaderFairness {}
 
 /// **Assumption (Round timeouts eventually exceed the round trip).** The round timeout grows
@@ -158,7 +158,7 @@ pub trait RoundTimeoutGrowth {}
 /// validators have reported skew.
 ///
 /// [`round_timeout`]: linera_chain::manager::ChainManager::round_timeout
-/// [`TimeoutVoteConditions`]: linera_chain::manager::proof::pacemaker::TimeoutVoteConditions
+/// [`TimeoutVoteConditions`]: linera_chain::manager::proof::timeouts::TimeoutVoteConditions
 pub trait ClockAccuracy {}
 
 /// **Assumption (Full reachability during synchronization).** After GST, a correct driver's

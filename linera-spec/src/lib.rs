@@ -54,7 +54,7 @@
 //! | Commit rule | [`linera_chain::manager::proof::commit`] |
 //! | Safety proof | [`linera_chain::manager::proof::safety`] |
 //! | Accountability | [`linera_chain::justification::proof`] |
-//! | Pacemaker and view changes | [`linera_chain::manager::proof::pacemaker`] |
+//! | Leaders, timeouts and round advancement | [`linera_chain::manager::proof::timeouts`] |
 //! | Progress lemmas | [`linera_core::proof::progress`] |
 //! | Liveness proof | [`linera_core::proof::liveness`] |
 //! | Availability, crash recovery and catch-up | [`linera_core::proof::availability`] |

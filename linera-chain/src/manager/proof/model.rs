@@ -52,7 +52,7 @@ pub trait ConsensusInstance {}
 ///
 /// The successor function is [`ChainOwnership::next_round`], which is *not* the successor of
 /// this order — it skips the multi-leader rounds a chain is not configured for and saturates
-/// into [`Round::Validator`]. It is monotone, which is all the pacemaker results need.
+/// into [`Round::Validator`]. It is monotone, which is all the round-advancement results need.
 ///
 /// [`Round`]: linera_base::data_types::Round
 /// [`Round::Fast`]: linera_base::data_types::Round::Fast

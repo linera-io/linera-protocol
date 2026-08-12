@@ -12,8 +12,8 @@
 
 use linera_chain::manager::proof::{
     commit::{CommittedBlock, TipAdvancesOnlyOnValidCertificate},
-    pacemaker::RoundsWithoutTimeout,
     safety::{CommitAgreement, UniqueChain},
+    timeouts::RoundsWithoutTimeout,
 };
 
 use super::{
@@ -59,7 +59,7 @@ use super::{
 /// [`ValidatedBlockCertificate`]: linera_chain::types::ValidatedBlockCertificate
 /// [`ConfirmedBlockCertificate`]: linera_chain::types::ConfirmedBlockCertificate
 /// [`RoundTimeoutGrowth`]: super::assumptions::RoundTimeoutGrowth
-/// [`TimeoutVoteConditions`]: linera_chain::manager::proof::pacemaker::TimeoutVoteConditions
+/// [`TimeoutVoteConditions`]: linera_chain::manager::proof::timeouts::TimeoutVoteConditions
 /// [`RoundAdvancement`]: super::progress::RoundAdvancement
 pub trait RoundProgress:
     EventuallyCorrectLeader
@@ -164,7 +164,7 @@ pub trait UnboundedProgress: HeightProgress + UniqueChain {}
 /// [`Validator`]: linera_base::data_types::Round::Validator
 /// [`TimeoutConfig`]: linera_base::ownership::TimeoutConfig
 /// [`FastConfirmationNeedsEmptyLock`]: linera_chain::manager::proof::voting::FastConfirmationNeedsEmptyLock
-/// [`LeaderEligibility`]: linera_chain::manager::proof::pacemaker::LeaderEligibility
+/// [`LeaderEligibility`]: linera_chain::manager::proof::timeouts::LeaderEligibility
 pub trait LivenessScope:
     UnboundedProgress + RoundsWithoutTimeout + ActiveCorrectDriver + LockRecovery
 {

@@ -5,7 +5,7 @@
 //!
 //! These are the first genuinely inductive results: they quantify over all reachable states of
 //! one consensus instance ([`ConsensusInstance`]). They are used by both the locking invariants
-//! and the pacemaker, so they are stated once, here.
+//! and round advancement, so they are stated once, here.
 //!
 //! [`current_round`]: field@crate::manager::ChainManager::current_round
 //! [`ConsensusInstance`]: crate::manager::proof::model::ConsensusInstance

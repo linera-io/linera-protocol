@@ -4,7 +4,7 @@
 //! The progress and liveness half of the microchain consensus correctness specification.
 //!
 //! The safety half is in [`linera_chain::manager::proof`] and does not depend on anything here.
-//! This half does the reverse: it cites the chain crate's voting, locking and pacemaker results
+//! This half does the reverse: it cites the chain crate's voting, locking and timeout results
 //! throughout, and adds the assumptions that mention time and availability.
 //!
 //! | module | contents |
