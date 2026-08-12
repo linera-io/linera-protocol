@@ -51,6 +51,24 @@ use super::assumptions::{
 /// already-certified block rather than products of execution. Nothing is recomputed, so the
 /// argument needs no appeal to [`DeterministicExecution`]. ∎
 ///
+/// **The order is load-bearing, not incidental.** The outputs and the tip go to different key
+/// spaces of the same backing store, so one batch could in principle span them; none does. The
+/// ordering is what stands in for that atomicity, and only one order works. Outputs first costs at
+/// most repeated work, because the block is reprocessed. The tip first would be unrecoverable: the
+/// guard would classify the block as already processed and return `BlockOutcome::Skipped`, so the
+/// outputs would be missing permanently with nothing left to notice it.
+///
+/// **What becomes visible early.** Certificates, blobs and events are written to storage shared
+/// across chains — the channel by which chains observe each other at all — while the tip and the
+/// inboxes are per-chain state no other worker reads ([`SerializedChainState`]). Between the two
+/// writes, then, a block's outputs are globally readable while the producing chain has not yet
+/// recorded the block locally. That is harmless because `certificate.check` precedes every one of
+/// these writes: what becomes visible early is content a quorum has already certified, and by
+/// [`CommitAgreement`] no conflicting block can ever be certified at that height. An uncertified
+/// block reaches none of these stores.
+///
+/// [`CommitAgreement`]: linera_chain::manager::proof::safety::CommitAgreement
+///
 /// **Preprocessing persists outputs with no tip to record them.** In `Preprocess` mode, or `Auto`
 /// with an unbridgeable gap, `preprocess_certified_block` updates outboxes and event streams and
 /// deliberately does not advance the tip. The outputs of such a block are in storage, but the
