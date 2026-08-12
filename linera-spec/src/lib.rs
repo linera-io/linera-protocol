@@ -176,8 +176,11 @@
 //!   supplied to a validator lacking them ([`MissingDependenciesAreRecoverable`]), and that its
 //!   outputs — published blobs, events and the certificate — reach storage before the block counts
 //!   as processed ([`BlockOutputsArePersisted`]).
-//! * **Cross-chain messaging** as a subsystem — inboxes, outboxes, delivery and ordering. What
-//!   consensus provides is that each chain's own block sequence is unique ([`UniqueChain`]).
+//! * **Cross-chain messaging** as a subsystem — delivery in particular: nothing states that an
+//!   outbox is ever drained, so no bundle is guaranteed to arrive. What *is* stated is that an
+//!   inbox holds only bundles its origin really sent ([`InboxHoldsOnlySentBundles`]), that no two
+//!   blocks consume the same bundle ([`BundleConsumedAtMostOnce`]), and that each chain's own
+//!   block sequence is unique ([`UniqueChain`]).
 //! * **Committee reconfiguration** — epoch changes are agreed *by* this protocol on the admin
 //!   chain; [`EpochAgreement`] records what is assumed about them.
 //! * **Chain ownership and lifecycle** — who may propose at a height, and how that changes;
@@ -201,6 +204,8 @@
 //! [`FullReachability`]: linera_core::proof::assumptions::FullReachability
 //! [`MissingDependenciesAreRecoverable`]: linera_core::proof::availability::MissingDependenciesAreRecoverable
 //! [`BlockOutputsArePersisted`]: linera_core::proof::availability::BlockOutputsArePersisted
+//! [`InboxHoldsOnlySentBundles`]: linera_core::proof::availability::InboxHoldsOnlySentBundles
+//! [`BundleConsumedAtMostOnce`]: linera_core::proof::availability::BundleConsumedAtMostOnce
 //! [`ValidationQuorumForms`]: linera_core::proof::progress::ValidationQuorumForms
 //! [`FastRetryPreservesBlock`]: linera_chain::manager::proof::safety::FastRetryPreservesBlock
 //! [`ProposalGate`]: linera_chain::manager::proof::voting::ProposalGate

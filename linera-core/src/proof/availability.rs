@@ -11,7 +11,7 @@
 //! [`CommitAgreement`]: linera_chain::manager::proof::safety::CommitAgreement
 
 use linera_chain::manager::proof::{
-    commit::CommittedBlock,
+    commit::{CommittedBlock, IncomingBundlesAreSelfDerived},
     model::{CorrectValidator, SerializedChainState, StorageAtomicity},
 };
 
@@ -199,11 +199,14 @@ pub trait MissingDependenciesAreRecoverable:
 /// the chain's view, and therefore part of what `save()` wrote. By [`StorageAtomicity`] that view
 /// is consistent after any crash, so the same set of actions is derivable again.
 ///
-/// *The recipient absorbs repeats.* A redelivered bundle reaches `Inbox::add_bundle`, which
-/// reconciles it against `added_bundles` and `removed_bundles` by [`Cursor`] and reports whether
-/// it was new. A bundle already consumed by a block is in `removed_bundles` and is discarded; one
-/// already queued is not queued twice. Delivery is therefore at-least-once with idempotent
-/// effect. ∎
+/// *The recipient absorbs repeats.* A redelivered bundle is filtered out before it reaches the
+/// inbox: `ChainWorkerState::select_message_bundles` drops every bundle whose height is below the
+/// inbox's `next_block_height_to_receive`, logging them as repeated. `Inbox::add_bundle` would not
+/// absorb one in any case — it requires the [`Cursor`] to be at least `next_cursor_to_add` and
+/// rejects anything lower with `InboxError::IncorrectOrder`. Its two reconciliation branches cover
+/// different situations: `removed_bundles` a bundle this chain consumed *by anticipation* before
+/// delivery, and `restored_cursor` a bundle whose effects a checkpoint restore has already baked
+/// into the state. Delivery is therefore at-least-once with idempotent effect. ∎
 ///
 /// `reset_and_reexecute_chain` relies on exactly this from the other direction: having wiped and
 /// replayed a chain, it returns a `CrossChainRequest::RevertConfirm` to every known sender,
@@ -224,6 +227,63 @@ pub trait MissingDependenciesAreRecoverable:
 /// [`CorrectValidator`]: linera_chain::manager::proof::model::CorrectValidator
 pub trait EffectsSurviveRestart:
     StorageAtomicity + SerializedChainState + CorrectValidator
+{
+}
+
+/// **Lemma (An inbox holds only bundles its origin really sent).** Every [`MessageBundle`] in a
+/// correct validator's inbox for an origin was produced by a block of that origin which the *same
+/// validator* has processed.
+///
+/// *Proof.* Bundles enter an inbox at exactly one place, `Inbox::add_bundle`, reached only from
+/// `ChainWorkerState::process_cross_chain_update`. That handler serves a
+/// `CrossChainRequest::UpdateRecipient`, and cross-chain requests are internal to one validator:
+/// `linera_rpc` routes each to the shard owning the target chain, so the request comes from
+/// another worker of the same validator, which built it in `build_network_actions` from its own
+/// persisted outbox for a block it had processed ([`EffectsSurviveRestart`], sender half). No
+/// other validator's word enters, and by [`SerializedChainState`] no other process writes this
+/// chain's inboxes. `select_message_bundles` additionally drops bundles whose epoch has been
+/// revoked, unless they were already anticipated. ∎
+///
+/// This is the premise [`IncomingBundlesAreSelfDerived`] leaves open: that lemma proves a voter
+/// matches consumed bundles against its own inbox, which is worth exactly as much as the inbox's
+/// own provenance.
+///
+/// [`MessageBundle`]: linera_chain::data_types::MessageBundle
+pub trait InboxHoldsOnlySentBundles: CorrectValidator + SerializedChainState {}
+
+/// **Lemma (A bundle is consumed at most once).** No two blocks of a chain consume the same
+/// [`MessageBundle`] from the same origin, even though delivery is at-least-once.
+///
+/// Together with [`EffectsSurviveRestart`]'s at-least-once delivery this is the exactly-once
+/// property for *consumption*. It is not exactly-once *delivery*: the same bundle may arrive any
+/// number of times, and nothing here says it arrives at all.
+///
+/// *Proof.* Four filters, one per way a repeat can present itself:
+///
+/// * *Redelivery.* `select_message_bundles` drops bundles below the inbox's
+///   `next_block_height_to_receive`, which has advanced past every height already received.
+/// * *Order.* Should one slip through, `Inbox::add_bundle` requires the [`Cursor`] to be at least
+///   `next_cursor_to_add` — set to the previous cursor plus one on every successful add — and
+///   fails with `InboxError::IncorrectOrder` otherwise.
+/// * *Anticipation.* A bundle consumed before it arrived sits in `removed_bundles`; on arrival it
+///   is matched by cursor, checked for equality and deleted rather than queued, so it is never
+///   offered for consumption a second time.
+/// * *Checkpoint restore.* A bundle below `restored_cursor` is dropped, its effects being already
+///   part of the restored state.
+///
+/// Consumption itself removes the bundle: `remove_bundles_from_inboxes` pops it from
+/// `added_bundles`, and by [`IncomingBundlesAreSelfDerived`] a correct validator does not vote for
+/// a block consuming a bundle that is not there. ∎
+///
+/// **Scoped to one validator.** Every clause above is about one validator's own inboxes. That all
+/// correct validators consume the same bundles in the same blocks follows from agreement on the
+/// block sequence ([`UniqueChain`]), not from anything here.
+///
+/// [`MessageBundle`]: linera_chain::data_types::MessageBundle
+/// [`Cursor`]: linera_base::data_types::Cursor
+/// [`UniqueChain`]: linera_chain::manager::proof::safety::UniqueChain
+pub trait BundleConsumedAtMostOnce:
+    InboxHoldsOnlySentBundles + EffectsSurviveRestart + IncomingBundlesAreSelfDerived
 {
 }
 
