@@ -19,6 +19,52 @@ use super::assumptions::{
     BlobRetention, BoundedRecovery, CorrectValidatorAvailability, EventualSynchrony,
 };
 
+/// **Lemma (A block's outputs are persisted before it counts as processed).** When a correct
+/// validator's [`ChainTipState::next_block_height`] passes a height, the outputs of the block at
+/// that height are already in storage: the blobs it publishes, the events it emits, and the
+/// certificate itself. A crash before that point costs nothing but repeated work — the tip is what
+/// marks a block processed, so the block is handled again on restart and the writes are redone.
+///
+/// *Code correspondence.*
+///
+/// | | |
+/// |---|---|
+/// | transition | `ChainWorkerState::process_confirmed_block` |
+/// | writes | `write_blobs_and_certificate`, then `write_events`, then `maybe_write_blob_states`, and only then the tip |
+/// | re-entry guard | `tip.next_block_height > height`, returning `BlockOutcome::Skipped` |
+///
+/// *Proof.* Three parts.
+///
+/// *Ordering.* `process_confirmed_block` issues the three storage writes and only afterwards
+/// dispatches to `execute_contiguous_block` (or `execute_block_with_checkpoint_restore`), which is
+/// where `tip_state` is set and `save()` runs. The writes are three separate awaited calls, not
+/// one batch, so a crash can land between them; what the argument needs is only that all of them
+/// precede the tip.
+///
+/// *The tip is the guard.* On restart the certificate is offered again, and the early return
+/// `if !in_trust_set && tip.next_block_height > height` decides whether the block is skipped. That
+/// test reads persisted chain state, which by [`StorageAtomicity`] is consistent, so a crash
+/// before `save()` leaves the block unprocessed and every write is reissued.
+///
+/// *The repeats are byte-identical.* The events come from `block.body.events` and the blobs from
+/// `get_required_blobs` over the block's `required_blob_ids` and `created_blobs` — all fields of an
+/// already-certified block rather than products of execution. Nothing is recomputed, so the
+/// argument needs no appeal to [`DeterministicExecution`]. ∎
+///
+/// **Preprocessing persists outputs with no tip to record them.** In `Preprocess` mode, or `Auto`
+/// with an unbridgeable gap, `preprocess_certified_block` updates outboxes and event streams and
+/// deliberately does not advance the tip. The outputs of such a block are in storage, but the
+/// guard above will not short-circuit a later offer of the same certificate, so the writes are
+/// simply redone.
+///
+/// **What this does not cover.** It places a block's outputs in the *producing* validator's
+/// storage. That the resulting bundles reach the recipient chain's inbox is
+/// [`EffectsSurviveRestart`]; that the outbox is ever drained is stated nowhere.
+///
+/// [`ChainTipState::next_block_height`]: linera_chain::ChainTipState::next_block_height
+/// [`DeterministicExecution`]: linera_chain::manager::proof::model::DeterministicExecution
+pub trait BlockOutputsArePersisted: CommittedBlock + StorageAtomicity + CorrectValidator {}
+
 /// **Lemma (A certified block and its dependencies are retrievable).** Once a block is a
 /// [`CommittedBlock`], any node that can reach a quorum can obtain the certificate, the ancestors
 /// it needs, and every blob and event the block requires, and can then execute it.
@@ -54,7 +100,7 @@ use super::assumptions::{
 /// [`BlobId`]: linera_base::identifiers::BlobId
 /// [`BlobRetention`]: super::assumptions::BlobRetention
 pub trait CertifiedBlockIsAvailable:
-    CommittedBlock + CorrectValidatorAvailability + EventualSynchrony + BlobRetention
+    BlockOutputsArePersisted + CorrectValidatorAvailability + EventualSynchrony + BlobRetention
 {
 }
 

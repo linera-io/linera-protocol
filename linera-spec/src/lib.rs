@@ -173,7 +173,9 @@
 //!   not stated at all. What is guaranteed is that a certified block was executed by some correct
 //!   validator ([`CertifiedBlockWasExecuted`]), that a voter matched every consumed bundle against
 //!   its own inbox ([`IncomingBundlesAreSelfDerived`]), and that the inputs execution needs can be
-//!   supplied to a validator lacking them ([`MissingDependenciesAreRecoverable`]).
+//!   supplied to a validator lacking them ([`MissingDependenciesAreRecoverable`]), and that its
+//!   outputs — published blobs, events and the certificate — reach storage before the block counts
+//!   as processed ([`BlockOutputsArePersisted`]).
 //! * **Cross-chain messaging** as a subsystem — inboxes, outboxes, delivery and ordering. What
 //!   consensus provides is that each chain's own block sequence is unique ([`UniqueChain`]).
 //! * **Committee reconfiguration** — epoch changes are agreed *by* this protocol on the admin
@@ -198,6 +200,7 @@
 //! [`IncomingBundlesAreSelfDerived`]: linera_chain::manager::proof::commit::IncomingBundlesAreSelfDerived
 //! [`FullReachability`]: linera_core::proof::assumptions::FullReachability
 //! [`MissingDependenciesAreRecoverable`]: linera_core::proof::availability::MissingDependenciesAreRecoverable
+//! [`BlockOutputsArePersisted`]: linera_core::proof::availability::BlockOutputsArePersisted
 //! [`ValidationQuorumForms`]: linera_core::proof::progress::ValidationQuorumForms
 //! [`FastRetryPreservesBlock`]: linera_chain::manager::proof::safety::FastRetryPreservesBlock
 //! [`ProposalGate`]: linera_chain::manager::proof::voting::ProposalGate
