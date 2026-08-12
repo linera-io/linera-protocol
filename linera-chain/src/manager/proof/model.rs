@@ -192,8 +192,9 @@ pub trait UnforgeableSignatures {}
 /// Without this, a crash could lose the record of a vote and let the validator vote again,
 /// breaking [`OneValidationVotePerRound`] and [`OneConfirmationVotePerRound`], which are the
 /// only places where the assumption is consumed. It is one half of a discipline whose other half
-/// — that an effect already persisted is never *lost* — is `linera_core::proof::durability`. A validator that violates it is faulty in the
-/// sense of [`CorrectValidator`], and is counted against [`MaxByzantineWeight`].
+/// — that an effect already persisted is never *lost* — is `linera_core::proof::availability`. A
+/// validator that violates it is faulty in the sense of [`CorrectValidator`], and is counted
+/// against [`MaxByzantineWeight`].
 ///
 /// [`OneValidationVotePerRound`]: crate::manager::proof::locking::OneValidationVotePerRound
 /// [`OneConfirmationVotePerRound`]: crate::manager::proof::locking::OneConfirmationVotePerRound
@@ -242,9 +243,8 @@ pub trait DurablePersistence {}
 /// [`ChainManager::create_vote`]: crate::manager::ChainManager::create_vote
 pub trait SerializedChainState {}
 
-/// **Assumption (Atomic persistence).** A `save()` either takes effect in full or not at all: the
-/// storage backend applies the batch of writes for a chain atomically, so a crash never leaves a
-/// chain's state partially updated.
+/// **Assumption (Atomic persistence).** A single `write_batch` is applied atomically, within
+/// whatever key-count and size limits the backend imposes.
 ///
 /// [`DurablePersistence`] is about *when* state is written; this is about the write being
 /// indivisible. Every invariant in [`crate::manager::proof::locking`] is stated over a state
@@ -253,7 +253,35 @@ pub trait SerializedChainState {}
 /// stored without the [`locking_block`](crate::manager::ChainManager::locking_block) that
 /// [`ConfirmationOnlyInCurrentRound`] installs before it.
 ///
-/// It also underpins the mirror property in `linera_core::proof::durability`: re-deriving a
+/// **Batches larger than the backend allows.** Atomicity comes from `write_batch` alone.
+/// Journaling adds none: it *preserves* all-or-nothing at sizes a remote store such as ScyllaDB
+/// will not accept in one `write_batch`, which a chain save can exceed.
+/// `linera_views::backends::journaling` writes the oversized batch into journal blocks and commits
+/// it by atomically updating a journal header; before any later read or write, a journal found
+/// present is replayed block by block, each block's write and its header update going in a single
+/// `write_batch`. A crash part-way therefore leaves a resumable journal rather than a torn
+/// state. That slow path requires exclusive access to the keys under the chain's root — it fails
+/// with `JournalingError::JournalRequiresExclusiveAccess` otherwise — which is exactly what
+/// [`SerializedChainState`] supplies.
+///
+/// **What a failed save costs.** Three outcomes are distinguished, and only the last is expensive:
+///
+/// * *Cancelled* — the request future is dropped part-way. `RollbackGuard` in
+///   `linera_core::chain_worker::handle` rolls the view back on drop, so no partial staging
+///   survives into the next request.
+/// * *Failed outright* — the write did not take effect. The in-memory view still agrees with
+///   storage, the error propagates, and the worker keeps serving.
+/// * *Ambiguous* — journal resolution failed, so storage may be partly advanced and the view can
+///   no longer be trusted. `ViewError::must_reload_view` reports it, `ChainWorkerState::save` sets
+///   `poisoned`, `check_not_poisoned` refuses every later use of that worker, and
+///   `evict_poisoned_worker` drops it from the cache so the next request reloads the chain from
+///   storage.
+///
+/// The guarantee the proofs rest on is therefore not that storage is never partially written, but
+/// that a partially written chain is never *read back as state*: it is either completed by journal
+/// replay or discarded along with the worker that could not complete it.
+///
+/// It also underpins the mirror property in `linera_core::proof::availability`: re-deriving a
 /// worker's undelivered effects after a restart is only meaningful if the state they are derived
 /// from is itself consistent.
 ///
