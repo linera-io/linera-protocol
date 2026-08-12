@@ -21,8 +21,10 @@ use linera_chain::manager::proof::model::{CorrectValidator, StorageAtomicity};
 /// `?`, so the actions are dropped and nothing is dispatched. Site by site:
 ///
 /// * `Reason::NewBlock` and `Reason::NewEvents` are pushed in
-///   `ChainWorkerState::execute_contiguous_block` and `Reason::NewEvents` again in
-///   `preprocess_certified_block`, both before that function's `self.save()?`.
+///   `ChainWorkerState::execute_contiguous_block` *before* its `self.save()?`, so a save that
+///   fails discards them along with the actions that carry them.
+/// * `Reason::NewEvents` is pushed again in `preprocess_certified_block`, there *after* the save
+///   rather than before it, which reaches the same conclusion more directly.
 /// * `Reason::NewRound` is built inside `create_network_actions` from
 ///   `ChainManager::current_round`, and travels out in the same returned value.
 /// * `Reason::NewIncomingBundle` is pushed in `WorkerState::handle_cross_chain_request` only once
