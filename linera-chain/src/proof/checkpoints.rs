@@ -50,3 +50,38 @@ use crate::manager::proof::model::SerializedChainState;
 /// [`previous_event_blocks_hash`]: crate::block::BlockHeader::previous_event_blocks_hash
 /// [`OracleResponse::Event`]: linera_base::data_types::OracleResponse::Event
 pub trait EventFloorTracksCheckpoints: SerializedChainState {}
+
+/// **Lemma (A checkpoint summarizes every user stream that published since the previous one).**
+/// At a checkpoint, each application holding an event stream that has published since the previous
+/// checkpoint is given the chance to replace that stream's history with a summary, and no system
+/// stream is ever in that position.
+///
+/// *Proof.* `ExecutionStateActor::summarize_events_at_checkpoint` takes as its work list exactly
+/// the user streams in [`previous_event_blocks`]. That map is cleared by every checkpoint, so an
+/// entry means the stream has published since the previous one. Each owning application is run
+/// through `UserAction::SummarizeEvents` with a `StreamUpdate` whose `previous_index` is `0` and
+/// whose `first_index` and `next_index` are both the stream's current count: a summary is an
+/// absolute-state snapshot, so the application is handed no incremental range to fold in. The
+/// summary it emits lands at `next_index`, which is a fresh index with no predecessor recorded, so
+/// by [`EventFloorTracksCheckpoints`] it becomes the stream's readable floor.
+///
+/// The map is then cleared, dropping every pre-checkpoint anchor, so no later block links back to
+/// blocks whose events are no longer guaranteed to be readable.
+///
+/// Only user streams can appear. A chain that has *published* to a system stream cannot checkpoint
+/// at all — `ExecutionStateView::prepare_checkpoint` scans [`previous_event_blocks`] and refuses,
+/// because system streams have no application to summarize them — and a chain that has *consumed*
+/// system events is refused separately by `ChainStateView`'s `check_checkpoint_preconditions`,
+/// which scans the reader-side trackers and fails with
+/// [`ChainError::CheckpointPreconditionFailed`]. The admin chain's epoch streams are the case both
+/// guards exist for. ∎
+///
+/// **A silent application closes its stream.** Summarization is an opportunity, not an obligation.
+/// A stream whose application emits nothing when summarized loses its anchor along with every
+/// other, and is not summarized again unless it publishes something new. Nothing distinguishes a
+/// stream deliberately closed from one whose application neglected to summarize, and in both cases
+/// the events below the floor are gone.
+///
+/// [`previous_event_blocks`]: crate::block::BlockBody::previous_event_blocks
+/// [`ChainError::CheckpointPreconditionFailed`]: crate::ChainError::CheckpointPreconditionFailed
+pub trait CheckpointSummarizesUserStreams: EventFloorTracksCheckpoints {}
