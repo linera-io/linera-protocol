@@ -1,14 +1,18 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! # Microchain consensus: correctness specification
+//! # The Linera protocol: correctness specification
 //!
-//! Linera runs one consensus instance per *microchain* and *block height*. This crate is the
-//! entry point to a specification of that protocol — its system model, its assumptions, and
-//! proofs of its safety, accountability and liveness properties.
+//! Linera is a multi-chain protocol: state is partitioned into *microchains*, each running its own
+//! consensus instance per block height, and chains communicate only by explicit message passing.
+//! This crate is the entry point to a correctness specification of that protocol — its system
+//! model, its assumptions, and proofs of the properties it is meant to have.
 //!
-//! **This crate contains no code.** The statements live next to the implementation they describe,
-//! spread across [`linera_chain`] and [`linera_core`]; this crate exists only so that a single
+//! The specification is written subsystem by subsystem; [Coverage](#coverage) says what is
+//! established today and what is not yet constrained by any statement here.
+//!
+//! **This crate contains no code.** The statements live next to the implementation they describe —
+//! today across [`linera_chain`] and [`linera_core`] — and this crate exists only so that a single
 //! index can link to all of them. Neither of those crates can do that on its own —
 //! `linera-core` depends on `linera-chain`, so the chain crate cannot name the progress and
 //! liveness results, and an index living there would have to describe half the specification in
@@ -19,7 +23,9 @@
 //! cargo doc -p linera-spec --open
 //! ```
 //!
-//! # The three headline results
+//! # Headline results
+//!
+//! Three results anchor the consensus core, each concerning one microchain's sequence of blocks.
 //!
 //! * **Safety** — [`CommitAgreement`]: for any chain and height, all valid confirmed block
 //!   certificates certify the same block. No synchrony, availability or fairness assumption is
@@ -153,19 +159,29 @@
 //! * [`VoteConstructionSites`] — an exhaustive-search argument over the five signing sites, which
 //!   a sixth would invalidate.
 //!
-//! # Scope and non-goals
+//! # Coverage
 //!
-//! The specification covers agreement on the *sequence of blocks* of a single microchain. It does
-//! not cover:
+//! Established today: agreement on the *sequence of blocks* of a single microchain, and what a
+//! certified block guarantees to nodes that were absent when it was certified.
+//!
+//! Not yet covered, in the sense that no statement here constrains them. Where consensus does say
+//! something adjacent, it is named.
 //!
 //! * **State-transition correctness** — that executing the agreed blocks yields the right state.
-//!   [`DeterministicExecution`] is assumed, not proved. What the protocol does guarantee is
-//!   [`CertifiedBlockWasExecuted`] and [`IncomingBundlesAreSelfDerived`].
-//! * **Cross-chain messaging** as a subsystem — inboxes, outboxes and delivery are outside
-//!   consensus; what consensus provides is that each chain's own block sequence is unique
-//!   ([`UniqueChain`]).
+//!   [`DeterministicExecution`] is assumed rather than proved, and *termination* of execution is
+//!   not stated at all. What is guaranteed is that a certified block was executed by some correct
+//!   validator ([`CertifiedBlockWasExecuted`]), that a voter matched every consumed bundle against
+//!   its own inbox ([`IncomingBundlesAreSelfDerived`]), and that the inputs execution needs can be
+//!   supplied to a validator lacking them ([`MissingDependenciesAreRecoverable`]).
+//! * **Cross-chain messaging** as a subsystem — inboxes, outboxes, delivery and ordering. What
+//!   consensus provides is that each chain's own block sequence is unique ([`UniqueChain`]).
 //! * **Committee reconfiguration** — epoch changes are agreed *by* this protocol on the admin
 //!   chain; [`EpochAgreement`] records what is assumed about them.
+//! * **Chain ownership and lifecycle** — who may propose at a height, and how that changes;
+//!   [`ConsensusInstance`] records what is assumed about it.
+//! * **Resource control and fees** — metering, declared block limits, and fee conservation.
+//! * **Event streams** as a subsystem — append-only-ness and the publisher-side guarantees behind
+//!   a cross-chain `OracleResponse::Event` read.
 //!
 //! [`CommitAgreement`]: linera_chain::manager::proof::safety::CommitAgreement
 //! [`UniqueChain`]: linera_chain::manager::proof::safety::UniqueChain
@@ -176,6 +192,7 @@
 //! [`MaxByzantineWeight`]: linera_chain::manager::proof::model::MaxByzantineWeight
 //! [`DeterministicExecution`]: linera_chain::manager::proof::model::DeterministicExecution
 //! [`EpochAgreement`]: linera_chain::manager::proof::model::EpochAgreement
+//! [`ConsensusInstance`]: linera_chain::manager::proof::model::ConsensusInstance
 //! [`CertifiedBlockWasExecuted`]: linera_chain::manager::proof::commit::CertifiedBlockWasExecuted
 //! [`IncomingBundlesAreSelfDerived`]: linera_chain::manager::proof::commit::IncomingBundlesAreSelfDerived
 //! [`FullReachability`]: linera_core::proof::assumptions::FullReachability
