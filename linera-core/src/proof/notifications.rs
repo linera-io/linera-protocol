@@ -41,12 +41,25 @@ use super::availability::{BlockOutputsArePersisted, InboxHoldsOnlySentBundles};
 /// so a client is never told about a half-written change. ∎
 ///
 /// **A notification carries no evidence.** [`Notification`] is a `chain_id` and a [`Reason`]: no
-/// signature, no certificate, not even a field naming the sender. So the qualifier above is not a
-/// technicality a client can discharge by inspection — a fabricated notification is
-/// indistinguishable from a sound one, and the only way to learn whether the change really happened
-/// is to ask. What a client may take from one is that it is worth querying now, and never what the
-/// answer will be. That the named block is *the* block at that height, rather than one validator's
-/// idea of it, is [`CommitAgreement`]'s and not this lemma's.
+/// signature, no certificate, not even a field naming the sender. Validators are not asked to sign
+/// them.
+///
+/// Knowing *who* sent one is a deployment matter rather than a protocol one. Under
+/// `NetworkProtocol::Grpc(TlsConfig::Tls)` the transport authenticates which validator the stream
+/// came from, so a third party cannot inject notifications into it; `TlsConfig::ClearText` is an
+/// equally valid configuration, so the specification cannot assume even that. And where it does
+/// hold it authenticates the *origin*, never the content, and only to the client holding the
+/// connection — a client cannot show anyone else what a validator told it. A notification is
+/// therefore never evidence in the sense the [accountability results] use: none is convictable, and
+/// none can be forwarded as proof of anything.
+///
+/// So the qualifier above is not a technicality a client can discharge by inspection. A fabricated
+/// notification is indistinguishable *by content* from a sound one, and the only way to learn
+/// whether the change happened is to ask. What a client may take from one is that it is worth
+/// querying now, and never what the answer will be. That the named block is *the* block at that
+/// height, rather than one validator's idea of it, is [`CommitAgreement`]'s and not this lemma's.
+///
+/// [accountability results]: linera_chain::justification::proof
 ///
 /// [`Notification`]: crate::worker::Notification
 /// [`NetworkActions`]: crate::worker::NetworkActions
@@ -118,6 +131,11 @@ pub trait NoProofDependsOnNotifications: NotificationsAreBestEffort {}
 /// `download_certificates_by_heights`. A node that receives one of these notifications can fetch
 /// the certificate, verify it against the committee, and push it onward — `send_confirmed_certificate`
 /// is exactly that path. ∎
+///
+/// This is the precise sense in which a notification is worth acting on despite carrying no
+/// evidence itself. The message is unsigned and, at best, authenticated only to its recipient by
+/// the transport; what it points at is quorum-signed and transferable to anyone. The hint is
+/// non-transferable, the thing it hints at is not.
 ///
 /// **`Reason::NewRound` has no such backing, and cannot.** `ChainManager::update_current_round`
 /// takes a maximum over four inputs, and only two are certificates: a [`TimeoutCertificate`], or a
