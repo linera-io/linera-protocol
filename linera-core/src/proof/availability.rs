@@ -126,6 +126,46 @@ pub trait CertifiedBlockIsAvailable:
 /// [`BoundedRecovery`]: super::assumptions::BoundedRecovery
 pub trait BoundedCatchUp: CertifiedBlockIsAvailable + BoundedRecovery {}
 
+/// **Lemma (A locked block's blobs travel with the lock).** Whenever a correct validator holds a
+/// locking block, it also holds the blobs that block requires, and any node that can reach it can
+/// obtain them.
+///
+/// This is what makes [`LockRecovery`] executable rather than merely permitted. Re-proposing a
+/// locked block means proposing the block itself, which cannot be done without the blobs it
+/// publishes and reads — and the party that has to do it is often not the party that created the
+/// lock.
+///
+/// *Proof.* Three parts.
+///
+/// *The validator keeps them.* [`ChainManager`] writes the required blobs into
+/// [`locking_blobs`] in the same transition that installs the lock, clearing the map first, so it
+/// always describes the current lock and never an earlier one. [`ManagerSafetySnapshot`] carries
+/// `locking_blobs` alongside the lock, so a restore cannot reinstate a lock without its blobs.
+///
+/// *They are reachable.* `ValidatorNode::download_pending_blob` resolves through
+/// [`ChainManager::pending_blob`], which consults the proposer's blobs and then `locking_blobs`.
+/// So a lock held by a reachable correct validator is a lock whose blobs are downloadable, without
+/// the original proposer being involved at all.
+///
+/// *A recovering client collects them.* In `Client::synchronize_chain_state`, installing a
+/// [`ValidatedBlockCertificate`] on the local node fails with `LocalNodeError::BlobsNotFound` when
+/// they are absent; each missing blob is then downloaded from the remote node, installed with
+/// `handle_pending_blobs`, and the certificate retried. The proposal path does the same for a fast
+/// lock. ∎
+///
+/// **Re-proposal itself does not fetch.** `ChainClient` reads the blobs for a re-proposal from its
+/// own local node, and fails with an internal error rather than a retry if they are not there. The
+/// fetching happens only in the synchronization above, so this lemma is a statement about that
+/// path having run, not about a fallback at proposal time.
+///
+/// [`LockRecovery`]: super::progress::LockRecovery
+/// [`ChainManager`]: linera_chain::manager::ChainManager
+/// [`ChainManager::pending_blob`]: linera_chain::manager::ChainManager::pending_blob
+/// [`locking_blobs`]: linera_chain::manager::ChainManager::locking_blobs
+/// [`ManagerSafetySnapshot`]: linera_chain::manager::ManagerSafetySnapshot
+/// [`ValidatedBlockCertificate`]: linera_chain::types::ValidatedBlockCertificate
+pub trait LockingBlobsTravelWithTheLock: CorrectValidator + CorrectValidatorAvailability {}
+
 /// **Lemma (Missing dependencies are recoverable).** A validator needs data in hand for either of
 /// two operations: *accepting a block proposal*, which means executing it, and *executing a
 /// certified block*. When it lacks that data, what is missing falls into a closed set of classes,
@@ -149,8 +189,11 @@ pub trait BoundedCatchUp: CertifiedBlockIsAvailable + BoundedRecovery {}
 /// | `WrongRound`, `UnexpectedBlockHeight` — *requester* behind | acceptance | nothing; the requester is wrong | pulled: `sync_remote_if_needed` reports [`LocalNodeLagging`] and the client synchronizes |
 ///
 /// All but `MissingCrossChainUpdate` and `EventsNotFound` are *self-suppliable*: the requester
-/// holds the data by construction, because it built the block or already verified the certificate.
-/// Those classes cannot stall. ∎
+/// holds the data already, so the push cannot fail for want of it. Usually that is by
+/// construction, because it built the block or verified the certificate. The one case where it is
+/// not is a lock the requester is *recovering* rather than one it created: there the blobs were
+/// collected during synchronization, by [`LockingBlobsTravelWithTheLock`]. Either way these
+/// classes cannot stall. ∎
 ///
 /// **Those two are not, and that is where general liveness is weakest.** Their data originates
 /// on a *third* chain. A client that does not follow the sending or publishing chain cannot push
@@ -182,7 +225,7 @@ pub trait BoundedCatchUp: CertifiedBlockIsAvailable + BoundedRecovery {}
 /// [`IncomingBundlesAreSelfDerived`]: linera_chain::manager::proof::commit::IncomingBundlesAreSelfDerived
 /// [`ValidationQuorumForms`]: super::progress::ValidationQuorumForms
 pub trait MissingDependenciesAreRecoverable:
-    CorrectValidatorAvailability + EventualSynchrony
+    LockingBlobsTravelWithTheLock + CorrectValidatorAvailability + EventualSynchrony
 {
 }
 
