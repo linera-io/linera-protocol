@@ -35,7 +35,9 @@ use super::assumptions::{
 ///
 /// *Proof.* Three parts.
 ///
-/// *Ordering.* `process_confirmed_block` issues the three storage writes and only afterwards
+/// *Ordering.* None of these writes is atomic with any other — not even within a call, since
+/// `write_blobs_and_certificate` fans out to one write per storage partition
+/// ([`StorageAtomicity`]). `process_confirmed_block` issues the three writes and only afterwards
 /// dispatches to `execute_contiguous_block` (or `execute_block_with_checkpoint_restore`), which is
 /// where `tip_state` is set and `save()` runs. The writes are three separate awaited calls, not
 /// one batch, so a crash can land between them; what the argument needs is only that all of them

@@ -248,8 +248,9 @@ pub trait DurablePersistence {}
 /// [`ChainManager::create_vote`]: crate::manager::ChainManager::create_vote
 pub trait SerializedChainState {}
 
-/// **Assumption (Atomic persistence).** A single `write_batch` is applied atomically, within
-/// whatever key-count and size limits the backend imposes.
+/// **Assumption (Atomic persistence).** A single `WritableKeyValueStore::write_batch` — one batch
+/// against one root key — is applied atomically, within whatever key-count and size limits the
+/// backend imposes.
 ///
 /// [`DurablePersistence`] is about *when* state is written; this is about the write being
 /// indivisible. Every invariant in [`crate::manager::proof::locking`] is stated over a state
@@ -268,6 +269,15 @@ pub trait SerializedChainState {}
 /// state. That slow path requires exclusive access to the keys under the chain's root — it fails
 /// with `JournalingError::JournalRequiresExclusiveAccess` otherwise — which is exactly what
 /// [`SerializedChainState`] supplies.
+///
+/// **Two things are called `write_batch`, and only one is atomic.** The store-level one above is.
+/// `DbStorage::write_batch` is not: it takes a `MultiPartitionBatch` keyed by root key, opens a
+/// store per key, and issues one independent `write_entry` per partition with `try_join_all`. So a
+/// storage call that spans partitions — `write_blobs_and_certificate`, which batches a block's
+/// blobs together with its certificate — is atomic within each partition and not across them, and
+/// a crash can leave one partition written and another not. Nothing in this specification relies
+/// on cross-partition atomicity; `linera_core::proof::availability::BlockOutputsArePersisted`
+/// carries that weight with replay instead.
 ///
 /// **What a failed save costs.** Three outcomes are distinguished, and only the last is expensive:
 ///
