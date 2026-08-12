@@ -128,3 +128,71 @@ pub trait CheckpointSummarizesUserStreams: EventFloorTracksCheckpoints {}
 /// The checkpoint block's certificate therefore transitively certifies those older blocks, so a
 /// bootstrapping node can rely on them without replaying the chain.
 pub trait CheckpointPreservesConsumptionBoundary: SerializedChainState {}
+
+/// **Lemma (A checkpoint leaves blob availability unchanged).** Checkpointing neither strands a
+/// blob the chain can still reach nor silently requires one a bootstrapping node cannot obtain.
+///
+/// *Proof.* Two directions.
+///
+/// *Nothing is stranded.* Blobs live in storage shared across chains, addressed by content and
+/// owned by no chain's view. What a checkpoint prunes is this chain's *history* — its older blocks
+/// and the events they published — which is not where blobs are kept. So no blob becomes
+/// unreachable by checkpointing, and the retention obligation is exactly what it was before.
+///
+/// *Nothing is silently required.* `ExecutionStateView::apply_checkpoint` records an
+/// [`OracleResponse::Checkpoint`] carrying `used_blobs`, read from the system state's `used_blobs`
+/// set: every blob the chain references at that moment. An oracle response is part of the block's
+/// outcome and covered by the block hash, so the list is certified rather than advisory, and a
+/// bootstrapping node knows precisely which blobs it must hold in shared storage before applying
+/// the checkpoint — otherwise a later operation could read blob content it does not have. ∎
+///
+/// **The state dump is itself a blob, on the ordinary terms.** The execution state is split at the
+/// current epoch's `maximum_blob_size` and published through `add_created_blob`, so a checkpoint's
+/// snapshot is published by its block exactly as any other blob is: priced by the block that
+/// publishes it, bounded in count and size, and retained on the same footing. A checkpoint buys a
+/// node the right to skip replaying history; it does not buy free storage.
+///
+/// [`OracleResponse::Checkpoint`]: linera_base::data_types::OracleResponse::Checkpoint
+pub trait CheckpointPreservesBlobAvailability: SerializedChainState {}
+
+/// **Lemma (A checkpoint restores exactly the execution state it captured).** Applying a
+/// checkpoint's blobs reproduces the chain's execution state as it stood immediately before the
+/// checkpoint block, in full.
+///
+/// *Proof.* Four parts.
+///
+/// *The dump is total.* `ExecutionStateView` has exactly one field: an inner view holding the
+/// system state, the user applications' key-value stores, and the two previous-block maps.
+/// Everything the outer view exposes is reached by dereferencing into it, and `dump_content`
+/// serializes that inner view's persisted content whole. No part of the execution state can be
+/// left out of a checkpoint by oversight — totality here is structural, not an inventory someone
+/// has to keep current as fields are added.
+///
+/// *The dump is quiescent.* `dump_content` reads from storage and refuses to run while the view
+/// holds pending in-memory changes, failing with `ViewError::HasPendingChanges`.
+/// `prepare_checkpoint` is therefore a *pre-block* operation, run before block-level setup mutates
+/// the chain. The captured bytes are the committed pre-block state — exactly what a bootstrapping
+/// node restores before re-applying the certified checkpoint block.
+///
+/// *The bytes are pinned by the certificate.* The dump is chunked at the epoch's
+/// `maximum_blob_size` and published as created blobs of the checkpoint block, their ids listed in
+/// that block's `OracleResponse::Checkpoint` as `execution_state_blobs`. Blobs are content
+/// addressed, so a node fetching them cannot be handed different bytes; and the id list is part of
+/// the certified outcome, so it cannot be pointed at a different dump. Integrity here is free, in
+/// the way integrity of any blob is free — availability is the separate question, and is
+/// `linera_core::proof::availability::CertifiedBlockIsAvailable`'s.
+///
+/// *The hash agrees.* `ExecutionStateView::crypto_hash_mut` derives the state hash from the inner
+/// view's historical hash, and `restore_from_content` records the hash of the restored bytes as the
+/// new stored hash. A node that restores and then re-applies the certified checkpoint block
+/// computes the `state_hash` that block certifies, so a restore that went wrong does not go
+/// unnoticed. ∎
+///
+/// **Residual obligation.** `restore_from_content` leaves the in-memory view stale: its
+/// documentation requires the caller to reload afterwards, and nothing in the type enforces it. A
+/// caller that skipped the reload would continue against a view that no longer describes storage.
+/// This is the same shape as [`SafetyStateRecovery`] — a correctness condition discharged by
+/// convention at the call site rather than by construction.
+///
+/// [`SafetyStateRecovery`]: crate::manager::proof::locking::SafetyStateRecovery
+pub trait CheckpointRestoresExecutionState: SerializedChainState {}

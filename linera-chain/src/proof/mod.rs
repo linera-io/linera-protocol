@@ -10,6 +10,6 @@
 //!
 //! | module | covers |
 //! |---|---|
-//! | [`checkpoints`] | event streams across a checkpoint boundary |
+//! | [`checkpoints`] | events, messages, blobs and execution state across a checkpoint boundary |
 
 pub mod checkpoints;
