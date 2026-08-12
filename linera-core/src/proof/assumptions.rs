@@ -42,6 +42,47 @@ pub trait EventualSynchrony {}
 /// [`CorrectValidatorsFormQuorum`]: linera_chain::data_types::proof::quorum::CorrectValidatorsFormQuorum
 pub trait CorrectValidatorAvailability {}
 
+/// **Assumption (Blob retention).** A correct validator that has processed a certified block keeps
+/// the blobs that block requires, for as long as any node may still need to execute it.
+///
+/// Content addressing makes a blob impossible to *forge* but does nothing to make it *exist*:
+/// [`CertifiedBlockIsAvailable`] needs someone to still be holding it. A validator writes them
+/// when it accepts the block — `write_blobs_and_certificate` — and records
+/// `BlobState { origin, last_used_by, epoch }` alongside.
+///
+/// **Currently discharged by omission.** Nothing deletes blobs: there is no collection pass in
+/// `linera-storage` or `linera-views`, so retention is unbounded and the assumption holds
+/// trivially. That is not a policy, and the shape of `BlobState` — recording which certificate
+/// last used a blob and in which epoch — suggests one was anticipated. Introducing collection
+/// would put this assumption at risk, and the rule would have to be keyed on those fields rather
+/// than on age.
+///
+/// Its counterpart is [`BlobAdmissionIsBounded`]: retention is only affordable because blobs that
+/// no certified block references cannot accumulate.
+///
+/// [`CertifiedBlockIsAvailable`]: super::availability::CertifiedBlockIsAvailable
+/// [`BlobAdmissionIsBounded`]: super::availability::BlobAdmissionIsBounded
+pub trait BlobRetention {}
+
+/// **Assumption (Bounded recovery).** After GST, a correct validator that crashes restarts and is
+/// again answering requests within Δ.
+///
+/// [`CorrectValidator`] admits a crash at any moment, discarding whatever was not persisted.
+/// Before GST that is unconstrained: crashes may be arbitrarily frequent and restarts arbitrarily
+/// slow, which is one of the ways the network is allowed to misbehave. After GST it must stop,
+/// or [`CorrectValidatorAvailability`] is unattainable — a validator that restarts more slowly
+/// than Δ is, from the protocol's point of view, permanently unavailable.
+///
+/// What the implementation must do to earn this is bounded work on restart: reload the chain
+/// views from storage rather than replay history. That holds for a validator that was only
+/// briefly down, since its saved state is close to the tip. It does **not** hold for one that has
+/// fallen far behind, where catching up is linear in the distance to the chain's latest
+/// checkpoint — see [`BoundedCatchUp`], which is where this assumption's real cost sits.
+///
+/// [`CorrectValidator`]: linera_chain::manager::proof::model::CorrectValidator
+/// [`BoundedCatchUp`]: super::availability::BoundedCatchUp
+pub trait BoundedRecovery {}
+
 /// **Assumption (An active correct driver).** Some correct owner of the chain runs a
 /// [`ChainClient`] that, from some point on, repeatedly and without giving up calls
 /// [`ChainClient::process_pending_block`] (or an operation that does, such as
@@ -67,7 +108,7 @@ pub trait CorrectValidatorAvailability {}
 /// [`Round::Validator`]: linera_base::data_types::Round::Validator
 /// [`ChainManager::fallback_owners`]: linera_chain::manager::ChainManager::fallback_owners
 /// [`ChainManager::reset`]: linera_chain::manager::ChainManager::reset
-/// [`TimeoutVoteConditions`]: linera_chain::manager::proof::pacemaker::TimeoutVoteConditions
+/// [`TimeoutVoteConditions`]: linera_chain::manager::proof::timeouts::TimeoutVoteConditions
 pub trait ActiveCorrectDriver {}
 
 /// **Assumption (Leader fairness).** The leader schedule selects the correct owner of
@@ -83,7 +124,7 @@ pub trait ActiveCorrectDriver {}
 ///
 /// [`SingleLeader`]: linera_base::data_types::Round::SingleLeader
 /// [`ChainOwnership::owners`]: linera_base::ownership::ChainOwnership::owners
-/// [`LeaderEligibility`]: linera_chain::manager::proof::pacemaker::LeaderEligibility
+/// [`LeaderEligibility`]: linera_chain::manager::proof::timeouts::LeaderEligibility
 pub trait LeaderFairness {}
 
 /// **Assumption (Round timeouts eventually exceed the round trip).** The round timeout grows
@@ -117,7 +158,7 @@ pub trait RoundTimeoutGrowth {}
 /// validators have reported skew.
 ///
 /// [`round_timeout`]: linera_chain::manager::ChainManager::round_timeout
-/// [`TimeoutVoteConditions`]: linera_chain::manager::proof::pacemaker::TimeoutVoteConditions
+/// [`TimeoutVoteConditions`]: linera_chain::manager::proof::timeouts::TimeoutVoteConditions
 pub trait ClockAccuracy {}
 
 /// **Assumption (Full reachability during synchronization).** After GST, a correct driver's

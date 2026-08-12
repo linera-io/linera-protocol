@@ -52,7 +52,7 @@ pub trait ConsensusInstance {}
 ///
 /// The successor function is [`ChainOwnership::next_round`], which is *not* the successor of
 /// this order — it skips the multi-leader rounds a chain is not configured for and saturates
-/// into [`Round::Validator`]. It is monotone, which is all the pacemaker results need.
+/// into [`Round::Validator`]. It is monotone, which is all the round-advancement results need.
 ///
 /// [`Round`]: linera_base::data_types::Round
 /// [`Round::Fast`]: linera_base::data_types::Round::Fast
@@ -72,8 +72,20 @@ pub trait RoundOrder {}
 /// produces such a vote, because that path is the only one that can produce it
 /// ([`VoteConstructionSites`]).
 ///
-/// Note this is a statement about *signing*, not about liveness: a correct validator may be
-/// slow, unreachable, or permanently crashed without becoming faulty.
+/// Note this is a statement about *signing*, not about availability. A correct validator may be
+/// slow or unreachable without becoming faulty, and in particular **it may crash at any time and
+/// restart**, losing whatever it had not yet persisted. Crash-recovery, not fail-stop, is the
+/// model: before GST crashes may be arbitrarily frequent and restarts arbitrarily slow; after
+/// GST, recovery is bounded by `linera_core::proof::assumptions::BoundedRecovery`.
+///
+/// That is what makes [`DurablePersistence`] load-bearing rather than hygienic. A validator that
+/// signed a vote and crashed before saving it would, on restart, have no record of having voted —
+/// and could vote again in the same round, breaking
+/// [`OneValidationVotePerRound`](crate::manager::proof::locking::OneValidationVotePerRound). That
+/// is a *safety* failure, not a lost message, and it is why the persistence obligation is stated
+/// as a condition of correctness rather than as an implementation detail.
+///
+/// [`DurablePersistence`]: self::DurablePersistence
 ///
 /// [`VoteConstructionSites`]: crate::manager::proof::voting::VoteConstructionSites
 pub trait CorrectValidator {}
@@ -179,8 +191,10 @@ pub trait UnforgeableSignatures {}
 ///
 /// Without this, a crash could lose the record of a vote and let the validator vote again,
 /// breaking [`OneValidationVotePerRound`] and [`OneConfirmationVotePerRound`], which are the
-/// only places where the assumption is consumed. A validator that violates it is faulty in the
-/// sense of [`CorrectValidator`], and is counted against [`MaxByzantineWeight`].
+/// only places where the assumption is consumed. It is one half of a discipline whose other half
+/// — that an effect already persisted is never *lost* — is `linera_core::proof::availability`. A
+/// validator that violates it is faulty in the sense of [`CorrectValidator`], and is counted
+/// against [`MaxByzantineWeight`].
 ///
 /// [`OneValidationVotePerRound`]: crate::manager::proof::locking::OneValidationVotePerRound
 /// [`OneConfirmationVotePerRound`]: crate::manager::proof::locking::OneConfirmationVotePerRound
@@ -191,18 +205,103 @@ pub trait DurablePersistence {}
 /// mutually exclusive and each runs to completion: no two of them interleave their reads and
 /// writes of the same [`ChainManager`](crate::manager::ChainManager).
 ///
-/// This is enforced, not hoped for: `linera_core::worker::WorkerState` routes every mutating
-/// request for a chain through `chain_write`, which holds a per-chain write lock for the whole
-/// transition, and the manager is `!Sync`-by-construction behind that guard. The specification
-/// relies on it whenever it reasons about "the state immediately before" a vote — for instance
-/// in [`UnlockingJustification`], where the guard evaluated by
+/// Exclusivity has two halves, and only the second is in this repository's control.
+///
+/// *Within a worker process*, `linera_core::worker::WorkerState` reaches a chain only through a
+/// per-chain `tokio::sync::RwLock<ChainWorkerState>` — `chain_write` for transitions, `chain_read`
+/// for queries. A transition holds the write side for its whole duration, and the manager is
+/// `!Sync`-by-construction behind the guard.
+///
+/// *Across the processes of one validator*, each chain belongs to exactly one worker, because
+/// shard assignment is static: `ValidatorInternalNetworkPreConfig::get_shard_id` in `linera-rpc`
+/// is a pure function of the validator's public key, the chain id and `shards.len()`, with no
+/// leases and no handoff. Senders route by that function, so a worker is only ever asked for the
+/// chains of its own shard.
+///
+/// That partition excludes *reads* as much as writes. All shards share one backing store, so
+/// nothing physically prevents a worker from reading another shard's keys; what makes it never
+/// happen is that a worker is never asked to. A chain's mutable state is therefore touched in
+/// neither direction by any process but its owner.
+///
+/// Chains do still share storage, but only *published* artifacts: blobs, which are content
+/// addressed, and events, which a reader reaches through `OracleResponse::Event`. Both are
+/// immutable once written and belong to no chain's view. So the boundary is not "no shared
+/// storage" but "no reading another chain's state": a cross-chain dependency is either delivered
+/// as a message or read from one of those two stores, never observed in the producing chain's
+/// [`ChainManager`](crate::manager::ChainManager) or inboxes.
+/// [`IncomingBundlesAreSelfDerived`] is the form that takes for the message case.
+///
+/// The specification relies on the composition whenever it reasons about "the state immediately
+/// before" a vote — for instance in [`UnlockingJustification`], where the guard evaluated by
 /// [`ChainManager::check_proposed_block`] must still describe the state when
 /// [`ChainManager::create_vote`] runs a few statements later.
 ///
+/// **Residual obligation.** The second half holds only while `shards.len()` is stable and worker
+/// processes do not overlap. Changing the shard count re-partitions every chain, and a rolling
+/// restart that runs a replacement alongside its predecessor puts two processes on the same
+/// chain; in both cases they compute the same owner and write the same shared keys. Nothing in
+/// the code detects either, so this is a deployment obligation, not an enforced invariant.
+///
+/// [`IncomingBundlesAreSelfDerived`]: crate::manager::proof::commit::IncomingBundlesAreSelfDerived
 /// [`UnlockingJustification`]: crate::manager::proof::safety::UnlockingJustification
 /// [`ChainManager::check_proposed_block`]: crate::manager::ChainManager::check_proposed_block
 /// [`ChainManager::create_vote`]: crate::manager::ChainManager::create_vote
 pub trait SerializedChainState {}
+
+/// **Assumption (Atomic persistence).** A single `WritableKeyValueStore::write_batch` — one batch
+/// against one root key — is applied atomically, within whatever key-count and size limits the
+/// backend imposes.
+///
+/// [`DurablePersistence`] is about *when* state is written; this is about the write being
+/// indivisible. Every invariant in [`crate::manager::proof::locking`] is stated over a state
+/// reached by whole transitions, so a torn write would put the manager in a state no transition
+/// produces — for instance a [`confirmed_vote`](field@crate::manager::ChainManager::confirmed_vote)
+/// stored without the [`locking_block`](crate::manager::ChainManager::locking_block) that
+/// [`ConfirmationOnlyInCurrentRound`] installs before it.
+///
+/// **Batches larger than the backend allows.** Atomicity comes from `write_batch` alone.
+/// Journaling adds none: it *preserves* all-or-nothing at sizes a remote store such as ScyllaDB
+/// will not accept in one `write_batch`, which a chain save can exceed.
+/// `linera_views::backends::journaling` writes the oversized batch into journal blocks and commits
+/// it by atomically updating a journal header; before any later read or write, a journal found
+/// present is replayed block by block, each block's write and its header update going in a single
+/// `write_batch`. A crash part-way therefore leaves a resumable journal rather than a torn
+/// state. That slow path requires exclusive access to the keys under the chain's root — it fails
+/// with `JournalingError::JournalRequiresExclusiveAccess` otherwise — which is exactly what
+/// [`SerializedChainState`] supplies.
+///
+/// **Two things are called `write_batch`, and only one is atomic.** The store-level one above is.
+/// `DbStorage::write_batch` is not: it takes a `MultiPartitionBatch` keyed by root key, opens a
+/// store per key, and issues one independent `write_entry` per partition with `try_join_all`. So a
+/// storage call that spans partitions — `write_blobs_and_certificate`, which batches a block's
+/// blobs together with its certificate — is atomic within each partition and not across them, and
+/// a crash can leave one partition written and another not. Nothing in this specification relies
+/// on cross-partition atomicity; `linera_core::proof::availability::BlockOutputsArePersisted`
+/// carries that weight with replay instead.
+///
+/// **What a failed save costs.** Three outcomes are distinguished, and only the last is expensive:
+///
+/// * *Cancelled* — the request future is dropped part-way. `RollbackGuard` in
+///   `linera_core::chain_worker::handle` rolls the view back on drop, so no partial staging
+///   survives into the next request.
+/// * *Failed outright* — the write did not take effect. The in-memory view still agrees with
+///   storage, the error propagates, and the worker keeps serving.
+/// * *Ambiguous* — journal resolution failed, so storage may be partly advanced and the view can
+///   no longer be trusted. `ViewError::must_reload_view` reports it, `ChainWorkerState::save` sets
+///   `poisoned`, `check_not_poisoned` refuses every later use of that worker, and
+///   `evict_poisoned_worker` drops it from the cache so the next request reloads the chain from
+///   storage.
+///
+/// The guarantee the proofs rest on is therefore not that storage is never partially written, but
+/// that a partially written chain is never *read back as state*: it is either completed by journal
+/// replay or discarded along with the worker that could not complete it.
+///
+/// It also underpins the mirror property in `linera_core::proof::availability`: re-deriving a
+/// worker's undelivered effects after a restart is only meaningful if the state they are derived
+/// from is itself consistent.
+///
+/// [`ConfirmationOnlyInCurrentRound`]: crate::manager::proof::voting::ConfirmationOnlyInCurrentRound
+pub trait StorageAtomicity {}
 
 /// **Assumption (Deterministic execution).** For a fixed chain state at a height, a fixed
 /// [`ProposedBlock`], a fixed set of published blobs and a fixed multi-leader round argument,

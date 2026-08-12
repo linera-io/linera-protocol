@@ -385,5 +385,5 @@ pub trait SafetyStateRecovery:
 /// [`fallback_vote`]: crate::manager::ChainManager::fallback_vote
 /// [`ChainManagerInfo::pending`]: crate::manager::ChainManagerInfo::pending
 /// [`Timeout`]: crate::block::Timeout
-/// [`FallbackVote`]: crate::manager::proof::pacemaker::FallbackVote
+/// [`FallbackVote`]: crate::manager::proof::timeouts::FallbackVote
 pub trait SimultaneousVotes: VoteConstructionSites {}

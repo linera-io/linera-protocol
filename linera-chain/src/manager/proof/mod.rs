@@ -19,7 +19,7 @@
 //! | [`locking`] | locking invariants, proved by induction over an instance's transitions |
 //! | [`commit`] | the commit rule, and what a node does when a block commits |
 //! | [`safety`] | the safety theorem: at most one block per chain and height |
-//! | [`pacemaker`] | view changes: how a height leaves a round, for the progress argument |
+//! | [`timeouts`] | how a height leaves a round it cannot finish in, for the progress argument |
 //!
 //! The single most important statement is [`safety::CommitAgreement`]; the single most
 //! substantial proof is [`safety::LockPreservation`].
@@ -40,7 +40,7 @@
 pub mod commit;
 pub mod locking;
 pub mod model;
-pub mod pacemaker;
 pub mod rounds;
 pub mod safety;
+pub mod timeouts;
 pub mod voting;

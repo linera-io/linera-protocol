@@ -26,6 +26,7 @@ pub mod justification;
 pub mod manager;
 mod outbox;
 mod pending_blobs;
+pub mod proof;
 #[cfg(with_testing)]
 pub mod test;
 

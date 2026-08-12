@@ -42,9 +42,9 @@ use crate::{
             SafetyStateRecovery,
         },
         model::{ConsensusInstance, DeterministicExecution, UnforgeableSignatures},
-        pacemaker::LeaderEligibility,
         rounds::{CurrentRoundMonotone, RoundFloor, VoteRoundBelowCurrentRound},
         safety::CommitAgreement,
+        timeouts::LeaderEligibility,
         voting::{
             ConfirmationOnlyInCurrentRound, FastConfirmationNeedsEmptyLock,
             UnlockingRequiresHigherCertificate, VoteConstructionSites,
