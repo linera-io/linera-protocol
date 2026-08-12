@@ -238,10 +238,9 @@ struct ExportedBlock {
     /// for a blob this very block publishes — is served without a read from storage. Held as the
     /// storage cache's pointers, so queued blocks share the allocations rather than copying them.
     blobs: Vec<CacheArc<Blob>>,
-    /// The chain's epoch and committee *after* the block was applied, so that a validator joining
-    /// in this block is exported to immediately.
+    /// The chain's epoch *after* the block was applied — a hint that lets the queue load a newer
+    /// committee from storage, so a validator joining in this block is exported to immediately.
     epoch: Epoch,
-    committee: Arc<Committee>,
     /// The persisted `exported_heights` of the chain, seeding cursors on its first block this
     /// process so a restart re-sends at most one block per destination instead of a history.
     exported_heights: BTreeMap<ValidatorPublicKey, BlockHeight>,
@@ -288,7 +287,6 @@ impl BlockExportHandle {
         certificate: CacheArc<ConfirmedBlockCertificate>,
         blobs: Vec<CacheArc<Blob>>,
         epoch: Epoch,
-        committee: Arc<Committee>,
         exported_heights: BTreeMap<ValidatorPublicKey, BlockHeight>,
     ) {
         // Announced before the queue is tried: a dropped block must still raise the repair
@@ -309,7 +307,6 @@ impl BlockExportHandle {
             certificate,
             blobs,
             epoch,
-            committee,
             exported_heights,
             #[cfg(with_metrics)]
             blob_bytes,
@@ -532,7 +529,7 @@ where
             };
             match wake {
                 Wake::Done(done) => self.on_done(done, &mut jobs),
-                Wake::Block(Some(block)) => self.on_block(block, &mut jobs),
+                Wake::Block(Some(block)) => self.on_block(block, &mut jobs).await,
                 Wake::Block(None) => break,
                 Wake::Tick => self.tick(&mut jobs).await,
             }
@@ -548,7 +545,7 @@ where
 
     /// Folds a fresh block in: advances the chain's tip and fans out to every destination that
     /// can take it now; the rest catch up from storage when their turn comes.
-    fn on_block(&mut self, block: ExportedBlock, jobs: &mut FuturesUnordered<JobFuture>) {
+    async fn on_block(&mut self, block: ExportedBlock, jobs: &mut FuturesUnordered<JobFuture>) {
         #[cfg(with_metrics)]
         {
             metrics::QUEUE_SIZE.dec();
@@ -559,9 +556,21 @@ where
         let header = &block.certificate.block().header;
         let (chain_id, height) = (header.chain_id, header.height);
         if self.latest_epoch.is_none_or(|epoch| block.epoch > epoch) {
-            self.latest_epoch = Some(block.epoch);
-            self.committee = Some(block.committee.clone());
-            self.committee_dirty = true;
+            // The block only carries the epoch; the committee itself comes from storage, where
+            // the chain that executed under it has already stored the event and blob.
+            match self.storage.get_or_load_committee(block.epoch).await {
+                Ok(Some(committee)) => {
+                    self.latest_epoch = Some(block.epoch);
+                    self.committee = Some(committee);
+                    self.committee_dirty = true;
+                }
+                Ok(None) => {
+                    debug!(epoch = %block.epoch, "Cannot load the committee for an exported block");
+                }
+                Err(error) => {
+                    debug!(%error, epoch = %block.epoch, "Cannot load a committee from storage");
+                }
+            }
         }
         // Per committee change, not per block: the rebuild walks every tracked chain.
         if self.committee_dirty || self.destinations.is_empty() {

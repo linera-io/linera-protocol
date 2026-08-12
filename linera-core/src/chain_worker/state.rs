@@ -1021,9 +1021,7 @@ where
         tip: ChainTipState,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
-        // Hold the certificate behind the storage cache's shared pointer rather than unwrapping
-        // the block out of it: the export task pushes this very certificate, so it never has to
-        // read the block back from storage.
+        // Hold the certificate behind the storage cache's shared pointer.
         let certificate = self.storage.cache_certificate(certificate);
         let block_hash = certificate.hash();
         let block = certificate.block();
@@ -1190,7 +1188,6 @@ where
             certificate.clone(),
             blobs,
             epoch,
-            committee.clone(),
             (**self.chain.exported_heights.get()).clone(),
         );
 
