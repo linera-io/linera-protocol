@@ -13,6 +13,7 @@
 //! | [`availability`] | what a certified block guarantees to everyone else, and what a crash costs |
 //! | [`progress`] | the individual steps a correct driver can force after GST |
 //! | [`liveness`] | the liveness theorems, and what they exclude |
+//! | [`notifications`] | what a notification tells a client, and why no proof relies on one |
 //!
 //! The `linera-spec` crate gives the reading order across both crates.
 //!
@@ -27,4 +28,5 @@
 pub mod assumptions;
 pub mod availability;
 pub mod liveness;
+pub mod notifications;
 pub mod progress;
