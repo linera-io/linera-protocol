@@ -4,7 +4,8 @@
 //! # The Linera protocol: correctness specification
 //!
 //! Linera is a multi-chain protocol: state is partitioned into *microchains*, each running its own
-//! consensus instance per block height, and chains communicate only by explicit message passing.
+//! consensus instance per block height. No chain can read another's state; they communicate by
+//! explicit message passing and through shared immutable stores — today, published blobs and events.
 //! This crate is the entry point to a correctness specification of that protocol — its system
 //! model, its assumptions, and proofs of the properties it is meant to have.
 //!

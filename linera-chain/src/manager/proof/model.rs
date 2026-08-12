@@ -220,11 +220,16 @@ pub trait DurablePersistence {}
 ///
 /// That partition excludes *reads* as much as writes. All shards share one backing store, so
 /// nothing physically prevents a worker from reading another shard's keys; what makes it never
-/// happen is that a worker is never asked to. A chain's state is therefore touched in neither
-/// direction by any process but its owner — which is why one chain cannot learn about another by
-/// inspecting it, and why every cross-chain dependency in this specification is carried by an
-/// explicit message or event rather than by a shared read. [`IncomingBundlesAreSelfDerived`] is
-/// the form that takes for inboxes.
+/// happen is that a worker is never asked to. A chain's mutable state is therefore touched in
+/// neither direction by any process but its owner.
+///
+/// Chains do still share storage, but only *published* artifacts: blobs, which are content
+/// addressed, and events, which a reader reaches through `OracleResponse::Event`. Both are
+/// immutable once written and belong to no chain's view. So the boundary is not "no shared
+/// storage" but "no reading another chain's state": a cross-chain dependency is either delivered
+/// as a message or read from one of those two stores, never observed in the producing chain's
+/// [`ChainManager`](crate::manager::ChainManager) or inboxes.
+/// [`IncomingBundlesAreSelfDerived`] is the form that takes for the message case.
 ///
 /// The specification relies on the composition whenever it reasons about "the state immediately
 /// before" a vote — for instance in [`UnlockingJustification`], where the guard evaluated by
