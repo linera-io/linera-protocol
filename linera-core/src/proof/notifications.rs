@@ -13,6 +13,8 @@
 
 use linera_chain::manager::proof::model::{CorrectValidator, StorageAtomicity};
 
+use super::availability::{BlockOutputsArePersisted, InboxHoldsOnlySentBundles};
+
 /// **Lemma (A correct validator's notification reports a change that is already persisted).** If a
 /// client receives a [`Notification`] from a correct validator, the state change it names is in
 /// that validator's storage. Nothing is claimed about a faulty validator's notifications, which by
@@ -91,3 +93,49 @@ pub trait NotificationsAreBestEffort {}
 /// [`ActiveCorrectDriver`]: super::assumptions::ActiveCorrectDriver
 /// [`MissingDependenciesAreRecoverable`]: super::availability::MissingDependenciesAreRecoverable
 pub trait NoProofDependsOnNotifications: NotificationsAreBestEffort {}
+
+/// **Lemma (A notification is backed by a certificate the validator can serve — except for a new
+/// round).** For every notification a correct validator emits other than `Reason::NewRound`, that
+/// validator holds a quorum-signed certificate establishing what the notification reports, and
+/// will hand it to anyone who asks. A recipient can therefore not merely learn that something
+/// happened but verify it, and carry the evidence to other validators.
+///
+/// *Proof.* Site by site, for the reasons a validator emits.
+///
+/// * `Reason::NewBlock` and `Reason::NewEvents` are reachable only through
+///   `ChainWorkerState::process_confirmed_block`, which verifies the [`ConfirmedBlockCertificate`]
+///   with `certificate.check` and writes it with `write_blobs_and_certificate` *before* dispatching
+///   to the path that emits them ([`BlockOutputsArePersisted`]). The certificate is in storage
+///   before the notification exists.
+/// * `Reason::NewIncomingBundle` is emitted once `process_cross_chain_update` reports
+///   `CrossChainUpdateResult::Updated`. By [`InboxHoldsOnlySentBundles`] that bundle reached the
+///   inbox from another worker of the *same validator*, built from its persisted outbox for a block
+///   that validator had processed — so the sending block's certificate is in this validator's
+///   storage too. Note it certifies a block of the *sending* chain, not of the chain the
+///   notification names.
+///
+/// Serving them is the ordinary node surface: `download_certificate`, `download_certificates` and
+/// `download_certificates_by_heights`. A node that receives one of these notifications can fetch
+/// the certificate, verify it against the committee, and push it onward — `send_confirmed_certificate`
+/// is exactly that path. ∎
+///
+/// **`Reason::NewRound` has no such backing, and cannot.** `ChainManager::update_current_round`
+/// takes a maximum over four inputs, and only two are certificates: a [`TimeoutCertificate`], or a
+/// locking block, which is a [`ValidatedBlockCertificate`]. The other two are `proposed` and
+/// `signed_proposal` — one owner's signature, not a quorum's. A round raised by a proposal in a
+/// higher multi-leader round therefore has nothing portable behind it, which is
+/// [`MultiLeaderRoundsAreLocal`] seen from the notification side: a recipient that wants to reach
+/// that round must be sent the proposal itself, because no compact proof of it exists to send.
+///
+/// **`Reason::BlockExecuted` is out of scope here.** It is emitted by `linera_core::client`, not by
+/// a validator, so it is a client telling itself something rather than a claim one node makes to
+/// another.
+///
+/// [`ConfirmedBlockCertificate`]: linera_chain::types::ConfirmedBlockCertificate
+/// [`ValidatedBlockCertificate`]: linera_chain::types::ValidatedBlockCertificate
+/// [`TimeoutCertificate`]: linera_chain::types::TimeoutCertificate
+/// [`MultiLeaderRoundsAreLocal`]: linera_chain::manager::proof::timeouts::MultiLeaderRoundsAreLocal
+pub trait NotificationIsCertificateBacked:
+    NotificationImpliesPersistedChange + BlockOutputsArePersisted + InboxHoldsOnlySentBundles
+{
+}
