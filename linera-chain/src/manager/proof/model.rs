@@ -72,8 +72,20 @@ pub trait RoundOrder {}
 /// produces such a vote, because that path is the only one that can produce it
 /// ([`VoteConstructionSites`]).
 ///
-/// Note this is a statement about *signing*, not about liveness: a correct validator may be
-/// slow, unreachable, or permanently crashed without becoming faulty.
+/// Note this is a statement about *signing*, not about availability. A correct validator may be
+/// slow or unreachable without becoming faulty, and in particular **it may crash at any time and
+/// restart**, losing whatever it had not yet persisted. Crash-recovery, not fail-stop, is the
+/// model: before GST crashes may be arbitrarily frequent and restarts arbitrarily slow; after
+/// GST, recovery is bounded by `linera_core::proof::assumptions::BoundedRecovery`.
+///
+/// That is what makes [`DurablePersistence`] load-bearing rather than hygienic. A validator that
+/// signed a vote and crashed before saving it would, on restart, have no record of having voted —
+/// and could vote again in the same round, breaking
+/// [`OneValidationVotePerRound`](crate::manager::proof::locking::OneValidationVotePerRound). That
+/// is a *safety* failure, not a lost message, and it is why the persistence obligation is stated
+/// as a condition of correctness rather than as an implementation detail.
+///
+/// [`DurablePersistence`]: self::DurablePersistence
 ///
 /// [`VoteConstructionSites`]: crate::manager::proof::voting::VoteConstructionSites
 pub trait CorrectValidator {}

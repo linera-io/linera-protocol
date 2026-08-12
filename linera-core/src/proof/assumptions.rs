@@ -42,6 +42,25 @@ pub trait EventualSynchrony {}
 /// [`CorrectValidatorsFormQuorum`]: linera_chain::data_types::proof::quorum::CorrectValidatorsFormQuorum
 pub trait CorrectValidatorAvailability {}
 
+/// **Assumption (Bounded recovery).** After GST, a correct validator that crashes restarts and is
+/// again answering requests within Δ.
+///
+/// [`CorrectValidator`] admits a crash at any moment, discarding whatever was not persisted.
+/// Before GST that is unconstrained: crashes may be arbitrarily frequent and restarts arbitrarily
+/// slow, which is one of the ways the network is allowed to misbehave. After GST it must stop,
+/// or [`CorrectValidatorAvailability`] is unattainable — a validator that restarts more slowly
+/// than Δ is, from the protocol's point of view, permanently unavailable.
+///
+/// What the implementation must do to earn this is bounded work on restart: reload the chain
+/// views from storage rather than replay history. That holds for a validator that was only
+/// briefly down, since its saved state is close to the tip. It does **not** hold for one that has
+/// fallen far behind, where catching up is linear in the distance to the chain's latest
+/// checkpoint — see [`BoundedCatchUp`], which is where this assumption's real cost sits.
+///
+/// [`CorrectValidator`]: linera_chain::manager::proof::model::CorrectValidator
+/// [`BoundedCatchUp`]: super::availability::BoundedCatchUp
+pub trait BoundedRecovery {}
+
 /// **Assumption (An active correct driver).** Some correct owner of the chain runs a
 /// [`ChainClient`] that, from some point on, repeatedly and without giving up calls
 /// [`ChainClient::process_pending_block`] (or an operation that does, such as
