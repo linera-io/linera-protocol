@@ -85,3 +85,46 @@ pub trait EventFloorTracksCheckpoints: SerializedChainState {}
 /// [`previous_event_blocks`]: crate::block::BlockBody::previous_event_blocks
 /// [`ChainError::CheckpointPreconditionFailed`]: crate::ChainError::CheckpointPreconditionFailed
 pub trait CheckpointSummarizesUserStreams: EventFloorTracksCheckpoints {}
+
+/// **Lemma (A checkpoint moves the consumption boundary and nothing else about messages).**
+/// Restoring a chain from a checkpoint changes which incoming bundles are still *retained*, never
+/// which have been consumed. Bundles below the restored cursor are already reflected in the
+/// restored execution state and are ignored on arrival and on consumption; bundles at or above it
+/// are queued, delivered and consumed exactly as they would have been with no checkpoint at all.
+///
+/// *Proof.* Three parts — what the checkpoint records, what a restore does, and what the guards
+/// then absorb.
+///
+/// *Recorded.* `PreparedCheckpoint::inbox_cursors` carries the cursor of **every** inbox with a
+/// non-default `next_cursor_to_remove`, not only those the checkpoint acknowledges. A bootstrapping
+/// node therefore learns the consumption position of every origin the chain had consumed from,
+/// including origins it will never hear from again.
+///
+/// *Restored.* `Inbox::restore_from_checkpoint` sets `restored_cursor` to that cursor, raises
+/// `next_cursor_to_add` to it if it lagged, sets `next_cursor_to_remove` to it, drops
+/// `added_bundles` below it, and clears `removed_bundles` — those anticipated removals came from
+/// pre-restore blocks the rollback has invalidated. It refuses to move backwards: restoring at a
+/// cursor below the current `restored_cursor` is an error, so a checkpoint dispatched out of order
+/// cannot undo a later one.
+///
+/// *Absorbed.* Below `restored_cursor`, `Inbox::add_bundle` returns without queueing and
+/// `Inbox::remove_bundle` returns immediately, reporting the bundle as already known and
+/// deliberately *not* recording it in `removed_bundles` — otherwise that queue would fill with
+/// anticipations no sender will ever satisfy. So a sender that has not yet seen the matching
+/// acknowledgement and re-pushes an already-consumed bundle causes a silent no-op, not a duplicate
+/// consumption. At or above the cursor the guards are the ordinary ones, and
+/// `linera_core::proof::availability::BundleConsumedAtMostOnce` applies unchanged. ∎
+///
+/// **The acknowledgement is what lets a sender forget.** A checkpoint emits
+/// `SystemMessage::CheckpointAck` to each origin in `PreparedCheckpoint::origin_cursors` so that
+/// origin can trim its outbox dump of messages the recipient has now folded into its state. That
+/// list is the delta since the previous checkpoint, filtered by `pending_checkpoint_ack_targets` —
+/// the chains that sent something other than a `Checkpoint`. Excluding pure-checkpoint senders is
+/// what stops two chains acknowledging each other's checkpoints forever.
+///
+/// **What the outboxes still reference is certified, not merely named.**
+/// `PreparedCheckpoint::outbox_block_hashes` lists every block this chain's outboxes still refer
+/// to, captured before the checkpoint block runs, and travels in the checkpoint's oracle response.
+/// The checkpoint block's certificate therefore transitively certifies those older blocks, so a
+/// bootstrapping node can rely on them without replaying the chain.
+pub trait CheckpointPreservesConsumptionBoundary: SerializedChainState {}
