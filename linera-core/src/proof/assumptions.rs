@@ -42,6 +42,28 @@ pub trait EventualSynchrony {}
 /// [`CorrectValidatorsFormQuorum`]: linera_chain::data_types::proof::quorum::CorrectValidatorsFormQuorum
 pub trait CorrectValidatorAvailability {}
 
+/// **Assumption (Blob retention).** A correct validator that has processed a certified block keeps
+/// the blobs that block requires, for as long as any node may still need to execute it.
+///
+/// Content addressing makes a blob impossible to *forge* but does nothing to make it *exist*:
+/// [`CertifiedBlockIsAvailable`] needs someone to still be holding it. A validator writes them
+/// when it accepts the block — `write_blobs_and_certificate` — and records
+/// `BlobState { origin, last_used_by, epoch }` alongside.
+///
+/// **Currently discharged by omission.** Nothing deletes blobs: there is no collection pass in
+/// `linera-storage` or `linera-views`, so retention is unbounded and the assumption holds
+/// trivially. That is not a policy, and the shape of `BlobState` — recording which certificate
+/// last used a blob and in which epoch — suggests one was anticipated. Introducing collection
+/// would put this assumption at risk, and the rule would have to be keyed on those fields rather
+/// than on age.
+///
+/// Its counterpart is [`BlobAdmissionIsBounded`]: retention is only affordable because blobs that
+/// no certified block references cannot accumulate.
+///
+/// [`CertifiedBlockIsAvailable`]: super::availability::CertifiedBlockIsAvailable
+/// [`BlobAdmissionIsBounded`]: super::availability::BlobAdmissionIsBounded
+pub trait BlobRetention {}
+
 /// **Assumption (Bounded recovery).** After GST, a correct validator that crashes restarts and is
 /// again answering requests within Δ.
 ///

@@ -20,7 +20,9 @@ use linera_chain::manager::proof::{
     model::{CorrectValidator, SerializedChainState, StorageAtomicity},
 };
 
-use super::assumptions::{BoundedRecovery, CorrectValidatorAvailability, EventualSynchrony};
+use super::assumptions::{
+    BlobRetention, BoundedRecovery, CorrectValidatorAvailability, EventualSynchrony,
+};
 
 /// **Lemma (A certified block and its dependencies are retrievable).** Once a block is a
 /// [`CommittedBlock`], any node that can reach a quorum can obtain the certificate, the ancestors
@@ -38,8 +40,9 @@ use super::assumptions::{BoundedRecovery, CorrectValidatorAvailability, Eventual
 ///   `receive_certificate_with_checked_signatures` re-verifies before applying, so retrieval
 ///   requires trusting no individual source.
 /// * *Blobs.* `Client::update_local_node_with_blobs_from` fetches by [`BlobId`] across validators,
-///   hedged. Content addressing means a blob needs no trust either: a wrong one is detectable by
-///   hashing, so a single honest source suffices.
+///   hedged. Content addressing supplies *integrity* for free — a wrong blob is detectable by
+///   hashing, so one honest source suffices — but says nothing about *availability*, which is the
+///   property actually needed here and which rests on [`BlobRetention`].
 /// * *Events.* Read across chains as `OracleResponse::Event`, so they are recorded in the block
 ///   itself; a validator missing the *publishing* chain's state answers `EventsNotFound`, and the
 ///   updater's response is to push the admin chain (`update_admin_chain`) or the publishing
@@ -54,8 +57,9 @@ use super::assumptions::{BoundedRecovery, CorrectValidatorAvailability, Eventual
 ///
 /// [`CommittedBlock`]: linera_chain::manager::proof::commit::CommittedBlock
 /// [`BlobId`]: linera_base::identifiers::BlobId
+/// [`BlobRetention`]: super::assumptions::BlobRetention
 pub trait CertifiedBlockIsAvailable:
-    CommittedBlock + CorrectValidatorAvailability + EventualSynchrony
+    CommittedBlock + CorrectValidatorAvailability + EventualSynchrony + BlobRetention
 {
 }
 
@@ -158,3 +162,32 @@ pub trait EffectsSurviveRestart:
     StorageAtomicity + SerializedChainState + CorrectValidator
 {
 }
+
+/// **Lemma (Unpaid blob storage is bounded).** A validator's storage of blobs that no certified
+/// block references is bounded, so pushing data at a validator buys neither storage nor
+/// availability.
+///
+/// This is the companion to [`BlobRetention`]. Retention says a *certified* block's blobs stay
+/// available; without a matching bound on *uncertified* ones, "blobs are available" would be an
+/// invitation to store anything for free.
+///
+/// *Proof.* Blobs arrive ahead of certification only through
+/// `ChainWorkerState::handle_pending_blob`, which admits one only if it is *expected*: it must
+/// belong to a pending proposal or validated block for this chain, or the call fails with
+/// `WorkerError::UnexpectedBlob`. Admission is then bounded twice over by the committee's
+/// [`ResourceControlPolicy`] — in count, `ensure!(count < policy.maximum_published_blobs)` with
+/// `WorkerError::TooManyPublishedBlobs`, and in size, by `check_blob_size` against
+/// `maximum_blob_size`. The staging areas themselves are per-chain view state
+/// (`pending_proposed_blobs`, `pending_validated_blobs`) and are cleared when the chain manager is
+/// reset for the next height.
+///
+/// Publication that does survive is charged: the policy prices it at `blob_published` per blob and
+/// `blob_byte_published` per byte, paid by the block that publishes it. ∎
+///
+/// **The economic side is out of scope.** That those prices *cover* the cost of keeping a blob for
+/// as long as [`BlobRetention`] requires is an economic question this specification does not
+/// address; it treats the fee schedule as given.
+///
+/// [`ResourceControlPolicy`]: linera_execution::ResourceControlPolicy
+/// [`BlobRetention`]: super::assumptions::BlobRetention
+pub trait BlobAdmissionIsBounded: CorrectValidator {}
