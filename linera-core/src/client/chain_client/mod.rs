@@ -3258,97 +3258,104 @@ impl<Env: Environment> ChainClient<Env> {
         };
 
         let this = self.clone();
-        let update_streams = async move {
-            let mut abortable_notifications = abortable_notifications.fuse();
-            // Set when an update attempt fails, to the time at which to retry it.
-            // Updates fail before touching the breaker state, so without this a
-            // failure would either spin on a past probe deadline or leave ended
-            // streams unregistered with no timer to ever pick them up.
-            let mut retry_update_at: Option<Timestamp> = None;
+        // Boxed (type-erased): the loop below nests enough futures that leaving the
+        // concrete type exposed makes downstream `tokio::spawn` calls overflow the
+        // trait solver when proving `Send` (E0275, seen in the bridge e2e workspace).
+        let update_streams: NotificationStreamTask = Box::pin(
+            async move {
+                let mut abortable_notifications = abortable_notifications.fuse();
+                // Set when an update attempt fails, to the time at which to retry it.
+                // Updates fail before touching the breaker state, so without this a
+                // failure would either spin on a past probe deadline or leave ended
+                // streams unregistered with no timer to ever pick them up.
+                let mut retry_update_at: Option<Timestamp> = None;
 
-            'listen: loop {
-                // Deadline of the earliest scheduled circuit-breaker probe, if any.
-                // Waking on it is what allows a chain with no live notification
-                // streams to repair them: `update_notification_streams` would
-                // otherwise only run again on this chain's next `NewBlock`, which may
-                // never arrive precisely because every stream is dead and the client
-                // cannot hear the traffic that would produce one.
-                // While updates are failing, probes cannot run anyway (they are
-                // launched by the update), so the retry deadline governs alone.
-                let next_probe_at = retry_update_at
-                    .or_else(|| circuit_breakers.values().map(|s| s.next_probe_at).min());
-                let probe_due = async {
-                    match next_probe_at {
-                        Some(deadline) => this.storage_client().clock().sleep_until(deadline).await,
-                        None => future::pending().await,
-                    }
-                }
-                .fuse();
-                tokio::pin!(probe_due);
-
-                let update_now = futures::select! {
-                    maybe_notification = abortable_notifications.next() => {
-                        match maybe_notification {
-                            // Re-subscribe to validators on new blocks to handle
-                            // committee changes.
-                            Some(notification) => {
-                                matches!(notification.reason, Reason::NewBlock { .. })
+                'listen: loop {
+                    // Deadline of the earliest scheduled circuit-breaker probe, if any.
+                    // Waking on it is what allows a chain with no live notification
+                    // streams to repair them: `update_notification_streams` would
+                    // otherwise only run again on this chain's next `NewBlock`, which may
+                    // never arrive precisely because every stream is dead and the client
+                    // cannot hear the traffic that would produce one.
+                    // While updates are failing, probes cannot run anyway (they are
+                    // launched by the update), so the retry deadline governs alone.
+                    let next_probe_at = retry_update_at
+                        .or_else(|| circuit_breakers.values().map(|s| s.next_probe_at).min());
+                    let probe_due = async {
+                        match next_probe_at {
+                            Some(deadline) => {
+                                this.storage_client().clock().sleep_until(deadline).await
                             }
-                            None => break 'listen,
+                            None => future::pending().await,
                         }
                     }
-                    // A validator notification stream task finished: update now, so
-                    // that the ended stream is registered in the circuit breaker and
-                    // a probe gets scheduled even if this chain never produces
-                    // another block.
-                    _ = process_notifications.select_next_some() => true,
-                    // A circuit-breaker probe is due.
-                    _ = probe_due => true,
-                };
-                if !update_now {
-                    continue;
-                }
-                // A stream can also end while an update is in flight; its wake-up is
-                // then consumed by `await_while_polling` below. Update again until no
-                // ended stream remains unregistered, so that the probe deadline above
-                // is armed whenever there is something left to repair.
-                loop {
-                    match Box::pin(await_while_polling(
-                        this.update_notification_streams(&mut senders, &mut circuit_breakers)
-                            .fuse(),
-                        &mut process_notifications,
-                    ))
-                    .await
-                    {
-                        Ok(tasks) => {
-                            retry_update_at = None;
-                            process_notifications.extend(tasks);
+                    .fuse();
+                    tokio::pin!(probe_due);
+
+                    let update_now = futures::select! {
+                        maybe_notification = abortable_notifications.next() => {
+                            match maybe_notification {
+                                // Re-subscribe to validators on new blocks to handle
+                                // committee changes.
+                                Some(notification) => {
+                                    matches!(notification.reason, Reason::NewBlock { .. })
+                                }
+                                None => break 'listen,
+                            }
                         }
-                        Err(error) => {
-                            error!("Failed to update committee: {error}");
-                            let now = this.storage_client().clock().current_time();
-                            retry_update_at = Some(
-                                now.saturating_add(TimeDelta::from_duration(
-                                    this.options
-                                        .notification_circuit_breaker_initial_probe_interval,
-                                )),
-                            );
+                        // A validator notification stream task finished: update now, so
+                        // that the ended stream is registered in the circuit breaker and
+                        // a probe gets scheduled even if this chain never produces
+                        // another block.
+                        _ = process_notifications.select_next_some() => true,
+                        // A circuit-breaker probe is due.
+                        _ = probe_due => true,
+                    };
+                    if !update_now {
+                        continue;
+                    }
+                    // A stream can also end while an update is in flight; its wake-up is
+                    // then consumed by `await_while_polling` below. Update again until no
+                    // ended stream remains unregistered, so that the probe deadline above
+                    // is armed whenever there is something left to repair.
+                    loop {
+                        match Box::pin(await_while_polling(
+                            this.update_notification_streams(&mut senders, &mut circuit_breakers)
+                                .fuse(),
+                            &mut process_notifications,
+                        ))
+                        .await
+                        {
+                            Ok(tasks) => {
+                                retry_update_at = None;
+                                process_notifications.extend(tasks);
+                            }
+                            Err(error) => {
+                                error!("Failed to update committee: {error}");
+                                let now = this.storage_client().clock().current_time();
+                                retry_update_at = Some(
+                                    now.saturating_add(TimeDelta::from_duration(
+                                        this.options
+                                            .notification_circuit_breaker_initial_probe_interval,
+                                    )),
+                                );
+                                break;
+                            }
+                        }
+                        if !senders.values().any(|abort| abort.is_aborted()) {
                             break;
                         }
                     }
-                    if !senders.values().any(|abort| abort.is_aborted()) {
-                        break;
-                    }
                 }
-            }
 
-            for abort in senders.into_values() {
-                abort.abort();
-            }
+                for abort in senders.into_values() {
+                    abort.abort();
+                }
 
-            let () = process_notifications.collect().await;
-        }
-        .in_current_span();
+                let () = process_notifications.collect().await;
+            }
+            .in_current_span(),
+        );
 
         Ok((update_streams, AbortOnDrop(abort), notifications))
     }
