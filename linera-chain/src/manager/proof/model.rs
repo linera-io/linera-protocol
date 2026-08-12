@@ -206,15 +206,24 @@ pub trait DurablePersistence {}
 ///
 /// Exclusivity has two halves, and only the second is in this repository's control.
 ///
-/// *Within a worker process*, `linera_core::worker::WorkerState` routes every mutating request
-/// for a chain through `chain_write`, which holds a per-chain write lock for the whole transition,
-/// and the manager is `!Sync`-by-construction behind that guard.
+/// *Within a worker process*, `linera_core::worker::WorkerState` reaches a chain only through a
+/// per-chain `tokio::sync::RwLock<ChainWorkerState>` — `chain_write` for transitions, `chain_read`
+/// for queries. A transition holds the write side for its whole duration, and the manager is
+/// `!Sync`-by-construction behind the guard.
 ///
-/// *Across the processes of one validator*, there is at most one worker per chain because shard
-/// assignment is static: `ValidatorInternalNetworkPreConfig::get_shard_id` in `linera-rpc` is a
-/// pure function of the validator's public key, the
-/// chain id and `shards.len()`, with no leases and no handoff. All shards share one backing store,
-/// so this is what keeps two processes from writing the same chain's keys.
+/// *Across the processes of one validator*, each chain belongs to exactly one worker, because
+/// shard assignment is static: `ValidatorInternalNetworkPreConfig::get_shard_id` in `linera-rpc`
+/// is a pure function of the validator's public key, the chain id and `shards.len()`, with no
+/// leases and no handoff. Senders route by that function, so a worker is only ever asked for the
+/// chains of its own shard.
+///
+/// That partition excludes *reads* as much as writes. All shards share one backing store, so
+/// nothing physically prevents a worker from reading another shard's keys; what makes it never
+/// happen is that a worker is never asked to. A chain's state is therefore touched in neither
+/// direction by any process but its owner — which is why one chain cannot learn about another by
+/// inspecting it, and why every cross-chain dependency in this specification is carried by an
+/// explicit message or event rather than by a shared read. [`IncomingBundlesAreSelfDerived`] is
+/// the form that takes for inboxes.
 ///
 /// The specification relies on the composition whenever it reasons about "the state immediately
 /// before" a vote — for instance in [`UnlockingJustification`], where the guard evaluated by
@@ -227,6 +236,7 @@ pub trait DurablePersistence {}
 /// chain; in both cases they compute the same owner and write the same shared keys. Nothing in
 /// the code detects either, so this is a deployment obligation, not an enforced invariant.
 ///
+/// [`IncomingBundlesAreSelfDerived`]: crate::manager::proof::commit::IncomingBundlesAreSelfDerived
 /// [`UnlockingJustification`]: crate::manager::proof::safety::UnlockingJustification
 /// [`ChainManager::check_proposed_block`]: crate::manager::ChainManager::check_proposed_block
 /// [`ChainManager::create_vote`]: crate::manager::ChainManager::create_vote
