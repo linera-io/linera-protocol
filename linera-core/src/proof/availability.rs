@@ -8,11 +8,6 @@
 //! quorum has certified a block, any node — a validator that was down, a validator that did not
 //! exist yet, a client — can obtain it and everything needed to execute it.
 //!
-//! This is deliberately framed as availability rather than durability. Durability is a property of
-//! one node's storage; what the protocol actually needs is that the certified block and its
-//! dependencies are *retrievable from the network*, which is what makes a crashed validator's
-//! recovery and a new validator's bootstrap the same operation.
-//!
 //! [`CommitAgreement`]: linera_chain::manager::proof::safety::CommitAgreement
 
 use linera_chain::manager::proof::{
