@@ -1,11 +1,16 @@
 # Linera specification
 
 This crate contains no code. It is the entry point to the correctness specification of the
-Linera microchain consensus protocol: the reading order, the conventions, and the index of every
+Linera protocol: the reading order, the conventions, and the index of every statement.
+
+The specification is written subsystem by subsystem. What it establishes today is agreement on one
+microchain's sequence of blocks, and what a certified block guarantees to nodes that were absent
+when it was certified; the index's `Coverage` section says what is not yet constrained by any
 statement.
 
 The statements themselves live next to the code they describe, in `linera_chain::manager::proof`,
-`linera_chain::data_types::proof`, `linera_chain::justification::proof` and `linera_core::proof`.
+`linera_chain::data_types::proof`, `linera_chain::justification::proof`, `linera_chain::proof` and
+`linera_core::proof`.
 This crate exists so that a single index can link to all of them — it depends on both
 `linera-chain` and `linera-core`, which neither of those crates can do.
 
