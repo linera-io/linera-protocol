@@ -80,9 +80,10 @@ pub trait CertifiedBlockIsAvailable:
 /// [`BoundedRecovery`]: super::assumptions::BoundedRecovery
 pub trait BoundedCatchUp: CertifiedBlockIsAvailable + BoundedRecovery {}
 
-/// **Lemma (Missing dependencies are recoverable).** When a validator cannot act on a proposal or
-/// a certificate because it lacks data, the missing data falls into a closed set of classes, and
-/// each has a route by which it arrives.
+/// **Lemma (Missing dependencies are recoverable).** A validator needs data in hand for either of
+/// two operations: *accepting a block proposal*, which means executing it, and *executing a
+/// certified block*. When it lacks that data, what is missing falls into a closed set of classes,
+/// each with a route by which it arrives.
 ///
 /// This is what makes the retry loops in `linera_core::updater` converge rather than spin, and it
 /// is the substance behind [`ValidationQuorumForms`]'s claim that a step completes in `2Δ`: a
@@ -91,20 +92,21 @@ pub trait BoundedCatchUp: CertifiedBlockIsAvailable + BoundedRecovery {}
 /// *Proof.* The classes are exactly the errors those loops match, and the recovery route differs
 /// by where the data originates:
 ///
-/// | class | what is missing | route |
-/// |---|---|---|
-/// | `BlobsNotFound` | a blob the block publishes or reads | pushed by the requester: `send_pending_blobs` on the proposal path, `upload_blobs` from local storage on the certificate path |
-/// | `BlocksNotFound` | ancestor block bytes a checkpoint trust-marked | pushed from the requester's storage |
-/// | `InactiveChain` | the chain does not exist at that validator | pushed with the chain's creation |
-/// | `WrongRound`, `UnexpectedBlockHeight` — validator behind | consensus state for this chain | pushed by `send_chain_information` |
-/// | `WrongRound`, `UnexpectedBlockHeight` — *requester* behind | nothing; the requester is wrong | pulled: `sync_remote_if_needed` reports [`LocalNodeLagging`] and the client synchronizes |
-/// | `MissingCrossChainUpdate` | an incoming bundle the block consumes | the **sending** chain's certificates |
-/// | `EventsNotFound` | an event the block read | the **publishing** chain's certificates; the admin chain is special-cased for epoch events |
+/// | class | blocks | what is missing | route |
+/// |---|---|---|---|
+/// | `BlobsNotFound` | both | a blob the block publishes or reads | pushed by the requester: `send_pending_blobs` when accepting a proposal, `upload_blobs` from local storage when executing a certified block |
+/// | `EventsNotFound` | both | an event the block read | the **publishing** chain's certificates; the admin chain is special-cased for epoch events |
+/// | `BlocksNotFound` | execution | ancestor block bytes a checkpoint trust-marked | pushed from the requester's storage |
+/// | `MissingCrossChainUpdate` | acceptance | an incoming bundle the block consumes | the **sending** chain's certificates |
+/// | `InactiveChain` | acceptance | the chain does not exist at that validator | pushed with the chain's creation |
+/// | `WrongRound`, `UnexpectedBlockHeight` — validator behind | acceptance | consensus state for this chain | pushed by `send_chain_information` |
+/// | `WrongRound`, `UnexpectedBlockHeight` — *requester* behind | acceptance | nothing; the requester is wrong | pulled: `sync_remote_if_needed` reports [`LocalNodeLagging`] and the client synchronizes |
 ///
-/// The first five are *self-suppliable*: the requester holds the data by construction, because it
-/// built the block or already verified the certificate. Those classes cannot stall. ∎
+/// All but `MissingCrossChainUpdate` and `EventsNotFound` are *self-suppliable*: the requester
+/// holds the data by construction, because it built the block or already verified the certificate.
+/// Those classes cannot stall. ∎
 ///
-/// **The last two are not, and that is where general liveness is weakest.** Their data originates
+/// **Those two are not, and that is where general liveness is weakest.** Their data originates
 /// on a *third* chain. A client that does not follow the sending or publishing chain cannot push
 /// what the validator is missing, and the push simply fails.
 ///
