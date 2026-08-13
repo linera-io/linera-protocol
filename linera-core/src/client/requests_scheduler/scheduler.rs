@@ -597,7 +597,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         Fut: Future<Output = Result<T, NodeError>> + 'static,
     {
         // Check cache for exact or subsuming match
-        if let Some(result) = self.cache.get(&key).await {
+        if let Some(result) = self.cache.get(&key, self.clock.current_time()).await {
             return Ok(result);
         }
 
@@ -732,13 +732,19 @@ impl<Env: Environment> RequestsScheduler<Env> {
         in_flight_guard.complete_and_broadcast(shared_result.clone());
 
         if let Ok(success) = shared_result.as_ref() {
-            self.cache
-                .store(
-                    key.clone(),
-                    Arc::new(success.clone()),
-                    self.clock.current_time(),
-                )
-                .await;
+            // A missing blob is a statement about one peer at one moment, not about
+            // the network: `download_blob` maps `BlobsNotFound` to `Ok(None)`, and
+            // caching that would blank the blob out for every peer for the whole TTL
+            // even while another in-flight peer has it.
+            if !matches!(success, RequestResult::Blob(None)) {
+                self.cache
+                    .store(
+                        key.clone(),
+                        Arc::new(success.clone()),
+                        self.clock.current_time(),
+                    )
+                    .await;
+            }
         }
         result
     }
