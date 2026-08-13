@@ -3,98 +3,9 @@
 
 //! Prometheus metrics for the bridge relay.
 
-use std::sync::LazyLock;
-
 use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
 use prometheus::{Gauge, IntCounter, IntGauge, Opts, TextEncoder};
 use tower_http::cors::CorsLayer;
-
-static DEPOSITS_DETECTED: LazyLock<IntCounter> = LazyLock::new(|| {
-    let opts = Opts::new(
-        "bridge_deposits_detected",
-        "Total deposits found by EVM scanner",
-    )
-    .namespace("linera");
-    prometheus::register_int_counter!(opts).unwrap()
-});
-
-static DEPOSITS_COMPLETED: LazyLock<IntCounter> = LazyLock::new(|| {
-    let opts =
-        Opts::new("bridge_deposits_completed", "Deposits confirmed on Linera").namespace("linera");
-    prometheus::register_int_counter!(opts).unwrap()
-});
-
-static DEPOSITS_PENDING: LazyLock<IntGauge> = LazyLock::new(|| {
-    let opts =
-        Opts::new("bridge_deposits_pending", "Currently pending deposits").namespace("linera");
-    prometheus::register_int_gauge!(opts).unwrap()
-});
-
-static DEPOSITS_FAILED: LazyLock<IntGauge> = LazyLock::new(|| {
-    let opts =
-        Opts::new("bridge_deposits_failed", "Permanently failed deposits").namespace("linera");
-    prometheus::register_int_gauge!(opts).unwrap()
-});
-
-static BURNS_DETECTED: LazyLock<IntCounter> = LazyLock::new(|| {
-    let opts = Opts::new(
-        "bridge_burns_detected",
-        "Total burns found by Linera scanner",
-    )
-    .namespace("linera");
-    prometheus::register_int_counter!(opts).unwrap()
-});
-
-static BURNS_COMPLETED: LazyLock<IntCounter> = LazyLock::new(|| {
-    let opts = Opts::new("bridge_burns_completed", "Burns forwarded to EVM").namespace("linera");
-    prometheus::register_int_counter!(opts).unwrap()
-});
-
-static BURNS_PENDING: LazyLock<IntGauge> = LazyLock::new(|| {
-    let opts = Opts::new("bridge_burns_pending", "Currently pending burns").namespace("linera");
-    prometheus::register_int_gauge!(opts).unwrap()
-});
-
-static BURNS_FAILED: LazyLock<IntGauge> = LazyLock::new(|| {
-    let opts = Opts::new("bridge_burns_failed", "Permanently failed burns").namespace("linera");
-    prometheus::register_int_gauge!(opts).unwrap()
-});
-
-static LAST_SCANNED_EVM_BLOCK: LazyLock<IntGauge> = LazyLock::new(|| {
-    let opts = Opts::new(
-        "bridge_last_scanned_evm_block",
-        "Last scanned EVM block number",
-    )
-    .namespace("linera");
-    prometheus::register_int_gauge!(opts).unwrap()
-});
-
-static LAST_SCANNED_LINERA_HEIGHT: LazyLock<IntGauge> = LazyLock::new(|| {
-    let opts = Opts::new(
-        "bridge_last_scanned_linera_height",
-        "Last scanned Linera block height",
-    )
-    .namespace("linera");
-    prometheus::register_int_gauge!(opts).unwrap()
-});
-
-static RELAYER_EVM_BALANCE_WEI: LazyLock<Gauge> = LazyLock::new(|| {
-    let opts = Opts::new(
-        "bridge_evm_balance_wei",
-        "Relayer EVM account balance in wei",
-    )
-    .namespace("linera");
-    prometheus::register_gauge!(opts).unwrap()
-});
-
-static RELAYER_LINERA_BALANCE_ATTO: LazyLock<Gauge> = LazyLock::new(|| {
-    let opts = Opts::new(
-        "bridge_linera_balance_atto",
-        "Relayer Linera chain balance in attos",
-    )
-    .namespace("linera");
-    prometheus::register_gauge!(opts).unwrap()
-});
 
 pub(crate) fn deposit_detected() {
     DEPOSITS_DETECTED.inc();
@@ -181,4 +92,105 @@ mod tests {
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
     }
+}
+
+linera_base::declare_metrics! {
+    static DEPOSITS_DETECTED: IntCounter =
+        {
+            let opts = Opts::new(
+                "bridge_deposits_detected",
+                "Total deposits found by EVM scanner",
+            )
+            .namespace("linera");
+            prometheus::register_int_counter!(opts).unwrap()
+        };
+
+    static DEPOSITS_COMPLETED: IntCounter =
+        {
+            let opts =
+                Opts::new("bridge_deposits_completed", "Deposits confirmed on Linera").namespace("linera");
+            prometheus::register_int_counter!(opts).unwrap()
+        };
+
+    static DEPOSITS_PENDING: IntGauge =
+        {
+            let opts =
+                Opts::new("bridge_deposits_pending", "Currently pending deposits").namespace("linera");
+            prometheus::register_int_gauge!(opts).unwrap()
+        };
+
+    static DEPOSITS_FAILED: IntGauge =
+        {
+            let opts =
+                Opts::new("bridge_deposits_failed", "Permanently failed deposits").namespace("linera");
+            prometheus::register_int_gauge!(opts).unwrap()
+        };
+
+    static BURNS_DETECTED: IntCounter =
+        {
+            let opts = Opts::new(
+                "bridge_burns_detected",
+                "Total burns found by Linera scanner",
+            )
+            .namespace("linera");
+            prometheus::register_int_counter!(opts).unwrap()
+        };
+
+    static BURNS_COMPLETED: IntCounter =
+        {
+            let opts = Opts::new("bridge_burns_completed", "Burns forwarded to EVM").namespace("linera");
+            prometheus::register_int_counter!(opts).unwrap()
+        };
+
+    static BURNS_PENDING: IntGauge =
+        {
+            let opts = Opts::new("bridge_burns_pending", "Currently pending burns").namespace("linera");
+            prometheus::register_int_gauge!(opts).unwrap()
+        };
+
+    static BURNS_FAILED: IntGauge =
+        {
+            let opts = Opts::new("bridge_burns_failed", "Permanently failed burns").namespace("linera");
+            prometheus::register_int_gauge!(opts).unwrap()
+        };
+
+    static LAST_SCANNED_EVM_BLOCK: IntGauge =
+        {
+            let opts = Opts::new(
+                "bridge_last_scanned_evm_block",
+                "Last scanned EVM block number",
+            )
+            .namespace("linera");
+            prometheus::register_int_gauge!(opts).unwrap()
+        };
+
+    static LAST_SCANNED_LINERA_HEIGHT: IntGauge =
+        {
+            let opts = Opts::new(
+                "bridge_last_scanned_linera_height",
+                "Last scanned Linera block height",
+            )
+            .namespace("linera");
+            prometheus::register_int_gauge!(opts).unwrap()
+        };
+
+    static RELAYER_EVM_BALANCE_WEI: Gauge =
+        {
+            let opts = Opts::new(
+                "bridge_evm_balance_wei",
+                "Relayer EVM account balance in wei",
+            )
+            .namespace("linera");
+            prometheus::register_gauge!(opts).unwrap()
+        };
+
+    static RELAYER_LINERA_BALANCE_ATTO: Gauge =
+        {
+            let opts = Opts::new(
+                "bridge_linera_balance_atto",
+                "Relayer Linera chain balance in attos",
+            )
+            .namespace("linera");
+            prometheus::register_gauge!(opts).unwrap()
+        };
 }

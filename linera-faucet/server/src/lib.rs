@@ -52,118 +52,106 @@ use crate::database::FaucetDatabase;
 
 // Prometheus metrics for the faucet
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{
         exponential_bucket_interval, register_gauge_vec, register_histogram_vec,
         register_int_counter_vec,
     };
     use prometheus::{GaugeVec, HistogramVec, IntCounterVec};
 
-    pub static CLAIM_REQUESTS_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "faucet_claim_requests_total",
-            "Total number of claim requests by result",
-            &["result"],
-        )
-    });
+    linera_base::declare_metrics! {
+        pub static CLAIM_REQUESTS_TOTAL: IntCounterVec =
+            register_int_counter_vec(
+                "faucet_claim_requests_total",
+                "Total number of claim requests by result",
+                &["result"],
+            );
 
-    pub static CLAIM_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "faucet_claim_latency_ms",
-            "End-to-end latency of claim requests in milliseconds",
-            &["result"],
-            exponential_bucket_interval(0.5, 8000.0),
-        )
-    });
+        pub static CLAIM_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "faucet_claim_latency_ms",
+                "End-to-end latency of claim requests in milliseconds",
+                &["result"],
+                exponential_bucket_interval(0.5, 8000.0),
+            );
 
-    pub static CHAINS_CREATED_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "faucet_chains_created_total",
-            "Total number of chains created by the faucet",
-            &[],
-        )
-    });
+        pub static CHAINS_CREATED_TOTAL: IntCounterVec =
+            register_int_counter_vec(
+                "faucet_chains_created_total",
+                "Total number of chains created by the faucet",
+                &[],
+            );
 
-    pub static BATCH_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "faucet_batch_size",
-            "Number of chain creation requests per batch",
-            &[],
-            Some(vec![1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0]),
-        )
-    });
+        pub static BATCH_SIZE: HistogramVec =
+            register_histogram_vec(
+                "faucet_batch_size",
+                "Number of chain creation requests per batch",
+                &[],
+                Some(vec![1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0]),
+            );
 
-    pub static BATCH_PROCESSING_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "faucet_batch_processing_latency_ms",
-            "Time to process a batch of chain creation requests in milliseconds",
-            &["result"],
-            exponential_bucket_interval(0.5, 8000.0),
-        )
-    });
+        pub static BATCH_PROCESSING_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "faucet_batch_processing_latency_ms",
+                "Time to process a batch of chain creation requests in milliseconds",
+                &["result"],
+                exponential_bucket_interval(0.5, 8000.0),
+            );
 
-    pub static QUEUE_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "faucet_queue_size",
-            "Number of pending claim requests in the queue",
-            &[],
-            Some(vec![
-                0.0, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0,
-            ]),
-        )
-    });
+        pub static QUEUE_SIZE: HistogramVec =
+            register_histogram_vec(
+                "faucet_queue_size",
+                "Number of pending claim requests in the queue",
+                &[],
+                Some(vec![
+                    0.0, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0,
+                ]),
+            );
 
-    pub static QUEUE_WAIT_TIME: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "faucet_queue_wait_time_ms",
-            "Time a request spends in the queue before processing in milliseconds",
-            &[],
-            exponential_bucket_interval(0.5, 2000.0),
-        )
-    });
+        pub static QUEUE_WAIT_TIME: HistogramVec =
+            register_histogram_vec(
+                "faucet_queue_wait_time_ms",
+                "Time a request spends in the queue before processing in milliseconds",
+                &[],
+                exponential_bucket_interval(0.5, 2000.0),
+            );
 
-    pub static FAUCET_BALANCE: LazyLock<GaugeVec> = LazyLock::new(|| {
-        register_gauge_vec(
-            "faucet_balance_amount",
-            "Current balance of the faucet chain, in tokens",
-            &[],
-        )
-    });
+        pub static FAUCET_BALANCE: GaugeVec =
+            register_gauge_vec(
+                "faucet_balance_amount",
+                "Current balance of the faucet chain, in tokens",
+                &[],
+            );
 
-    pub static RATE_LIMIT_REJECTIONS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "faucet_rate_limit_rejections_total",
-            "Number of requests rejected due to rate limiting",
-            &[],
-        )
-    });
+        pub static RATE_LIMIT_REJECTIONS: IntCounterVec =
+            register_int_counter_vec(
+                "faucet_rate_limit_rejections_total",
+                "Number of requests rejected due to rate limiting",
+                &[],
+            );
 
-    pub static INSUFFICIENT_BALANCE_REJECTIONS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "faucet_insufficient_balance_rejections_total",
-            "Number of requests rejected due to insufficient faucet balance",
-            &[],
-        )
-    });
+        pub static INSUFFICIENT_BALANCE_REJECTIONS: IntCounterVec =
+            register_int_counter_vec(
+                "faucet_insufficient_balance_rejections_total",
+                "Number of requests rejected due to insufficient faucet balance",
+                &[],
+            );
 
-    pub static DATABASE_OPERATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "faucet_database_operation_latency_ms",
-            "Database operation latency in milliseconds",
-            &["operation"],
-            exponential_bucket_interval(0.5, 2000.0),
-        )
-    });
+        pub static DATABASE_OPERATION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "faucet_database_operation_latency_ms",
+                "Database operation latency in milliseconds",
+                &["operation"],
+                exponential_bucket_interval(0.5, 2000.0),
+            );
 
-    pub static RETRYABLE_ERRORS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "faucet_retryable_errors_total",
-            "Number of chain execution retryable errors by type",
-            &["error_type"],
-        )
-    });
+        pub static RETRYABLE_ERRORS: IntCounterVec =
+            register_int_counter_vec(
+                "faucet_retryable_errors_total",
+                "Number of chain execution retryable errors by type",
+                &["error_type"],
+            );
+    }
 }
 
 /// Refusal messages returned by the claim paths. Shared as constants because the
@@ -197,6 +185,21 @@ pub(crate) async fn graphiql(uri: axum::http::Uri) -> impl axum::response::IntoR
             .subscription_endpoint("/ws")
             .finish(),
     )
+}
+
+/// Registers every metric reachable from this crate.
+///
+/// Without this, a metric is only exported after the code path that observes it has run, so a
+/// rarely-taken path leaves its panels blank and makes a routine restart look like the metric
+/// was removed.
+#[cfg(with_metrics)]
+pub fn init_metrics() {
+    linera_base::init_metrics();
+    linera_chain::init_metrics();
+    linera_core::init_metrics();
+    linera_execution::init_metrics();
+    linera_storage::init_metrics();
+    metrics::init_metrics();
 }
 
 #[cfg(test)]
@@ -1268,6 +1271,8 @@ where
         let port = self.port;
         let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
 
+        #[cfg(feature = "metrics")]
+        crate::init_metrics();
         #[cfg(feature = "metrics")]
         monitoring_server::start_metrics_with_profiling(
             self.metrics_address(),

@@ -320,6 +320,10 @@ where
         let address = self.get_listen_address();
 
         #[cfg(with_metrics)]
+        linera_service::init_metrics();
+        #[cfg(with_metrics)]
+        grpc::metrics::init_metrics();
+        #[cfg(with_metrics)]
         monitoring_server::start_metrics_with_profiling(
             address,
             shutdown_signal.clone(),

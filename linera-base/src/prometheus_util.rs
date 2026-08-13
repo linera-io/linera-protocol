@@ -4,6 +4,7 @@
 //! This module defines utility functions for interacting with Prometheus (logging metrics, etc)
 
 use prometheus::{
+    core::{MetricVec, MetricVecBuilder},
     exponential_buckets, histogram_opts, linear_buckets, register_gauge_vec, register_histogram,
     register_histogram_vec, register_int_counter, register_int_counter_vec, register_int_gauge,
     register_int_gauge_vec, GaugeVec, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge,
@@ -14,6 +15,47 @@ use crate::time::Instant;
 
 const LINERA_NAMESPACE: &str = "linera";
 
+/// Instantiates the sole child of a metric vector that has no labels.
+///
+/// A `MetricVec` exports one series per child, so registering it is not enough to make it
+/// appear in `/metrics`: with no child it emits nothing, which is indistinguishable from the
+/// metric having been renamed or removed. Creating the child up front exports it at zero
+/// until the code path that observes it first runs. Vectors that do have labels cannot get
+/// this treatment, because their label values are not known ahead of time.
+fn materialize_unlabeled<Builder: MetricVecBuilder>(
+    metric: MetricVec<Builder>,
+    label_names: &[&str],
+) -> MetricVec<Builder> {
+    if label_names.is_empty() {
+        metric.with_label_values(&[]);
+    }
+    metric
+}
+
+/// Declares Prometheus metrics as statics, along with an `init_metrics` that forces all of them.
+///
+/// A metric is only exported once its `LazyLock` has been forced, so one that is touched only
+/// on a rare code path disappears whenever its process is replaced. Generating the initializer
+/// from the declarations themselves means a newly added metric cannot be left out of it.
+#[macro_export]
+macro_rules! declare_metrics {
+    ($(
+        $(#[$attribute:meta])*
+        $visibility:vis static $name:ident: $metric_type:ty = $registration:expr;
+    )*) => {
+        $(
+            $(#[$attribute])*
+            $visibility static $name: ::std::sync::LazyLock<$metric_type> =
+                ::std::sync::LazyLock::new(|| $registration);
+        )*
+
+        /// Registers every metric declared in this module.
+        pub fn init_metrics() {
+            $( ::std::sync::LazyLock::force(&$name); )*
+        }
+    };
+}
+
 /// Wrapper around Prometheus `register_int_counter_vec!` macro which also sets the `linera` namespace
 pub fn register_int_counter_vec(
     name: &str,
@@ -21,7 +63,10 @@ pub fn register_int_counter_vec(
     label_names: &[&str],
 ) -> IntCounterVec {
     let counter_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
-    register_int_counter_vec!(counter_opts, label_names).expect("IntCounter can be created")
+    materialize_unlabeled(
+        register_int_counter_vec!(counter_opts, label_names).expect("IntCounter can be created"),
+        label_names,
+    )
 }
 
 /// Wrapper around Prometheus `register_int_counter_vec!` macro with `linera` namespace and a subsystem.
@@ -35,7 +80,10 @@ pub fn register_int_counter_vec_with_subsystem(
     let counter_opts = Opts::new(name, description)
         .namespace(LINERA_NAMESPACE)
         .subsystem(subsystem);
-    register_int_counter_vec!(counter_opts, label_names).expect("IntCounter can be created")
+    materialize_unlabeled(
+        register_int_counter_vec!(counter_opts, label_names).expect("IntCounter can be created"),
+        label_names,
+    )
 }
 
 /// Wrapper around Prometheus `register_int_counter!` macro which also sets the `linera` namespace
@@ -57,7 +105,10 @@ pub fn register_histogram_vec(
         histogram_opts!(name, description).namespace(LINERA_NAMESPACE)
     };
 
-    register_histogram_vec!(histogram_opts, label_names).expect("Histogram can be created")
+    materialize_unlabeled(
+        register_histogram_vec!(histogram_opts, label_names).expect("Histogram can be created"),
+        label_names,
+    )
 }
 
 /// Wrapper around Prometheus `register_histogram_vec!` macro with `linera` namespace and a subsystem.
@@ -79,7 +130,10 @@ pub fn register_histogram_vec_with_subsystem(
             .subsystem(subsystem)
     };
 
-    register_histogram_vec!(histogram_opts, label_names).expect("Histogram can be created")
+    materialize_unlabeled(
+        register_histogram_vec!(histogram_opts, label_names).expect("Histogram can be created"),
+        label_names,
+    )
 }
 
 /// Wrapper around Prometheus `register_histogram!` macro which also sets the `linera` namespace
@@ -136,14 +190,20 @@ pub fn register_int_gauge_with_subsystem(
 /// Wrapper around Prometheus `register_int_gauge_vec!` macro which also sets the `linera` namespace
 pub fn register_int_gauge_vec(name: &str, description: &str, label_names: &[&str]) -> IntGaugeVec {
     let gauge_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
-    register_int_gauge_vec!(gauge_opts, label_names).expect("IntGauge can be created")
+    materialize_unlabeled(
+        register_int_gauge_vec!(gauge_opts, label_names).expect("IntGauge can be created"),
+        label_names,
+    )
 }
 
 /// Wrapper around Prometheus `register_gauge_vec!` macro (floating-point gauge) which also sets
 /// the `linera` namespace. Use this for quantities with a fractional part (e.g. token balances).
 pub fn register_gauge_vec(name: &str, description: &str, label_names: &[&str]) -> GaugeVec {
     let gauge_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
-    register_gauge_vec!(gauge_opts, label_names).expect("Gauge can be created")
+    materialize_unlabeled(
+        register_gauge_vec!(gauge_opts, label_names).expect("Gauge can be created"),
+        label_names,
+    )
 }
 
 /// Wrapper around Prometheus `register_int_gauge_vec!` macro with `linera` namespace and a subsystem.
@@ -157,7 +217,10 @@ pub fn register_int_gauge_vec_with_subsystem(
     let gauge_opts = Opts::new(name, description)
         .namespace(LINERA_NAMESPACE)
         .subsystem(subsystem);
-    register_int_gauge_vec!(gauge_opts, label_names).expect("IntGauge can be created")
+    materialize_unlabeled(
+        register_int_gauge_vec!(gauge_opts, label_names).expect("IntGauge can be created"),
+        label_names,
+    )
 }
 
 /// Construct the bucket interval exponentially starting from a value and an ending value.

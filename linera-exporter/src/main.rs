@@ -167,6 +167,8 @@ impl Runnable for ExporterContext {
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
         #[cfg(with_metrics)]
+        linera_exporter::init_metrics();
+        #[cfg(with_metrics)]
         monitoring_server::start_metrics_with_profiling(
             self.config.metrics_address(),
             shutdown_notifier.clone(),
