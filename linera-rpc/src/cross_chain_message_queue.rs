@@ -8,16 +8,17 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
     future::Future,
+    panic::AssertUnwindSafe,
     time::Duration,
 };
 
-use futures::{channel::mpsc, StreamExt as _};
+use futures::{channel::mpsc, FutureExt as _, StreamExt as _};
 use linera_base::identifiers::ChainId;
 #[cfg(with_metrics)]
 use linera_base::time::Instant;
 use linera_core::data_types::CrossChainRequest;
 use rand::Rng as _;
-use tracing::{trace, warn};
+use tracing::{error, trace, warn};
 
 use crate::config::ShardId;
 
@@ -115,6 +116,38 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
                 }
             },
         )
+    };
+
+    // Every step must report back the queue it belongs to. A step that ends in a panic
+    // reports nothing: `join_next` yields a `JoinError` instead of a `(QueueId, Action)`
+    // pair, so the queue keeps its entry in `job_states` with no running step, and every
+    // later request for it is only recorded there and never sent — that queue stops
+    // delivering for the lifetime of the process. Catching the panic turns it into an
+    // ordinary failed attempt, leaving the queue under the usual retry and give-up logic.
+    let run_action = move |action, queue: QueueId, state: JobState| {
+        // Kept out of `state`, which the step consumes, so that the panic can be reported
+        // with the same fields as an ordinary send failure.
+        let nickname = state.nickname.clone();
+        let to_shard = state.task.shard_id;
+        let retries = state.retries;
+        let step = run_action.clone()(action, queue, state);
+        async move {
+            AssertUnwindSafe(step)
+                .catch_unwind()
+                .await
+                .unwrap_or_else(|_| {
+                    error!(
+                        nickname,
+                        retry = retries,
+                        from_shard = this_shard,
+                        to_shard,
+                        sender = %queue.sender,
+                        recipient = %queue.recipient,
+                        "Panic while sending a cross-chain query; treating it as a failed attempt",
+                    );
+                    (queue, Action::Retry)
+                })
+        }
     };
 
     loop {
@@ -329,6 +362,8 @@ mod tests {
         calls: Arc<Mutex<Vec<(ShardId, CrossChainRequest)>>>,
         /// How many further calls fail before they start succeeding.
         failures_left: Arc<AtomicUsize>,
+        /// How many further calls panic before they stop panicking.
+        panics_left: Arc<AtomicUsize>,
         /// If set, each call takes one permit before returning, so that a test can hold
         /// requests in flight.
         gate: Option<Arc<Semaphore>>,
@@ -344,6 +379,7 @@ mod tests {
             Handler {
                 calls: Arc::default(),
                 failures_left: Arc::new(AtomicUsize::new(0)),
+                panics_left: Arc::new(AtomicUsize::new(0)),
                 gate: None,
                 call_signal,
                 call_signals: Arc::new(AsyncMutex::new(call_signals)),
@@ -353,6 +389,12 @@ mod tests {
         /// Makes the next `count` calls fail.
         fn failing(self, count: usize) -> Self {
             self.failures_left.store(count, Ordering::SeqCst);
+            self
+        }
+
+        /// Makes the next `count` calls panic.
+        fn panicking(self, count: usize) -> Self {
+            self.panics_left.store(count, Ordering::SeqCst);
             self
         }
 
@@ -394,15 +436,19 @@ mod tests {
                     .expect("the gate is never closed")
                     .forget();
             }
-            // `checked_sub` yields `None` once the budget is exhausted, which makes
+            // `checked_sub` yields `None` once a budget is exhausted, which makes
             // `fetch_update` fail without touching the counter.
-            let fails = self
-                .failures_left
-                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |left| {
-                    left.checked_sub(1)
-                })
-                .is_ok();
-            if fails {
+            let take = |budget: &AtomicUsize| {
+                budget
+                    .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |left| {
+                        left.checked_sub(1)
+                    })
+                    .is_ok()
+            };
+            if take(&self.panics_left) {
+                panic!("simulated transport panic");
+            }
+            if take(&self.failures_left) {
                 anyhow::bail!("simulated transport failure");
             }
             Ok(())
@@ -650,6 +696,50 @@ mod tests {
             vec![1, 1, 1, 2],
             "the queue is usable again",
         );
+    }
+
+    /// A panicking transport is treated like a failing one: the request is retried rather
+    /// than lost, and the forwarder keeps running.
+    #[tokio::test(start_paused = true)]
+    async fn test_retries_after_a_panicking_transport() {
+        let handler = Handler::new().panicking(1);
+        let (mut sender, _task) = spawn_forwarder(
+            &handler,
+            5,
+            Duration::from_secs(1),
+            Duration::from_secs(30),
+            NO_DELAY,
+            NEVER_DROP,
+        );
+
+        send(&mut sender, confirm(1, 2, 1), 0).await;
+        settle().await;
+
+        assert_eq!(handler.tags(), vec![1, 1], "one panic, then success");
+    }
+
+    /// Giving up on a request that kept panicking still releases its queue. Without that, the
+    /// queue would keep an entry with no running step, and every later request for it would
+    /// be recorded there and never sent.
+    #[tokio::test(start_paused = true)]
+    async fn test_queue_recovers_after_giving_up_on_a_panicking_request() {
+        let handler = Handler::new().panicking(2);
+        let (mut sender, _task) = spawn_forwarder(
+            &handler,
+            1,
+            Duration::from_secs(1),
+            Duration::from_secs(30),
+            NO_DELAY,
+            NEVER_DROP,
+        );
+
+        send(&mut sender, confirm(1, 2, 1), 0).await;
+        settle().await;
+        assert_eq!(handler.tags(), vec![1, 1], "one attempt plus one retry");
+
+        send(&mut sender, confirm(1, 2, 2), 0).await;
+        settle().await;
+        assert_eq!(handler.tags(), vec![1, 1, 2], "the queue is usable again");
     }
 
     /// The wait before the n-th retry is `retry_delay * n`, capped at `max_backoff`.
