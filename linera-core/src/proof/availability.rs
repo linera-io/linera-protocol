@@ -203,12 +203,12 @@ pub trait LockingBlobsTravelWithTheLock: CorrectValidator + CorrectValidatorAvai
 /// | `BlobsNotFound` | both | a blob the block publishes or reads | pushed by the requester: `send_pending_blobs` when accepting a proposal, `upload_blobs` from local storage when executing a certified block |
 /// | `EventsNotFound` | both | an event the block read | the **publishing** chain's certificates; the admin chain is special-cased for epoch events |
 /// | `BlocksNotFound` | execution | ancestor block bytes a checkpoint trust-marked | pushed from the requester's storage |
-/// | `MissingCrossChainUpdate` | acceptance | an incoming bundle the block consumes | the **sending** chain's certificates |
+/// | `MissingCrossChainUpdates` | acceptance | the incoming bundles the block consumes | the **sending** chains' certificates |
 /// | `InactiveChain` | acceptance | the chain does not exist at that validator | pushed with the chain's creation |
 /// | `WrongRound`, `UnexpectedBlockHeight` — validator behind | acceptance | consensus state for this chain | pushed by `send_chain_information` |
 /// | `WrongRound`, `UnexpectedBlockHeight` — *requester* behind | acceptance | nothing; the requester is wrong | pulled: `sync_remote_if_needed` reports [`LocalNodeLagging`] and the client synchronizes |
 ///
-/// All but `MissingCrossChainUpdate` and `EventsNotFound` are *self-suppliable*: the requester
+/// All but `MissingCrossChainUpdates` and `EventsNotFound` are *self-suppliable*: the requester
 /// holds the data already, so the push cannot fail for want of it. Usually that is by
 /// construction, because it built the block or verified the certificate. The one case where it is
 /// not is a lock the requester is *recovering* rather than one it created: there the blobs were
@@ -235,11 +235,10 @@ pub trait LockingBlobsTravelWithTheLock: CorrectValidator + CorrectValidatorAvai
 /// **Why the pushes terminate.** Each class carries a well-founded measure.
 /// `send_confirmed_certificate` latches `sent_admin_chain` / `sent_blobs` / `sent_blocks`, so each
 /// class is attempted once. `send_block_proposal` drains its `blob_ids` with `mem::take` and
-/// records `publisher_chain_ids_sent` per publishing chain. `MissingCrossChainUpdate` is the one
-/// that is not a latch: it retries per origin while the reported height strictly increases, which
-/// terminates because those heights are bounded by the sender's tip and a block has finitely many
-/// origins. A validator reporting the same class with no progress is not retried, so a dependency
-/// that nobody can supply surfaces as an error rather than looping.
+/// records `publisher_chain_ids_sent` per publishing chain. `MissingCrossChainUpdates` reports
+/// every missing bundle at once, so it too is a latch: the whole reported set is synced in one
+/// batch, and a validator that still reports missing bundles afterwards is not retried. A
+/// dependency that nobody can supply therefore surfaces as an error rather than looping.
 ///
 /// [`LocalNodeLagging`]: crate::client::chain_client::Error::LocalNodeLagging
 /// [`IncomingBundlesAreSelfDerived`]: linera_chain::manager::proof::commit::IncomingBundlesAreSelfDerived
