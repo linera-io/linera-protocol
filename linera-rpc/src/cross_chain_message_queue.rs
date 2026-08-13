@@ -118,13 +118,16 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
         )
     };
 
-    // Every step must report back the queue it belongs to. A step that ends in a panic
-    // reports nothing: `join_next` yields a `JoinError` instead of a `(QueueId, Action)`
-    // pair, so the queue keeps its entry in `job_states` with no running step, and every
-    // later request for it is only recorded there and never sent — that queue stops
-    // delivering for the lifetime of the process. Catching the panic turns it into an
-    // ordinary failed attempt, leaving the queue under the usual retry and give-up logic.
-    let run_action = move |action, queue: QueueId, state| {
+    // The steps are polled by this task, so a panic in one unwinds the forwarder itself
+    // and the shard silently stops forwarding cross-chain messages altogether. Catching
+    // the panic turns it into an ordinary failed attempt, leaving the queue under the
+    // usual retry and give-up logic.
+    let run_action = move |action, queue: QueueId, state: JobState| {
+        // Kept out of `state`, which the step consumes, so that the panic can be reported
+        // with the same fields as an ordinary send failure.
+        let nickname = state.nickname.clone();
+        let to_shard = state.task.shard_id;
+        let retries = state.retries;
         let step = run_action.clone()(action, queue, state);
         async move {
             AssertUnwindSafe(step)
@@ -132,7 +135,10 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
                 .await
                 .unwrap_or_else(|_| {
                     error!(
+                        nickname,
+                        retry = retries,
                         from_shard = this_shard,
+                        to_shard,
                         sender = %queue.sender,
                         recipient = %queue.recipient,
                         "Panic while sending a cross-chain query; treating it as a failed attempt",
