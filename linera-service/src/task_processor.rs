@@ -237,28 +237,27 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 let retry_delay = self.retry_delay;
                 let operators = self.operators.clone();
                 tokio::spawn(async move {
-                    let independent = outcomes_are_independent(&actions.execute_tasks);
-                    // Spawn all tasks concurrently and join them.
-                    let handles: Vec<_> = actions
-                        .execute_tasks
-                        .into_iter()
-                        .map(|task| {
-                            let operators = operators.clone();
-                            tokio::spawn(Self::execute_task(application_id, task, operators))
-                        })
-                        .collect();
-                    let results = future::join_all(handles)
-                        .await
-                        .into_iter()
-                        .map(|result| {
-                            result.unwrap_or_else(|error| {
-                                Err(anyhow::anyhow!("task panicked: {error}"))
-                            })
-                        })
-                        .collect();
+                    // Run all tasks concurrently, keeping the group each one belongs to.
+                    // Tasks sharing an id, and all the tasks without one, can only be told
+                    // apart by position, so they form a group whose outcomes must stay
+                    // ordered. A distinctly identified task is a group of its own.
+                    let results = future::join_all(actions.execute_tasks.into_iter().map(|task| {
+                        let operators = operators.clone();
+                        let group = task.id.clone();
+                        async move {
+                            let result =
+                                tokio::spawn(Self::execute_task(application_id, task, operators))
+                                    .await
+                                    .unwrap_or_else(|error| {
+                                        Err(anyhow::anyhow!("task panicked: {error}"))
+                                    });
+                            (group, result)
+                        }
+                    }))
+                    .await;
                     // Tasks are assumed idempotent: whatever is not submitted here is
                     // recomputed by the next call to `nextActions`.
-                    let (outcomes, errors) = split_batch_results(results, independent);
+                    let (outcomes, errors) = split_batch_results(results);
                     // `None` sorts before any timestamp, so keeping the maximum keeps the
                     // latest retry the batch asked for: a task failing on every attempt
                     // cannot shorten the delay protecting the operator.
@@ -267,7 +266,11 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                         error!(%application_id, %error, "Error executing task");
                         retry_at = retry_at.max(Some(Timestamp::now().saturating_add(retry_delay)));
                     }
-                    for outcome in outcomes {
+                    let mut failed_groups = BTreeSet::new();
+                    for (group, outcome) in outcomes {
+                        if failed_groups.contains(&group) {
+                            continue;
+                        }
                         if let Err(timestamp) = Self::submit_task_outcome(
                             &chain_client,
                             application_id,
@@ -277,9 +280,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                         .await
                         {
                             retry_at = retry_at.max(Some(timestamp));
-                            if !independent {
-                                break;
-                            }
+                            failed_groups.insert(group);
                         }
                     }
                     if batch_sender
@@ -425,39 +426,28 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
     }
 }
 
-/// Returns whether the outcomes of `tasks` can be submitted independently of each other.
+/// Splits the results of a finished batch into the outcomes to submit, each with the group it
+/// belongs to, and the errors to report.
 ///
-/// They can only if every task carries a distinct id: an application that has to match an
-/// outcome by position - because the task has no id, or because another task shares it -
-/// would pop the wrong entry as soon as one outcome is skipped.
-fn outcomes_are_independent(tasks: &[Task]) -> bool {
-    let ids = tasks
-        .iter()
-        .filter_map(|task| task.id.as_ref())
-        .collect::<BTreeSet<_>>();
-    ids.len() == tasks.len()
-}
-
-/// Splits the results of a finished batch into the outcomes to submit and the errors to
-/// report.
-///
-/// If the outcomes are not `independent`, the ones ordered after the first failure are
-/// dropped and recomputed on the next attempt, so that the application sees no gap in the
-/// sequence it matches them against.
+/// Outcomes of different groups are independent, but within a group the ones ordered after a
+/// failure are dropped and recomputed on the next attempt, so that an application matching
+/// them by position sees no gap in the sequence.
 fn split_batch_results(
-    results: Vec<Result<TaskOutcome, anyhow::Error>>,
-    independent: bool,
-) -> (Vec<TaskOutcome>, Vec<anyhow::Error>) {
+    results: Vec<(Option<String>, Result<TaskOutcome, anyhow::Error>)>,
+) -> (Vec<(Option<String>, TaskOutcome)>, Vec<anyhow::Error>) {
     let mut outcomes = Vec::new();
     let mut errors = Vec::new();
-    for result in results {
+    let mut failed_groups = BTreeSet::new();
+    for (group, result) in results {
         match result {
-            Ok(outcome) => outcomes.push(outcome),
+            Ok(outcome) => {
+                if !failed_groups.contains(&group) {
+                    outcomes.push((group, outcome));
+                }
+            }
             Err(error) => {
                 errors.push(error);
-                if !independent {
-                    break;
-                }
+                failed_groups.insert(group);
             }
         }
     }
@@ -484,56 +474,62 @@ mod tests {
         }
     }
 
-    fn task(id: Option<&str>) -> Task {
-        Task {
-            id: id.map(str::to_string),
-            operator: "echo".to_string(),
-            input: "input".to_string(),
-        }
+    type BatchResult = (Option<String>, Result<TaskOutcome, anyhow::Error>);
+
+    fn success(id: Option<&str>, output: &str) -> BatchResult {
+        (id.map(str::to_string), Ok(outcome(id, output)))
+    }
+
+    fn failure(id: Option<&str>) -> BatchResult {
+        (id.map(str::to_string), Err(anyhow::anyhow!("boom")))
+    }
+
+    fn outputs(outcomes: Vec<(Option<String>, TaskOutcome)>) -> Vec<String> {
+        outcomes
+            .into_iter()
+            .map(|(_, outcome)| outcome.output)
+            .collect()
     }
 
     #[test]
-    fn test_outcomes_are_independent() {
-        assert!(outcomes_are_independent(&[
-            task(Some("1")),
-            task(Some("2"))
-        ]));
-        assert!(!outcomes_are_independent(&[task(Some("1")), task(None)]));
-        assert!(!outcomes_are_independent(&[
-            task(Some("1")),
-            task(Some("1"))
-        ]));
-    }
-
-    #[test]
-    fn test_split_batch_results_stops_at_first_failure_when_ordered() {
+    fn test_split_batch_results_drops_a_failed_group() {
+        // Tasks without an id all belong to the same group.
         let results = vec![
-            Ok(outcome(None, "first")),
-            Err(anyhow::anyhow!("boom")),
-            Ok(outcome(None, "third")),
+            success(None, "first"),
+            failure(None),
+            success(None, "third"),
         ];
-        let (outcomes, errors) = split_batch_results(results, false);
-        assert_eq!(
-            outcomes.into_iter().map(|o| o.output).collect::<Vec<_>>(),
-            vec!["first"]
-        );
+        let (outcomes, errors) = split_batch_results(results);
+        assert_eq!(outputs(outcomes), vec!["first"]);
         assert_eq!(errors.len(), 1);
     }
 
     #[test]
-    fn test_split_batch_results_keeps_siblings_when_independent() {
+    fn test_split_batch_results_keeps_distinctly_identified_siblings() {
         let results = vec![
-            Err(anyhow::anyhow!("boom")),
-            Ok(outcome(Some("2"), "second")),
-            Err(anyhow::anyhow!("bang")),
-            Ok(outcome(Some("4"), "fourth")),
+            failure(Some("1")),
+            success(Some("2"), "second"),
+            failure(Some("3")),
+            success(Some("4"), "fourth"),
         ];
-        let (outcomes, errors) = split_batch_results(results, true);
-        assert_eq!(
-            outcomes.into_iter().map(|o| o.output).collect::<Vec<_>>(),
-            vec!["second", "fourth"]
-        );
+        let (outcomes, errors) = split_batch_results(results);
+        assert_eq!(outputs(outcomes), vec!["second", "fourth"]);
         assert_eq!(errors.len(), 2);
+    }
+
+    #[test]
+    fn test_split_batch_results_only_drops_the_siblings_sharing_an_id() {
+        // Only what is ordered after the failure *and* shares its id is dropped.
+        let results = vec![
+            success(Some("dup"), "before"),
+            failure(Some("dup")),
+            success(Some("dup"), "after"),
+            success(Some("other"), "other"),
+            success(None, "unidentified"),
+        ];
+        let (outcomes, errors) = split_batch_results(results);
+        assert_eq!(outputs(outcomes), vec!["before", "other", "unidentified"]);
+        assert_eq!(errors.len(), 1);
     }
 
     #[test]

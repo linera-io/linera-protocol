@@ -30,10 +30,10 @@ pub struct ProcessorActions {
     pub set_cursor: Option<String>,
     /// The application is requesting the execution of the given tasks.
     ///
-    /// If every task carries a distinct [`id`](Task::id), the outcomes are independent: each
-    /// one is submitted as soon as its task succeeds, and a task that fails is retried
-    /// without holding back its siblings. Otherwise - if a task has no id, or if two of them
-    /// share one - the outcomes are submitted in the order of this vector and submission
+    /// Tasks are grouped by [`id`](Task::id), the ones without an id forming a single group.
+    /// The outcomes of distinct groups are independent: each is submitted as soon as its task
+    /// succeeds, and a task that fails is retried without holding back the other groups.
+    /// Within a group the outcomes are submitted in the order of this vector and submission
     /// stops at the first failure, so that an application matching them by position never
     /// sees a gap.
     pub execute_tasks: Vec<Task>,
@@ -46,9 +46,9 @@ scalar!(ProcessorActions);
 pub struct Task {
     /// An opaque, application-defined identifier, echoed back in the [`TaskOutcome`].
     ///
-    /// Applications that set it match outcomes by identity rather than by position. It must
-    /// be distinct from the id of every other task of the same batch; see
-    /// [`ProcessorActions::execute_tasks`].
+    /// Applications that set it match outcomes by identity rather than by position. An id
+    /// distinct from the id of every other task of the batch makes the outcome independent of
+    /// all of them; see [`ProcessorActions::execute_tasks`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     /// The operator handling the task.
