@@ -237,10 +237,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 let retry_delay = self.retry_delay;
                 let operators = self.operators.clone();
                 tokio::spawn(async move {
-                    // Outcomes are independent only if every task in the batch is identified:
-                    // an application that has to match an outcome by position would pop the
-                    // wrong entry as soon as one is skipped.
-                    let independent = actions.execute_tasks.iter().all(|task| task.id.is_some());
+                    let independent = outcomes_are_independent(&actions.execute_tasks);
                     // Spawn all tasks concurrently and join them.
                     let handles: Vec<_> = actions
                         .execute_tasks
@@ -428,6 +425,19 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
     }
 }
 
+/// Returns whether the outcomes of `tasks` can be submitted independently of each other.
+///
+/// They can only if every task carries a distinct id: an application that has to match an
+/// outcome by position - because the task has no id, or because another task shares it -
+/// would pop the wrong entry as soon as one outcome is skipped.
+fn outcomes_are_independent(tasks: &[Task]) -> bool {
+    let ids = tasks
+        .iter()
+        .filter_map(|task| task.id.as_ref())
+        .collect::<BTreeSet<_>>();
+    ids.len() == tasks.len()
+}
+
 /// Splits the results of a finished batch into the outcomes to submit and the errors to
 /// report.
 ///
@@ -472,6 +482,27 @@ mod tests {
             operator: "echo".to_string(),
             output: output.to_string(),
         }
+    }
+
+    fn task(id: Option<&str>) -> Task {
+        Task {
+            id: id.map(str::to_string),
+            operator: "echo".to_string(),
+            input: "input".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_outcomes_are_independent() {
+        assert!(outcomes_are_independent(&[
+            task(Some("1")),
+            task(Some("2"))
+        ]));
+        assert!(!outcomes_are_independent(&[task(Some("1")), task(None)]));
+        assert!(!outcomes_are_independent(&[
+            task(Some("1")),
+            task(Some("1"))
+        ]));
     }
 
     #[test]
