@@ -262,10 +262,13 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                     // Tasks are assumed idempotent: whatever is not submitted here is
                     // recomputed by the next call to `nextActions`.
                     let (outcomes, errors) = split_batch_results(results, independent);
+                    // `None` sorts before any timestamp, so keeping the maximum keeps the
+                    // latest retry the batch asked for: a task failing on every attempt
+                    // cannot shorten the delay protecting the operator.
                     let mut retry_at = None;
                     for error in errors {
                         error!(%application_id, %error, "Error executing task");
-                        retry_at = later(retry_at, Timestamp::now().saturating_add(retry_delay));
+                        retry_at = retry_at.max(Some(Timestamp::now().saturating_add(retry_delay)));
                     }
                     for outcome in outcomes {
                         if let Err(timestamp) = Self::submit_task_outcome(
@@ -276,7 +279,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                         )
                         .await
                         {
-                            retry_at = later(retry_at, timestamp);
+                            retry_at = retry_at.max(Some(timestamp));
                             if !independent {
                                 break;
                             }
@@ -451,12 +454,6 @@ fn split_batch_results(
     (outcomes, errors)
 }
 
-/// Returns the latest of the timestamps at which a batch should be retried, so that a task
-/// failing on every attempt cannot shorten the delay protecting the operator.
-fn later(retry_at: Option<Timestamp>, timestamp: Timestamp) -> Option<Timestamp> {
-    Some(retry_at.map_or(timestamp, |retry_at| retry_at.max(timestamp)))
-}
-
 /// Builds the GraphQL query submitting `task_outcome` to its application.
 fn task_outcome_query(task_outcome: &TaskOutcome) -> String {
     format!(
@@ -506,15 +503,6 @@ mod tests {
             vec!["second", "fourth"]
         );
         assert_eq!(errors.len(), 2);
-    }
-
-    #[test]
-    fn test_later() {
-        let early = Timestamp::from(1);
-        let late = Timestamp::from(2);
-        assert_eq!(later(None, early), Some(early));
-        assert_eq!(later(Some(late), early), Some(late));
-        assert_eq!(later(Some(early), late), Some(late));
     }
 
     #[test]
