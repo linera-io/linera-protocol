@@ -2054,15 +2054,17 @@ impl<Env: Environment> Client<Env> {
                 if let Some((prev_hash, prev_height)) =
                     block.body.previous_event_blocks.get(stream_id)
                 {
-                    if next_expected_events.get(stream_id).is_some_and(|index| {
-                        block
-                            .body
-                            .events
-                            .iter()
-                            .flatten()
-                            .find(|event| event.stream_id == *stream_id)
-                            .is_some_and(|event| event.index == *index)
-                    }) {
+                    let first_event_index = block
+                        .body
+                        .events
+                        .iter()
+                        .flatten()
+                        .find(|event| event.stream_id == *stream_id)
+                        .map(|event| event.index);
+                    if !event_ancestors_needed(
+                        next_expected_events.get(stream_id).copied(),
+                        first_event_index,
+                    ) {
                         continue;
                     }
                     if !certificates.contains_key(prev_height) {
@@ -2859,6 +2861,52 @@ pub async fn create_bytecode_blobs(
         blobs.push(blob);
     }
     (blobs, module_id)
+}
+
+/// Whether ancestor blocks in a `previous_event_blocks` walk may still hold unseen
+/// events. Ancestors only carry indices strictly below `first_event_index`, so once
+/// that index is at or below the next expected one, everything older is already known.
+/// Unknown stream or a block without the stream's events keeps walking.
+fn event_ancestors_needed(next_expected: Option<u32>, first_event_index: Option<u32>) -> bool {
+    match (next_expected, first_event_index) {
+        (Some(expected), Some(first)) => first > expected,
+        _ => true,
+    }
+}
+
+#[cfg(test)]
+mod event_walk_tests {
+    use super::event_ancestors_needed;
+
+    /// A stream with no new events since the last sync (every block's first index is
+    /// below the expected one) must stop the walk instead of traversing the entire
+    /// stream history — the regression behind the 2026-08-12 restart storms.
+    #[test]
+    fn already_known_block_stops_the_walk() {
+        assert!(!event_ancestors_needed(Some(10), Some(3)));
+        assert!(!event_ancestors_needed(Some(10), Some(9)));
+    }
+
+    /// The frontier block (first event is exactly the next expected one) ends the walk.
+    #[test]
+    fn frontier_block_stops_the_walk() {
+        assert!(!event_ancestors_needed(Some(10), Some(10)));
+    }
+
+    /// A gap below this block's events means older blocks are still needed.
+    #[test]
+    fn gap_keeps_walking() {
+        assert!(event_ancestors_needed(Some(10), Some(11)));
+        assert!(event_ancestors_needed(Some(0), Some(5)));
+    }
+
+    /// No local knowledge of the stream, or no event for it in this block: keep walking.
+    #[test]
+    fn unknown_state_keeps_walking() {
+        assert!(event_ancestors_needed(None, Some(0)));
+        assert!(event_ancestors_needed(Some(10), None));
+        assert!(event_ancestors_needed(None, None));
+    }
 }
 
 #[cfg(test)]
