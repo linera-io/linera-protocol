@@ -11,7 +11,7 @@
 
 use std::{
     panic::PanicHookInfo,
-    sync::{Mutex, Once},
+    sync::{Once, OnceLock},
 };
 
 #[cfg(with_metrics)]
@@ -30,6 +30,15 @@ mod metrics {
     /// increase deserves investigation.
     pub(super) static PANICS: LazyLock<IntCounter> =
         LazyLock::new(|| register_int_counter("linera_panics_total", "Number of panics observed"));
+
+    /// Registers [`PANICS`] before anything has panicked.
+    ///
+    /// A lazily registered counter is absent from `/metrics` until it is first touched, so
+    /// without this the series would spring into existence on the first panic — leaving
+    /// dashboards showing no data rather than zero, and nothing for an alert to sit on.
+    pub(super) fn register() {
+        LazyLock::force(&PANICS);
+    }
 }
 
 /// A panic hook, in the form [`std::panic::take_hook`] returns it.
@@ -37,7 +46,10 @@ type PanicHook = Box<dyn Fn(&PanicHookInfo<'_>) + Sync + Send>;
 
 /// The hook that was installed before ours, which we delegate to so that the standard
 /// message and the `RUST_BACKTRACE` backtrace are still printed.
-static PREVIOUS_HOOK: Mutex<Option<PanicHook>> = Mutex::new(None);
+///
+/// A `OnceLock` rather than a lock, so that reading it from inside a panic costs nothing
+/// and cannot be contended.
+static PREVIOUS_HOOK: OnceLock<PanicHook> = OnceLock::new();
 
 static INIT: Once = Once::new();
 
@@ -49,8 +61,11 @@ static INIT: Once = Once::new();
 /// recorded about it.
 pub fn init() {
     INIT.call_once(|| {
-        *PREVIOUS_HOOK.lock().expect("hook mutex is never poisoned") =
-            Some(std::panic::take_hook());
+        #[cfg(with_metrics)]
+        metrics::register();
+        PREVIOUS_HOOK
+            .set(std::panic::take_hook())
+            .unwrap_or_else(|_| unreachable!("`call_once` runs this at most once"));
         std::panic::set_hook(Box::new(report_panic));
     });
 }
@@ -80,12 +95,8 @@ fn report_panic(info: &PanicHookInfo<'_>) {
         "Panic",
     );
 
-    // The lock is only ever held while installing the hook, and the hook is installed
-    // once, so a panic here would mean a panic inside `init` itself.
-    if let Ok(guard) = PREVIOUS_HOOK.lock() {
-        if let Some(previous) = guard.as_ref() {
-            previous(info);
-        }
+    if let Some(previous) = PREVIOUS_HOOK.get() {
+        previous(info);
     }
 }
 

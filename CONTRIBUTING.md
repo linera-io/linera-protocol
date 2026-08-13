@@ -119,14 +119,13 @@ happens next is decided entirely by whoever joins that task. Choose deliberately
 
 * **Prefer crashing over running degraded.** When a task's death silently disables a
   subsystem — a cross-chain message forwarder, a notification fan-out, a chain listener —
-  the process should exit and be restarted rather than keep serving without it. Await such
-  tasks with `JoinSetExt::await_all_tasks`, which re-raises the panic.
+  the process should exit and be restarted rather than keep serving without it. Whoever
+  joins such a task must re-raise its panic rather than discard it.
 
 * **Except for work that is scoped to one request or one chain.** Handling a single RPC,
   or executing a block for a single chain, must not be able to take the process down: a
   panic reachable from user input would otherwise be a way for one crafted message to stop
-  every validator at once. Contain those panics and let the caller retry, using
-  `JoinSetExt::await_all_tasks_logging_panics` for sets of such tasks.
+  every validator at once. Contain those panics, log them, and let the caller retry.
 
 * **Never swallow a panic silently.** `catch_unwind` is acceptable at a boundary where the
   containment is the point, but log at `error!` and say in a comment why continuing is
