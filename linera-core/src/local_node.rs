@@ -15,7 +15,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, ProposedBlock},
-    types::{Block, ConfirmedBlockCertificate, GenericCertificate},
+    types::{Block, ConfirmedBlockCertificate},
     ChainError, ChainExecutionContext, StreamCounts,
 };
 use linera_execution::{BlobState, ExecutionError, Query, QueryOutcome, ResourceTracker};
@@ -133,7 +133,7 @@ where
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_certificate<T>(
         &self,
-        certificate: GenericCertificate<T>,
+        certificate: T::Certificate,
         notifier: &impl Notifier,
     ) -> Result<ChainInfoResponse, LocalNodeError>
     where

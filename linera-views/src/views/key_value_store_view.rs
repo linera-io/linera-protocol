@@ -1118,10 +1118,6 @@ impl KeyValueStoreError for ViewContainerError {
 impl<C: Context> ReadableKeyValueStore for ViewContainer<C> {
     const MAX_KEY_SIZE: usize = <C::Store as ReadableKeyValueStore>::MAX_KEY_SIZE;
 
-    fn max_stream_queries(&self) -> usize {
-        1
-    }
-
     fn root_key(&self) -> Result<Vec<u8>, ViewContainerError> {
         Ok(Vec::new())
     }

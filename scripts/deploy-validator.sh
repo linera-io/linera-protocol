@@ -287,12 +287,13 @@ build_local_image() {
 	log INFO "Building local Docker image from commit ${git_commit}..."
 
 	if [[ "${DRY_RUN:-0}" == "1" ]]; then
-		log INFO "[DRY RUN] Would build: docker build --build-arg git_commit=${git_commit} -f docker/Dockerfile . -t ${image_tag}"
+		log INFO "[DRY RUN] Would build: docker build --build-arg git_commit=${git_commit} --target validator -f docker/Dockerfile . -t ${image_tag}"
 		return 0
 	fi
 
 	if ! docker build \
 		--build-arg git_commit="${git_commit}" \
+		--target validator \
 		-f "${REPO_ROOT}/docker/Dockerfile" \
 		"${REPO_ROOT}" \
 		-t "${image_tag}"; then

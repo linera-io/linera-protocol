@@ -303,6 +303,23 @@ mod tests {
     }
 
     #[test]
+    fn test_light_client_verify_first_round_block() {
+        let mut light_client: TestLightClient = TestLightClient::new();
+
+        // A confirmation attested as being in the chain's first round, so its C-votes sign the
+        // first-round flag. The proof carries the flag and the light client must reproduce it in
+        // the signed `VoteValue`, or `ecrecover` would recover the wrong signer.
+        let certificate =
+            create_signed_certificate_first_round(&light_client.secret, &light_client.public);
+        let bcs_bytes = bcs::to_bytes(&crate::block_proof::BlockProof::from_certificate(
+            &certificate,
+        ))
+        .expect("BCS serialization failed");
+
+        light_client.verify_block(bcs_bytes);
+    }
+
+    #[test]
     fn test_light_client_register_block_records_events_hash() {
         let mut light_client = TestLightClient::new();
         let certificate = create_signed_certificate(&light_client.secret, &light_client.public);

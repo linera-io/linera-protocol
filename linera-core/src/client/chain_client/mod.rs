@@ -251,6 +251,14 @@ pub enum Error {
     #[error("Remote node operation failed: {0}")]
     RemoteNodeError(#[from] NodeError),
 
+    /// A validator reported state ahead of the local node for this chain. The caller may pull
+    /// the missing state from that validator, then retry or surface the carried error.
+    #[error("The local node is lagging behind a validator on chain {chain_id}: {error}")]
+    LocalNodeLagging {
+        chain_id: ChainId,
+        error: Box<NodeError>,
+    },
+
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
 
@@ -1316,7 +1324,9 @@ impl<Env: Environment> ChainClient<Env> {
                 .communicate_chain_action(&committee, action, value)
                 .await?,
         );
-        self.client.handle_certificate(*certificate.clone()).await?;
+        self.client
+            .handle_certificate::<Timeout>(*certificate.clone())
+            .await?;
         // The block height didn't increase, but this will communicate the timeout as well.
         self.client
             .communicate_chain_updates(
@@ -1561,8 +1571,8 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Creates a vector of transactions which, in addition to the provided operations,
-    /// also contains epoch changes, receiving message bundles and event stream updates
-    /// (if there are any to be processed).
+    /// also contains the next pending epoch change, receiving message bundles and event
+    /// stream updates (if there are any to be processed).
     /// This should be called when executing a block, in order to make sure that any pending
     /// messages or events are included in it.
     #[instrument(level = "trace", skip(operations))]
@@ -1573,7 +1583,7 @@ impl<Env: Environment> ChainClient<Env> {
         let incoming_bundles = self.pending_message_bundles().await?;
         let stream_updates = self.collect_stream_updates().await?;
         Ok(self
-            .collect_epoch_changes()
+            .next_epoch_change()
             .await?
             .into_iter()
             .map(Transaction::ExecuteOperation)
@@ -2052,17 +2062,19 @@ impl<Env: Environment> ChainClient<Env> {
                 return Err(err);
             };
             if current == snapshot {
-                // The lazy per-validator pull on rejection (`Updater::send_block_proposal`) can be
-                // raced out: `communicate_with_quorum` breaks as soon as a quorum is impossible and
-                // drops the still-in-flight `synchronize_chain_state_from` calls, so a locking block
-                // held only by the slower-to-respond validators is never absorbed. Fall back once to
-                // an explicit quorum sync — guaranteed to reach a lock-holder — and retry if it
-                // absorbed anything; otherwise the rejection was genuine, so propagate it.
+                // The post-quorum pull on rejection (`Client::process_lag_reports`) only covers
+                // validators whose rejection was actually received: `communicate_with_quorum`
+                // breaks as soon as a quorum is impossible and drops still-in-flight requests, so
+                // a locking block held only by the slower-to-respond validators is never even
+                // reported. Fall back once to an explicit quorum sync — guaranteed to reach a
+                // lock-holder — and retry if it absorbed anything; otherwise the rejection was
+                // genuine, so propagate it.
                 //
-                // TODO(#6453): this fallback path has no deterministic regression test yet — forcing
-                // the lazy pull to miss needs a clock-driven per-validator response delay in the test
-                // harness (building on #6448); until then it is only covered indirectly by the (now
-                // non-flaky) `test_lazy_pull_absorbs_locking_block_on_proposal_rejection`.
+                // TODO(#6453): this fallback path has no deterministic regression test yet —
+                // forcing a lock-holder's response to be dropped needs a clock-driven
+                // per-validator response delay in the test harness (building on #6448); until
+                // then it is only covered indirectly by the (now non-flaky)
+                // `test_lazy_pull_absorbs_locking_block_on_proposal_rejection`.
                 if did_fallback_sync {
                     return Err(err);
                 }
@@ -2868,20 +2880,21 @@ impl<Env: Environment> ChainClient<Env> {
         }
     }
 
-    /// Returns operations to process all pending new epochs, in order.
-    async fn collect_epoch_changes(&self) -> Result<Vec<Operation>, Error> {
-        let mut next_epoch = self.chain_info().await?.epoch.try_add_one()?;
-        let mut epoch_change_ops = Vec::new();
-        while self
+    /// Returns an operation to process the next pending new epoch, if there is one.
+    ///
+    /// Later epochs are not included, since a block may advance the epoch at most once;
+    /// they are processed by subsequent blocks.
+    async fn next_epoch_change(&self) -> Result<Option<Operation>, Error> {
+        let next_epoch = self.chain_info().await?.epoch.try_add_one()?;
+        if !self
             .has_admin_event(EPOCH_STREAM_NAME, next_epoch.0)
             .await?
         {
-            epoch_change_ops.push(Operation::system(SystemOperation::ProcessNewEpoch(
-                next_epoch,
-            )));
-            next_epoch.try_add_assign_one()?;
+            return Ok(None);
         }
-        Ok(epoch_change_ops)
+        Ok(Some(Operation::system(SystemOperation::ProcessNewEpoch(
+            next_epoch,
+        ))))
     }
 
     /// Returns whether the system event on the admin chain with the given stream name and key
@@ -3459,67 +3472,29 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(validator_tasks.collect())
     }
 
-    /// Attempts to update a validator with the local information.
-    #[instrument(level = "trace", skip(remote_node))]
-    pub async fn sync_validator(&self, remote_node: Env::ValidatorNode) -> Result<(), Error> {
-        let validator_next_block_height = match remote_node
-            .handle_chain_info_query(ChainInfoQuery::new(self.chain_id))
-            .await
-        {
-            Ok(info) => info.info.next_block_height,
-            // The validator doesn't have this chain's description blob yet.
-            Err(NodeError::BlobsNotFound(_)) => BlockHeight::ZERO,
-            Err(err) => return Err(err.into()),
-        };
+    /// Attempts to update a validator with the local information: sends any confirmed
+    /// block certificates the validator is missing, along with the blobs and other
+    /// chains' blocks they depend on, and evidence for the current consensus round.
+    ///
+    /// The public key is used to verify the validator's responses.
+    #[instrument(level = "trace", skip(node))]
+    pub async fn sync_validator(
+        &self,
+        public_key: ValidatorPublicKey,
+        node: Env::ValidatorNode,
+    ) -> Result<(), Error> {
         let local_next_block_height = self.chain_info().await?.next_block_height;
-
-        if validator_next_block_height >= local_next_block_height {
-            debug!("Validator is up-to-date with local state");
-            return Ok(());
-        }
-
-        let heights = (validator_next_block_height.0..local_next_block_height.0)
-            .map(BlockHeight)
-            .collect::<Vec<_>>();
-
-        let certificates = self
+        let mut updater = self
             .client
-            .storage_client()
-            .read_certificates_by_heights(self.chain_id, &heights)
-            .await?
-            .into_iter()
-            .flatten();
-
-        for certificate in certificates {
-            let missing_blob_ids = match remote_node
-                .handle_confirmed_certificate(
-                    certificate.clone(),
-                    CrossChainMessageDelivery::NonBlocking,
-                )
-                .await
-            {
-                Ok(_) => continue,
-                Err(NodeError::BlobsNotFound(missing_blob_ids)) => missing_blob_ids,
-                Err(err) => return Err(err.into()),
-            };
-            // The validator is missing blobs the certificate depends on
-            // (including possibly the chain description). Upload and retry.
-            let missing_blobs = self
-                .client
-                .storage_client()
-                .read_blobs(&missing_blob_ids)
-                .await?
-                .into_iter()
-                .flatten()
-                .map(|b| b.into_std())
-                .collect();
-            remote_node.upload_blobs(missing_blobs).await?;
-            remote_node
-                .handle_confirmed_certificate(certificate, CrossChainMessageDelivery::NonBlocking)
-                .await?;
-        }
-
-        Ok(())
+            .remote_node_updater(RemoteNode { public_key, node });
+        updater
+            .send_chain_information(
+                self.chain_id,
+                local_next_block_height,
+                CrossChainMessageDelivery::NonBlocking,
+                None,
+            )
+            .await
     }
 }
 

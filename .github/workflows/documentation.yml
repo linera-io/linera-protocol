@@ -33,7 +33,14 @@ jobs:
 
   publish-docs:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # `cargo doc --all-features` documents ~565 crates and has been creeping up
+    # on this budget: the last success took 36m37s against a 40m limit, and the
+    # next run hit the wall at 40m15s. A timeout here is quiet — the job reports
+    # `cancelled` (indistinguishable at a glance from a concurrency cancellation)
+    # and `Deploy` is simply skipped, so the published docs go stale without
+    # anything going red. Caching is not the lever: rust-cache already reports a
+    # full hit and restores ~718 MB in 17s.
+    timeout-minutes: 75
 
     # We only publish docs for the main branch.
     if: github.ref == 'refs/heads/main'

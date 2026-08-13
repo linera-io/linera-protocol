@@ -94,6 +94,10 @@ BlockProof:
         TYPENAME: BlockHeader
     - round:
         TYPENAME: Round
+    - first_round: BOOL
+    - justification_commitment:
+        OPTION:
+          TYPENAME: CryptoHash
     - signatures:
         SEQ:
           TUPLE:
@@ -253,3 +257,8 @@ VoteValue:
     - TYPENAME: CryptoHash
     - TYPENAME: Round
     - TYPENAME: CertificateKind
+    - OPTION:
+        TYPENAME: Round
+    - BOOL
+    - OPTION:
+        TYPENAME: CryptoHash

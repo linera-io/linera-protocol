@@ -114,7 +114,7 @@ pub struct Add {
     /// Account public key for receiving payments and rewards
     #[arg(long)]
     account_key: AccountPublicKey,
-    /// Network address where the validator can be reached (e.g., grpcs://host:port)
+    /// Network address where the validator can be reached (e.g., grpcs:host:port)
     #[arg(long)]
     address: url::Url,
     /// Voting weight for consensus (default: 1)
@@ -182,7 +182,7 @@ pub struct List {
 /// view of the blockchain state, including block height and committee information.
 #[derive(Debug, Clone, clap::Parser)]
 pub struct Query {
-    /// Network address of the validator (e.g., grpcs://host:port)
+    /// Network address of the validator (e.g., grpcs:host:port)
     address: String,
     /// Chain ID to query about (defaults to default chain)
     #[arg(long)]
@@ -198,7 +198,7 @@ pub struct Query {
 /// view of the blockchain.
 #[derive(Debug, Clone, clap::Parser)]
 pub struct QueryBlock {
-    /// Network address of the validator (e.g., grpcs://host:port)
+    /// Network address of the validator (e.g., grpcs:host:port)
     address: String,
     /// Chain ID to query about (defaults to default chain)
     #[arg(long)]
@@ -228,7 +228,7 @@ pub struct Remove {
 /// ensuring the validator has up-to-date information about specified chains.
 #[derive(Debug, Clone, clap::Parser)]
 pub struct Sync {
-    /// Network address of the validator to sync (e.g., grpcs://host:port)
+    /// Network address of the validator to sync (e.g., grpcs:host:port)
     address: String,
     /// Chain IDs to synchronize (defaults to all chains in wallet)
     #[arg(long)]
@@ -236,6 +236,11 @@ pub struct Sync {
     /// Verify validator is online before syncing
     #[arg(long)]
     check_online: bool,
+    /// Public key of the validator, used to verify its responses. Defaults to the key
+    /// registered for this network address in the current committee; required if the
+    /// validator is not (yet) a committee member.
+    #[arg(long)]
+    public_key: Option<ValidatorPublicKey>,
 }
 
 /// Parse a batch operations file or stdin.
@@ -844,12 +849,33 @@ impl Sync {
         let node_provider = context.make_node_provider();
         let validator = node_provider.make_node(&self.address)?;
 
+        // The validator's public key, to verify its responses: either given explicitly
+        // or looked up in the current committee by network address.
+        let public_key = match self.public_key {
+            Some(public_key) => public_key,
+            None => {
+                let admin_chain = context.make_chain_client(context.admin_chain_id()).await?;
+                let (_, committee) = admin_chain.admin_committee().await?;
+                let public_key = committee
+                    .validator_addresses()
+                    .find(|(_, address)| *address == self.address)
+                    .map(|(public_key, _)| public_key);
+                public_key.with_context(|| {
+                    format!(
+                        "validator {} is not in the current committee; \
+                         use --public-key to sync it",
+                        self.address
+                    )
+                })?
+            }
+        };
+
         // Sync each chain
         for chain_id in chains_to_sync {
             tracing::info!("Syncing chain {} to {}", chain_id, self.address);
             let chain = context.make_chain_client(chain_id).await?;
 
-            Box::pin(chain.sync_validator(validator.clone())).await?;
+            Box::pin(chain.sync_validator(public_key, validator.clone())).await?;
             tracing::info!("Chain {} synced successfully", chain_id);
         }
 

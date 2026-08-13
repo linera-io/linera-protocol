@@ -4,25 +4,52 @@
 #
 # - `git_commit` is the hash of the current git commit — used for
 #   versioning information inside the binaries.
-# - `build_date` is the date and time of when the docker image was
-#   built
-# - `binaries` is the path to the directory containing the Linera
-#   binaries. Leave unset to build the binaries from scratch.
+# - `build_date` is the date and time of when the docker image was built.
 # - `build_flag` is either "--release" or an empty string.
 # - `build_folder` is either "release" or "debug".
-# - `build_features` is a comma-separated list of features to build the binaries with.
+# - `build_features` is the feature set for EVERY target. Built WITHOUT
+#   --no-default-features, so the crate defaults (wasmer, rocksdb,
+#   storage-service) are added on top, exactly as before this file was split.
+#
+# This split changes WHICH BINARIES each image carries — deliberately NOT which
+# features they are built with. Curating features per image (dropping
+# storage-service / rocksdb from the validator) is a separate follow-up with its
+# own runtime gate, so a regression can never be ambiguous between the two.
+#
+# Targets — ALWAYS pass --target. A bare `docker build` with no --target hits
+# the `default` guard stage and fails fast (see the end of this file). Before
+# the guard existed, `tests` was the last stage and therefore the implicit
+# default, so most call sites silently paid `cargo test --no-run` of
+# linera_net_tests:
+#
+#   validator   linera-server + linera-proxy   -> linera-validator
+#   client      linera                         -> linera-client
+#   tests       all three + remote-net test binary + linera-benchmark + example wasm
+#
+# There is no combined image. Every consumer takes exactly one of the two:
+# anything running the client (the validator chart's *-initializer init
+# containers, the faucet, PM workers, CLI users) takes linera-client; anything
+# running server/proxy takes linera-validator. `tests` is the sole place needing
+# all three in one filesystem, because `linera net up` spawns linera-server and
+# linera-proxy as child processes (cli_wrappers/local_net.rs command_for_binary).
+#
+# `--target X` builds only X's FROM-chain, so a validator build never compiles
+# the client binary or the tests stage, and vice versa.
 #
 # Requires BuildKit for `RUN --mount=type=cache` (DOCKER_BUILDKIT=1, `docker buildx`,
 # or recent Docker Desktop/Engine).
 
 ARG git_commit
 ARG build_date
-ARG binaries=
-ARG copy=${binaries:+_copy}
 ARG build_flag=--release
 ARG build_folder=release
 ARG build_features=scylladb,metrics,jemalloc
-ARG rustflags="-C force-frame-pointers=yes -L /usr/lib/x86_64-linux-gnu"
+# The `-L` lets the linker find libunwind, jemalloc's stack-trace backend (#5602).
+# Debian's multiarch lib dir is arch-dependent (x86_64-linux-gnu vs
+# aarch64-linux-gnu), so this points at a stable symlink that cook_base resolves
+# from the build machine. Hardcoding one arch would silently drop libunwind on
+# the other.
+ARG rustflags="-C force-frame-pointers=yes -L /usr/lib/deb-multiarch"
 
 # ── Stage 0: chef base (rust + cargo-chef + system deps) ──
 FROM rust:1.86-slim-bookworm AS chef
@@ -81,13 +108,14 @@ RUN set -e && \
         done; \
     done
 
-# ── Stage 2: builder — cook deps (cached), then build source ──
+# ── Stage 2: cook_base — shared pre-cook setup ──
+# Everything the per-binary builder stages need BEFORE `cargo chef cook`, so the
+# fragile bits (build.rs include!() inputs, examples stubs, env) are written
+# ONCE and shared by every builder. Only the cook/build RUN lines differ per
+# binary set.
 
-FROM chef AS builder_src
+FROM chef AS cook_base
 ARG git_commit
-ARG build_flag
-ARG build_folder
-ARG build_features
 ARG rustflags
 
 COPY --from=planner /app/recipe.json recipe.json
@@ -106,11 +134,23 @@ COPY linera-sdk/wit linera-sdk/wit
 COPY --from=planner /examples-stubs examples
 
 ENV GIT_COMMIT=${git_commit}
+
+# Resolve the multiarch lib dir from the machine actually doing the build, so
+# `rustflags` above stays arch-agnostic and amd64/arm64 need no separate value.
+RUN ln -s "/usr/lib/$(uname -m)-linux-gnu" /usr/lib/deb-multiarch
 ENV RUSTFLAGS=${rustflags}
 
+# ── Stage 3a: builder_src — all three binaries, for the `tests` image only ──
+# `tests` needs the client AND server/proxy in one filesystem (linera net up
+# spawns them), so it builds them together here rather than composing the two
+# split images, which would mean three separate cargo builds for one image.
+
+FROM cook_base AS builder_src
+ARG build_flag
+ARG build_folder
+ARG build_features
+
 # Cook dependencies — cached until Cargo.toml / Cargo.lock change.
-# The three cache mounts persist cargo's registry, git deps, and the
-# compilation target/ across builds so unchanged deps never recompile.
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,target=/app/target,sharing=locked \
@@ -121,10 +161,10 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --bin linera \
     ${build_features:+--features $build_features}
 
-# Copy full source and build (only changed crates recompile).
+# Copy full source and build (only changed crates recompile). target/ is a
+# cache mount — build + copy binaries OUT of it in the same RUN so they persist
+# in the image layer (cache mounts don't survive the RUN).
 COPY . .
-# target/ is a cache mount — build + copy binaries OUT of it in the same RUN
-# so they persist in the image layer (cache mounts don't survive the RUN).
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,target=/app/target,sharing=locked \
@@ -139,23 +179,83 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
         target/"$build_folder"/linera-server \
         /
 
-# Optionally copy binaries instead of using the build stage above
-FROM scratch AS builder_src_copy
-ARG binaries
-COPY \
-    "$binaries"/linera \
-    "$binaries"/linera-server \
-    "$binaries"/linera-proxy \
-    /
+# ── Stage 3b: validator_builder — the two validator binaries ──
+# Same feature set as every other stage. This PR splits WHICH BINARIES each
+# image carries, deliberately not which features they are built with: curating
+# features (dropping storage-service / rocksdb, adding --no-default-features)
+# is a separate change with its own runtime gate, so that if something breaks
+# it is never ambiguous whether the split or a feature did it.
+# The win here is that `--target validator` never builds the `linera` binary,
+# nor the tests stage.
 
-FROM builder_src$copy AS binaries
+FROM cook_base AS validator_builder
+ARG build_flag
+ARG build_folder
+ARG build_features
 
-# ── Stage 3: runtime ──
-FROM debian:bookworm-slim AS runtime
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/app/target,sharing=locked \
+    cargo chef cook ${build_flag:+"$build_flag"} \
+    --recipe-path recipe.json \
+    --bin linera-proxy \
+    --bin linera-server \
+    ${build_features:+--features $build_features}
+
+COPY . .
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/app/target,sharing=locked \
+    cargo build ${build_flag:+"$build_flag"} \
+        --bin linera-proxy \
+        --bin linera-server \
+        ${build_features:+--features $build_features} \
+    && cp \
+        target/"$build_folder"/linera-proxy \
+        target/"$build_folder"/linera-server \
+        /
+
+# ── Stage 3c: client_builder — the client binary only ──
+# Same features as everything else (see the note on validator_builder).
+# `--target client` never compiles linera-server or linera-proxy.
+
+FROM cook_base AS client_builder
+ARG build_flag
+ARG build_folder
+ARG build_features
+
+# `[profile.release] debug = true` (root Cargo.toml) is there so production
+# binaries can be profiled, and it costs a LOT: the client links to 1693 MB with
+# debuginfo versus 123 MB without, while keeping ~212k symbols either way, so
+# panic backtraces still symbolicate. Linking that with thin LTO does not fit in
+# a 16 GB arm64 runner. The validator keeps debuginfo — it is the one being
+# profiled — so this is set on the client stage only, not in cook_base.
+ENV CARGO_PROFILE_RELEASE_DEBUG=false
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/app/target,sharing=locked \
+    cargo chef cook ${build_flag:+"$build_flag"} \
+    --recipe-path recipe.json \
+    --bin linera \
+    ${build_features:+--features $build_features}
+
+COPY . .
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/app/target,sharing=locked \
+    cargo build ${build_flag:+"$build_flag"} \
+        --bin linera \
+        ${build_features:+--features $build_features} \
+    && cp \
+        target/"$build_folder"/linera \
+        /
+
+# ── Stage 4: runtime_base — OS deps shared by every runtime image ──
+FROM debian:bookworm-slim AS runtime_base
 
 ARG git_commit
 LABEL git_commit=$git_commit
-
 ARG build_date
 LABEL build_date=$build_date
 
@@ -166,18 +266,39 @@ RUN apt-get update && apt-get install -y \
     && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=binaries \
-    /linera \
+# ── Stage 4a: validator runtime — linera-server + linera-proxy ──
+# Published as `linera-validator`. Note the validator Helm chart also invokes
+# the CLIENT binary (`linera storage check-existence` / `initialize`) — but only
+# from init containers (linera-server-initializer, linera-proxy-initializer,
+# linera-exporter-initializer), which take their own image. Those move to
+# `linera-client`; this image does not need the client binary.
+FROM runtime_base AS validator
+COPY --from=validator_builder \
     /linera-server \
     /linera-proxy \
     ./
 
-# ── Stage 4: tests-builder — compile the remote-net integration test ──
-# Builds /linera_net_tests and /linera-benchmark; also pre-compiles all
-# example Wasm contracts so the test binary can publish them without needing
-# cargo or source code at runtime.  The test binary lives in
-# /app/target/release/deps/ (a cache mount) so it must be copied out in the
-# same RUN.
+# ── Stage 4b: client runtime — the linera client binary only ──
+# Published as `linera-client`.
+FROM runtime_base AS client
+COPY --from=client_builder \
+    /linera \
+    ./
+
+# ── Stage 4c: nothing. There is no all-three image.
+# Every consumer maps to exactly one of the two above: anything running the
+# client (validator *-initializer init containers, the faucet, PM workers, CLI
+# users) takes linera-client; anything running server/proxy takes
+# linera-validator. `tests` is the one place that needs all three in a single
+# filesystem — `linera net up` spawns linera-server/linera-proxy as child
+# processes (cli_wrappers/local_net.rs command_for_binary) — and it gets them by
+# copying from both builders below, not from a published combined image.
+
+# ── Stage 5: tests-builder — remote-net test binary + benchmark + example wasm ──
+# Builds /linera_net_tests and /linera-benchmark; also pre-compiles all example
+# Wasm contracts so the test binary can publish them without needing cargo or
+# source at runtime. The test binary lives in /app/target/release/deps/ (a cache
+# mount) so it must be copied out in the same RUN.
 
 FROM builder_src AS tests-builder
 ARG build_flag
@@ -216,12 +337,16 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
         -maxdepth 1 -name "*.wasm" \
         -exec cp {} /wasm-examples/ \;
 
-# ── Stage 5: tests runtime — runtime image + remote-net test binary ──
-# Used by linera-infra's network-health-check CronJob; production image
-# `linera:<tag>` (target=runtime) is unchanged. The test binary spawns
+# ── Stage 6: tests runtime — runtime image + remote-net test binary ──
+# Used by linera-infra's network-health-check CronJob. The test binary spawns
 # the linera CLI via PATH, so /linera is symlinked into /usr/local/bin.
 
-FROM runtime AS tests
+FROM runtime_base AS tests
+COPY --from=builder_src \
+    /linera \
+    /linera-server \
+    /linera-proxy \
+    ./
 RUN ln -s /linera /usr/local/bin/linera
 COPY --from=tests-builder /linera_net_tests /usr/local/bin/linera-net-tests
 COPY --from=tests-builder /linera-benchmark /usr/local/bin/linera-benchmark
@@ -237,3 +362,11 @@ RUN printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/cargo && chmod +x /usr/local/b
 # source tree (.dockerignore strips target/) and overlay the pre-built wasm.
 COPY examples /examples
 COPY --from=tests-builder /wasm-examples/ /examples/target/wasm32-unknown-unknown/release/
+
+# ── Final stage: guard ──
+# Building with no --target used to silently build the expensive `tests` image.
+# There is no "build everything" production image — every caller must choose a
+# target. Placed last so a bare `docker build` resolves here and fails fast
+# (this stage has no builder ancestors, so chef/planner/cargo never run).
+FROM debian:bookworm-slim AS default
+RUN echo "ERROR: this Dockerfile requires an explicit --target (validator | client | tests)" >&2 && exit 1

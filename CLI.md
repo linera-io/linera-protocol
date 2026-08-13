@@ -13,6 +13,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera set-preferred-owner`↴](#linera-set-preferred-owner)
 * [`linera change-application-permissions`↴](#linera-change-application-permissions)
 * [`linera close-chain`↴](#linera-close-chain)
+* [`linera checkpoint`↴](#linera-checkpoint)
 * [`linera show-network-description`↴](#linera-show-network-description)
 * [`linera local-balance`↴](#linera-local-balance)
 * [`linera query-balance`↴](#linera-query-balance)
@@ -97,6 +98,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `set-preferred-owner` — Change the preferred owner of a chain
 * `change-application-permissions` — Changes the application permissions configuration
 * `close-chain` — Close an existing chain
+* `checkpoint` — Publish a checkpoint of the chain's execution state
 * `show-network-description` — Print out the network description
 * `local-balance` — Read the current native-token balance of the given account directly from the local state
 * `query-balance` — Simulate the execution of one block made of pending messages from the local inbox, then read the native-token balance of the account from the local state
@@ -255,9 +257,6 @@ Client implementation and command-line tool for the Linera blockchain
 * `-w`, `--with-wallet <WITH_WALLET>` — Given an ASCII alphanumeric parameter `X`, read the wallet state and the wallet storage config from the environment variables `LINERA_WALLET_{X}` and `LINERA_STORAGE_{X}` instead of `LINERA_WALLET` and `LINERA_STORAGE`
 * `--storage <STORAGE_CONFIG>` — Storage configuration for the blockchain history
 * `--storage-max-concurrent-queries <STORAGE_MAX_CONCURRENT_QUERIES>` — The maximal number of simultaneous queries to the database
-* `--storage-max-stream-queries <STORAGE_MAX_STREAM_QUERIES>` — The maximal number of simultaneous stream queries to the database
-
-  Default value: `10`
 * `--storage-max-cache-size <STORAGE_MAX_CACHE_SIZE>` — The maximal memory used in the storage cache
 
   Default value: `10000000`
@@ -472,6 +471,20 @@ A closed chain cannot execute operations or accept messages anymore. It can stil
 ###### **Arguments:**
 
 * `<CHAIN_ID>` — Chain ID (must be one of our chains)
+
+
+
+## `linera checkpoint`
+
+Publish a checkpoint of the chain's execution state.
+
+The resulting block contains a single checkpoint operation. Future nodes can bootstrap from the published state snapshot instead of replaying the chain's earlier history.
+
+**Usage:** `linera checkpoint [CHAIN_ID]`
+
+###### **Arguments:**
+
+* `<CHAIN_ID>` — The chain to checkpoint. If not specified, the wallet's default chain is used
 
 
 
@@ -1429,7 +1442,7 @@ Adds a new validator with the specified public key, account key, network address
 
 * `--public-key <PUBLIC_KEY>` — Public key of the validator to add
 * `--account-key <ACCOUNT_KEY>` — Account public key for receiving payments and rewards
-* `--address <ADDRESS>` — Network address where the validator can be reached (e.g., grpcs://host:port)
+* `--address <ADDRESS>` — Network address where the validator can be reached (e.g., grpcs:host:port)
 * `--votes <VOTES>` — Voting weight for consensus (default: 1)
 * `--skip-online-check` — Skip online connectivity verification before adding
 
@@ -1465,7 +1478,7 @@ PREREQUISITE: the read layers are only meaningful if the candidate already holds
 
 ###### **Arguments:**
 
-* `<ADDRESS>` — Network address of the candidate validator (e.g. `grpcs://host:port`)
+* `<ADDRESS>` — Network address of the candidate validator (e.g. `grpcs:host:port`)
 
 ###### **Options:**
 
@@ -1564,7 +1577,7 @@ Connects to a validator at the specified network address and queries its view of
 
 ###### **Arguments:**
 
-* `<ADDRESS>` — Network address of the validator (e.g., grpcs://host:port)
+* `<ADDRESS>` — Network address of the validator (e.g., grpcs:host:port)
 
 ###### **Options:**
 
@@ -1583,7 +1596,7 @@ Connects to a validator at the specified network address and queries its view of
 
 ###### **Arguments:**
 
-* `<ADDRESS>` — Network address of the validator (e.g., grpcs://host:port)
+* `<ADDRESS>` — Network address of the validator (e.g., grpcs:host:port)
 
 ###### **Options:**
 
@@ -1617,12 +1630,13 @@ Pushes the current chain state from local storage to a validator node, ensuring 
 
 ###### **Arguments:**
 
-* `<ADDRESS>` — Network address of the validator to sync (e.g., grpcs://host:port)
+* `<ADDRESS>` — Network address of the validator to sync (e.g., grpcs:host:port)
 
 ###### **Options:**
 
 * `--chains <CHAINS>` — Chain IDs to synchronize (defaults to all chains in wallet)
 * `--check-online` — Verify validator is online before syncing
+* `--public-key <PUBLIC_KEY>` — Public key of the validator, used to verify its responses. Defaults to the key registered for this network address in the current committee; required if the validator is not (yet) a committee member
 
 
 

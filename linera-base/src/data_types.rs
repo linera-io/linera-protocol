@@ -345,6 +345,15 @@ impl From<Amount> for U256 {
     }
 }
 
+impl From<Amount> for f64 {
+    /// Returns the amount as a floating-point number of whole tokens. This is
+    /// lossy for large or high-precision amounts; intended for telemetry, not
+    /// for arithmetic.
+    fn from(amount: Amount) -> f64 {
+        amount.0 as f64 / Amount::ONE.0 as f64
+    }
+}
+
 /// Error converting from `U256` to `Amount`.
 /// This can fail since `Amount` is a `u128`.
 #[derive(Error, Debug)]
@@ -372,8 +381,6 @@ impl TryFrom<U256> for Amount {
     PartialOrd,
     Hash,
     derive_more::Display,
-    derive_more::From,
-    derive_more::Into,
     derive_more::Deref,
     derive_more::DerefMut,
     derive_more::FromStr,
@@ -842,6 +849,7 @@ impl TryFrom<BlockHeight> for usize {
 }
 
 impl_wrapped_number!(Amount, u128);
+impl_wrapped_number!(U128, u128);
 impl_wrapped_number!(BlockHeight, u64);
 impl_wrapped_number!(TimeDelta, u64);
 

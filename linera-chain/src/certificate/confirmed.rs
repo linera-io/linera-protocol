@@ -2,18 +2,174 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{borrow::Cow, ops::Deref};
+
+use allocative::Allocative;
 use linera_base::{
-    crypto::{ValidatorPublicKey, ValidatorSignature},
+    crypto::{CryptoHash, ValidatorPublicKey, ValidatorSignature},
     data_types::{Epoch, Round},
     identifiers::ChainId,
 };
-use serde::{ser::SerializeStruct, Deserialize, Deserializer, Serialize};
+use linera_execution::committee::Committee;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::{generic::GenericCertificate, Certificate};
+use super::{generic::GenericCertificate, Certificate, Certified, LiteCertificate};
 use crate::{
     block::{Block, ConfirmedBlock, ConversionError},
     data_types::MessageBundle,
+    justification::JustificationChain,
+    ChainError,
 };
+
+/// The serialized representation of a [`ConfirmedBlockCertificate`]. Deriving the
+/// (de)serialization on this single type keeps both directions in sync and free of manual field
+/// bookkeeping; the manual impls only add the strictly-ordered-signatures invariant.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename = "ConfirmedBlockCertificate")]
+struct Repr<'a> {
+    value: Cow<'a, ConfirmedBlock>,
+    round: Round,
+    first_round: bool,
+    justification_commitment: Option<CryptoHash>,
+    signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
+    justification: Cow<'a, JustificationChain>,
+}
+
+/// Certificate for a [`ConfirmedBlock`] instance, certified in some round by a quorum of
+/// `ConfirmedBlock` votes (which carry no unlocking round).
+///
+/// A confirmed block certificate means that the block is finalized: it is the agreed block at
+/// that height on that chain. It wraps the signed quorum and carries the full chain of validated
+/// quorums for the block, making it self-contained evidence for fault attribution.
+#[derive(Clone, Debug, Allocative)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+pub struct ConfirmedBlockCertificate {
+    /// The signed quorum of `ConfirmedBlock` votes. Its unlocking round is always `None`.
+    quorum: GenericCertificate<ConfirmedBlock>,
+    /// The full chain of validated quorums for the block, rising from the grounding round to its
+    /// top link in the round the block was confirmed. Empty iff the block was confirmed in the
+    /// chain's first round.
+    justification: JustificationChain,
+}
+
+impl ConfirmedBlockCertificate {
+    /// Creates a confirmed block certificate with an empty justification chain (first round).
+    pub fn new(
+        value: ConfirmedBlock,
+        round: Round,
+        signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
+    ) -> Self {
+        Self {
+            quorum: GenericCertificate::new(value, round, signatures),
+            justification: JustificationChain::default(),
+        }
+    }
+
+    /// Creates a confirmed block certificate from a signed quorum and its justification chain.
+    pub fn from_parts(
+        quorum: GenericCertificate<ConfirmedBlock>,
+        justification: JustificationChain,
+    ) -> Self {
+        Self {
+            quorum,
+            justification,
+        }
+    }
+
+    /// Returns the signed quorum of `ConfirmedBlock` votes.
+    pub fn quorum(&self) -> &GenericCertificate<ConfirmedBlock> {
+        &self.quorum
+    }
+
+    /// Returns the full chain of validated quorums for the block.
+    pub fn justification(&self) -> &JustificationChain {
+        &self.justification
+    }
+
+    /// Consumes this certificate, returning the signed quorum and the justification chain.
+    pub fn into_parts(self) -> (GenericCertificate<ConfirmedBlock>, JustificationChain) {
+        (self.quorum, self.justification)
+    }
+
+    /// Returns the round in which the value was certified.
+    pub fn round(&self) -> Round {
+        self.quorum.round()
+    }
+
+    /// Consumes this certificate, returning the confirmed block it contains.
+    pub fn into_value(self) -> ConfirmedBlock {
+        self.quorum.into_value()
+    }
+
+    /// Consumes this certificate, returning the confirmed block it contains.
+    pub fn into_inner(self) -> ConfirmedBlock {
+        self.quorum.into_inner()
+    }
+
+    /// Verifies the certificate's signatures and justification chain: the quorum of
+    /// `ConfirmedBlock` votes, that the justification chain is itself a valid chain of quorums,
+    /// and that — if present — it heads at the confirmation round. Delegates to
+    /// [`LiteCertificate::check`], the single source of truth for the quorum-to-chain binding.
+    ///
+    /// An *absent* chain is accepted only when the quorum carries the first-round attestation
+    /// (a fast-round confirmation always does, since the fast round is a chain's first round):
+    /// the attestation asserts that no lower round exists, so any conflicting confirmation is
+    /// attributable without this block's chain — via the other block's chain if it is higher, or
+    /// via the attestation itself if it is lower (see `EquivocationProof::FirstRoundViolation`).
+    /// The attestation is also sanity-checked against the round — it can only be set in a round
+    /// that could be a chain's first one. Whether it is the *actual* first round depends on the
+    /// chain's ownership at that height, which a committee-only check cannot know; that, and the
+    /// obligation of a later-round block to carry its chain, rest on honest block construction
+    /// (see `finalize_block`), full-execution verification, and the per-signature justifications
+    /// retained by the commitment scheme.
+    pub fn check(&self, committee: &Committee) -> Result<(), ChainError> {
+        self.lite_certificate().check(committee)?;
+        Ok(())
+    }
+
+    /// Returns the [`LiteCertificate`] corresponding to this certificate, borrowing the chain.
+    pub fn lite_certificate(&self) -> LiteCertificate<'_> {
+        let mut lite = self.quorum.lite_certificate_without_justification();
+        lite.justification = Cow::Borrowed(&self.justification);
+        lite
+    }
+}
+
+impl Deref for ConfirmedBlockCertificate {
+    type Target = GenericCertificate<ConfirmedBlock>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.quorum
+    }
+}
+
+impl Certified for ConfirmedBlockCertificate {
+    type Value = ConfirmedBlock;
+
+    fn value(&self) -> &ConfirmedBlock {
+        self.quorum.value()
+    }
+
+    fn round(&self) -> Round {
+        ConfirmedBlockCertificate::round(self)
+    }
+
+    fn unlocking_round(&self) -> Option<Round> {
+        self.quorum.unlocking_round()
+    }
+
+    fn signatures(&self) -> &Vec<(ValidatorPublicKey, ValidatorSignature)> {
+        self.quorum.signatures()
+    }
+
+    fn lite_certificate(&self) -> LiteCertificate<'_> {
+        ConfirmedBlockCertificate::lite_certificate(self)
+    }
+
+    fn check(&self, committee: &Committee) -> Result<(), ChainError> {
+        ConfirmedBlockCertificate::check(self, committee)
+    }
+}
 
 impl GenericCertificate<ConfirmedBlock> {
     /// Returns reference to the `Block` contained in this certificate.
@@ -40,7 +196,7 @@ impl GenericCertificate<ConfirmedBlock> {
     }
 }
 
-impl TryFrom<Certificate> for GenericCertificate<ConfirmedBlock> {
+impl TryFrom<Certificate> for ConfirmedBlockCertificate {
     type Error = ConversionError;
 
     fn try_from(cert: Certificate) -> Result<Self, Self::Error> {
@@ -51,49 +207,56 @@ impl TryFrom<Certificate> for GenericCertificate<ConfirmedBlock> {
     }
 }
 
-impl From<GenericCertificate<ConfirmedBlock>> for Certificate {
-    fn from(cert: GenericCertificate<ConfirmedBlock>) -> Certificate {
+impl From<ConfirmedBlockCertificate> for Certificate {
+    fn from(cert: ConfirmedBlockCertificate) -> Certificate {
         Certificate::Confirmed(cert)
     }
 }
 
-impl From<&GenericCertificate<ConfirmedBlock>> for Certificate {
-    fn from(cert: &GenericCertificate<ConfirmedBlock>) -> Certificate {
+impl From<&ConfirmedBlockCertificate> for Certificate {
+    fn from(cert: &ConfirmedBlockCertificate) -> Certificate {
         Certificate::Confirmed(cert.clone())
     }
 }
 
-impl Serialize for GenericCertificate<ConfirmedBlock> {
+impl Serialize for ConfirmedBlockCertificate {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer,
+        S: Serializer,
     {
-        let mut state = serializer.serialize_struct("ConfirmedBlockCertificate", 3)?;
-        state.serialize_field("value", self.inner())?;
-        state.serialize_field("round", &self.round)?;
-        state.serialize_field("signatures", self.signatures())?;
-        state.end()
+        Repr {
+            value: Cow::Borrowed(self.quorum.inner()),
+            round: self.quorum.round(),
+            first_round: self.quorum.first_round(),
+            justification_commitment: self.quorum.justification_commitment(),
+            signatures: Cow::Borrowed(self.quorum.signatures().as_slice()),
+            justification: Cow::Borrowed(&self.justification),
+        }
+        .serialize(serializer)
     }
 }
 
-impl<'de> Deserialize<'de> for GenericCertificate<ConfirmedBlock> {
+impl<'de> Deserialize<'de> for ConfirmedBlockCertificate {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        #[derive(Debug, Deserialize)]
-        #[serde(rename = "ConfirmedBlockCertificate")]
-        struct Helper {
-            value: ConfirmedBlock,
-            round: Round,
-            signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
-        }
-
-        let helper = Helper::deserialize(deserializer)?;
-        if !crate::data_types::is_strictly_ordered(&helper.signatures) {
+        let helper = Repr::deserialize(deserializer)?;
+        let signatures = helper.signatures.into_owned();
+        if !crate::data_types::is_strictly_ordered(&signatures) {
             Err(serde::de::Error::custom("Vector is not strictly sorted"))
         } else {
-            Ok(Self::new(helper.value, helper.round, helper.signatures))
+            Ok(Self::from_parts(
+                GenericCertificate::new_with_payload(
+                    helper.value.into_owned(),
+                    helper.round,
+                    None,
+                    helper.first_round,
+                    helper.justification_commitment,
+                    signatures,
+                ),
+                helper.justification.into_owned(),
+            ))
         }
     }
 }

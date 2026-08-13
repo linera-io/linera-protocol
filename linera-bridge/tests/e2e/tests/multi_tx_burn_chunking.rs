@@ -76,7 +76,6 @@ async fn relayer_falls_back_to_chunked_process_burns() -> anyhow::Result<()> {
     let relay_genesis_config = genesis_config.clone();
 
     let store_config = MemoryStoreConfig {
-        max_stream_queries: 10,
         kill_on_drop: true,
     };
     let mut storage = DbStorage::<MemoryDatabase, _>::maybe_create_and_connect(

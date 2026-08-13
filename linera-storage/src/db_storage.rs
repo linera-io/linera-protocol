@@ -1685,7 +1685,7 @@ where
         let hash = block.hash();
         self.caches.confirmed_block.insert(&hash, block.clone());
         let certificate = lite
-            .with_value(block)
+            .into_confirmed_certificate(block)
             .ok_or(ViewError::InconsistentEntries)?;
         let arc = self.caches.certificate.insert(&hash, certificate);
         Ok(Some(arc))

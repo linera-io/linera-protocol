@@ -153,10 +153,6 @@ where
     // The LRU cache does not change the underlying store's size limits.
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
 
-    fn max_stream_queries(&self) -> usize {
-        self.store.max_stream_queries()
-    }
-
     fn root_key(&self) -> Result<Vec<u8>, Self::Error> {
         self.store.root_key()
     }

@@ -15,7 +15,7 @@ use linera_cache::Arc as CacheArc;
 use linera_chain::{
     data_types::BlockProposal,
     types::{
-        CertificateValue, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate,
+        CertificateValue, Certified, ConfirmedBlockCertificate, LiteCertificate,
         TimeoutCertificate, ValidatedBlockCertificate,
     },
 };
@@ -115,7 +115,8 @@ impl<N: ValidatorNode> RemoteNode<N> {
         certificate: &CacheArc<ConfirmedBlockCertificate>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, NodeError> {
-        if let Some(result) = self.try_lite_certificate(certificate, delivery).await {
+        let cert: &ConfirmedBlockCertificate = certificate;
+        if let Some(result) = self.try_lite_certificate(cert, delivery).await {
             return result;
         }
         self.handle_confirmed_certificate(certificate.clone(), delivery)
@@ -124,9 +125,9 @@ impl<N: ValidatorNode> RemoteNode<N> {
 
     /// Tries to send a lite certificate if this validator signed it. Returns `Some` on
     /// success or non-recoverable error, `None` if the full certificate should be sent.
-    async fn try_lite_certificate<T: CertificateValue>(
+    async fn try_lite_certificate<C: Certified>(
         &self,
-        certificate: &GenericCertificate<T>,
+        certificate: &C,
         delivery: CrossChainMessageDelivery,
     ) -> Option<Result<Box<ChainInfo>, NodeError>> {
         if !certificate.is_signed_by(&self.public_key) {
@@ -140,7 +141,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
                 debug!(
                     address = self.address(),
                     certificate_hash = %certificate.hash(),
-                    kind = ?T::KIND,
+                    kind = ?C::Value::KIND,
                     "validator forgot a certificate value that they signed before",
                 );
                 None
@@ -283,13 +284,13 @@ impl<N: ValidatorNode> RemoteNode<N> {
 
     /// Checks that requesting these blobs when trying to handle this certificate is legitimate,
     /// i.e. that there are no duplicates and the blobs are actually required.
-    pub fn check_blobs_not_found<T: CertificateValue>(
+    pub fn check_blobs_not_found<C: Certified>(
         &self,
-        certificate: &GenericCertificate<T>,
+        certificate: &C,
         blob_ids: &[BlobId],
     ) -> Result<(), NodeError> {
         ensure!(!blob_ids.is_empty(), NodeError::EmptyBlobsNotFound);
-        let required = certificate.inner().required_blob_ids();
+        let required = certificate.value().required_blob_ids();
         for blob_id in blob_ids {
             if !required.contains(blob_id) {
                 info!(

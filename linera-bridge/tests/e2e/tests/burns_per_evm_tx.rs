@@ -92,7 +92,6 @@ async fn burns_per_evm_tx(
     let genesis_config = faucet.genesis_config().await?;
 
     let store_config = MemoryStoreConfig {
-        max_stream_queries: 10,
         kill_on_drop: true,
     };
     let mut storage = DbStorage::<MemoryDatabase, _>::maybe_create_and_connect(

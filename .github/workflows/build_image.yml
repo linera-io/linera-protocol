@@ -12,13 +12,14 @@ on:
         required: true
         type: choice
         options:
-          - main
+          - validator
+          - client
           - indexer
           - explorer
           - exporter
           - bridge
           - all
-        default: main
+        default: validator
       image_tag:
         description: 'Image tag (e.g., testnet_conway, a branch name, or arbitrary label)'
         required: true
@@ -93,6 +94,10 @@ jobs:
             local DOCKERFILE=$1
             local IMAGE_NAME=$2
             local BUILD_NAME=$3
+            # Optional. docker/Dockerfile now REQUIRES an explicit --target (a
+            # guard stage fails the build otherwise); the single-target
+            # Dockerfiles (indexer/explorer/exporter/bridge) pass nothing.
+            local TARGET=${4:-}
             local LOG_FILE="/tmp/build-${BUILD_NAME}.log"
 
             local IMAGE_TAGGED="${REGISTRY_BASE}/${IMAGE_NAME}:${IMAGE_TAG}"
@@ -109,6 +114,7 @@ jobs:
                 -t "${IMAGE_SHORT}" \
                 -t "${IMAGE_LONG}" \
                 -f "${DOCKERFILE}" \
+                ${TARGET:+--target "${TARGET}"} \
                 --build-arg "git_commit=${GIT_COMMIT_LONG}" \
                 --build-arg "build_date=${BUILD_DATE}" \
                 --build-arg "build_flag=${BUILD_FLAG}" \
@@ -127,7 +133,8 @@ jobs:
           build_image_by_type() {
             local TYPE=$1
             case "${TYPE}" in
-              main)     build_and_push "docker/Dockerfile"           "linera"          "main"     ;;
+              validator) build_and_push "docker/Dockerfile"          "linera-validator" "validator" "validator" ;;
+              client)   build_and_push "docker/Dockerfile"           "linera-client"   "client"   "client"  ;;
               indexer)  build_and_push "docker/Dockerfile.indexer"   "linera-indexer"  "indexer"  ;;
               explorer) build_and_push "docker/Dockerfile.explorer"  "linera-explorer" "explorer" ;;
               exporter) build_and_push "docker/Dockerfile.exporter"  "linera-exporter" "exporter" ;;
@@ -137,7 +144,7 @@ jobs:
           }
 
           if [ "${IMAGE_TYPE}" = "all" ]; then
-            TYPES="main indexer explorer exporter bridge"
+            TYPES="validator client indexer explorer exporter bridge"
           else
             TYPES="${IMAGE_TYPE}"
           fi

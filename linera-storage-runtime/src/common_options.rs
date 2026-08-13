@@ -14,10 +14,6 @@ pub struct CommonStorageOptions {
     #[arg(long, global = true)]
     pub storage_max_concurrent_queries: Option<usize>,
 
-    /// The maximal number of simultaneous stream queries to the database
-    #[arg(long, default_value = "10", global = true)]
-    pub storage_max_stream_queries: usize,
-
     /// The maximal memory used in the storage cache.
     #[arg(long, default_value = "10000000", global = true)]
     pub storage_max_cache_size: usize,

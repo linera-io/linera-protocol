@@ -21,8 +21,8 @@ use linera_cache::Arc as CacheArc;
 use linera_chain::{
     data_types::BlockProposal,
     types::{
-        ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, LiteCertificate, Timeout,
-        ValidatedBlock,
+        ConfirmedBlockCertificate, GenericCertificate, LiteCertificate, Timeout,
+        ValidatedBlockCertificate,
     },
     ChainError,
 };
@@ -78,14 +78,14 @@ pub trait ValidatorNode {
     /// Processes a confirmed certificate.
     async fn handle_confirmed_certificate(
         &self,
-        certificate: CacheArc<GenericCertificate<ConfirmedBlock>>,
+        certificate: CacheArc<ConfirmedBlockCertificate>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Processes a validated certificate.
     async fn handle_validated_certificate(
         &self,
-        certificate: GenericCertificate<ValidatedBlock>,
+        certificate: ValidatedBlockCertificate,
     ) -> Result<ChainInfoResponse, NodeError>;
 
     /// Processes a timeout certificate.

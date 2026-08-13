@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    cmp::Ordering,
+    cmp::{Ordering, Reverse},
     collections::{BTreeMap, BTreeSet, HashSet},
     slice,
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex, RwLock},
 };
 
 use custom_debug_derive::Debug;
@@ -32,12 +32,13 @@ use linera_base::{data_types::Bytecode, identifiers::ModuleId, vm::VmRuntime};
 use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, ChainAndHeight, LiteVote,
-        ProposedBlock,
+        OriginalProposal, ProposedBlock,
     },
+    justification::JustificationChain,
     manager::LockingBlock,
     types::{
-        Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
-        LiteCertificate, ValidatedBlock, ValidatedBlockCertificate,
+        Block, CertificateValue, Certified, ConfirmedBlock, ConfirmedBlockCertificate,
+        GenericCertificate, LiteCertificate, Timeout, ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainIdSet,
 };
@@ -56,7 +57,7 @@ use crate::{
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode as _, ValidatorNodeProvider as _},
     notifier::{ChannelNotifier, Notifier as _},
     remote_node::RemoteNode,
-    updater::{communicate_with_quorum, CommunicateAction, ValidatorUpdater},
+    updater::{communicate_with_quorum, CommunicateAction, RemoteNodeUpdater},
     worker::{Notification, ProcessableCertificate, Reason, WorkerError, WorkerState},
     ChainWorkerConfig, ProcessConfirmedBlockMode, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
@@ -332,6 +333,16 @@ impl ChainModes {
         }
         result
     }
+
+    /// Stops tracking `chain_id`, removing its entry entirely. Returns the removed mode, if any.
+    /// The tracked-set hash is recomputed only if the removed chain was `FullChain`.
+    pub fn remove_mode(&mut self, chain_id: &ChainId) -> Option<ListeningMode> {
+        let removed = self.modes.remove(chain_id)?;
+        if removed.is_full() {
+            self.full = Self::compute_full(&self.modes);
+        }
+        Some(removed)
+    }
 }
 
 /// A builder that creates [`ChainClient`]s which share the cache and notifiers.
@@ -478,10 +489,6 @@ impl<Env: Environment> Client<Env> {
         self.environment.network()
     }
 
-    pub(crate) fn options(&self) -> &chain_client::Options {
-        &self.options
-    }
-
     /// Handles any pending local cross-chain requests, notifying subscribers.
     pub async fn retry_pending_cross_chain_requests(
         &self,
@@ -519,6 +526,15 @@ impl<Env: Environment> Client<Env> {
             .write()
             .expect("Panics should not happen while holding a lock to `chain_modes`")
             .extend_mode(chain_id, mode)
+    }
+
+    /// Stops tracking a chain, removing its listening mode. Returns the removed mode, if any.
+    #[instrument(level = "trace", skip(self))]
+    pub fn remove_chain_mode(&self, chain_id: ChainId) -> Option<ListeningMode> {
+        self.chain_modes
+            .write()
+            .expect("Panics should not happen while holding a lock to `chain_modes`")
+            .remove_mode(&chain_id)
     }
 
     /// Returns the listening mode for a chain, if it is tracked.
@@ -690,7 +706,10 @@ impl<Env: Environment> Client<Env> {
                     break;
                 }
             }
-            last_info = self.handle_certificate(certificate).await?.info;
+            last_info = self
+                .handle_certificate::<ConfirmedBlock>(certificate)
+                .await?
+                .info;
         }
         Ok(last_info)
     }
@@ -1136,10 +1155,10 @@ impl<Env: Environment> Client<Env> {
 
     async fn handle_certificate<T: ProcessableCertificate>(
         &self,
-        certificate: GenericCertificate<T>,
+        certificate: T::Certificate,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         self.local_node
-            .handle_certificate(certificate, &self.notifier)
+            .handle_certificate::<T>(certificate, &self.notifier)
             .await
     }
 
@@ -1267,15 +1286,40 @@ impl<Env: Environment> Client<Env> {
         committee: &Committee,
         certificate: ValidatedBlockCertificate,
     ) -> Result<ConfirmedBlockCertificate, chain_client::Error> {
-        debug!(round = %certificate.round, "Submitting block for confirmation");
-        let hashed_value = ConfirmedBlock::new(certificate.inner().block().clone());
+        debug!(round = %certificate.round(), "Submitting block for confirmation");
+        let hashed_value = ConfirmedBlock::new(certificate.block().clone());
+        // The full chain of validated quorums for the block: this validated certificate's own
+        // quorum as the top link, then the chain below it. Whether the confirmed certificate
+        // actually carries it is decided *after* the quorum forms, from the attestation the
+        // confirming votes signed (below).
+        let full_justification = certificate.full_justification();
         let finalize_action = CommunicateAction::FinalizeBlock {
             certificate: Box::new(certificate),
             delivery: self.options.cross_chain_message_delivery,
         };
-        let certificate = self
+        let quorum = self
             .communicate_chain_action(committee, finalize_action, hashed_value)
             .await?;
+        // Omit the chain iff the confirming votes attested that this is the chain's first round:
+        // such a block is always the lower one in any fork, so it never needs a chain of its own.
+        // Deciding from the quorum's signed attestation — rather than our local ownership view,
+        // which a concurrently finalized block could have advanced to a different first round —
+        // guarantees the certificate we assemble matches what the validators actually signed.
+        let justification = if quorum.first_round() {
+            JustificationChain::default()
+        } else {
+            full_justification
+        };
+        // The confirming votes committed to the chain they were shown; the chain we attach must
+        // be that one, or the assembled certificate would fail verification everywhere.
+        ensure!(
+            quorum.justification_commitment() == justification.commitment(quorum.hash()),
+            chain_client::Error::ProtocolError(
+                "A quorum confirmed with a justification commitment that does not match the \
+                 validated certificate's justification chain",
+            )
+        );
+        let certificate = ConfirmedBlockCertificate::from_parts(quorum, justification);
         self.receive_certificate_with_checked_signatures(
             certificate.clone(),
             ProcessConfirmedBlockMode::Execute,
@@ -1291,11 +1335,19 @@ impl<Env: Environment> Client<Env> {
         committee: Arc<Committee>,
         proposal: Box<BlockProposal>,
         value: T,
-    ) -> Result<GenericCertificate<T>, chain_client::Error> {
+    ) -> Result<T::Certificate, chain_client::Error> {
         debug!(
             round = %proposal.content.round,
             "Submitting block proposal to validators"
         );
+
+        // The certificate's justification chain comes from the proposal: a regular retry is
+        // justified by the validated certificate it carries (the new top link plus that
+        // certificate's own chain); a fresh proposal or fast-round proposal has none.
+        let justification = match proposal.original_proposal.as_ref() {
+            Some(OriginalProposal::Regular { certificate }) => certificate.full_justification(),
+            Some(OriginalProposal::Fast(_)) | None => JustificationChain::default(),
+        };
 
         // Check if the block timestamp is in the future and log INFO.
         let block_timestamp = proposal.content.block.timestamp;
@@ -1344,14 +1396,81 @@ impl<Env: Environment> Client<Env> {
             }
         });
 
-        let certificate = self
+        let quorum = self
             .communicate_chain_action(&committee, submit_action, value)
             .await?;
 
         clock_skew_check_handle.await;
 
-        self.handle_certificate(certificate.clone()).await?;
+        // The justification chain comes from our own proposal, but the winning quorum may have
+        // been formed from a competing proposal that cited a different certificate: its votes then
+        // sign a different unlocking round and justification commitment, and gluing our chain onto
+        // them would build a certificate that fails verification downstream. Reject that here with
+        // a retryable error rather than assembling a mismatched certificate. (For confirmed and
+        // timeout quorums both sides are `None`, so this only bites the validated-retry case it is
+        // meant to guard.)
+        ensure!(
+            quorum.unlocking_round() == justification.top_unlocking_round(),
+            chain_client::Error::ProtocolError(
+                "A quorum voted with an unlocking round that does not match the proposal's \
+                 justification chain",
+            )
+        );
+        ensure!(
+            quorum.justification_commitment() == justification.commitment(quorum.hash()),
+            chain_client::Error::ProtocolError(
+                "A quorum voted with a justification commitment that does not match the \
+                 proposal's justification chain",
+            )
+        );
+        let certificate = T::make_certificate(quorum, justification);
+        self.handle_certificate::<T>(certificate.clone()).await?;
         Ok(certificate)
+    }
+
+    /// Creates a [`RemoteNodeUpdater`] for the given validator, backed by our local node.
+    fn remote_node_updater(
+        &self,
+        remote_node: RemoteNode<Env::ValidatorNode>,
+    ) -> RemoteNodeUpdater<Env> {
+        RemoteNodeUpdater {
+            remote_node,
+            local_node: self.local_node.clone(),
+            admin_chain_id: self.admin_chain_id,
+            certificate_upload_batch_size: self.options.certificate_upload_batch_size,
+        }
+    }
+
+    /// Pulls the chain state that validators reported being ahead of the local node on,
+    /// during a failed quorum round.
+    ///
+    /// Reports are processed here, after `communicate_with_quorum` returns, rather than inside
+    /// the per-validator tasks: this keeps those tasks read-only for the local node — mutually
+    /// independent and fair to each validator — and means a pull can no longer be cancelled by
+    /// the quorum's early exit. Processing is best-effort: failures are only logged, and the
+    /// quorum outcome is surfaced unchanged either way, so the outer logic reacts on top of
+    /// whatever state was absorbed (e.g. `execute_operations` rebuilds and re-proposes).
+    ///
+    /// Validators that are further ahead are pulled from first, which makes later pulls cheap,
+    /// but every reporter is visited: a proposal rejection justified by a locking block can
+    /// only be absorbed from a validator that holds that block.
+    async fn process_lag_reports(&self, mut reports: Vec<LagReport<Env::ValidatorNode>>) {
+        reports.sort_by_key(|report| Reverse(report.remote_progress()));
+        for report in reports {
+            // Boxed to keep this future small: the synchronization future is large, and it
+            // would otherwise be inlined into every caller of the quorum communication.
+            if let Err(error) =
+                Box::pin(self.synchronize_chain_state_from(&report.remote_node, report.chain_id))
+                    .await
+            {
+                debug!(
+                    remote_node = report.remote_node.address(),
+                    chain_id = %report.chain_id,
+                    %error,
+                    "failed to pull chain state from a validator that reported being ahead",
+                );
+            }
+        }
     }
 
     /// Broadcasts certified blocks to validators.
@@ -1362,7 +1481,7 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
         height: BlockHeight,
         delivery: CrossChainMessageDelivery,
-        latest_certificate: Option<CacheArc<GenericCertificate<ConfirmedBlock>>>,
+        latest_certificate: Option<CacheArc<ConfirmedBlockCertificate>>,
     ) -> Result<(), chain_client::Error> {
         let nodes = self.make_nodes(committee)?;
         communicate_with_quorum(
@@ -1370,11 +1489,7 @@ impl<Env: Environment> Client<Env> {
             committee,
             |_: &()| (),
             |remote_node| {
-                let mut updater = ValidatorUpdater {
-                    remote_node,
-                    client: self.clone(),
-                    admin_chain_id: self.admin_chain_id,
-                };
+                let mut updater = self.remote_node_updater(remote_node);
                 let certificate = latest_certificate.clone();
                 Box::pin(async move {
                     updater
@@ -1400,23 +1515,59 @@ impl<Env: Environment> Client<Env> {
         action: CommunicateAction,
         value: T,
     ) -> Result<GenericCertificate<T>, chain_client::Error> {
+        // Validators that turn out to be ahead of the local node are recorded here and pulled
+        // from after the quorum round, so that each per-validator task stays read-only for the
+        // local node. The updater's original validator error re-enters the quorum aggregation
+        // below, keeping the round's error classification unchanged.
+        let lag_reports = Mutex::new(Vec::new());
         let nodes = self.make_nodes(committee)?;
-        let ((votes_hash, votes_round), votes) = communicate_with_quorum(
+        // Group votes by their full signed payload: signatures only aggregate into a
+        // certificate if they are unanimous on all signed fields, so a vote that diverges in
+        // the unlocking round, first-round attestation or justification commitment belongs to
+        // a separate candidate quorum.
+        let result = communicate_with_quorum(
             &nodes,
             committee,
-            |vote: &LiteVote| (vote.value.value_hash, vote.round),
+            |vote: &LiteVote| {
+                (
+                    vote.value.value_hash,
+                    vote.round,
+                    vote.unlocking_round,
+                    vote.first_round,
+                    vote.justification_commitment,
+                )
+            },
             |remote_node| {
-                let mut updater = ValidatorUpdater {
-                    remote_node,
-                    client: self.clone(),
-                    admin_chain_id: self.admin_chain_id,
-                };
+                let mut updater = self.remote_node_updater(remote_node.clone());
                 let action = action.clone();
-                Box::pin(async move { updater.send_chain_update(action).await })
+                let lag_reports = &lag_reports;
+                Box::pin(async move {
+                    match updater.send_chain_update(action).await {
+                        Err(chain_client::Error::LocalNodeLagging { chain_id, error }) => {
+                            lag_reports.lock().unwrap().push(LagReport {
+                                remote_node,
+                                chain_id,
+                                error: (*error).clone(),
+                            });
+                            Err((*error).into())
+                        }
+                        result => result,
+                    }
+                })
             },
             self.options.quorum_grace_period,
         )
-        .await?;
+        .await;
+        let ((votes_hash, votes_round, _, _, _), votes) = match result {
+            Ok(quorum) => quorum,
+            Err(err) => {
+                // The round failed; absorb whatever the more advanced validators hold before
+                // surfacing the outcome, so the caller retries on top of a synchronized state.
+                self.process_lag_reports(lag_reports.into_inner().unwrap())
+                    .await;
+                return Err(err.into());
+            }
+        };
         ensure!(
             (votes_hash, votes_round) == (value.hash(), action.round()),
             chain_client::Error::UnexpectedQuorum {
@@ -2093,7 +2244,7 @@ impl<Env: Environment> Client<Env> {
         };
 
         if let Some(timeout) = remote_info.manager.timeout {
-            self.handle_certificate(*timeout).await?;
+            self.handle_certificate::<Timeout>(*timeout).await?;
         }
         let mut proposals = Vec::new();
         if let Some(proposal) = remote_info.manager.requested_signed_proposal {
@@ -2266,13 +2417,15 @@ impl<Env: Environment> Client<Env> {
     async fn try_process_locking_block_from(
         &self,
         remote_node: &RemoteNode<Env::ValidatorNode>,
-        certificate: GenericCertificate<ValidatedBlock>,
+        certificate: ValidatedBlockCertificate,
     ) -> Result<(), chain_client::Error> {
         let chain_id = certificate.inner().chain_id();
         let mut downloaded_blobs = HashSet::<BlobId>::new();
         let mut events = EventSetDownloader::new(self);
         loop {
-            let result = self.handle_certificate(certificate.clone()).await;
+            let result = self
+                .handle_certificate::<ValidatedBlock>(certificate.clone())
+                .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let new_blobs = filter_new(blob_ids, &downloaded_blobs);
                 if !new_blobs.is_empty() {
@@ -2627,6 +2780,29 @@ pub struct PendingProposal {
     pub round: Option<Round>,
 }
 
+/// A validator's report, collected during a quorum round, that it is ahead of the local node
+/// on a chain (a [`chain_client::Error::LocalNodeLagging`] signal from the updater).
+struct LagReport<N> {
+    remote_node: RemoteNode<N>,
+    chain_id: ChainId,
+    error: NodeError,
+}
+
+impl<N> LagReport<N> {
+    /// The height and round the validator reported being at, as far as the error reveals them.
+    /// Used to pull from the most advanced validators first.
+    fn remote_progress(&self) -> (Option<BlockHeight>, Option<Round>) {
+        match &self.error {
+            NodeError::UnexpectedBlockHeight {
+                expected_block_height,
+                ..
+            } => (Some(*expected_block_height), None),
+            NodeError::WrongRound(round) => (None, Some(*round)),
+            _ => (None, None),
+        }
+    }
+}
+
 enum ReceiveCertificateMode {
     NeedsCheck,
     AlreadyChecked,
@@ -2695,6 +2871,44 @@ pub async fn create_bytecode_blobs(
         blobs.push(blob);
     }
     (blobs, module_id)
+}
+
+#[cfg(test)]
+mod chain_modes_tests {
+    use std::collections::BTreeSet;
+
+    use linera_base::{crypto::CryptoHash, identifiers::ChainId};
+
+    use super::{ChainModes, ListeningMode};
+
+    /// `remove_mode` reports the previous mode (and `None` for an absent chain), and only rehashes
+    /// the memoized fully-tracked set when the removed chain was `FullChain` — removing an
+    /// `EventsOnly` chain leaves that set untouched.
+    #[test]
+    fn remove_mode_updates_full_set_only_for_full_chains() {
+        let mut modes = ChainModes::default();
+        let full = ChainId(CryptoHash::test_hash("full"));
+        let events_only = ChainId(CryptoHash::test_hash("events-only"));
+        modes.extend_mode(full, ListeningMode::FullChain);
+        modes.extend_mode(events_only, ListeningMode::EventsOnly(BTreeSet::new()));
+
+        let full_hash_before = modes.full().hash();
+        // Removing the events-only chain returns its mode but doesn't touch the fully-tracked set.
+        assert!(matches!(
+            modes.remove_mode(&events_only),
+            Some(ListeningMode::EventsOnly(_))
+        ));
+        assert!(modes.get(&events_only).is_none());
+        // Removing it again is a no-op.
+        assert!(modes.remove_mode(&events_only).is_none());
+        assert_eq!(modes.full().hash(), full_hash_before);
+        assert_eq!(modes.full().inner().0, BTreeSet::from([full]));
+
+        // Removing the full chain empties and rehashes the fully-tracked set.
+        assert_eq!(modes.remove_mode(&full), Some(ListeningMode::FullChain));
+        assert_ne!(modes.full().hash(), full_hash_before);
+        assert!(modes.full().inner().0.is_empty());
+    }
 }
 
 #[cfg(test)]

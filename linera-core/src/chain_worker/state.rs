@@ -33,7 +33,7 @@ use linera_chain::{
         Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
         ValidatedBlockCertificate,
     },
-    ChainError, ChainExecutionContext, ChainIdSet, ChainStateView, ChainTipState,
+    BlockExecution, ChainError, ChainExecutionContext, ChainIdSet, ChainStateView, ChainTipState,
     ExecutionResultExt as _, StreamCounts,
 };
 use linera_execution::{
@@ -1267,6 +1267,18 @@ where
         let (epoch, _) = self.chain.current_committee().await?;
         check_block_epoch(epoch, chain_id, block.header.epoch)?;
 
+        // The chain is initialized and this block has not executed yet, so the current ownership
+        // is the configuration the block was proposed under — even for the chain's first block,
+        // whose ownership comes from the just-applied chain description. This is the point where
+        // the first-round attestation can be checked against the actual first round; blocks that
+        // are only preprocessed skip it and rely on the nodes that execute the chain in order.
+        if certificate.first_round() {
+            ensure!(
+                certificate.round() == self.chain.ownership().await?.first_round(),
+                ChainError::FalseFirstRoundAttestation
+            );
+        }
+
         let published_blobs = block
             .published_blob_ids()
             .iter()
@@ -1306,15 +1318,15 @@ where
             certificate.into_value()
         } else {
             let (proposed_block, outcome) = certificate.into_value().into_block().into_proposal();
-            let oracle_responses = Some(outcome.oracle_responses.clone());
             let (proposed_block, verified, _resource_tracker, _) = chain
                 .execute_block(
                     proposed_block,
                     local_time,
                     None,
                     &published_blobs,
-                    oracle_responses,
-                    BundleExecutionPolicy::committed(),
+                    BlockExecution::HandleConfirmed {
+                        oracle_responses: outcome.oracle_responses.clone(),
+                    },
                 )
                 .await?;
             // We should always agree on the messages and state hash.
@@ -2317,7 +2329,14 @@ where
             .remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())
             .await?;
         let (executed_block, resource_tracker, never_reject_origins) =
-            Box::pin(self.execute_block(block, local_time, round, published_blobs, policy)).await?;
+            Box::pin(self.execute_block(
+                block,
+                local_time,
+                round,
+                published_blobs,
+                BlockExecution::StageProposal { policy },
+            ))
+            .await?;
 
         // No need to sign: only used internally.
         let info = ChainInfo::from_chain_view(&mut self.chain).await?;
@@ -2522,7 +2541,7 @@ where
                 local_time,
                 round.multi_leader(),
                 &published_blobs,
-                BundleExecutionPolicy::committed(),
+                BlockExecution::HandleProposal,
             ))
             .await?;
             executed_block
@@ -2686,11 +2705,11 @@ where
         local_time: Timestamp,
         round: Option<u32>,
         published_blobs: &[Blob],
-        policy: BundleExecutionPolicy,
+        execution: BlockExecution,
     ) -> Result<(Block, ResourceTracker, HashSet<ChainId>), WorkerError> {
         let (proposed_block, outcome, resource_tracker, never_reject_origins) = Box::pin(
             self.chain
-                .execute_block(block, local_time, round, published_blobs, None, policy),
+                .execute_block(block, local_time, round, published_blobs, execution),
         )
         .await?;
         let executed_block = Block::new(proposed_block, outcome);
