@@ -380,7 +380,10 @@ impl ValidatorNode for GrpcClient {
         );
 
         // A stream of `Result<grpc::Notification, tonic::Status>` that keeps calling
-        // `client.subscribe(request)` endlessly and without delay.
+        // `client.subscribe(request)` endlessly. Reconnects pause for `retry_delay`
+        // first: a server that cleanly closes the stream yields no error item, so the
+        // error backoff below never runs for it, and reconnecting immediately would
+        // hammer it with subscriptions in a tight loop.
         let retry_count_for_unfold = retry_count.clone();
         let cooldowns_for_unfold = subscription_cooldowns.clone();
         let address_for_unfold = address.clone();
@@ -395,6 +398,7 @@ impl ValidatorNode for GrpcClient {
                 let stream = if let Some(stream) = stream.take() {
                     future::Either::Right(stream)
                 } else {
+                    linera_base::time::timer::sleep(retry_delay).await;
                     match client.subscribe(subscription_request.clone()).await {
                         Err(err) => future::Either::Left(stream::iter(iter::once(Err(err)))),
                         Ok(response) => {
