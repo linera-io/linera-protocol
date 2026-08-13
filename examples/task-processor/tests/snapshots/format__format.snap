@@ -13,6 +13,7 @@ REGISTRY:
       1:
         StoreResult:
           STRUCT:
+            - id: U64
             - result: STR
 OPERATION:
   TYPENAME: TaskProcessorOperation

@@ -18,7 +18,7 @@ use futures::{future, stream::StreamExt, FutureExt};
 use linera_base::{
     data_types::{TimeDelta, Timestamp},
     identifiers::{ApplicationId, ChainId},
-    task_processor::{ProcessorActions, TaskOutcome},
+    task_processor::{ProcessorActions, Task, TaskOutcome},
 };
 use linera_core::{
     client::ChainClient, data_types::ClientOutcome, node::NotificationStream, worker::Reason,
@@ -237,50 +237,47 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 let retry_delay = self.retry_delay;
                 let operators = self.operators.clone();
                 tokio::spawn(async move {
+                    // Outcomes are independent only if every task in the batch is identified:
+                    // an application that has to match an outcome by position would pop the
+                    // wrong entry as soon as one is skipped.
+                    let independent = actions.execute_tasks.iter().all(|task| task.id.is_some());
                     // Spawn all tasks concurrently and join them.
                     let handles: Vec<_> = actions
                         .execute_tasks
                         .into_iter()
                         .map(|task| {
                             let operators = operators.clone();
-                            tokio::spawn(Self::execute_task(
-                                application_id,
-                                task.operator,
-                                task.input,
-                                operators,
-                            ))
+                            tokio::spawn(Self::execute_task(application_id, task, operators))
                         })
                         .collect();
-                    let results = future::join_all(handles).await;
-                    // Submit outcomes in the original order. Stop on any failure to
-                    // preserve ordering: the on-chain queue is FIFO, so skipping a
-                    // failed task and submitting a later one would pop the wrong entry.
-                    // Tasks are assumed idempotent, so on failure the whole batch is
-                    // retried from scratch.
+                    let results = future::join_all(handles)
+                        .await
+                        .into_iter()
+                        .map(|result| {
+                            result.unwrap_or_else(|error| {
+                                Err(anyhow::anyhow!("task panicked: {error}"))
+                            })
+                        })
+                        .collect();
+                    // Tasks are assumed idempotent: whatever is not submitted here is
+                    // recomputed by the next call to `nextActions`.
+                    let (outcomes, errors) = split_batch_results(results, independent);
                     let mut retry_at = None;
-                    for result in results {
-                        match result {
-                            Ok(Ok(outcome)) => {
-                                if let Err(timestamp) = Self::submit_task_outcome(
-                                    &chain_client,
-                                    application_id,
-                                    &outcome,
-                                    retry_delay,
-                                )
-                                .await
-                                {
-                                    retry_at = Some(timestamp);
-                                    break;
-                                }
-                            }
-                            Ok(Err(error)) => {
-                                error!(%application_id, %error, "Error executing task");
-                                retry_at = Some(Timestamp::now().saturating_add(retry_delay));
-                                break;
-                            }
-                            Err(error) => {
-                                error!(%application_id, %error, "Task panicked");
-                                retry_at = Some(Timestamp::now().saturating_add(retry_delay));
+                    for error in errors {
+                        error!(%application_id, %error, "Error executing task");
+                        retry_at = later(retry_at, Timestamp::now().saturating_add(retry_delay));
+                    }
+                    for outcome in outcomes {
+                        if let Err(timestamp) = Self::submit_task_outcome(
+                            &chain_client,
+                            application_id,
+                            &outcome,
+                            retry_delay,
+                        )
+                        .await
+                        {
+                            retry_at = later(retry_at, timestamp);
+                            if !independent {
                                 break;
                             }
                         }
@@ -301,10 +298,14 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
 
     async fn execute_task(
         application_id: ApplicationId,
-        operator: String,
-        input: String,
+        task: Task,
         operators: OperatorMap,
     ) -> Result<TaskOutcome, anyhow::Error> {
+        let Task {
+            id,
+            operator,
+            input,
+        } = task;
         let binary_path = operators
             .get(&operator)
             .ok_or_else(|| anyhow::anyhow!("unsupported operator: {operator}"))?;
@@ -326,6 +327,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             output.status
         );
         let outcome = TaskOutcome {
+            id,
             operator,
             output: String::from_utf8_lossy(&output.stdout).into(),
         };
@@ -378,11 +380,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
     ) -> Result<(), Timestamp> {
         info!("Submitting task outcome for {application_id}: {task_outcome:?}");
         let retry_with_delay = || Timestamp::now().saturating_add(retry_delay);
-        let query = format!(
-            "query {{ processTaskOutcome(outcome: {{ operator: {}, output: {} }}) }}",
-            task_outcome.operator.to_value(),
-            task_outcome.output.to_value(),
-        );
+        let query = task_outcome_query(task_outcome);
         let bytes = serde_json::to_vec(&json!({"query": query})).map_err(|error| {
             error!(%application_id, %error, "Error serializing task outcome query");
             retry_with_delay()
@@ -424,5 +422,110 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             }
         }
         Ok(())
+    }
+}
+
+/// Splits the results of a finished batch into the outcomes to submit and the errors to
+/// report.
+///
+/// If the outcomes are not `independent`, the ones ordered after the first failure are
+/// dropped and recomputed on the next attempt, so that the application sees no gap in the
+/// sequence it matches them against.
+fn split_batch_results(
+    results: Vec<Result<TaskOutcome, anyhow::Error>>,
+    independent: bool,
+) -> (Vec<TaskOutcome>, Vec<anyhow::Error>) {
+    let mut outcomes = Vec::new();
+    let mut errors = Vec::new();
+    for result in results {
+        match result {
+            Ok(outcome) => outcomes.push(outcome),
+            Err(error) => {
+                errors.push(error);
+                if !independent {
+                    break;
+                }
+            }
+        }
+    }
+    (outcomes, errors)
+}
+
+/// Returns the latest of the timestamps at which a batch should be retried, so that a task
+/// failing on every attempt cannot shorten the delay protecting the operator.
+fn later(retry_at: Option<Timestamp>, timestamp: Timestamp) -> Option<Timestamp> {
+    Some(retry_at.map_or(timestamp, |retry_at| retry_at.max(timestamp)))
+}
+
+/// Builds the GraphQL query submitting `task_outcome` to its application.
+fn task_outcome_query(task_outcome: &TaskOutcome) -> String {
+    format!(
+        "query {{ processTaskOutcome(outcome: {}) }}",
+        task_outcome.to_value()
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn outcome(id: Option<&str>, output: &str) -> TaskOutcome {
+        TaskOutcome {
+            id: id.map(str::to_string),
+            operator: "echo".to_string(),
+            output: output.to_string(),
+        }
+    }
+
+    #[test]
+    fn test_split_batch_results_stops_at_first_failure_when_ordered() {
+        let results = vec![
+            Ok(outcome(None, "first")),
+            Err(anyhow::anyhow!("boom")),
+            Ok(outcome(None, "third")),
+        ];
+        let (outcomes, errors) = split_batch_results(results, false);
+        assert_eq!(
+            outcomes.into_iter().map(|o| o.output).collect::<Vec<_>>(),
+            vec!["first"]
+        );
+        assert_eq!(errors.len(), 1);
+    }
+
+    #[test]
+    fn test_split_batch_results_keeps_siblings_when_independent() {
+        let results = vec![
+            Err(anyhow::anyhow!("boom")),
+            Ok(outcome(Some("2"), "second")),
+            Err(anyhow::anyhow!("bang")),
+            Ok(outcome(Some("4"), "fourth")),
+        ];
+        let (outcomes, errors) = split_batch_results(results, true);
+        assert_eq!(
+            outcomes.into_iter().map(|o| o.output).collect::<Vec<_>>(),
+            vec!["second", "fourth"]
+        );
+        assert_eq!(errors.len(), 2);
+    }
+
+    #[test]
+    fn test_later() {
+        let early = Timestamp::from(1);
+        let late = Timestamp::from(2);
+        assert_eq!(later(None, early), Some(early));
+        assert_eq!(later(Some(late), early), Some(late));
+        assert_eq!(later(Some(early), late), Some(late));
+    }
+
+    #[test]
+    fn test_task_outcome_query() {
+        assert_eq!(
+            task_outcome_query(&outcome(None, "hello")),
+            r#"query { processTaskOutcome(outcome: {operator: "echo", output: "hello"}) }"#
+        );
+        assert_eq!(
+            task_outcome_query(&outcome(Some("42"), "hello")),
+            r#"query { processTaskOutcome(outcome: {id: "42", operator: "echo", output: "hello"}) }"#
+        );
     }
 }
