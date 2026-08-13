@@ -32,7 +32,7 @@ use linera_chain::{
         Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
         ValidatedBlockCertificate,
     },
-    ChainError, ChainExecutionContext, ChainIdSet, ChainStateView, ChainTipState,
+    BlockExecution, ChainError, ChainExecutionContext, ChainIdSet, ChainStateView, ChainTipState,
     ExecutionResultExt as _,
 };
 use linera_execution::{
@@ -1075,7 +1075,6 @@ where
                 .await;
             certificate.into_value()
         } else {
-            let oracle_responses = Some(block.body.oracle_responses.clone());
             let (proposed_block, outcome) = block.clone().into_proposal();
             let (proposed_block, verified, _resource_tracker, _) = chain
                 .execute_block(
@@ -1083,8 +1082,9 @@ where
                     local_time,
                     None,
                     &published_blobs,
-                    oracle_responses,
-                    BundleExecutionPolicy::committed(),
+                    BlockExecution::HandleConfirmed {
+                        oracle_responses: outcome.oracle_responses.clone(),
+                    },
                 )
                 .await?;
             // We should always agree on the messages and state hash.
@@ -2085,7 +2085,14 @@ where
             .remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())
             .await?;
         let (executed_block, resource_tracker, never_reject_origins) =
-            Box::pin(self.execute_block(block, local_time, round, published_blobs, policy)).await?;
+            Box::pin(self.execute_block(
+                block,
+                local_time,
+                round,
+                published_blobs,
+                BlockExecution::StageProposal { policy },
+            ))
+            .await?;
 
         // No need to sign: only used internally.
         let info = ChainInfo::from_chain_view(&self.chain).await?;
@@ -2290,7 +2297,7 @@ where
                 local_time,
                 round.multi_leader(),
                 &published_blobs,
-                BundleExecutionPolicy::committed(),
+                BlockExecution::HandleProposal,
             ))
             .await?;
             executed_block
@@ -2464,11 +2471,11 @@ where
         local_time: Timestamp,
         round: Option<u32>,
         published_blobs: &[Blob],
-        policy: BundleExecutionPolicy,
+        execution: BlockExecution,
     ) -> Result<(Block, ResourceTracker, HashSet<ChainId>), WorkerError> {
         let (proposed_block, outcome, resource_tracker, never_reject_origins) = Box::pin(
             self.chain
-                .execute_block(block, local_time, round, published_blobs, None, policy),
+                .execute_block(block, local_time, round, published_blobs, execution),
         )
         .await?;
         let executed_block = Block::new(proposed_block, outcome);

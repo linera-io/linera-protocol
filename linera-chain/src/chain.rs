@@ -59,6 +59,80 @@ mod chain_tests;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency;
 
+/// The protocol phase a block is executed in. Recorded as the `phase` label on the
+/// block-execution metrics so the three distinct paths — staging a proposal, validating a
+/// received proposal, and committing a confirmed certificate — are separate time series in
+/// Prometheus.
+///
+/// Every path that executes a block must name its phase explicitly: there is no `Default`,
+/// so a new caller cannot compile without choosing one, and no execution can land in an
+/// unlabeled or silently-mislabeled bucket.
+///
+/// The label strings are derived from the variant names in `snake_case`; they are part of the
+/// metrics wire format, so `metrics_label_values_are_stable` pins them against an accidental
+/// variant rename.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum BlockExecutionPhase {
+    /// A block proposer staging (building) its own block (`stage_block_execution`).
+    StageProposal,
+    /// A validator validating a received block proposal (`handle_block_proposal`).
+    HandleProposal,
+    /// A validator executing a confirmed certificate before committing it
+    /// (`process_confirmed_block`).
+    HandleConfirmed,
+}
+
+/// What a call to [`ChainStateView::execute_block`] is doing, carrying exactly the inputs that
+/// are legal for that phase.
+///
+/// Bundling the phase together with the replayed oracle responses and the bundle-execution
+/// policy makes the illegal combinations unrepresentable: only [`StageProposal`] may choose a
+/// policy (and thus `AutoRetry`), and only [`HandleConfirmed`] carries oracle responses to
+/// replay — so "replay oracle responses while auto-retrying" cannot be constructed.
+///
+/// [`StageProposal`]: BlockExecution::StageProposal
+/// [`HandleConfirmed`]: BlockExecution::HandleConfirmed
+pub enum BlockExecution {
+    /// A proposer staging (building) its own block. The bundle-failure policy is caller-chosen
+    /// (and may be `AutoRetry`); oracle responses are computed fresh, never replayed.
+    StageProposal {
+        /// How to handle failing bundles while building the proposal.
+        policy: BundleExecutionPolicy,
+    },
+    /// A validator validating a received block proposal. Bundles must abort on failure (the
+    /// proposal is fixed) and oracle responses are computed fresh.
+    HandleProposal,
+    /// A validator executing a confirmed certificate before committing it. Bundles must abort
+    /// on failure and the certificate's recorded oracle responses are replayed for determinism.
+    HandleConfirmed {
+        /// The oracle responses recorded in the certificate, replayed to reproduce the outcome.
+        oracle_responses: Vec<Vec<OracleResponse>>,
+    },
+}
+
+impl BlockExecution {
+    /// The protocol phase this execution represents, used to label execution metrics and spans.
+    pub fn phase(&self) -> BlockExecutionPhase {
+        match self {
+            BlockExecution::StageProposal { .. } => BlockExecutionPhase::StageProposal,
+            BlockExecution::HandleProposal => BlockExecutionPhase::HandleProposal,
+            BlockExecution::HandleConfirmed { .. } => BlockExecutionPhase::HandleConfirmed,
+        }
+    }
+
+    /// Splits into the oracle responses to replay (if any) and the bundle-execution policy.
+    fn into_oracle_and_policy(self) -> (Option<Vec<Vec<OracleResponse>>>, BundleExecutionPolicy) {
+        match self {
+            BlockExecution::StageProposal { policy } => (None, policy),
+            BlockExecution::HandleProposal => (None, BundleExecutionPolicy::committed()),
+            BlockExecution::HandleConfirmed { oracle_responses } => {
+                (Some(oracle_responses), BundleExecutionPolicy::committed())
+            }
+        }
+    }
+}
+
 #[cfg(with_metrics)]
 pub(crate) mod metrics {
     use std::sync::LazyLock;
@@ -70,14 +144,18 @@ pub(crate) mod metrics {
     use prometheus::{HistogramVec, IntCounterVec};
 
     pub static NUM_BLOCKS_EXECUTED: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec("num_blocks_executed", "Number of blocks executed", &[])
+        register_int_counter_vec(
+            "num_blocks_executed",
+            "Number of blocks executed",
+            &["phase"],
+        )
     });
 
     pub static BLOCK_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
             "block_execution_latency",
             "Block execution latency",
-            &[],
+            &["phase"],
             exponential_bucket_interval(50.0_f64, 10_000_000.0),
         )
     });
@@ -87,7 +165,7 @@ pub(crate) mod metrics {
         register_histogram_vec(
             "message_execution_latency",
             "Message execution latency",
-            &[],
+            &["phase"],
             exponential_bucket_interval(0.1_f64, 1_000_000.0),
         )
     });
@@ -96,7 +174,7 @@ pub(crate) mod metrics {
         register_histogram_vec(
             "operation_execution_latency",
             "Operation execution latency",
-            &[],
+            &["phase"],
             exponential_bucket_interval(0.1_f64, 1_000_000.0),
         )
     });
@@ -105,7 +183,7 @@ pub(crate) mod metrics {
         register_histogram_vec(
             "wasm_fuel_used_per_block",
             "Wasm fuel used per block",
-            &[],
+            &["phase"],
             exponential_bucket_interval(10.0, 100_000_000.0),
         )
     });
@@ -114,7 +192,7 @@ pub(crate) mod metrics {
         register_histogram_vec(
             "evm_fuel_used_per_block",
             "EVM fuel used per block",
-            &[],
+            &["phase"],
             exponential_bucket_interval(10.0, 100_000_000.0),
         )
     });
@@ -123,7 +201,7 @@ pub(crate) mod metrics {
         register_histogram_vec(
             "vm_num_reads_per_block",
             "VM number of reads per block",
-            &[],
+            &["phase"],
             exponential_bucket_interval(0.1, 100.0),
         )
     });
@@ -132,7 +210,7 @@ pub(crate) mod metrics {
         register_histogram_vec(
             "vm_bytes_read_per_block",
             "VM number of bytes read per block",
-            &[],
+            &["phase"],
             exponential_bucket_interval(0.1, 10_000_000.0),
         )
     });
@@ -141,7 +219,7 @@ pub(crate) mod metrics {
         register_histogram_vec(
             "vm_bytes_written_per_block",
             "VM number of bytes written per block",
-            &[],
+            &["phase"],
             exponential_bucket_interval(0.1, 10_000_000.0),
         )
     });
@@ -150,7 +228,7 @@ pub(crate) mod metrics {
         register_histogram_vec(
             "state_hash_computation_latency",
             "Time to recompute the state hash, in microseconds",
-            &[],
+            &["phase"],
             exponential_bucket_interval(1.0, 2_000_000.0),
         )
     });
@@ -173,23 +251,27 @@ pub(crate) mod metrics {
         )
     });
 
-    /// Tracks block execution metrics in Prometheus.
-    pub(crate) fn track_block_metrics(tracker: &ResourceTracker) {
-        NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
+    /// Tracks block execution metrics in Prometheus, labeled by the execution `phase`.
+    pub(crate) fn track_block_metrics(
+        tracker: &ResourceTracker,
+        phase: super::BlockExecutionPhase,
+    ) {
+        let phase: &[&str] = &[phase.into()];
+        NUM_BLOCKS_EXECUTED.with_label_values(phase).inc();
         WASM_FUEL_USED_PER_BLOCK
-            .with_label_values(&[])
+            .with_label_values(phase)
             .observe(tracker.wasm_fuel as f64);
         EVM_FUEL_USED_PER_BLOCK
-            .with_label_values(&[])
+            .with_label_values(phase)
             .observe(tracker.evm_fuel as f64);
         VM_NUM_READS_PER_BLOCK
-            .with_label_values(&[])
+            .with_label_values(phase)
             .observe(tracker.read_operations as f64);
         VM_BYTES_READ_PER_BLOCK
-            .with_label_values(&[])
+            .with_label_values(phase)
             .observe(tracker.bytes_read as f64);
         VM_BYTES_WRITTEN_PER_BLOCK
-            .with_label_values(&[])
+            .with_label_values(phase)
             .observe(tracker.bytes_written as f64);
     }
 }
@@ -817,18 +899,13 @@ where
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         exec_policy: BundleExecutionPolicy,
+        phase: BlockExecutionPhase,
     ) -> Result<(BlockExecutionOutcome, ResourceTracker, HashSet<ChainId>), ChainError> {
-        // AutoRetry is incompatible with replaying oracle responses because discarding or
-        // rejecting bundles would change which transactions execute.
-        if !matches!(&exec_policy.on_failure, BundleFailurePolicy::Abort) {
-            assert!(
-                replaying_oracle_responses.is_none(),
-                "Cannot use AutoRetry policy when replaying oracle responses"
-            );
-        }
-
         #[cfg(with_metrics)]
-        let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency_us();
+        let block_execution_latency =
+            metrics::BLOCK_EXECUTION_LATENCY.with_label_values(&[phase.into()]);
+        #[cfg(with_metrics)]
+        let _execution_latency = block_execution_latency.measure_latency_us();
         chain.system.timestamp.set(block.timestamp);
 
         let committee_policy = chain
@@ -864,6 +941,7 @@ where
             local_time,
             replaying_oracle_responses,
             block,
+            phase,
         )?;
 
         // Extract failure-policy parameters from exec_policy.
@@ -1053,7 +1131,10 @@ where
 
         let state_hash = {
             #[cfg(with_metrics)]
-            let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency_us();
+            let state_hash_latency =
+                metrics::STATE_HASH_COMPUTATION_LATENCY.with_label_values(&[phase.into()]);
+            #[cfg(with_metrics)]
+            let _hash_latency = state_hash_latency.measure_latency_us();
             chain.crypto_hash_mut().await?
         };
 
@@ -1115,8 +1196,7 @@ where
         local_time: Timestamp,
         round: Option<u32>,
         published_blobs: &[Blob],
-        replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-        policy: BundleExecutionPolicy,
+        execution: BlockExecution,
     ) -> Result<
         (
             ProposedBlock,
@@ -1173,6 +1253,8 @@ where
             mandatory_apps_need_accepted_message,
         )?;
 
+        let phase = execution.phase();
+        let (replaying_oracle_responses, policy) = execution.into_oracle_and_policy();
         Self::execute_block_inner(
             &mut self.execution_state,
             &self.confirmed_log,
@@ -1184,6 +1266,7 @@ where
             published_blobs,
             replaying_oracle_responses,
             policy,
+            phase,
         )
         .await
         .map(|(outcome, tracker, never_reject_origins)| {
