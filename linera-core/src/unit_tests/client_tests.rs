@@ -4972,3 +4972,66 @@ where
         builder.resident_chain_workers(0).await,
     );
 }
+
+/// A validator that has fallen behind its cursor reports its own height, which is what lets the
+/// queue notice a regression.
+///
+/// A validator restored from a backup is *behind* where we last saw it. The queue's cursor is
+/// only corrected because a send above that cursor comes back carrying the validator's real
+/// height rather than the one we assumed — this asserts that reporting, which
+/// `on_done` then follows downwards.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_send_block_reports_the_destinations_own_height<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use crate::remote_node::RemoteNode;
+
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = sender.chain_id();
+
+    // Validator 3 misses everything, so its real height stays far below the others'.
+    builder.set_fault_type([3], FaultType::Offline);
+    for _ in 0..4 {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+    let tip = sender.chain_info().await?.next_block_height;
+    builder.set_fault_type([3], FaultType::Honest);
+    assert_eq!(builder.next_block_height(3, chain_id).await, BlockHeight(0));
+
+    let storage = builder.validator_storage(0);
+    let node = builder.node(3);
+    let mut sender_task = crate::chain_worker::export::BlockSender {
+        remote_node: RemoteNode {
+            public_key: node.name(),
+            node,
+        },
+        storage,
+        certificate_upload_batch_size: 100,
+    };
+
+    // Ask with no cursor at all — the state a failed send leaves behind. One bounded round must
+    // come back with what the validator actually holds, so the queue can act on the truth.
+    let reached = sender_task
+        .send_missing_blocks(chain_id, tip, None, 2)
+        .await?;
+    assert_eq!(
+        reached,
+        BlockHeight(2),
+        "a bounded round must report the validator's own height afterwards",
+    );
+    Ok(())
+}

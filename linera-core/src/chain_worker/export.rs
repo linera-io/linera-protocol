@@ -808,10 +808,24 @@ where
                 }
                 match &outcome {
                     SendOutcome::Reached(next_height) => {
-                        let advanced = chain_dest.next_height.is_none_or(|n| *next_height > n);
-                        if advanced {
-                            // Only ever forward: a stale response must not drag the cursor back.
-                            chain_dest.next_height = Some(*next_height);
+                        let previous = chain_dest.next_height;
+                        let advanced = previous.is_none_or(|n| *next_height > n);
+                        // The validator is authoritative about its own height, in both
+                        // directions: only one send per pair is ever in flight and stale
+                        // generations are filtered above, so this is not a race. One restored
+                        // from a backup reports a *lower* height, and refusing to believe it
+                        // would leave that gap unrepaired for good — we would think it caught
+                        // up and never send the blocks it lost.
+                        //
+                        // Untested: the in-process harness has no way to make a validator lose
+                        // state, so this direction rests on the argument above rather than on a
+                        // failing-first test. A regression is noticed only once a send happens,
+                        // which needs the chain's tip to be above the cursor. One that regresses while we
+                        // believe it fully converged waits for the chain's next block; probing
+                        // converged pairs instead would cost a query per chain per destination
+                        // forever, to catch something only a restore causes.
+                        chain_dest.next_height = Some(*next_height);
+                        if advanced || previous.is_some_and(|n| *next_height < n) {
                             chain_dest.failures = 0;
                             chain_dest.retry_at = None;
                             if let Ok(acked) = next_height.try_sub_one() {
