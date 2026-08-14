@@ -73,9 +73,22 @@ mod metrics {
 
     use linera_base::prometheus_util::{
         exponential_bucket_interval, exponential_bucket_latencies, register_histogram,
-        register_histogram_vec, register_int_counter, register_int_gauge, register_int_gauge_vec,
+        register_histogram_vec, register_int_counter, register_int_counter_vec, register_int_gauge,
+        register_int_gauge_vec,
     };
-    use prometheus::{Histogram, HistogramVec, IntCounter, IntGauge, IntGaugeVec};
+    use prometheus::{Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec};
+
+    /// Sends refused for a reason about one chain rather than the destination — most often a
+    /// committee the destination has not learned yet. Self-healing, so a rising rate is the
+    /// signal, not the count: one that stays flat and non-zero means a destination is stuck on
+    /// some chain and nothing is repairing it.
+    pub static CHAIN_SCOPED_BACKOFFS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "block_export_chain_scoped_backoffs",
+            "Sends deferred because a destination cannot accept a particular chain yet",
+            &["validator"],
+        )
+    });
 
     /// Chains the queue is tracking: those with a destination still behind, plus recently
     /// converged ones inside the retention window. A destination that is down holds every chain
@@ -904,6 +917,10 @@ where
                             %chain_id, %validator, %error,
                             "Destination cannot accept this chain yet; backing the pair off",
                         );
+                        #[cfg(with_metrics)]
+                        metrics::CHAIN_SCOPED_BACKOFFS
+                            .with_label_values(&[&dest.address])
+                            .inc();
                         chain_dest.next_height = None;
                         back_off(
                             &mut chain_dest.failures,
@@ -1164,6 +1181,9 @@ where
                 .ok();
             metrics::SEND_LATENCY.remove_label_values(&[address]).ok();
             metrics::DESTINATION_LAG
+                .remove_label_values(&[address])
+                .ok();
+            metrics::CHAIN_SCOPED_BACKOFFS
                 .remove_label_values(&[address])
                 .ok();
         }
@@ -1486,6 +1506,12 @@ where
     /// date, and this block succeeds on a later round. Replaying the admin chain from inside
     /// another chain's push is how one export round used to stall on an unbounded foreign
     /// history.
+    ///
+    /// The pair retries indefinitely — the backoff caps at `max_retry_delay` — so it recovers
+    /// whenever the destination learns the epoch, from the admin chain's own export or from the
+    /// client, which pushes it on this same error. After a restart the admin chain re-enters
+    /// this queue's work-list only once it produces a block, so a quiet admin chain can leave a
+    /// pair deferred for a while; `CHAIN_SCOPED_BACKOFFS` is what makes that visible.
     async fn send_confirmed_certificate(
         &mut self,
         certificate: &CacheArc<ConfirmedBlockCertificate>,
