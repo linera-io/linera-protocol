@@ -18,7 +18,7 @@ use futures::{future, stream::StreamExt, FutureExt};
 use linera_base::{
     data_types::{TimeDelta, Timestamp},
     identifiers::{ApplicationId, ChainId},
-    task_processor::{ProcessorActions, TaskOutcome},
+    task_processor::{ProcessorActions, Task, TaskOutcome},
 };
 use linera_core::{
     client::ChainClient, data_types::ClientOutcome, node::NotificationStream, worker::Reason,
@@ -237,52 +237,50 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 let retry_delay = self.retry_delay;
                 let operators = self.operators.clone();
                 tokio::spawn(async move {
-                    // Spawn all tasks concurrently and join them.
-                    let handles: Vec<_> = actions
-                        .execute_tasks
-                        .into_iter()
-                        .map(|task| {
-                            let operators = operators.clone();
-                            tokio::spawn(Self::execute_task(
-                                application_id,
-                                task.operator,
-                                task.input,
-                                operators,
-                            ))
-                        })
-                        .collect();
-                    let results = future::join_all(handles).await;
-                    // Submit outcomes in the original order. Stop on any failure to
-                    // preserve ordering: the on-chain queue is FIFO, so skipping a
-                    // failed task and submitting a later one would pop the wrong entry.
-                    // Tasks are assumed idempotent, so on failure the whole batch is
-                    // retried from scratch.
+                    // Run all tasks concurrently, keeping the group each one belongs to.
+                    // Tasks sharing an id, and all the tasks without one, can only be told
+                    // apart by position, so they form a group whose outcomes must stay
+                    // ordered. A distinctly identified task is a group of its own.
+                    let results = future::join_all(actions.execute_tasks.into_iter().map(|task| {
+                        let operators = operators.clone();
+                        let group = task.id.clone();
+                        async move {
+                            let result =
+                                tokio::spawn(Self::execute_task(application_id, task, operators))
+                                    .await
+                                    .unwrap_or_else(|error| {
+                                        Err(anyhow::anyhow!("task panicked: {error}"))
+                                    });
+                            (group, result)
+                        }
+                    }))
+                    .await;
+                    // Tasks are assumed idempotent: whatever is not submitted here is
+                    // recomputed by the next call to `nextActions`.
+                    let (outcomes, errors) = split_batch_results(results);
+                    // `None` sorts before any timestamp, so keeping the maximum keeps the
+                    // latest retry the batch asked for: a task failing on every attempt
+                    // cannot shorten the delay protecting the operator.
                     let mut retry_at = None;
-                    for result in results {
-                        match result {
-                            Ok(Ok(outcome)) => {
-                                if let Err(timestamp) = Self::submit_task_outcome(
-                                    &chain_client,
-                                    application_id,
-                                    &outcome,
-                                    retry_delay,
-                                )
-                                .await
-                                {
-                                    retry_at = Some(timestamp);
-                                    break;
-                                }
-                            }
-                            Ok(Err(error)) => {
-                                error!(%application_id, %error, "Error executing task");
-                                retry_at = Some(Timestamp::now().saturating_add(retry_delay));
-                                break;
-                            }
-                            Err(error) => {
-                                error!(%application_id, %error, "Task panicked");
-                                retry_at = Some(Timestamp::now().saturating_add(retry_delay));
-                                break;
-                            }
+                    for error in errors {
+                        error!(%application_id, %error, "Error executing task");
+                        retry_at = retry_at.max(Some(Timestamp::now().saturating_add(retry_delay)));
+                    }
+                    let mut failed_groups = BTreeSet::new();
+                    for (group, outcome) in outcomes {
+                        if failed_groups.contains(&group) {
+                            continue;
+                        }
+                        if let Err(timestamp) = Self::submit_task_outcome(
+                            &chain_client,
+                            application_id,
+                            &outcome,
+                            retry_delay,
+                        )
+                        .await
+                        {
+                            retry_at = retry_at.max(Some(timestamp));
+                            failed_groups.insert(group);
                         }
                     }
                     if batch_sender
@@ -301,10 +299,14 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
 
     async fn execute_task(
         application_id: ApplicationId,
-        operator: String,
-        input: String,
+        task: Task,
         operators: OperatorMap,
     ) -> Result<TaskOutcome, anyhow::Error> {
+        let Task {
+            id,
+            operator,
+            input,
+        } = task;
         let binary_path = operators
             .get(&operator)
             .ok_or_else(|| anyhow::anyhow!("unsupported operator: {operator}"))?;
@@ -326,6 +328,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             output.status
         );
         let outcome = TaskOutcome {
+            id,
             operator,
             output: String::from_utf8_lossy(&output.stdout).into(),
         };
@@ -378,11 +381,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
     ) -> Result<(), Timestamp> {
         info!("Submitting task outcome for {application_id}: {task_outcome:?}");
         let retry_with_delay = || Timestamp::now().saturating_add(retry_delay);
-        let query = format!(
-            "query {{ processTaskOutcome(outcome: {{ operator: {}, output: {} }}) }}",
-            task_outcome.operator.to_value(),
-            task_outcome.output.to_value(),
-        );
+        let query = task_outcome_query(task_outcome);
         let bytes = serde_json::to_vec(&json!({"query": query})).map_err(|error| {
             error!(%application_id, %error, "Error serializing task outcome query");
             retry_with_delay()
@@ -424,5 +423,124 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             }
         }
         Ok(())
+    }
+}
+
+/// Splits the results of a finished batch into the outcomes to submit, each with the group it
+/// belongs to, and the errors to report.
+///
+/// Outcomes of different groups are independent, but within a group the ones ordered after a
+/// failure are dropped and recomputed on the next attempt, so that an application matching
+/// them by position sees no gap in the sequence.
+fn split_batch_results(
+    results: Vec<(Option<String>, Result<TaskOutcome, anyhow::Error>)>,
+) -> (Vec<(Option<String>, TaskOutcome)>, Vec<anyhow::Error>) {
+    let mut outcomes = Vec::new();
+    let mut errors = Vec::new();
+    let mut failed_groups = BTreeSet::new();
+    for (group, result) in results {
+        match result {
+            Ok(outcome) => {
+                if !failed_groups.contains(&group) {
+                    outcomes.push((group, outcome));
+                }
+            }
+            Err(error) => {
+                errors.push(error);
+                failed_groups.insert(group);
+            }
+        }
+    }
+    (outcomes, errors)
+}
+
+/// Builds the GraphQL query submitting `task_outcome` to its application.
+fn task_outcome_query(task_outcome: &TaskOutcome) -> String {
+    format!(
+        "query {{ processTaskOutcome(outcome: {}) }}",
+        task_outcome.to_value()
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn outcome(id: Option<&str>, output: &str) -> TaskOutcome {
+        TaskOutcome {
+            id: id.map(str::to_string),
+            operator: "echo".to_string(),
+            output: output.to_string(),
+        }
+    }
+
+    type BatchResult = (Option<String>, Result<TaskOutcome, anyhow::Error>);
+
+    fn success(id: Option<&str>, output: &str) -> BatchResult {
+        (id.map(str::to_string), Ok(outcome(id, output)))
+    }
+
+    fn failure(id: Option<&str>) -> BatchResult {
+        (id.map(str::to_string), Err(anyhow::anyhow!("boom")))
+    }
+
+    fn outputs(outcomes: Vec<(Option<String>, TaskOutcome)>) -> Vec<String> {
+        outcomes
+            .into_iter()
+            .map(|(_, outcome)| outcome.output)
+            .collect()
+    }
+
+    #[test]
+    fn test_split_batch_results_drops_a_failed_group() {
+        // Tasks without an id all belong to the same group.
+        let results = vec![
+            success(None, "first"),
+            failure(None),
+            success(None, "third"),
+        ];
+        let (outcomes, errors) = split_batch_results(results);
+        assert_eq!(outputs(outcomes), vec!["first"]);
+        assert_eq!(errors.len(), 1);
+    }
+
+    #[test]
+    fn test_split_batch_results_keeps_distinctly_identified_siblings() {
+        let results = vec![
+            failure(Some("1")),
+            success(Some("2"), "second"),
+            failure(Some("3")),
+            success(Some("4"), "fourth"),
+        ];
+        let (outcomes, errors) = split_batch_results(results);
+        assert_eq!(outputs(outcomes), vec!["second", "fourth"]);
+        assert_eq!(errors.len(), 2);
+    }
+
+    #[test]
+    fn test_split_batch_results_only_drops_the_siblings_sharing_an_id() {
+        // Only what is ordered after the failure *and* shares its id is dropped.
+        let results = vec![
+            success(Some("dup"), "before"),
+            failure(Some("dup")),
+            success(Some("dup"), "after"),
+            success(Some("other"), "other"),
+            success(None, "unidentified"),
+        ];
+        let (outcomes, errors) = split_batch_results(results);
+        assert_eq!(outputs(outcomes), vec!["before", "other", "unidentified"]);
+        assert_eq!(errors.len(), 1);
+    }
+
+    #[test]
+    fn test_task_outcome_query() {
+        assert_eq!(
+            task_outcome_query(&outcome(None, "hello")),
+            r#"query { processTaskOutcome(outcome: {operator: "echo", output: "hello"}) }"#
+        );
+        assert_eq!(
+            task_outcome_query(&outcome(Some("42"), "hello")),
+            r#"query { processTaskOutcome(outcome: {id: "42", operator: "echo", output: "hello"}) }"#
+        );
     }
 }
