@@ -1440,11 +1440,11 @@ async fn test_node_service_with_task_processor() -> Result<()> {
     Ok(())
 }
 
-/// Test that task processor outcomes are submitted in the order they were requested,
-/// even when a later task finishes before an earlier one.
+/// Test that a slow task does not delay the outcome of a distinctly identified sibling: the
+/// example application gives every task an id, so each one is a group of its own.
 #[cfg(feature = "storage-service")]
 #[test_log::test(tokio::test)]
-async fn test_task_processor_outcome_ordering() -> Result<()> {
+async fn test_task_processor_slow_task_does_not_delay_siblings() -> Result<()> {
     use std::{io::Write, os::unix::fs::PermissionsExt};
 
     use linera_base::{abi::ContractAbi, identifiers::ApplicationId};
@@ -1476,7 +1476,7 @@ async fn test_task_processor_outcome_ordering() -> Result<()> {
     {
         let mut file = std::fs::File::create(&slow_path)?;
         writeln!(file, "#!/bin/sh")?;
-        writeln!(file, "sleep 1")?;
+        writeln!(file, "sleep 5")?;
         writeln!(file, "cat")?;
     }
     std::fs::set_permissions(&slow_path, std::fs::Permissions::from_mode(0o755))?;
@@ -1518,17 +1518,19 @@ async fn test_task_processor_outcome_ordering() -> Result<()> {
     // Wait for the block containing the RequestTask operations.
     notifications.wait_for_block(None).await?;
 
-    // Wait for the two blocks containing the StoreResult operations.
+    // Wait for the first block containing a StoreResult operation. It must be the one of the
+    // fast task, submitted while the slow task requested before it is still running.
     notifications.wait_for_block(None).await?;
+    let results: Vec<String> = app.query_json("results").await?;
+    assert_eq!(results, vec!["fast_result"]);
+
+    // Wait for the block containing the StoreResult operation of the slow task.
     notifications.wait_for_block(None).await?;
 
     let task_count: u64 = app.query_json("taskCount").await?;
     assert_eq!(task_count, 2);
-
-    // Verify the results are in request order (slow first, fast second),
-    // not completion order (which would be fast first).
     let results: Vec<String> = app.query_json("results").await?;
-    assert_eq!(results, vec!["slow_result", "fast_result"]);
+    assert_eq!(results, vec!["fast_result", "slow_result"]);
 
     net.ensure_is_running().await?;
     net.terminate().await?;
