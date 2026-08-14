@@ -42,6 +42,9 @@ pub struct ChainWorkerConfig {
     /// cross-chain message. When exceeded, the bundles are split into multiple requests.
     /// Defaults to `usize::MAX` (no chunking).
     pub cross_chain_message_chunk_limit: usize,
+    /// How often, at most, export progress is folded into the persisted `exported_heights` of an
+    /// active chain — the fold rewrites the whole register.
+    pub exported_heights_fold_interval: linera_base::time::Duration,
     /// Maximum number of cross-chain requests coalesced into a single batch by the
     /// per-chain driver. Smaller values bound the worst-case write-lock hold time at
     /// the cost of more lock acquisitions; larger values amortize lock and storage
@@ -97,6 +100,7 @@ impl Default for ChainWorkerConfig {
             block_cache_size: crate::worker::DEFAULT_BLOCK_CACHE_SIZE,
             execution_state_cache_size: crate::worker::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
             cross_chain_message_chunk_limit: usize::MAX,
+            exported_heights_fold_interval: linera_base::time::Duration::from_secs(5),
             cross_chain_batch_size_limit: 1000,
             allow_revert_confirm: false,
             reset_on_corrupted_chain_state: None,

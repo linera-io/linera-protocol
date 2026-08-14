@@ -19,7 +19,7 @@
 
 mod guard;
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use guard::INTEGRATION_TEST_GUARD;
 use linera_base::time::Duration;
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
@@ -43,15 +43,28 @@ async fn relayed_requests(net: &LocalNet, validator: usize) -> Result<u64> {
         .await?
         .text()
         .await?;
+    // The scrape itself must have worked: an empty or non-Prometheus body would otherwise make
+    // every count read as zero — exactly what the direct-transport test asserts, for the wrong
+    // reason. A silent *rename* of the counter is indistinguishable from "never incremented"
+    // here, which is why `test_block_export_through_the_proxy` asserts the same counter is
+    // nonzero: the pair fails loudly if the name rots.
+    anyhow::ensure!(
+        metrics.lines().any(|line| line.starts_with("# TYPE")),
+        "the metrics scrape of validator {validator} returned no Prometheus payload",
+    );
     let mut total = 0;
     for line in metrics.lines() {
         // e.g. `linera_proxy_relayed_request_count{method_name="relay_confirmed_certificate"} 7`
         if line.starts_with('#') || !line.contains("proxy_relayed_request_count") {
             continue;
         }
-        if let Some(value) = line.rsplit(' ').next() {
-            total += value.parse::<u64>().unwrap_or(0);
-        }
+        let value = line
+            .rsplit(' ')
+            .next()
+            .expect("rsplit yields at least one piece");
+        total += value
+            .parse::<u64>()
+            .with_context(|| format!("unparseable metric line: {line}"))?;
     }
     Ok(total)
 }

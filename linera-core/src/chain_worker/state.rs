@@ -132,6 +132,9 @@ where
     poisoned: bool,
     /// The process-wide export queue, if the server enabled block export.
     block_export: Option<BlockExportHandle>,
+    /// When export progress was last folded into `exported_heights`, to bound the register
+    /// rewrites on an active chain.
+    last_exported_heights_fold: Option<linera_base::time::Instant>,
 }
 
 /// The result of processing a cross-chain update.
@@ -212,6 +215,7 @@ where
             knows_chain_is_active: false,
             poisoned: false,
             block_export,
+            last_exported_heights_fold: None,
         })
     }
 
@@ -1021,8 +1025,17 @@ where
         tip: ChainTipState,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
-        // Hold the certificate behind the storage cache's shared pointer.
-        let certificate = self.storage.cache_certificate(certificate);
+        // Cached only when export is on: the queue holds the shared pointer, and inserting on
+        // every executed block would otherwise churn the dedup cache for nothing.
+        let (cached, plain) = if self.block_export.is_some() {
+            (Some(self.storage.cache_certificate(certificate)), None)
+        } else {
+            (None, Some(certificate))
+        };
+        let certificate = cached
+            .as_deref()
+            .or(plain.as_ref())
+            .expect("exactly one of the two is set");
         let block_hash = certificate.hash();
         let block = certificate.block();
         let chain_id = block.header.chain_id;
@@ -1114,7 +1127,7 @@ where
                 tracked.as_deref().map(|h| h.inner()),
             )
             .await?;
-        self.export_block(&certificate, published_blobs, blobs)
+        self.export_block(cached.as_ref(), published_blobs, blobs)
             .await;
         let mut actions = self.create_network_actions(None).await?;
         trace!("Processed confirmed block {height}");
@@ -1160,11 +1173,13 @@ where
     /// consensus, so a problem here is logged and the block stands.
     async fn export_block(
         &mut self,
-        certificate: &CacheArc<ConfirmedBlockCertificate>,
+        certificate: Option<&CacheArc<ConfirmedBlockCertificate>>,
         published_blobs: Vec<Blob>,
         read_blobs: BTreeMap<BlobId, Blob>,
     ) {
-        let Some(export) = self.block_export.clone() else {
+        // The certificate is cached exactly when export is enabled, so both are `Some` or
+        // neither is.
+        let (Some(export), Some(certificate)) = (self.block_export.clone(), certificate) else {
             return;
         };
         // The committee *after* applying the block: a validator that this very block admits has to
@@ -1204,7 +1219,18 @@ where
             }
         }
         if **self.chain.exported_heights.get() != merged {
-            self.chain.exported_heights.set(merged.into());
+            // Rewrites of an already-populated register are throttled: it is re-serialized
+            // whole, changes on every block of an active chain, and is a lower bound by design.
+            // The first real content is never held back.
+            let now = linera_base::time::Instant::now();
+            let throttled = !self.chain.exported_heights.get().is_empty()
+                && self.last_exported_heights_fold.is_some_and(|last| {
+                    now.duration_since(last) < self.config.exported_heights_fold_interval
+                });
+            if !throttled {
+                self.last_exported_heights_fold = Some(now);
+                self.chain.exported_heights.set(merged.into());
+            }
         }
     }
 

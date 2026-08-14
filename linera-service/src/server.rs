@@ -603,6 +603,11 @@ enum ServerCommand {
         #[arg(long, default_value_t = BlockExportConfig::default().queue_size)]
         block_export_queue_size: usize,
 
+        /// The most blob payload bytes queued blocks may pin; past it blocks are dropped for
+        /// catch-up to re-send from storage.
+        #[arg(long, default_value_t = BlockExportConfig::default().queue_bytes)]
+        block_export_queue_bytes: usize,
+
         /// The most concurrent sends to one destination validator. Export backs off from this
         /// ceiling on its own when a destination slows down or fails.
         #[arg(long, default_value_t = BlockExportConfig::default().max_in_flight_per_destination)]
@@ -799,6 +804,7 @@ async fn run(options: ServerOptions) {
             block_export_batch_size,
             block_export_max_catch_up_blocks,
             block_export_queue_size,
+            block_export_queue_bytes,
             block_export_max_in_flight,
             block_export_converged_retention,
             block_export_idle_interval,
@@ -832,6 +838,7 @@ async fn run(options: ServerOptions) {
                     let config = BlockExportConfig {
                         certificate_upload_batch_size: block_export_batch_size,
                         queue_size: block_export_queue_size,
+                        queue_bytes: block_export_queue_bytes,
                         max_in_flight_per_destination: block_export_max_in_flight,
                         max_catch_up_blocks: block_export_max_catch_up_blocks,
                         idle_catch_up_interval: block_export_idle_interval,

@@ -301,12 +301,16 @@ where
     /// `Err` means the scan itself failed and says nothing about the address, so the caller must
     /// answer "try again", not "refused".
     async fn is_relay_destination(&self, address: &str) -> Result<bool, ViewError> {
-        // How many epochs past the last loadable one to probe. An epoch can be temporarily
-        // unloadable (incomplete admin history) while later ones are present; without a probe the
-        // scan would stop at the hole forever, hiding every later committee.
-        const EPOCH_LOOKAHEAD: u32 = 8;
+        // The scan stops after this many consecutive unloadable epochs. A committee lists the
+        // *full* validator set, so an unloadable epoch can be skipped permanently — anyone still
+        // in the committee appears in a later, loadable one — and only the frontier (the trailing
+        // run of misses) is re-probed on later requests.
+        const EPOCH_MISS_RUN: u32 = 8;
+        // The most epochs one request scans; the frontier persists, so a scan interrupted by
+        // this cap resumes on the next request instead of doing unbounded work in a gRPC handler.
+        const MAX_EPOCHS_PER_SCAN: u32 = 64;
 
-        let (known, mut next_epoch) = {
+        let (known, start) = {
             let destinations = self.0.relay_destinations.read().await;
             (
                 destinations.addresses.contains(address),
@@ -320,9 +324,9 @@ where
         // Scan outside any lock: `get_or_load_committee` reads storage, and holding the write
         // lock across that would stall every concurrent `peer()` call, cached ones included.
         let mut found = Vec::new();
-        let mut probe = next_epoch;
-        let mut contiguous = true;
-        while probe < next_epoch.saturating_add(EPOCH_LOOKAHEAD).max(next_epoch) {
+        let mut probe = start;
+        let mut misses = 0;
+        while misses < EPOCH_MISS_RUN && probe.saturating_sub(start) < MAX_EPOCHS_PER_SCAN {
             match self.0.storage.get_or_load_committee(Epoch(probe)).await? {
                 Some(committee) => {
                     found.extend(
@@ -330,24 +334,18 @@ where
                             .validator_addresses()
                             .map(|(_, address)| address.to_owned()),
                     );
-                    if contiguous {
-                        // Everything up to here loaded, so the scan need never revisit it.
-                        next_epoch = probe + 1;
-                    }
-                    probe += 1;
+                    misses = 0;
                 }
-                // Not loadable (yet). Do not advance `next_epoch` past it — it may load later —
-                // but keep probing a bounded window so a hole cannot hide committees beyond it.
-                None => {
-                    contiguous = false;
-                    probe += 1;
-                }
+                None => misses += 1,
             }
+            probe = probe.saturating_add(1);
         }
+        // Resume after everything decided; only the trailing miss-run is ever revisited.
+        let scanned_to = probe - misses;
 
         let mut destinations = self.0.relay_destinations.write().await;
         destinations.addresses.extend(found);
-        destinations.next_epoch = destinations.next_epoch.max(next_epoch);
+        destinations.next_epoch = destinations.next_epoch.max(scanned_to);
         Ok(destinations.addresses.contains(address))
     }
 

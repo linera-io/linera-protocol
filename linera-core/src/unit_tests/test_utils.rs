@@ -1016,9 +1016,11 @@ where
             let config = ChainWorkerConfig {
                 nickname: format!("Node {i}"),
                 // Export folds progress into the chain state when the worker next saves, so
-                // give workers a lifetime instead of dropping them after every request.
+                // give workers a lifetime instead of dropping them after every request, and fold
+                // unthrottled so assertions see progress as it happens.
                 ttl: chain_worker_ttl
                     .or_else(|| block_export.is_some().then(|| Duration::from_secs(60))),
+                exported_heights_fold_interval: Duration::ZERO,
                 ..ChainWorkerConfig::default()
             }
             .with_key_pair(Some(validator_keypair.secret_key));

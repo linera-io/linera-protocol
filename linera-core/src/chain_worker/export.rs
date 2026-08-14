@@ -149,6 +149,9 @@ pub struct BlockExportConfig {
     pub certificate_upload_batch_size: u64,
     /// How many blocks the export queue holds before dropping new ones for catch-up to repair.
     pub queue_size: usize,
+    /// The most blob payload bytes queued blocks may pin before new ones are dropped for
+    /// catch-up to repair — a block count alone lets 1024 blob-heavy blocks pin gigabytes.
+    pub queue_bytes: usize,
     /// The most concurrent sends one destination is ever allowed — the AIMD window's ceiling.
     pub max_in_flight_per_destination: usize,
     /// How long a destination is skipped after a failed push, doubling up to `max_retry_delay`.
@@ -183,6 +186,10 @@ impl BlockExportConfig {
         if self.queue_size == 0 {
             // Every block would be dropped and export would run on catch-up alone.
             return Err("block export queue size must be greater than zero".into());
+        }
+        if self.queue_bytes == 0 {
+            // Every block carrying any blob would be dropped.
+            return Err("block export queue byte budget must be greater than zero".into());
         }
         if self.max_in_flight_per_destination == 0 {
             // No destination could ever be sent anything.
@@ -221,6 +228,7 @@ impl Default for BlockExportConfig {
         BlockExportConfig {
             certificate_upload_batch_size: 100,
             queue_size: 1024,
+            queue_bytes: 256 * 1024 * 1024,
             max_in_flight_per_destination: 8,
             retry_delay: Duration::from_secs(1),
             max_retry_delay: Duration::from_secs(60),
@@ -241,12 +249,12 @@ struct ExportedBlock {
     /// The chain's epoch *after* the block was applied — a hint that lets the queue load a newer
     /// committee from storage, so a validator joining in this block is exported to immediately.
     epoch: Epoch,
-    /// The persisted `exported_heights` of the chain, seeding cursors on its first block this
-    /// process so a restart re-sends at most one block per destination instead of a history.
+    /// The persisted `exported_heights` of the chain, seeding missing cursors so a restart
+    /// re-sends at most one block per destination instead of a history.
     exported_heights: BTreeMap<ValidatorPublicKey, BlockHeight>,
-    /// Blob payload bytes, counted at enqueue so the dequeue can decrement the same amount.
-    #[cfg(with_metrics)]
-    blob_bytes: i64,
+    /// Blob payload bytes, counted at enqueue so the dequeue releases the same amount of the
+    /// byte budget.
+    blob_bytes: usize,
     #[cfg(with_metrics)]
     queued_at: Instant,
 }
@@ -256,6 +264,10 @@ pub struct BlockExportHandle {
     blocks: mpsc::Sender<ExportedBlock>,
     progress: SharedProgress,
     tips: SharedTips,
+    /// Blob payload bytes currently pinned by queued blocks, enforced against
+    /// [`BlockExportConfig::queue_bytes`].
+    queued_bytes: Arc<std::sync::atomic::AtomicUsize>,
+    queue_bytes_budget: usize,
 }
 
 impl Clone for BlockExportHandle {
@@ -264,6 +276,8 @@ impl Clone for BlockExportHandle {
             blocks: self.blocks.clone(),
             progress: self.progress.clone(),
             tips: self.tips.clone(),
+            queued_bytes: self.queued_bytes.clone(),
+            queue_bytes_budget: self.queue_bytes_budget,
         }
     }
 }
@@ -298,27 +312,38 @@ impl BlockExportHandle {
             let entry = tips.entry(header.chain_id).or_insert(tip);
             *entry = (*entry).max(tip);
         }
-        #[cfg(with_metrics)]
-        let blob_bytes = blobs
-            .iter()
-            .map(|blob| blob.bytes().len() as i64)
-            .sum::<i64>();
+        let blob_bytes = blobs.iter().map(|blob| blob.bytes().len()).sum::<usize>();
+        // The byte budget is enforced, not merely measured: a block count alone would let a few
+        // blob-heavy blocks pin memory far past the cache's own bounds.
+        let queued = self.queued_bytes.load(std::sync::atomic::Ordering::Relaxed);
+        if queued.saturating_add(blob_bytes) > self.queue_bytes_budget {
+            debug!(
+                chain_id = %certificate.block().header.chain_id,
+                height = %certificate.block().header.height,
+                queued, blob_bytes,
+                "Export queue byte budget exhausted; dropping the block for catch-up to re-send",
+            );
+            #[cfg(with_metrics)]
+            metrics::DROPPED_BLOCKS.inc();
+            return;
+        }
         let block = ExportedBlock {
             certificate,
             blobs,
             epoch,
             exported_heights,
-            #[cfg(with_metrics)]
             blob_bytes,
             #[cfg(with_metrics)]
             queued_at: Instant::now(),
         };
         match self.blocks.try_send(block) {
             Ok(()) => {
+                self.queued_bytes
+                    .fetch_add(blob_bytes, std::sync::atomic::Ordering::Relaxed);
                 #[cfg(with_metrics)]
                 {
                     metrics::QUEUE_SIZE.inc();
-                    metrics::QUEUE_BYTES.add(blob_bytes);
+                    metrics::QUEUE_BYTES.add(blob_bytes as i64);
                 }
             }
             Err(mpsc::error::TrySendError::Full(block)) => {
@@ -373,9 +398,16 @@ where
     P: ValidatorNodeProvider + Send + Sync + 'static,
     P::Node: Send + Sync,
 {
+    // Enforced here rather than only at the CLI: every constructor, tests included, must go
+    // through it, and an invalid config panics at startup instead of mid-export.
+    if let Err(message) = config.check() {
+        panic!("invalid block export configuration: {message}");
+    }
     let (blocks, receiver) = mpsc::channel(config.queue_size);
     let progress: SharedProgress = Arc::default();
     let tips: SharedTips = Arc::default();
+    let queued_bytes = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let queue_bytes_budget = config.queue_bytes;
 
     let task = BlockExportQueue {
         storage,
@@ -389,6 +421,9 @@ where
         ticks_until_scan: 0,
         chains: HashMap::new(),
         destinations: HashMap::new(),
+        next_generation: 0,
+        destinations_changed: false,
+        queued_bytes: queued_bytes.clone(),
         progress: progress.clone(),
         tips: tips.clone(),
         draining: false,
@@ -399,6 +434,8 @@ where
         blocks,
         progress,
         tips,
+        queued_bytes,
+        queue_bytes_budget,
     }
 }
 
@@ -482,6 +519,13 @@ where
     ticks_until_scan: u32,
     chains: HashMap<ChainId, ChainRecord>,
     destinations: HashMap<ValidatorPublicKey, DestState<P::Node>>,
+    /// The last destination generation handed out; never reused within this queue's lifetime.
+    next_generation: u64,
+    /// Set when `sync_destinations` changed the set, so the per-record cursor fill runs once
+    /// per change instead of once per tick.
+    destinations_changed: bool,
+    /// Blob bytes pinned by queued blocks, shared with every handle for budget enforcement.
+    queued_bytes: Arc<std::sync::atomic::AtomicUsize>,
     progress: SharedProgress,
     /// The highest height each chain has announced, written by every `export` call — including
     /// ones the full queue dropped — so a dropped block still moves the repair target.
@@ -511,9 +555,22 @@ where
             Tick,
         }
         let mut jobs = FuturesUnordered::new();
+        // One deadline carried across iterations: a timer rebuilt per iteration restarts on
+        // every completion or block, so under sustained load it would never fire — and with it
+        // would die every tick-only duty (drop repair, backoff expiry, the committee scan, the
+        // convergence sweep).
+        let interval = self.config.idle_catch_up_interval;
+        let mut next_tick = Instant::now() + interval;
         loop {
+            let now = Instant::now();
+            if now >= next_tick {
+                self.tick(&mut jobs).await;
+                next_tick = Instant::now() + interval;
+                continue;
+            }
+            let until_tick = next_tick.duration_since(now);
             let wake = if jobs.is_empty() {
-                match timeout(self.config.idle_catch_up_interval, receiver.recv()).await {
+                match timeout(until_tick, receiver.recv()).await {
                     Ok(received) => Wake::Block(received),
                     Err(_) => Wake::Tick,
                 }
@@ -523,15 +580,17 @@ where
                 futures::select_biased! {
                     done = jobs.next() => Wake::Done(done.expect("jobs is not empty")),
                     received = receiver.recv().fuse() => Wake::Block(received),
-                    _ = linera_base::time::timer::sleep(self.config.idle_catch_up_interval)
-                        .fuse() => Wake::Tick,
+                    _ = linera_base::time::timer::sleep(until_tick).fuse() => Wake::Tick,
                 }
             };
             match wake {
                 Wake::Done(done) => self.on_done(done, &mut jobs),
                 Wake::Block(Some(block)) => self.on_block(block, &mut jobs).await,
                 Wake::Block(None) => break,
-                Wake::Tick => self.tick(&mut jobs).await,
+                Wake::Tick => {
+                    self.tick(&mut jobs).await;
+                    next_tick = Instant::now() + interval;
+                }
             }
         }
         // The workers are gone. Let in-flight sends finish, without starting new ones — every
@@ -546,10 +605,12 @@ where
     /// Folds a fresh block in: advances the chain's tip and fans out to every destination that
     /// can take it now; the rest catch up from storage when their turn comes.
     async fn on_block(&mut self, block: ExportedBlock, jobs: &mut FuturesUnordered<JobFuture>) {
+        self.queued_bytes
+            .fetch_sub(block.blob_bytes, std::sync::atomic::Ordering::Relaxed);
         #[cfg(with_metrics)]
         {
             metrics::QUEUE_SIZE.dec();
-            metrics::QUEUE_BYTES.sub(block.blob_bytes);
+            metrics::QUEUE_BYTES.sub(block.blob_bytes as i64);
             metrics::EXPORT_LATENCY
                 .finish_measurement(block.queued_at.elapsed().as_secs_f64() * 1000.0);
         }
@@ -582,25 +643,22 @@ where
         let record = self.chains.entry(chain_id).or_insert_with(|| ChainRecord {
             tip: BlockHeight::ZERO,
             last_activity: now,
-            // Seeded from what the chain last persisted: at worst one block per destination is
-            // re-offered and skipped, instead of one query per destination per restart.
-            dests: block
-                .exported_heights
-                .iter()
-                .filter_map(|(validator, height)| {
-                    let next = height.try_add_one().ok()?;
-                    Some((
-                        *validator,
-                        ChainDest {
-                            next_height: Some(next),
-                            ..ChainDest::default()
-                        },
-                    ))
-                })
-                .collect(),
+            dests: BTreeMap::new(),
         });
         record.tip = record.tip.max(tip);
         record.last_activity = now;
+        // Seed *missing* pairs from what the chain last persisted — on every block, not only at
+        // record creation, so a record the tick created from a dropped block's tip still picks
+        // the cursors up. At worst one block per destination is re-offered and skipped, instead
+        // of one query per destination per restart.
+        for (validator, height) in &block.exported_heights {
+            if let Ok(next) = height.try_add_one() {
+                record.dests.entry(*validator).or_insert_with(|| ChainDest {
+                    next_height: Some(next),
+                    ..ChainDest::default()
+                });
+            }
+        }
         let validators = self.destinations.keys().copied().collect::<Vec<_>>();
         for validator in validators {
             let record = self.chains.get_mut(&chain_id).expect("inserted above");
@@ -670,6 +728,47 @@ where
         }
         dest.in_flight = dest.in_flight.saturating_sub(1);
 
+        // Destination health comes from the outcome alone, never gated on the chain record —
+        // a transport failure must shrink the window and set the backoff even for a chain the
+        // queue has since forgotten.
+        match &outcome {
+            SendOutcome::Reached(_) => {
+                dest.failures = 0;
+                dest.retry_at = None;
+                dest.window = (dest.window + 1).min(self.config.max_in_flight_per_destination);
+            }
+            SendOutcome::ChainScoped(_) => {}
+            SendOutcome::DestinationScoped(error) => {
+                warn!(
+                    validator = %dest.address, %chain_id, %error,
+                    "Failed to export to a validator; backing it off and re-resolving",
+                );
+                dest.window = (dest.window / 2).max(1);
+                back_off(&mut dest.failures, &mut dest.retry_at, now, &self.config);
+                // Re-resolve so a relayed transport draws the next proxy from the rotation; the
+                // backoff above still applies if the validator itself is the problem. Resolved
+                // through the list API because the test provider resolves by *key*, which only
+                // the list variant carries.
+                match self
+                    .node_provider
+                    .make_nodes_from_list(iter::once((validator, dest.address.clone())))
+                {
+                    Ok(mut nodes) => {
+                        if let Some((_, node)) = nodes.next() {
+                            dest.node = node;
+                        }
+                    }
+                    Err(error) => {
+                        warn!(%validator, %error, "Cannot re-resolve a failing destination");
+                    }
+                }
+            }
+        }
+        #[cfg(with_metrics)]
+        metrics::DESTINATION_WINDOW
+            .with_label_values(&[&dest.address])
+            .set(dest.window as i64);
+
         if let Some(record) = self.chains.get_mut(&chain_id) {
             record.last_activity = now;
             if let Some(chain_dest) = record.dests.get_mut(&validator) {
@@ -677,13 +776,19 @@ where
                 match &outcome {
                     SendOutcome::Reached(next_height) => {
                         let advanced = chain_dest.next_height.is_none_or(|n| *next_height > n);
-                        // Only ever forward: a stale response must not drag the cursor back.
                         if advanced {
+                            // Only ever forward: a stale response must not drag the cursor back.
                             chain_dest.next_height = Some(*next_height);
-                        }
-                        if advanced {
                             chain_dest.failures = 0;
                             chain_dest.retry_at = None;
+                            if let Ok(acked) = next_height.try_sub_one() {
+                                self.progress
+                                    .lock()
+                                    .expect("progress mutex is never poisoned")
+                                    .entry(chain_id)
+                                    .or_default()
+                                    .insert(validator, acked);
+                            }
                         } else if *next_height < record.tip {
                             // Answered but moved nothing — a gap our storage cannot fill — so
                             // back this pair off rather than spinning on it.
@@ -694,20 +799,6 @@ where
                                 &self.config,
                             );
                         }
-                        if advanced {
-                            if let Ok(acked) = next_height.try_sub_one() {
-                                self.progress
-                                    .lock()
-                                    .expect("progress mutex is never poisoned")
-                                    .entry(chain_id)
-                                    .or_default()
-                                    .insert(validator, acked);
-                            }
-                        }
-                        dest.failures = 0;
-                        dest.retry_at = None;
-                        dest.window =
-                            (dest.window + 1).min(self.config.max_in_flight_per_destination);
                     }
                     SendOutcome::ChainScoped(error) => {
                         debug!(
@@ -722,36 +813,10 @@ where
                             &self.config,
                         );
                     }
-                    SendOutcome::DestinationScoped(error) => {
-                        warn!(
-                            validator = %dest.address, %chain_id, %error,
-                            "Failed to export to a validator; backing it off and re-resolving",
-                        );
+                    SendOutcome::DestinationScoped(_) => {
                         chain_dest.next_height = None;
-                        dest.window = (dest.window / 2).max(1);
-                        back_off(&mut dest.failures, &mut dest.retry_at, now, &self.config);
-                        // Re-resolve so a relayed transport draws the next proxy from the
-                        // rotation; the backoff above still applies if the validator itself is
-                        // the problem.
-                        match self
-                            .node_provider
-                            .make_nodes_from_list(iter::once((validator, dest.address.clone())))
-                        {
-                            Ok(mut nodes) => {
-                                if let Some((_, node)) = nodes.next() {
-                                    dest.node = node;
-                                }
-                            }
-                            Err(error) => {
-                                warn!(%validator, %error, "Cannot re-resolve a failing destination");
-                            }
-                        }
                     }
                 }
-                #[cfg(with_metrics)]
-                metrics::DESTINATION_WINDOW
-                    .with_label_values(&[&dest.address])
-                    .set(dest.window as i64);
             }
         }
 
@@ -801,28 +866,28 @@ where
             self.sync_destinations();
         }
 
-        // Fold announced tips in: this is what repairs a block the full queue dropped, and what
-        // creates the record when even a chain's first block was dropped.
-        {
-            let tips = self
-                .tips
-                .lock()
-                .expect("tips mutex is never poisoned")
-                .clone();
-            for (chain_id, tip) in tips {
-                let record = self.chains.entry(chain_id).or_insert_with(|| ChainRecord {
-                    tip: BlockHeight::ZERO,
-                    last_activity: now,
-                    dests: BTreeMap::new(),
-                });
-                record.tip = record.tip.max(tip);
-            }
+        // Drain announced tips in: this is what repairs a block the full queue dropped, and what
+        // creates the record when even a chain's first block was dropped. Taken rather than
+        // cloned — the workers contend on this mutex every block, and once folded the records
+        // carry the truth.
+        let tips = std::mem::take(&mut *self.tips.lock().expect("tips mutex is never poisoned"));
+        for (chain_id, tip) in tips {
+            let record = self.chains.entry(chain_id).or_insert_with(|| ChainRecord {
+                tip: BlockHeight::ZERO,
+                last_activity: now,
+                dests: BTreeMap::new(),
+            });
+            record.tip = record.tip.max(tip);
         }
-        // Every current destination gets a cursor on every tracked chain, so a validator that
-        // joined after a chain's last block is still caught up on it.
-        for record in self.chains.values_mut() {
-            for validator in self.destinations.keys() {
-                record.dests.entry(*validator).or_default();
+        // When the destination set changed, every destination gets a cursor on every tracked
+        // chain, so a validator that joined after a chain's last block is still caught up on it.
+        // Gated on the change: this walks every record.
+        if self.destinations_changed {
+            self.destinations_changed = false;
+            for record in self.chains.values_mut() {
+                for validator in self.destinations.keys() {
+                    record.dests.entry(*validator).or_default();
+                }
             }
         }
 
@@ -837,7 +902,13 @@ where
         self.chains.retain(|chain_id, record| {
             let converged = destinations.keys().all(|validator| {
                 record.dests.get(validator).is_some_and(|chain_dest| {
-                    !chain_dest.in_flight && chain_dest.next_height == Some(record.tip)
+                    // `>=`: a destination is routinely *ahead* of our tip — the client
+                    // broadcasts to everyone — and ahead must count as done, not as never
+                    // converging.
+                    !chain_dest.in_flight
+                        && chain_dest
+                            .next_height
+                            .is_some_and(|next| next >= record.tip)
                 })
             });
             if converged && now.duration_since(record.last_activity) > retention {
@@ -852,10 +923,8 @@ where
                 .progress
                 .lock()
                 .expect("progress mutex is never poisoned");
-            let mut tips = self.tips.lock().expect("tips mutex is never poisoned");
             for chain_id in &forgotten {
                 progress.remove(chain_id);
-                tips.remove(chain_id);
             }
         }
 
@@ -951,12 +1020,6 @@ where
             return;
         };
         self.committee_dirty = false;
-        let mut generation = self
-            .destinations
-            .values()
-            .map(|dest| dest.generation)
-            .max()
-            .unwrap_or(0);
         let mut rebuilt = Vec::new();
         self.destinations.retain(|validator, dest| {
             let keep = committee
@@ -968,6 +1031,9 @@ where
             }
             keep
         });
+        if !rebuilt.is_empty() {
+            self.destinations_changed = true;
+        }
         // A dropped DestState takes its ready list with it, so clear the queued marks that
         // pointed into it — a queued pair is invisible to every requeue path.
         for record in self.chains.values_mut() {
@@ -983,20 +1049,26 @@ where
                 continue;
             }
             // One at a time: a batch fails whole on the first bad address, and one unresolvable
-            // validator must not keep every other one out of the destination set.
+            // validator must not keep every other one out of the destination set. Through the
+            // list API rather than `make_node`, because the test provider resolves by *key*,
+            // which only the list variant carries.
             match self
                 .node_provider
                 .make_nodes_from_list(iter::once((validator, address)))
             {
                 Ok(mut nodes) => {
                     if let Some((_, node)) = nodes.next() {
-                        generation += 1;
+                        // Monotonic across the queue's lifetime: derived from surviving
+                        // destinations it could repeat after the set empties, and a repeat lets
+                        // a stale in-flight send corrupt a fresh incarnation's accounting.
+                        self.next_generation += 1;
+                        self.destinations_changed = true;
                         self.destinations.insert(
                             validator,
                             DestState {
                                 node,
                                 address: address.to_owned(),
-                                generation,
+                                generation: self.next_generation,
                                 in_flight: 0,
                                 window: self.config.max_in_flight_per_destination,
                                 retry_at: None,
@@ -1284,25 +1356,31 @@ where
         held: &[CacheArc<Blob>],
     ) -> Result<Box<crate::data_types::ChainInfo>, chain_client::Error> {
         let delivery = CrossChainMessageDelivery::NonBlocking;
-        let result = self
+        let mut result = self
             .remote_node
             .handle_optimized_confirmed_certificate(certificate, delivery)
             .await;
-        match result {
-            Err(NodeError::BlobsNotFound(blob_ids)) => {
-                self.remote_node
-                    .check_blobs_not_found(certificate, &blob_ids)?;
-                let blobs = self.resolve_blobs(&blob_ids, held).await?;
-                self.remote_node
-                    .node
-                    .upload_blobs(blobs.into_iter().map(CacheArc::into_std).collect())
-                    .await?;
-                Ok(self
-                    .remote_node
-                    .handle_confirmed_certificate(certificate.clone(), delivery)
-                    .await?)
+        // The same once-per-cause loop as the client's `RemoteNodeUpdater`: a second
+        // `BlobsNotFound` naming new blobs is still recoverable, only repeating a cause is not.
+        let mut sent_blobs = false;
+        loop {
+            match result {
+                Err(NodeError::BlobsNotFound(blob_ids)) if !sent_blobs => {
+                    self.remote_node
+                        .check_blobs_not_found(certificate, &blob_ids)?;
+                    let blobs = self.resolve_blobs(&blob_ids, held).await?;
+                    self.remote_node
+                        .node
+                        .upload_blobs(blobs.into_iter().map(CacheArc::into_std).collect())
+                        .await?;
+                    sent_blobs = true;
+                }
+                result => return Ok(result?),
             }
-            result => Ok(result?),
+            result = self
+                .remote_node
+                .handle_confirmed_certificate(certificate.clone(), delivery)
+                .await;
         }
     }
 
