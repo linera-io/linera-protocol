@@ -507,7 +507,7 @@ mod tests {
     fn group(id: Option<&str>, inputs: &[&str]) -> (Option<String>, Vec<String>) {
         (
             id.map(str::to_string),
-            inputs.iter().map(|input| input.to_string()).collect(),
+            inputs.iter().copied().map(str::to_string).collect(),
         )
     }
 
