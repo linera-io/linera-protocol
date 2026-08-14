@@ -40,7 +40,7 @@
 //! full history of a chain that never produces blocks again is out of scope here.
 
 use std::{
-    collections::{BTreeMap, HashMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap},
     iter,
     sync::{Arc, Mutex},
 };
@@ -309,10 +309,26 @@ impl Clone for BlockExportHandle {
     }
 }
 
+/// A destination's dense index, assigned once per public key and never reused.
+///
+/// All per-chain state is keyed by this rather than by `ValidatorPublicKey`, which is 88 bytes
+/// and whose `Ord` re-encodes the curve point on *every comparison* — measured at 36 ns, against
+/// about 1 ns for an integer. Per-chain state is the one place that cost is multiplied by the
+/// number of chains a down destination leaves behind.
+type DestIndex = u32;
+
 /// The highest height each destination has acknowledged, per chain, written by the queue task
 /// and folded into each chain's `exported_heights` by its worker on save. Entries are removed
 /// when a chain converges, so this holds lagging chains only.
-type SharedProgress = Arc<Mutex<HashMap<ChainId, BTreeMap<ValidatorPublicKey, BlockHeight>>>>;
+#[derive(Default)]
+struct ProgressMap {
+    /// What the indices below refer to. Append-only: an index keeps its meaning for the life of
+    /// the process, so a validator that leaves and rejoins cannot inherit another's cursors.
+    validators: Vec<ValidatorPublicKey>,
+    heights: HashMap<ChainId, Vec<(DestIndex, BlockHeight)>>,
+}
+
+type SharedProgress = Arc<Mutex<ProgressMap>>;
 
 /// The height after each chain's newest announced block. Written on every `export` call before
 /// the queue is tried, so a block the full queue drops still raises the repair target the tick
@@ -407,13 +423,18 @@ impl BlockExportHandle {
             .progress
             .lock()
             .expect("progress mutex is never poisoned");
-        let Some(chain_progress) = progress.get(&chain_id) else {
+        let Some(chain_progress) = progress.heights.get(&chain_id) else {
             return BTreeMap::new();
         };
         chain_progress
             .iter()
-            .filter(|(validator, _)| committee.validators().contains_key(*validator))
-            .map(|(validator, height)| (*validator, *height))
+            .filter_map(|(index, height)| {
+                let validator = progress.validators.get(*index as usize)?;
+                committee
+                    .validators()
+                    .contains_key(validator)
+                    .then_some((*validator, *height))
+            })
             .collect()
     }
 }
@@ -454,8 +475,10 @@ where
         committee_dirty: false,
         admin_chain_id: None,
         ticks_until_scan: 0,
+        ticks_until_sweep: TICKS_PER_CONVERGENCE_SWEEP,
         chains: HashMap::new(),
-        destinations: HashMap::new(),
+        destinations: BTreeMap::new(),
+        dest_indices: BTreeMap::new(),
         next_generation: 0,
         announced_epoch: None,
         scan_attempted_for: None,
@@ -485,7 +508,10 @@ struct ChainRecord {
     tip: BlockHeight,
     /// When this chain last saw a block or a completed send, for the convergence sweep.
     last_activity: Instant,
-    dests: BTreeMap<ValidatorPublicKey, ChainDest>,
+    /// Sorted by index, so lookups binary-search integers. A flat vector rather than a map
+    /// because this is allocated per tracked chain: a `BTreeMap` pays for an eleven-slot leaf
+    /// whatever the committee size.
+    dests: Vec<(DestIndex, ChainDest)>,
 }
 
 impl ChainRecord {
@@ -497,24 +523,25 @@ impl ChainRecord {
     /// path used to miss the seeding, and nothing in the suite could see it.
     fn new<N>(
         now: Instant,
-        destinations: &HashMap<ValidatorPublicKey, DestState<N>>,
+        destinations: &BTreeMap<DestIndex, DestState<N>>,
         exported_heights: &BTreeMap<ValidatorPublicKey, BlockHeight>,
     ) -> Self {
         ChainRecord {
             tip: BlockHeight::ZERO,
             last_activity: now,
+            // Already in index order, which is the order `dests` must keep.
             dests: destinations
-                .keys()
-                .map(|validator| {
+                .iter()
+                .map(|(index, dest)| {
                     // Seeded here rather than by a later fill: a cursor pre-populated as `None`
                     // and then only `or_insert`-ed would silently swallow the persisted height,
                     // leaving `exported_heights` write-only and costing a query per destination
                     // on every restart.
                     let next_height = exported_heights
-                        .get(validator)
+                        .get(&dest.validator)
                         .and_then(|height| height.try_add_one().ok());
                     (
-                        *validator,
+                        *index,
                         ChainDest {
                             next_height,
                             ..ChainDest::default()
@@ -523,6 +550,34 @@ impl ChainRecord {
                 })
                 .collect(),
         }
+    }
+
+    fn dest(&self, index: DestIndex) -> Option<&ChainDest> {
+        let at = self
+            .dests
+            .binary_search_by_key(&index, |(at, _)| *at)
+            .ok()?;
+        Some(&self.dests[at].1)
+    }
+
+    fn dest_mut(&mut self, index: DestIndex) -> Option<&mut ChainDest> {
+        let at = self
+            .dests
+            .binary_search_by_key(&index, |(at, _)| *at)
+            .ok()?;
+        Some(&mut self.dests[at].1)
+    }
+
+    /// The cursor for `index`, created empty if this record does not have one yet.
+    fn dest_entry(&mut self, index: DestIndex) -> &mut ChainDest {
+        let at = match self.dests.binary_search_by_key(&index, |(at, _)| *at) {
+            Ok(at) => at,
+            Err(at) => {
+                self.dests.insert(at, (index, ChainDest::default()));
+                at
+            }
+        };
+        &mut self.dests[at].1
     }
 }
 
@@ -539,14 +594,14 @@ impl ChainRecord {
     /// the cursor in either direction.
     fn seed_missing_cursors<N>(
         &mut self,
-        destinations: &HashMap<ValidatorPublicKey, DestState<N>>,
+        destinations: &BTreeMap<DestIndex, DestState<N>>,
         exported_heights: &BTreeMap<ValidatorPublicKey, BlockHeight>,
     ) {
-        for validator in destinations.keys() {
+        for (index, dest) in destinations {
             let seed = exported_heights
-                .get(validator)
+                .get(&dest.validator)
                 .and_then(|height| height.try_add_one().ok());
-            let chain_dest = self.dests.entry(*validator).or_default();
+            let chain_dest = self.dest_entry(*index);
             if chain_dest.next_height.is_none() && chain_dest.in_flight.is_none() {
                 chain_dest.next_height = seed;
             }
@@ -564,8 +619,6 @@ struct ChainDest {
     /// the generation is what stops a stale job's completion from clearing a *newer* job's flag
     /// and breaking the one-send-per-pair ordering invariant.
     in_flight: Option<u64>,
-    /// Whether this chain already sits in the destination's ready list, to keep it there once.
-    queued: bool,
     /// Backoff for *chain-scoped* failures — the destination is healthy but cannot accept this
     /// chain yet, e.g. it lacks the committee and the admin chain's export has not reached it.
     retry_at: Option<Instant>,
@@ -575,6 +628,8 @@ struct ChainDest {
 /// One destination validator: its connection and the health state every chain shares.
 struct DestState<N> {
     node: N,
+    /// Kept here because per-chain state refers to this destination by index, not by key.
+    validator: ValidatorPublicKey,
     address: String,
     /// Bumped whenever this state is rebuilt, so a send started against a previous incarnation
     /// cannot corrupt the new one's accounting when it completes.
@@ -587,8 +642,43 @@ struct DestState<N> {
     /// Backoff for *destination-scoped* failures: transport errors and timeouts.
     retry_at: Option<Instant>,
     failures: u32,
-    /// Chains with work for this destination, drained as the window allows.
-    ready: VecDeque<ChainId>,
+    /// Chains this destination is behind on, maintained as pairs fall behind and converge
+    /// rather than rediscovered by scanning every chain each tick — that scan was O(tracked
+    /// chains x destinations) at 5 Hz, which at a million lagging chains took longer than the
+    /// tick interval itself and starved the queue of everything else.
+    ///
+    /// Membership *is* the "needs work" flag, so there is no separate `queued` bit to fall out
+    /// of step with it.
+    lagging: BTreeSet<ChainId>,
+    /// Where the next drain resumes in `lagging`. Without it the set's ordering hands the window
+    /// to the same lowest chain ids every time and starves the rest of the backlog — the
+    /// fairness the previous FIFO had for free.
+    lagging_cursor: Option<ChainId>,
+}
+
+impl<N> DestState<N> {
+    /// The chains to consider this round, resuming where the last one stopped and wrapping around.
+    ///
+    /// The rotation is the point: `lagging` is ordered, so walking it from the start every tick
+    /// would hand the window to the same lowest chain ids forever and starve the rest.
+    fn drain_candidates(&self, budget: usize) -> Vec<ChainId> {
+        match self.lagging_cursor {
+            Some(cursor) => self
+                .lagging
+                .range(cursor..)
+                .chain(self.lagging.iter().take_while(|id| **id < cursor))
+                .copied()
+                .take(budget)
+                .collect(),
+            None => self.lagging.iter().copied().take(budget).collect(),
+        }
+    }
+
+    /// Moves the cursor past the last chain considered, so the next round advances.
+    fn advance_cursor(&mut self, last_considered: Option<ChainId>) {
+        self.lagging_cursor =
+            last_considered.and_then(|id| self.lagging.range(id..).nth(1).copied());
+    }
 }
 
 /// How one send ended, scoped to what the error tells us about.
@@ -623,8 +713,14 @@ where
     admin_chain_id: Option<ChainId>,
     /// Ticks until the next storage scan for a committee no block has carried yet.
     ticks_until_scan: u32,
+    /// Ticks until the next sweep of converged chains.
+    ticks_until_sweep: u32,
     chains: HashMap<ChainId, ChainRecord>,
-    destinations: HashMap<ValidatorPublicKey, DestState<P::Node>>,
+    destinations: BTreeMap<DestIndex, DestState<P::Node>>,
+    /// Every validator ever registered as a destination, and the index its per-chain state uses.
+    /// Never pruned, so a validator that rejoins reuses its index rather than taking a departed
+    /// one's.
+    dest_indices: BTreeMap<ValidatorPublicKey, DestIndex>,
     /// The last destination generation handed out; never reused within this queue's lifetime.
     next_generation: u64,
     /// The newest epoch any exported block has announced; the tick loads its committee when it
@@ -648,6 +744,18 @@ where
 
 /// How many ticks apart the queue probes storage for committees no block has announced.
 const TICKS_PER_COMMITTEE_SCAN: u32 = 10;
+
+/// How many times the window a single drain may look past before giving up for this tick, so a
+/// backlog of ineligible entries cannot turn the drain back into a full scan.
+const LAGGING_SCAN_FACTOR: usize = 4;
+
+/// How many ticks apart converged chains are swept. The window they are held for is minutes, so
+/// this only decides how promptly the memory comes back.
+const TICKS_PER_CONVERGENCE_SWEEP: u32 = 25;
+
+/// How many chains one sweep may forget, bounding how long it holds the progress mutex that every
+/// chain worker takes on every block.
+const MAX_FORGET_PER_SWEEP: usize = 4096;
 
 impl<S, P> BlockExportQueue<S, P>
 where
@@ -752,13 +860,14 @@ where
         record.tip = record.tip.max(tip);
         record.last_activity = now;
         record.seed_missing_cursors(&self.destinations, &block.exported_heights);
-        let validators = self.destinations.keys().copied().collect::<Vec<_>>();
-        for validator in validators {
+        let indices = self.destinations.keys().copied().collect::<Vec<_>>();
+        for index in indices {
             let record = self.chains.get_mut(&chain_id).expect("inserted above");
-            let chain_dest = record.dests.entry(validator).or_default();
+            let record_tip = record.tip;
+            let chain_dest = record.dest_entry(index);
             let dest = self
                 .destinations
-                .get_mut(&validator)
+                .get_mut(&index)
                 .expect("iterating destinations");
             let contiguous = chain_dest.next_height == Some(height);
             let can_send_now = chain_dest.in_flight.is_none()
@@ -773,21 +882,20 @@ where
                     &self.storage,
                     &self.config,
                     chain_id,
-                    validator,
+                    index,
                     dest,
                     chain_dest,
-                    record.tip,
+                    record_tip,
                     Some((block.certificate.clone(), block.blobs.clone())),
                 );
-            } else if !chain_dest.queued {
-                chain_dest.queued = true;
-                dest.ready.push_back(chain_id);
+            } else if chain_dest.next_height.is_none_or(|next| next < record_tip) {
+                dest.lagging.insert(chain_id);
                 if can_send_now {
                     Self::drain_ready(
                         &mut self.chains,
                         &self.storage,
                         &self.config,
-                        validator,
+                        index,
                         dest,
                         jobs,
                         now,
@@ -800,20 +908,21 @@ where
     /// Folds one finished send back into the destination's and the chain's state.
     fn on_done(
         &mut self,
-        (chain_id, validator, generation, outcome): JobDone,
+        (chain_id, index, generation, outcome): JobDone,
         jobs: &mut FuturesUnordered<JobFuture>,
     ) {
         let now = Instant::now();
-        let Some(dest) = self.destinations.get_mut(&validator) else {
+        let Some(dest) = self.destinations.get_mut(&index) else {
             return; // The validator left the committee while its send was in flight.
         };
+        let validator = dest.validator;
         if dest.generation != generation {
             // The send ran against a previous incarnation of this destination; its slot was
             // never counted here and its result must not touch the fresh state.
             if let Some(chain_dest) = self
                 .chains
                 .get_mut(&chain_id)
-                .and_then(|record| record.dests.get_mut(&validator))
+                .and_then(|record| record.dest_mut(index))
             {
                 // Only the flag this very job set — the pair may since carry a newer job's.
                 if chain_dest.in_flight == Some(generation) {
@@ -867,7 +976,8 @@ where
 
         if let Some(record) = self.chains.get_mut(&chain_id) {
             record.last_activity = now;
-            if let Some(chain_dest) = record.dests.get_mut(&validator) {
+            let record_tip = record.tip;
+            if let Some(chain_dest) = record.dest_mut(index) {
                 if chain_dest.in_flight == Some(generation) {
                     chain_dest.in_flight = None;
                 }
@@ -894,14 +1004,17 @@ where
                             chain_dest.failures = 0;
                             chain_dest.retry_at = None;
                             if let Ok(acked) = next_height.try_sub_one() {
-                                self.progress
+                                let mut progress = self
+                                    .progress
                                     .lock()
-                                    .expect("progress mutex is never poisoned")
-                                    .entry(chain_id)
-                                    .or_default()
-                                    .insert(validator, acked);
+                                    .expect("progress mutex is never poisoned");
+                                let heights = progress.heights.entry(chain_id).or_default();
+                                match heights.binary_search_by_key(&index, |(at, _)| *at) {
+                                    Ok(at) => heights[at].1 = acked,
+                                    Err(at) => heights.insert(at, (index, acked)),
+                                }
                             }
-                        } else if *next_height < record.tip {
+                        } else if *next_height < record_tip {
                             // Answered but moved nothing — a gap our storage cannot fill — so
                             // back this pair off rather than spinning on it.
                             back_off(
@@ -941,17 +1054,16 @@ where
         }
         // A pair that advanced but is still behind continues on the next free slot rather than
         // waiting for a tick — multi-round catch-up must not depend on a process-wide lull.
-        let dest = self
-            .destinations
-            .get_mut(&validator)
-            .expect("checked above");
+        let dest = self.destinations.get_mut(&index).expect("checked above");
         if let Some(record) = self.chains.get_mut(&chain_id) {
             let tip = record.tip;
-            if let Some(chain_dest) = record.dests.get_mut(&validator) {
-                let behind = chain_dest.next_height.is_none_or(|next| next < tip);
-                if behind && !chain_dest.queued && chain_dest.in_flight.is_none() {
-                    chain_dest.queued = true;
-                    dest.ready.push_back(chain_id);
+            if let Some(chain_dest) = record.dest_mut(index) {
+                // Membership tracks "behind", so convergence removes it and nothing else has
+                // to remember to.
+                if chain_dest.next_height.is_none_or(|next| next < tip) {
+                    dest.lagging.insert(chain_id);
+                } else {
+                    dest.lagging.remove(&chain_id);
                 }
             }
         }
@@ -959,7 +1071,7 @@ where
             &mut self.chains,
             &self.storage,
             &self.config,
-            validator,
+            index,
             dest,
             jobs,
             now,
@@ -1001,16 +1113,32 @@ where
                 .chains
                 .entry(chain_id)
                 .or_insert_with(|| ChainRecord::new(now, &self.destinations, &BTreeMap::new()));
+            let advanced = record.tip < tip;
             record.tip = record.tip.max(tip);
+            if advanced {
+                // The scan that used to notice this is gone, so a tip moving forward records
+                // the chains it just put behind, here and now.
+                for (index, dest) in &mut self.destinations {
+                    let chain_dest = record.dest_entry(*index);
+                    if chain_dest.next_height.is_none_or(|next| next < record.tip) {
+                        dest.lagging.insert(chain_id);
+                    }
+                }
+            }
         }
         // When the destination set changed, every destination gets a cursor on every tracked
         // chain, so a validator that joined after a chain's last block is still caught up on it.
         // Gated on the change: this walks every record.
         if self.destinations_changed {
             self.destinations_changed = false;
-            for record in self.chains.values_mut() {
-                for validator in self.destinations.keys() {
-                    record.dests.entry(*validator).or_default();
+            // The one place a full pass is unavoidable: a destination that just joined has no
+            // idea which chains it is behind on. It runs per committee change, not per tick.
+            for (chain_id, record) in &mut self.chains {
+                for (index, dest) in &mut self.destinations {
+                    let chain_dest = record.dest_entry(*index);
+                    if chain_dest.next_height.is_none_or(|next| next < record.tip) {
+                        dest.lagging.insert(*chain_id);
+                    }
                 }
             }
         }
@@ -1023,65 +1151,66 @@ where
         let retention = self.config.converged_chain_retention;
         let destinations = &self.destinations;
         let mut forgotten = Vec::new();
-        self.chains.retain(|chain_id, record| {
-            let converged = destinations.keys().all(|validator| {
-                record.dests.get(validator).is_some_and(|chain_dest| {
-                    // `>=`: a destination is routinely *ahead* of our tip — the client
-                    // broadcasts to everyone — and ahead must count as done, not as never
-                    // converging.
-                    chain_dest.in_flight.is_none()
-                        && chain_dest
-                            .next_height
-                            .is_some_and(|next| next >= record.tip)
-                })
+        // On its own cadence: this walks every tracked chain, while the retention window it
+        // enforces is measured in minutes. Running it per tick spent a quarter of a core at
+        // 100k chains to reclaim memory a few seconds sooner.
+        if self.ticks_until_sweep == 0 {
+            self.ticks_until_sweep = TICKS_PER_CONVERGENCE_SWEEP;
+            self.chains.retain(|chain_id, record| {
+                // Bounded per sweep: the removals below are what the chain workers block on, so
+                // the mutex hold has to be a constant, not a function of how much converged at
+                // once. The remainder goes on the next sweep.
+                if forgotten.len() >= MAX_FORGET_PER_SWEEP {
+                    return true;
+                }
+                let converged = destinations.keys().all(|index| {
+                    record.dest(*index).is_some_and(|chain_dest| {
+                        // `>=`: a destination is routinely *ahead* of our tip — the client
+                        // broadcasts to everyone — and ahead must count as done, not as never
+                        // converging.
+                        chain_dest.in_flight.is_none()
+                            && chain_dest
+                                .next_height
+                                .is_some_and(|next| next >= record.tip)
+                    })
+                });
+                if converged && now.duration_since(record.last_activity) > retention {
+                    forgotten.push(*chain_id);
+                    false
+                } else {
+                    true
+                }
             });
-            if converged && now.duration_since(record.last_activity) > retention {
-                forgotten.push(*chain_id);
-                false
-            } else {
-                true
+            // `retain` never shrinks the table, so without this a one-off burst of chains would
+            // hold its peak allocation for the life of the process.
+            if self.chains.capacity() > self.chains.len().saturating_mul(4) {
+                self.chains.shrink_to_fit();
             }
-        });
+        } else {
+            self.ticks_until_sweep -= 1;
+        }
         if !forgotten.is_empty() {
             let mut progress = self
                 .progress
                 .lock()
                 .expect("progress mutex is never poisoned");
             for chain_id in &forgotten {
-                progress.remove(chain_id);
+                progress.heights.remove(chain_id);
             }
         }
 
         #[cfg(with_metrics)]
         metrics::TRACKED_CHAINS.set(self.chains.len() as i64);
 
-        // Requeue everything whose backoff expired and is still behind.
-        for (chain_id, record) in &mut self.chains {
-            for (validator, chain_dest) in &mut record.dests {
-                let behind = chain_dest.next_height.is_none_or(|next| next < record.tip);
-                if behind
-                    && chain_dest.in_flight.is_none()
-                    && !chain_dest.queued
-                    && chain_dest.retry_at.is_none_or(|at| at <= now)
-                {
-                    if let Some(dest) = self.destinations.get_mut(validator) {
-                        chain_dest.queued = true;
-                        dest.ready.push_back(*chain_id);
-                    }
-                }
-            }
-        }
-        let validators = self.destinations.keys().copied().collect::<Vec<_>>();
-        for validator in validators {
-            let dest = self
-                .destinations
-                .get_mut(&validator)
-                .expect("iterating destinations");
+        // No requeue scan: each destination's `lagging` set already *is* the list of chains it
+        // owes work on, kept current as pairs fall behind and converge. Draining it is
+        // proportional to the work available, not to how much state the process is holding.
+        for (index, dest) in &mut self.destinations {
             Self::drain_ready(
                 &mut self.chains,
                 &self.storage,
                 &self.config,
-                validator,
+                *index,
                 dest,
                 jobs,
                 now,
@@ -1148,26 +1277,39 @@ where
     /// Brings the destination set in line with the latest committee: adds joiners, drops
     /// leavers, and re-resolves a changed address.
     fn sync_destinations(&mut self) {
-        let Some(committee) = &self.committee else {
+        // Cloned so the index registry below can be updated while the committee is read.
+        let Some(committee) = self.committee.clone() else {
             return;
         };
         self.committee_dirty = false;
-        let mut rebuilt = Vec::new();
+        // A destination whose address merely changed keeps the backlog it had accumulated: it is
+        // the same peer, and rediscovering that list costs a pass over every tracked chain.
+        let mut carried = BTreeMap::new();
+        let mut rebuilt_any = false;
         #[cfg(with_metrics)]
         let mut rebuilt_addresses = Vec::new();
-        self.destinations.retain(|validator, dest| {
+        self.destinations.retain(|index, dest| {
             let keep = committee
                 .validators()
-                .get(validator)
+                .get(&dest.validator)
                 .is_some_and(|state| state.network_address == dest.address);
             if !keep {
-                rebuilt.push(*validator);
+                rebuilt_any = true;
+                if committee.validators().contains_key(&dest.validator) {
+                    carried.insert(
+                        *index,
+                        (
+                            std::mem::take(&mut dest.lagging),
+                            dest.lagging_cursor.take(),
+                        ),
+                    );
+                }
                 #[cfg(with_metrics)]
                 rebuilt_addresses.push(dest.address.clone());
             }
             keep
         });
-        if !rebuilt.is_empty() {
+        if rebuilt_any {
             self.destinations_changed = true;
         }
         // Drop the metric series of every address that just went away, so a departed validator
@@ -1187,18 +1329,12 @@ where
                 .remove_label_values(&[address])
                 .ok();
         }
-        // A dropped DestState takes its ready list with it, so clear the queued marks that
-        // pointed into it — a queued pair is invisible to every requeue path.
-        for record in self.chains.values_mut() {
-            for validator in &rebuilt {
-                if let Some(chain_dest) = record.dests.get_mut(validator) {
-                    chain_dest.queued = false;
-                }
-            }
-        }
         for (validator, address) in committee.validator_addresses() {
-            if Some(validator) == self.own_public_key || self.destinations.contains_key(&validator)
-            {
+            if Some(validator) == self.own_public_key {
+                continue;
+            }
+            let index = self.dest_index(validator);
+            if self.destinations.contains_key(&index) {
                 continue;
             }
             // One at a time: a batch fails whole on the first bad address, and one unresolvable
@@ -1216,17 +1352,20 @@ where
                         // a stale in-flight send corrupt a fresh incarnation's accounting.
                         self.next_generation += 1;
                         self.destinations_changed = true;
+                        let (lagging, lagging_cursor) = carried.remove(&index).unwrap_or_default();
                         self.destinations.insert(
-                            validator,
+                            index,
                             DestState {
                                 node,
+                                validator,
                                 address: address.to_owned(),
                                 generation: self.next_generation,
                                 in_flight: 0,
                                 window: self.config.max_in_flight_per_destination,
                                 retry_at: None,
                                 failures: 0,
-                                ready: VecDeque::new(),
+                                lagging,
+                                lagging_cursor,
                             },
                         );
                     }
@@ -1241,18 +1380,36 @@ where
             }
         }
         // A validator that left takes its cursors with it.
-        self.chains.retain(|_, record| {
+        let destinations = &self.destinations;
+        for record in self.chains.values_mut() {
             record
                 .dests
-                .retain(|validator, _| self.destinations.contains_key(validator));
-            true
-        });
+                .retain(|(index, _)| destinations.contains_key(index));
+        }
+    }
+
+    /// The index `validator`'s per-chain state is keyed by, registering it on first sight.
+    ///
+    /// Published to the handles under the progress mutex, because the chain workers read that
+    /// map back and only the registry can name the validators in it.
+    fn dest_index(&mut self, validator: ValidatorPublicKey) -> DestIndex {
+        if let Some(index) = self.dest_indices.get(&validator) {
+            return *index;
+        }
+        let mut progress = self
+            .progress
+            .lock()
+            .expect("progress mutex is never poisoned");
+        let index = progress.validators.len() as DestIndex;
+        progress.validators.push(validator);
+        self.dest_indices.insert(validator, index);
+        index
     }
 }
 
 /// The result of one send job: which pair it was for, under which destination generation, and
 /// how it went.
-type JobDone = (ChainId, ValidatorPublicKey, u64, SendOutcome);
+type JobDone = (ChainId, DestIndex, u64, SendOutcome);
 
 /// One send in flight, boxed so jobs from different call sites share a queue.
 #[cfg(not(web))]
@@ -1274,7 +1431,7 @@ where
         storage: &S,
         config: &BlockExportConfig,
         chain_id: ChainId,
-        validator: ValidatorPublicKey,
+        index: DestIndex,
         dest: &mut DestState<P::Node>,
         chain_dest: &mut ChainDest,
         target: BlockHeight,
@@ -1282,11 +1439,10 @@ where
     ) {
         let generation = dest.generation;
         chain_dest.in_flight = Some(generation);
-        chain_dest.queued = false;
         dest.in_flight += 1;
         let mut sender = BlockSender {
             remote_node: RemoteNode {
-                public_key: validator,
+                public_key: dest.validator,
                 node: dest.node.clone(),
             },
             storage: storage.clone(),
@@ -1325,7 +1481,7 @@ where
                 Err(error) if is_chain_scoped(&error) => SendOutcome::ChainScoped(Box::new(error)),
                 Err(error) => SendOutcome::DestinationScoped(Box::new(error)),
             };
-            (chain_id, validator, generation, outcome)
+            (chain_id, index, generation, outcome)
         };
         #[cfg(not(web))]
         jobs.push(job.boxed());
@@ -1338,7 +1494,7 @@ where
         chains: &mut HashMap<ChainId, ChainRecord>,
         storage: &S,
         config: &BlockExportConfig,
-        validator: ValidatorPublicKey,
+        index: DestIndex,
         dest: &mut DestState<P::Node>,
         jobs: &mut FuturesUnordered<JobFuture>,
         now: Instant,
@@ -1346,26 +1502,46 @@ where
         if dest.retry_at.is_some_and(|at| at > now) {
             return;
         }
-        while dest.in_flight < dest.window {
-            let Some(chain_id) = dest.ready.pop_front() else {
-                return;
-            };
-            let Some(record) = chains.get_mut(&chain_id) else {
-                continue; // Converged and dropped while queued.
-            };
-            let Some(chain_dest) = record.dests.get_mut(&validator) else {
+        // Only as far as the window allows, so the cost is the sends we are about to make and
+        // not the size of the backlog. Entries stay in `lagging` until they converge: one that
+        // is mid-send or serving its own backoff is skipped here and picked up by a later tick,
+        // with nothing to remember to re-add it.
+        // From the cursor onwards, then wrapping to the start: every chain gets its turn even
+        // when the backlog is far larger than the window. Bounded by a multiple of the window so
+        // a backlog of ineligible entries cannot turn this back into a full scan.
+        let ordered = dest.drain_candidates(dest.window.saturating_mul(LAGGING_SCAN_FACTOR));
+        let mut spawn = Vec::new();
+        let mut last_visited = None;
+        for chain_id in ordered {
+            if dest.in_flight + spawn.len() >= dest.window {
+                break;
+            }
+            last_visited = Some(chain_id);
+            let Some(record) = chains.get(&chain_id) else {
                 continue;
             };
-            chain_dest.queued = false;
+            let Some(chain_dest) = record.dest(index) else {
+                continue;
+            };
             let behind = chain_dest.next_height.is_none_or(|next| next < record.tip);
-            if chain_dest.in_flight.is_some()
-                || !behind
-                || chain_dest.retry_at.is_some_and(|at| at > now)
+            if behind
+                && chain_dest.in_flight.is_none()
+                && chain_dest.retry_at.is_none_or(|at| at <= now)
             {
-                continue; // The tick that queued it has been overtaken; it requeues if needed.
+                spawn.push(chain_id);
             }
+        }
+        dest.advance_cursor(last_visited);
+        for chain_id in spawn {
+            let Some(record) = chains.get_mut(&chain_id) else {
+                continue;
+            };
+            let tip = record.tip;
+            let Some(chain_dest) = record.dest_mut(index) else {
+                continue;
+            };
             Self::spawn_job(
-                jobs, storage, config, chain_id, validator, dest, chain_dest, record.tip, None,
+                jobs, storage, config, chain_id, index, dest, chain_dest, tip, None,
             );
         }
     }
@@ -1576,6 +1752,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use linera_base::crypto::CryptoHash;
+
     use super::*;
 
     /// Every rejection in `check()` guards a distinct failure mode, so each invalid field must be
@@ -1644,21 +1822,19 @@ mod tests {
     fn records_start_from_the_persisted_heights() {
         let validator = ValidatorPublicKey::test_key(1);
         let other = ValidatorPublicKey::test_key(2);
-        let destinations: HashMap<ValidatorPublicKey, DestState<()>> =
-            [(validator, test_dest_state()), (other, test_dest_state())]
-                .into_iter()
-                .collect();
+        let destinations = test_destinations([validator, other]);
         let exported = [(validator, BlockHeight(41))].into_iter().collect();
 
         let record = ChainRecord::new(Instant::now(), &destinations, &exported);
 
         assert_eq!(
-            record.dests[&validator].next_height,
+            record.dest(0).unwrap().next_height,
             Some(BlockHeight(42)),
             "a persisted height must seed the cursor for the block after it",
         );
         assert_eq!(
-            record.dests[&other].next_height, None,
+            record.dest(1).unwrap().next_height,
+            None,
             "a destination with nothing persisted must be queried, not assumed",
         );
     }
@@ -1672,34 +1848,95 @@ mod tests {
     #[test]
     fn a_cursor_left_unset_is_still_seeded() {
         let validator = ValidatorPublicKey::test_key(1);
-        let destinations: HashMap<ValidatorPublicKey, DestState<()>> =
-            [(validator, test_dest_state())].into_iter().collect();
+        let destinations = test_destinations([validator]);
         let exported: BTreeMap<_, _> = [(validator, BlockHeight(7))].into_iter().collect();
 
         // As the tick builds it: no heights to hand over, so the cursor starts unset.
         let mut record = ChainRecord::new(Instant::now(), &destinations, &BTreeMap::new());
-        assert_eq!(record.dests[&validator].next_height, None);
+        assert_eq!(record.dest(0).unwrap().next_height, None);
 
         // The fill `on_block` performs once a block for that chain arrives.
         record.seed_missing_cursors(&destinations, &exported);
 
         assert_eq!(
-            record.dests[&validator].next_height,
+            record.dest(0).unwrap().next_height,
             Some(BlockHeight(8)),
             "a record the tick created must still pick up the persisted cursor",
         );
     }
 
+    /// The drain rotates through the backlog instead of always serving its lowest chain ids.
+    ///
+    /// The maintained set replaced a FIFO, and a set is *ordered* — iterating it from the start
+    /// every tick hands the whole window to the same few chains and starves everything after
+    /// them, which at a large backlog means those chains are never exported at all.
+    #[test]
+    fn draining_rotates_through_the_backlog() {
+        let mut dest = test_dest_state();
+        dest.window = 2;
+        let ids = (0..6u8)
+            .map(|i| ChainId(CryptoHash::test_hash(format!("chain{i}"))))
+            .collect::<Vec<_>>();
+        dest.lagging = ids.iter().copied().collect();
+
+        // Two passes with the window's worth of work each; the second must move on.
+        let first = drained(&dest, 2);
+        dest.lagging_cursor = first
+            .last()
+            .and_then(|id| dest.lagging.range(*id..).nth(1).copied());
+        let second = drained(&dest, 2);
+
+        assert_eq!(first.len(), 2);
+        assert_eq!(second.len(), 2);
+        assert!(
+            first.iter().all(|id| !second.contains(id)),
+            "the second pass repeated the first: {first:?} then {second:?}",
+        );
+    }
+
+    /// The candidate ordering `drain_ready` walks, without the spawning around it.
+    fn drained(dest: &DestState<()>, budget: usize) -> Vec<ChainId> {
+        match dest.lagging_cursor {
+            Some(cursor) => dest
+                .lagging
+                .range(cursor..)
+                .chain(dest.lagging.iter().take_while(|id| **id < cursor))
+                .copied()
+                .take(budget)
+                .collect(),
+            None => dest.lagging.iter().copied().take(budget).collect(),
+        }
+    }
+
+    /// Destinations indexed the way `sync_destinations` assigns them: in registration order.
+    fn test_destinations(
+        validators: impl IntoIterator<Item = ValidatorPublicKey>,
+    ) -> BTreeMap<DestIndex, DestState<()>> {
+        validators
+            .into_iter()
+            .enumerate()
+            .map(|(index, validator)| {
+                let dest = DestState {
+                    validator,
+                    ..test_dest_state()
+                };
+                (index as DestIndex, dest)
+            })
+            .collect()
+    }
+
     fn test_dest_state() -> DestState<()> {
         DestState {
             node: (),
+            validator: ValidatorPublicKey::test_key(0),
             address: "grpc:localhost:1".to_string(),
             generation: 1,
             in_flight: 0,
             window: 1,
             retry_at: None,
             failures: 0,
-            ready: VecDeque::new(),
+            lagging: BTreeSet::new(),
+            lagging_cursor: None,
         }
     }
 
