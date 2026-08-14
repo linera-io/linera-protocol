@@ -350,19 +350,31 @@ where
             scanned_to = 1;
         }
         for event in events {
-            if let Some(committee) = self
+            let loaded = match self
                 .0
                 .storage
                 .get_or_load_committee(Epoch(event.index))
                 .await?
             {
-                found.extend(
-                    committee
-                        .validator_addresses()
-                        .map(|(_, address)| address.to_owned()),
-                );
-            }
-            scanned_to = scanned_to.max(event.index.saturating_add(1));
+                Some(committee) => {
+                    found.extend(
+                        committee
+                            .validator_addresses()
+                            .map(|(_, address)| address.to_owned()),
+                    );
+                    true
+                }
+                None => false,
+            };
+            // The frontier moves past an epoch we could not load — any validator still in the
+            // committee reappears in a later one, so its members are not lost — except when it
+            // is the newest we know of: there is no later committee to carry them, so leave the
+            // frontier on it and pick it up when it becomes loadable.
+            scanned_to = if loaded {
+                scanned_to.max(event.index.saturating_add(1))
+            } else {
+                scanned_to.max(event.index)
+            };
         }
 
         let mut destinations = self.0.relay_destinations.write().await;

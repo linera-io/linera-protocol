@@ -431,6 +431,7 @@ where
         destinations: HashMap::new(),
         next_generation: 0,
         announced_epoch: None,
+        scan_attempted_for: None,
         destinations_changed: false,
         queued_bytes: queued_bytes.clone(),
         progress: progress.clone(),
@@ -458,6 +459,25 @@ struct ChainRecord {
     /// When this chain last saw a block or a completed send, for the convergence sweep.
     last_activity: Instant,
     dests: BTreeMap<ValidatorPublicKey, ChainDest>,
+}
+
+impl ChainRecord {
+    /// Starts a record with a cursor for every current destination.
+    ///
+    /// Seeding here rather than at the call sites is what makes the empty-cursor state
+    /// unrepresentable: a record with no cursors is invisible to the requeue loop and trivially
+    /// "converged" to the sweep, so such a chain would be abandoned in silence. One creation
+    /// path used to miss the seeding, and nothing in the suite could see it.
+    fn new<N>(now: Instant, destinations: &HashMap<ValidatorPublicKey, DestState<N>>) -> Self {
+        ChainRecord {
+            tip: BlockHeight::ZERO,
+            last_activity: now,
+            dests: destinations
+                .keys()
+                .map(|validator| (*validator, ChainDest::default()))
+                .collect(),
+        }
+    }
 }
 
 /// One chain's cursor at one destination.
@@ -536,6 +556,9 @@ where
     /// The newest epoch any exported block has announced; the tick loads its committee when it
     /// is ahead of `latest_epoch`.
     announced_epoch: Option<Epoch>,
+    /// The announcement the eager scan last acted on, so one that fails to load is retried on
+    /// the normal cadence rather than on every tick.
+    scan_attempted_for: Option<Epoch>,
     /// Set when `sync_destinations` changed the set, so the per-record cursor fill runs once
     /// per change instead of once per tick.
     destinations_changed: bool,
@@ -633,7 +656,9 @@ where
         let (chain_id, height) = (header.chain_id, header.height);
         // Only recorded here: loading the committee reads storage, and an await in this handler
         // stalls every in-flight send — the tick's scan does the loading.
-        if block.epoch > self.announced_epoch.unwrap_or(Epoch(0)) || self.announced_epoch.is_none()
+        if self
+            .announced_epoch
+            .is_none_or(|announced| block.epoch > announced)
         {
             self.announced_epoch = Some(block.epoch);
         }
@@ -644,11 +669,10 @@ where
 
         let now = Instant::now();
         let tip = height.try_add_one().unwrap_or(BlockHeight::MAX);
-        let record = self.chains.entry(chain_id).or_insert_with(|| ChainRecord {
-            tip: BlockHeight::ZERO,
-            last_activity: now,
-            dests: BTreeMap::new(),
-        });
+        let record = self
+            .chains
+            .entry(chain_id)
+            .or_insert_with(|| ChainRecord::new(now, &self.destinations));
         record.tip = record.tip.max(tip);
         record.last_activity = now;
         // Seed *missing* pairs from what the chain last persisted — on every block, not only at
@@ -865,11 +889,17 @@ where
         // Occasionally scan storage for committees no block has carried — how a validator
         // admitted while every chain is idle still becomes a destination. On its own cadence
         // because the probe reads storage, and ticks now fire even under load.
-        let announced_newer = self
-            .announced_epoch
-            .is_some_and(|epoch| self.latest_epoch.is_none_or(|latest| epoch > latest));
+        // Eagerly, but at most once per announced epoch: a committee that cannot be loaded
+        // leaves `latest_epoch` behind, and re-triggering on the same announcement would turn
+        // the throttled scan into a storage read every tick for as long as it stays unloadable.
+        // The cadence below still retries it.
+        let announced_newer = self.announced_epoch.is_some_and(|epoch| {
+            self.latest_epoch.is_none_or(|latest| epoch > latest)
+                && self.scan_attempted_for != Some(epoch)
+        });
         if self.ticks_until_scan == 0 || announced_newer {
             self.ticks_until_scan = TICKS_PER_COMMITTEE_SCAN;
+            self.scan_attempted_for = self.announced_epoch;
             self.scan_committees().await;
         } else {
             self.ticks_until_scan -= 1;
@@ -884,18 +914,11 @@ where
         // carry the truth.
         let tips = std::mem::take(&mut *self.tips.lock().expect("tips mutex is never poisoned"));
         for (chain_id, tip) in tips {
-            let record = self.chains.entry(chain_id).or_insert_with(|| ChainRecord {
-                tip: BlockHeight::ZERO,
-                last_activity: now,
-                dests: BTreeMap::new(),
-            });
+            let record = self
+                .chains
+                .entry(chain_id)
+                .or_insert_with(|| ChainRecord::new(now, &self.destinations));
             record.tip = record.tip.max(tip);
-            // A record born here — its block was dropped — must get its cursors immediately:
-            // the destination-change fill below cannot be relied on for it, and a record with no
-            // cursors is invisible to the requeue and immortal to the sweep.
-            for validator in self.destinations.keys() {
-                record.dests.entry(*validator).or_default();
-            }
         }
         // When the destination set changed, every destination gets a cursor on every tracked
         // chain, so a validator that joined after a chain's last block is still caught up on it.
@@ -1000,39 +1023,39 @@ where
         let start = self
             .latest_epoch
             .map_or(0, |epoch| epoch.0.saturating_add(1));
-        let newest = if start == 0 {
-            // Epoch 0 comes from the genesis blob, not an event.
-            Some(Epoch(0))
-        } else {
-            None
-        };
-        let newest = match self
+        // Epoch 0 comes from the genesis blob, not an event, so it is never in the list.
+        let genesis = (start == 0).then_some(Epoch(0));
+        let mut candidates = match self
             .storage
             .read_events_from_index(&admin_chain_id, &StreamId::system(EPOCH_STREAM_NAME), start)
             .await
         {
-            // A committee lists the full validator set, so only the newest loadable one matters.
             Ok(events) => events
                 .into_iter()
                 .map(|event| Epoch(event.index))
-                .max()
-                .or(newest),
+                .chain(genesis)
+                .collect::<Vec<_>>(),
             Err(error) => {
                 debug!(%error, "Cannot list epoch events to scan for committees");
                 return;
             }
         };
-        let Some(epoch) = newest else {
-            return;
-        };
-        match self.storage.get_or_load_committee(epoch).await {
-            Ok(Some(committee)) => {
-                self.latest_epoch = Some(epoch);
-                self.committee = Some(committee);
-                self.committee_dirty = true;
+        // Newest first, and stop at the first that loads: a committee lists the full validator
+        // set, so the newest usable one subsumes the rest. Trying only the newest would stall
+        // the whole scan whenever its blob happens to be missing while an older — but still
+        // newer than ours — one is right there.
+        candidates.sort_unstable_by(|a, b| b.cmp(a));
+        for epoch in candidates {
+            match self.storage.get_or_load_committee(epoch).await {
+                Ok(Some(committee)) => {
+                    self.latest_epoch = Some(epoch);
+                    self.committee = Some(committee);
+                    self.committee_dirty = true;
+                    return;
+                }
+                Ok(None) => debug!(%epoch, "An epoch event exists but its committee cannot load"),
+                Err(error) => debug!(%error, %epoch, "Cannot load a committee from storage"),
             }
-            Ok(None) => debug!(%epoch, "An epoch event exists but its committee cannot load"),
-            Err(error) => debug!(%error, %epoch, "Cannot load a committee from storage"),
         }
     }
 
