@@ -1221,7 +1221,10 @@ where
         if **self.chain.exported_heights.get() != merged {
             // Rewrites of an already-populated register are throttled: it is re-serialized
             // whole, changes on every block of an active chain, and is a lower bound by design.
-            // The first real content is never held back.
+            // The first real content is never held back. The tail of a burst may therefore
+            // never be folded at all — there is no later save to carry it — which is accepted:
+            // the cost is one query per destination when the cursor is rebuilt, and the
+            // alternative is a full register write per block.
             let now = linera_base::time::Instant::now();
             let throttled = !self.chain.exported_heights.get().is_empty()
                 && self.last_exported_heights_fold.is_some_and(|last| {

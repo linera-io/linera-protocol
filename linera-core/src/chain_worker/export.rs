@@ -48,7 +48,7 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{Blob, BlockHeight, Epoch},
-    identifiers::{BlobId, ChainId, EventId, StreamId},
+    identifiers::{BlobId, ChainId, StreamId},
     time::{timer::timeout, Duration, Instant},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
@@ -314,13 +314,19 @@ impl BlockExportHandle {
         }
         let blob_bytes = blobs.iter().map(|blob| blob.bytes().len()).sum::<usize>();
         // The byte budget is enforced, not merely measured: a block count alone would let a few
-        // blob-heavy blocks pin memory far past the cache's own bounds.
-        let queued = self.queued_bytes.load(std::sync::atomic::Ordering::Relaxed);
-        if queued.saturating_add(blob_bytes) > self.queue_bytes_budget {
+        // blob-heavy blocks pin memory far past the cache's own bounds. Reserved *before* the
+        // send: incrementing after `try_send` would let the queue task's decrement run first and
+        // wrap the counter, spuriously exhausting the budget for every concurrent caller.
+        let prior = self
+            .queued_bytes
+            .fetch_add(blob_bytes, std::sync::atomic::Ordering::Relaxed);
+        if prior.saturating_add(blob_bytes) > self.queue_bytes_budget {
+            self.queued_bytes
+                .fetch_sub(blob_bytes, std::sync::atomic::Ordering::Relaxed);
             debug!(
                 chain_id = %certificate.block().header.chain_id,
                 height = %certificate.block().header.height,
-                queued, blob_bytes,
+                queued = prior, blob_bytes,
                 "Export queue byte budget exhausted; dropping the block for catch-up to re-send",
             );
             #[cfg(with_metrics)]
@@ -338,8 +344,6 @@ impl BlockExportHandle {
         };
         match self.blocks.try_send(block) {
             Ok(()) => {
-                self.queued_bytes
-                    .fetch_add(blob_bytes, std::sync::atomic::Ordering::Relaxed);
                 #[cfg(with_metrics)]
                 {
                     metrics::QUEUE_SIZE.inc();
@@ -347,6 +351,8 @@ impl BlockExportHandle {
                 }
             }
             Err(mpsc::error::TrySendError::Full(block)) => {
+                self.queued_bytes
+                    .fetch_sub(blob_bytes, std::sync::atomic::Ordering::Relaxed);
                 debug!(
                     chain_id = %block.certificate.block().header.chain_id,
                     height = %block.certificate.block().header.height,
@@ -356,6 +362,8 @@ impl BlockExportHandle {
                 metrics::DROPPED_BLOCKS.inc();
             }
             Err(mpsc::error::TrySendError::Closed(_)) => {
+                self.queued_bytes
+                    .fetch_sub(blob_bytes, std::sync::atomic::Ordering::Relaxed);
                 warn!("Block export queue stopped unexpectedly; blocks are no longer exported");
             }
         }
@@ -422,6 +430,7 @@ where
         chains: HashMap::new(),
         destinations: HashMap::new(),
         next_generation: 0,
+        announced_epoch: None,
         destinations_changed: false,
         queued_bytes: queued_bytes.clone(),
         progress: progress.clone(),
@@ -457,7 +466,10 @@ struct ChainDest {
     /// The next height the destination needs, or `None` when we have to ask it — before the
     /// first push, and after any failed one.
     next_height: Option<BlockHeight>,
-    in_flight: bool,
+    /// The destination generation of the send currently running for this pair, if any. Carrying
+    /// the generation is what stops a stale job's completion from clearing a *newer* job's flag
+    /// and breaking the one-send-per-pair ordering invariant.
+    in_flight: Option<u64>,
     /// Whether this chain already sits in the destination's ready list, to keep it there once.
     queued: bool,
     /// Backoff for *chain-scoped* failures — the destination is healthy but cannot accept this
@@ -521,6 +533,9 @@ where
     destinations: HashMap<ValidatorPublicKey, DestState<P::Node>>,
     /// The last destination generation handed out; never reused within this queue's lifetime.
     next_generation: u64,
+    /// The newest epoch any exported block has announced; the tick loads its committee when it
+    /// is ahead of `latest_epoch`.
+    announced_epoch: Option<Epoch>,
     /// Set when `sync_destinations` changed the set, so the per-record cursor fill runs once
     /// per change instead of once per tick.
     destinations_changed: bool,
@@ -585,7 +600,7 @@ where
             };
             match wake {
                 Wake::Done(done) => self.on_done(done, &mut jobs),
-                Wake::Block(Some(block)) => self.on_block(block, &mut jobs).await,
+                Wake::Block(Some(block)) => self.on_block(block, &mut jobs),
                 Wake::Block(None) => break,
                 Wake::Tick => {
                     self.tick(&mut jobs).await;
@@ -604,7 +619,7 @@ where
 
     /// Folds a fresh block in: advances the chain's tip and fans out to every destination that
     /// can take it now; the rest catch up from storage when their turn comes.
-    async fn on_block(&mut self, block: ExportedBlock, jobs: &mut FuturesUnordered<JobFuture>) {
+    fn on_block(&mut self, block: ExportedBlock, jobs: &mut FuturesUnordered<JobFuture>) {
         self.queued_bytes
             .fetch_sub(block.blob_bytes, std::sync::atomic::Ordering::Relaxed);
         #[cfg(with_metrics)]
@@ -616,22 +631,11 @@ where
         }
         let header = &block.certificate.block().header;
         let (chain_id, height) = (header.chain_id, header.height);
-        if self.latest_epoch.is_none_or(|epoch| block.epoch > epoch) {
-            // The block only carries the epoch; the committee itself comes from storage, where
-            // the chain that executed under it has already stored the event and blob.
-            match self.storage.get_or_load_committee(block.epoch).await {
-                Ok(Some(committee)) => {
-                    self.latest_epoch = Some(block.epoch);
-                    self.committee = Some(committee);
-                    self.committee_dirty = true;
-                }
-                Ok(None) => {
-                    debug!(epoch = %block.epoch, "Cannot load the committee for an exported block");
-                }
-                Err(error) => {
-                    debug!(%error, epoch = %block.epoch, "Cannot load a committee from storage");
-                }
-            }
+        // Only recorded here: loading the committee reads storage, and an await in this handler
+        // stalls every in-flight send — the tick's scan does the loading.
+        if block.epoch > self.announced_epoch.unwrap_or(Epoch(0)) || self.announced_epoch.is_none()
+        {
+            self.announced_epoch = Some(block.epoch);
         }
         // Per committee change, not per block: the rebuild walks every tracked chain.
         if self.committee_dirty || self.destinations.is_empty() {
@@ -668,7 +672,7 @@ where
                 .get_mut(&validator)
                 .expect("iterating destinations");
             let contiguous = chain_dest.next_height == Some(height);
-            let can_send_now = !chain_dest.in_flight
+            let can_send_now = chain_dest.in_flight.is_none()
                 && chain_dest.retry_at.is_none_or(|at| at <= now)
                 && dest.retry_at.is_none_or(|at| at <= now)
                 && dest.in_flight < dest.window;
@@ -722,7 +726,10 @@ where
                 .get_mut(&chain_id)
                 .and_then(|record| record.dests.get_mut(&validator))
             {
-                chain_dest.in_flight = false;
+                // Only the flag this very job set — the pair may since carry a newer job's.
+                if chain_dest.in_flight == Some(generation) {
+                    chain_dest.in_flight = None;
+                }
             }
             return;
         }
@@ -772,7 +779,9 @@ where
         if let Some(record) = self.chains.get_mut(&chain_id) {
             record.last_activity = now;
             if let Some(chain_dest) = record.dests.get_mut(&validator) {
-                chain_dest.in_flight = false;
+                if chain_dest.in_flight == Some(generation) {
+                    chain_dest.in_flight = None;
+                }
                 match &outcome {
                     SendOutcome::Reached(next_height) => {
                         let advanced = chain_dest.next_height.is_none_or(|n| *next_height > n);
@@ -833,7 +842,7 @@ where
             let tip = record.tip;
             if let Some(chain_dest) = record.dests.get_mut(&validator) {
                 let behind = chain_dest.next_height.is_none_or(|next| next < tip);
-                if behind && !chain_dest.queued && !chain_dest.in_flight {
+                if behind && !chain_dest.queued && chain_dest.in_flight.is_none() {
                     chain_dest.queued = true;
                     dest.ready.push_back(chain_id);
                 }
@@ -856,7 +865,10 @@ where
         // Occasionally scan storage for committees no block has carried — how a validator
         // admitted while every chain is idle still becomes a destination. On its own cadence
         // because the probe reads storage, and ticks now fire even under load.
-        if self.ticks_until_scan == 0 {
+        let announced_newer = self
+            .announced_epoch
+            .is_some_and(|epoch| self.latest_epoch.is_none_or(|latest| epoch > latest));
+        if self.ticks_until_scan == 0 || announced_newer {
             self.ticks_until_scan = TICKS_PER_COMMITTEE_SCAN;
             self.scan_committees().await;
         } else {
@@ -878,6 +890,12 @@ where
                 dests: BTreeMap::new(),
             });
             record.tip = record.tip.max(tip);
+            // A record born here — its block was dropped — must get its cursors immediately:
+            // the destination-change fill below cannot be relied on for it, and a record with no
+            // cursors is invisible to the requeue and immortal to the sweep.
+            for validator in self.destinations.keys() {
+                record.dests.entry(*validator).or_default();
+            }
         }
         // When the destination set changed, every destination gets a cursor on every tracked
         // chain, so a validator that joined after a chain's last block is still caught up on it.
@@ -905,7 +923,7 @@ where
                     // `>=`: a destination is routinely *ahead* of our tip — the client
                     // broadcasts to everyone — and ahead must count as done, not as never
                     // converging.
-                    !chain_dest.in_flight
+                    chain_dest.in_flight.is_none()
                         && chain_dest
                             .next_height
                             .is_some_and(|next| next >= record.tip)
@@ -933,7 +951,7 @@ where
             for (validator, chain_dest) in &mut record.dests {
                 let behind = chain_dest.next_height.is_none_or(|next| next < record.tip);
                 if behind
-                    && !chain_dest.in_flight
+                    && chain_dest.in_flight.is_none()
                     && !chain_dest.queued
                     && chain_dest.retry_at.is_none_or(|at| at <= now)
                 {
@@ -962,8 +980,9 @@ where
         }
     }
 
-    /// Scans storage forward for committees newer than any block has announced, probing the
-    /// epoch event directly so a missing next epoch — the steady state — stays silent.
+    /// Scans storage for committees newer than the one in use, by listing the admin chain's
+    /// epoch events from the frontier — one bulk read, immune to holes in the history, and
+    /// silent when nothing is new.
     async fn scan_committees(&mut self) {
         if self.admin_chain_id.is_none() {
             self.admin_chain_id = match self.storage.read_network_description().await {
@@ -978,38 +997,42 @@ where
         let Some(admin_chain_id) = self.admin_chain_id else {
             return;
         };
-        loop {
-            let next = self
-                .latest_epoch
-                .map_or(0, |epoch| epoch.0.saturating_add(1));
-            let event_present = if next == 0 {
-                // Epoch 0 comes from the genesis blob, not an event; only `get_or_load` knows.
-                Ok(true)
-            } else {
-                self.storage
-                    .read_event(EventId {
-                        chain_id: admin_chain_id,
-                        stream_id: StreamId::system(EPOCH_STREAM_NAME),
-                        index: next,
-                    })
-                    .await
-                    .map(|found| found.is_some())
-            };
-            match event_present {
-                Ok(true) => match self.storage.get_or_load_committee(Epoch(next)).await {
-                    Ok(Some(committee)) => {
-                        self.latest_epoch = Some(Epoch(next));
-                        self.committee = Some(committee);
-                        self.committee_dirty = true;
-                    }
-                    Ok(None) | Err(_) => return,
-                },
-                Ok(false) => return,
-                Err(error) => {
-                    debug!(%error, "Cannot probe for a new committee");
-                    return;
-                }
+        let start = self
+            .latest_epoch
+            .map_or(0, |epoch| epoch.0.saturating_add(1));
+        let newest = if start == 0 {
+            // Epoch 0 comes from the genesis blob, not an event.
+            Some(Epoch(0))
+        } else {
+            None
+        };
+        let newest = match self
+            .storage
+            .read_events_from_index(&admin_chain_id, &StreamId::system(EPOCH_STREAM_NAME), start)
+            .await
+        {
+            // A committee lists the full validator set, so only the newest loadable one matters.
+            Ok(events) => events
+                .into_iter()
+                .map(|event| Epoch(event.index))
+                .max()
+                .or(newest),
+            Err(error) => {
+                debug!(%error, "Cannot list epoch events to scan for committees");
+                return;
             }
+        };
+        let Some(epoch) = newest else {
+            return;
+        };
+        match self.storage.get_or_load_committee(epoch).await {
+            Ok(Some(committee)) => {
+                self.latest_epoch = Some(epoch);
+                self.committee = Some(committee);
+                self.committee_dirty = true;
+            }
+            Ok(None) => debug!(%epoch, "An epoch event exists but its committee cannot load"),
+            Err(error) => debug!(%error, %epoch, "Cannot load a committee from storage"),
         }
     }
 
@@ -1127,10 +1150,10 @@ where
         target: BlockHeight,
         live: Option<(CacheArc<ConfirmedBlockCertificate>, Vec<CacheArc<Blob>>)>,
     ) {
-        chain_dest.in_flight = true;
+        let generation = dest.generation;
+        chain_dest.in_flight = Some(generation);
         chain_dest.queued = false;
         dest.in_flight += 1;
-        let generation = dest.generation;
         let mut sender = BlockSender {
             remote_node: RemoteNode {
                 public_key: validator,
@@ -1205,7 +1228,10 @@ where
             };
             chain_dest.queued = false;
             let behind = chain_dest.next_height.is_none_or(|next| next < record.tip);
-            if chain_dest.in_flight || !behind || chain_dest.retry_at.is_some_and(|at| at > now) {
+            if chain_dest.in_flight.is_some()
+                || !behind
+                || chain_dest.retry_at.is_some_and(|at| at > now)
+            {
                 continue; // The tick that queued it has been overtaken; it requeues if needed.
             }
             Self::spawn_job(
@@ -1429,6 +1455,10 @@ mod tests {
             },
             BlockExportConfig {
                 queue_size: 0,
+                ..BlockExportConfig::default()
+            },
+            BlockExportConfig {
+                queue_bytes: 0,
                 ..BlockExportConfig::default()
             },
             BlockExportConfig {

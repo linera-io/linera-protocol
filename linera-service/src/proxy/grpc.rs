@@ -20,7 +20,7 @@ use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt as _};
 use linera_base::{
     data_types::{BlockHeight, Epoch},
-    identifiers::ChainId,
+    identifiers::{ChainId, StreamId},
 };
 use linera_chain::types::{ConfirmedBlock, LiteCertificate as ChainLiteCertificate};
 use linera_core::{
@@ -29,6 +29,7 @@ use linera_core::{
     notifier::ChannelNotifier,
     JoinSetExt as _,
 };
+use linera_execution::system::EPOCH_STREAM_NAME;
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
 #[cfg(all(with_metrics, feature = "opentelemetry"))]
@@ -240,6 +241,8 @@ struct GrpcProxyInner<S> {
 struct RelayDestinations {
     addresses: HashSet<String>,
     next_epoch: u32,
+    /// Resolved from the network description once and cached.
+    admin_chain_id: Option<ChainId>,
 }
 
 impl<S> GrpcProxy<S>
@@ -301,49 +304,69 @@ where
     /// `Err` means the scan itself failed and says nothing about the address, so the caller must
     /// answer "try again", not "refused".
     async fn is_relay_destination(&self, address: &str) -> Result<bool, ViewError> {
-        // The scan stops after this many consecutive unloadable epochs. A committee lists the
-        // *full* validator set, so an unloadable epoch can be skipped permanently — anyone still
-        // in the committee appears in a later, loadable one — and only the frontier (the trailing
-        // run of misses) is re-probed on later requests.
-        const EPOCH_MISS_RUN: u32 = 8;
-        // The most epochs one request scans; the frontier persists, so a scan interrupted by
-        // this cap resumes on the next request instead of doing unbounded work in a gRPC handler.
-        const MAX_EPOCHS_PER_SCAN: u32 = 64;
-
-        let (known, start) = {
+        let (known, start, admin_chain_id) = {
             let destinations = self.0.relay_destinations.read().await;
             (
                 destinations.addresses.contains(address),
                 destinations.next_epoch,
+                destinations.admin_chain_id,
             )
         };
         if known {
             return Ok(true);
         }
+        let admin_chain_id = match admin_chain_id {
+            Some(admin_chain_id) => admin_chain_id,
+            None => match self.0.storage.read_network_description().await? {
+                Some(description) => description.admin_chain_id,
+                None => return Ok(false),
+            },
+        };
 
-        // Scan outside any lock: `get_or_load_committee` reads storage, and holding the write
-        // lock across that would stall every concurrent `peer()` call, cached ones included.
+        // The events are listed in one bulk read from the frontier, outside any lock — so holes
+        // in the admin history are simply absent from the list rather than wedging a probe, and
+        // termination is the end of the list, not a heuristic. A committee lists the full
+        // validator set, so an epoch that stays unloadable is covered by any later one.
+        let events = self
+            .0
+            .storage
+            .read_events_from_index(
+                &admin_chain_id,
+                &StreamId::system(EPOCH_STREAM_NAME),
+                start.max(1),
+            )
+            .await?;
         let mut found = Vec::new();
-        let mut probe = start;
-        let mut misses = 0;
-        while misses < EPOCH_MISS_RUN && probe.saturating_sub(start) < MAX_EPOCHS_PER_SCAN {
-            match self.0.storage.get_or_load_committee(Epoch(probe)).await? {
-                Some(committee) => {
-                    found.extend(
-                        committee
-                            .validator_addresses()
-                            .map(|(_, address)| address.to_owned()),
-                    );
-                    misses = 0;
-                }
-                None => misses += 1,
+        let mut scanned_to = start;
+        if start == 0 {
+            // Epoch 0 comes from the genesis blob, not an event.
+            if let Some(committee) = self.0.storage.get_or_load_committee(Epoch(0)).await? {
+                found.extend(
+                    committee
+                        .validator_addresses()
+                        .map(|(_, address)| address.to_owned()),
+                );
             }
-            probe = probe.saturating_add(1);
+            scanned_to = 1;
         }
-        // Resume after everything decided; only the trailing miss-run is ever revisited.
-        let scanned_to = probe - misses;
+        for event in events {
+            if let Some(committee) = self
+                .0
+                .storage
+                .get_or_load_committee(Epoch(event.index))
+                .await?
+            {
+                found.extend(
+                    committee
+                        .validator_addresses()
+                        .map(|(_, address)| address.to_owned()),
+                );
+            }
+            scanned_to = scanned_to.max(event.index.saturating_add(1));
+        }
 
         let mut destinations = self.0.relay_destinations.write().await;
+        destinations.admin_chain_id = Some(admin_chain_id);
         destinations.addresses.extend(found);
         destinations.next_epoch = destinations.next_epoch.max(scanned_to);
         Ok(destinations.addresses.contains(address))
