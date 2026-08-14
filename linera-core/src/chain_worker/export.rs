@@ -32,7 +32,10 @@
 //! pair.
 //!
 //! Chains converge and are forgotten: a record exists only while some destination is behind, so
-//! memory is bounded by lagging chains, not by every chain the process ever served. The
+//! memory is bounded by lagging chains, not by every chain the process ever served. Note what
+//! that means during an outage — a destination that is down keeps every chain that produced a
+//! block while it was gone, because that set *is* the work-list its catch-up needs. That is
+//! bounded by the chains that were active, and [`metrics::TRACKED_CHAINS`] exposes it. The
 //! work-list therefore covers chains seen since the process started — a validator that needs the
 //! full history of a chain that never produces blocks again is out of scope here.
 
@@ -73,6 +76,17 @@ mod metrics {
         register_histogram_vec, register_int_counter, register_int_gauge, register_int_gauge_vec,
     };
     use prometheus::{Histogram, HistogramVec, IntCounter, IntGauge, IntGaugeVec};
+
+    /// Chains the queue is tracking: those with a destination still behind, plus recently
+    /// converged ones inside the retention window. A destination that is down holds every chain
+    /// that produced a block during the outage here — that is the work-list its catch-up needs,
+    /// and this is how an operator sees it growing.
+    pub static TRACKED_CHAINS: LazyLock<IntGauge> = LazyLock::new(|| {
+        register_int_gauge(
+            "block_export_tracked_chains",
+            "Chains the export queue is tracking for catch-up",
+        )
+    });
 
     /// Blocks waiting in the export queue.
     pub static QUEUE_SIZE: LazyLock<IntGauge> = LazyLock::new(|| {
@@ -499,6 +513,34 @@ impl ChainRecord {
     }
 }
 
+impl ChainRecord {
+    /// Fills in every cursor this record does not have from the chain's persisted heights.
+    ///
+    /// Applied on every block rather than at record creation, and idempotent. Tying the seeding
+    /// to creation has failed twice — the tick creates records too, from a tip announced before
+    /// its block was dequeued, and it has no heights to seed with; an `or_insert` then cannot
+    /// correct a cursor that already exists as `None`.
+    ///
+    /// Safe for a cursor a failure cleared, too: the persisted height is a lower bound, so the
+    /// worst case is re-offering blocks the destination already holds, and its reply corrects
+    /// the cursor in either direction.
+    fn seed_missing_cursors<N>(
+        &mut self,
+        destinations: &HashMap<ValidatorPublicKey, DestState<N>>,
+        exported_heights: &BTreeMap<ValidatorPublicKey, BlockHeight>,
+    ) {
+        for validator in destinations.keys() {
+            let seed = exported_heights
+                .get(validator)
+                .and_then(|height| height.try_add_one().ok());
+            let chain_dest = self.dests.entry(*validator).or_default();
+            if chain_dest.next_height.is_none() && chain_dest.in_flight.is_none() {
+                chain_dest.next_height = seed;
+            }
+        }
+    }
+}
+
 /// One chain's cursor at one destination.
 #[derive(Default)]
 struct ChainDest {
@@ -696,17 +738,7 @@ where
             .or_insert_with(|| ChainRecord::new(now, &self.destinations, &block.exported_heights));
         record.tip = record.tip.max(tip);
         record.last_activity = now;
-        // A destination that joined after this record did still needs a cursor, and the chain's
-        // persisted height is a better start than none.
-        for validator in self.destinations.keys() {
-            record.dests.entry(*validator).or_insert_with(|| ChainDest {
-                next_height: block
-                    .exported_heights
-                    .get(validator)
-                    .and_then(|height| height.try_add_one().ok()),
-                ..ChainDest::default()
-            });
-        }
+        record.seed_missing_cursors(&self.destinations, &block.exported_heights);
         let validators = self.destinations.keys().copied().collect::<Vec<_>>();
         for validator in validators {
             let record = self.chains.get_mut(&chain_id).expect("inserted above");
@@ -1002,6 +1034,9 @@ where
                 progress.remove(chain_id);
             }
         }
+
+        #[cfg(with_metrics)]
+        metrics::TRACKED_CHAINS.set(self.chains.len() as i64);
 
         // Requeue everything whose backoff expired and is still behind.
         for (chain_id, record) in &mut self.chains {
@@ -1599,6 +1634,33 @@ mod tests {
         assert_eq!(
             record.dests[&other].next_height, None,
             "a destination with nothing persisted must be queried, not assumed",
+        );
+    }
+
+    /// A cursor already present as `None` — the state a tick-created record starts in — is still
+    /// seeded from the persisted heights.
+    ///
+    /// The seeding has regressed three times, each time because it was tied to record *creation*
+    /// while a second path also creates records. This pins the property that actually matters:
+    /// after the fill, a missing cursor is seeded no matter who made the record.
+    #[test]
+    fn a_cursor_left_unset_is_still_seeded() {
+        let validator = ValidatorPublicKey::test_key(1);
+        let destinations: HashMap<ValidatorPublicKey, DestState<()>> =
+            [(validator, test_dest_state())].into_iter().collect();
+        let exported: BTreeMap<_, _> = [(validator, BlockHeight(7))].into_iter().collect();
+
+        // As the tick builds it: no heights to hand over, so the cursor starts unset.
+        let mut record = ChainRecord::new(Instant::now(), &destinations, &BTreeMap::new());
+        assert_eq!(record.dests[&validator].next_height, None);
+
+        // The fill `on_block` performs once a block for that chain arrives.
+        record.seed_missing_cursors(&destinations, &exported);
+
+        assert_eq!(
+            record.dests[&validator].next_height,
+            Some(BlockHeight(8)),
+            "a record the tick created must still pick up the persisted cursor",
         );
     }
 
