@@ -26,8 +26,8 @@ pub enum TaskProcessorOperation {
         operator: String,
         input: String,
     },
-    /// Store the result of a completed task.
-    StoreResult { result: String },
+    /// Store the result of the completed task with the given identifier.
+    StoreResult { id: u64, result: String },
 }
 
 #[derive(Debug, Deserialize, Serialize)]

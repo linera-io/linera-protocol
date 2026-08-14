@@ -1720,6 +1720,107 @@ async fn test_task_processor_outcome_ordering() -> Result<()> {
     Ok(())
 }
 
+/// Test that a task failing on every attempt does not hold back the outcomes of the other
+/// tasks in its batch.
+#[cfg(feature = "storage-service")]
+#[test_log::test(tokio::test)]
+async fn test_task_processor_failing_task_does_not_block_siblings() -> Result<()> {
+    use std::{io::Write, os::unix::fs::PermissionsExt};
+
+    use linera_base::{abi::ContractAbi, identifiers::ApplicationId};
+
+    struct TaskProcessorAbi;
+
+    impl ContractAbi for TaskProcessorAbi {
+        type Operation = ();
+        type Response = ();
+    }
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let config = LocalNetConfig::new_test(Database::Service, Network::Grpc);
+    let (mut net, client) = config.instantiate().await?;
+    let chain = client.load_wallet()?.default_chain().unwrap();
+
+    // Publish and create the task-processor example application.
+    let example_dir = ClientWrapper::example_path("task-processor")?;
+    let app_id_str = client
+        .project_publish(example_dir, vec![], None, &())
+        .await?;
+    let app_id: ApplicationId = app_id_str.trim().parse()?;
+
+    // Create an operator that always fails, and one that echoes its input.
+    let tmp_dir = tempfile::tempdir()?;
+    let failing_path = tmp_dir.path().join("failing-operator");
+    {
+        let mut file = std::fs::File::create(&failing_path)?;
+        writeln!(file, "#!/bin/sh")?;
+        writeln!(file, "exit 1")?;
+    }
+    std::fs::set_permissions(&failing_path, std::fs::Permissions::from_mode(0o755))?;
+
+    let fast_path = tmp_dir.path().join("fast-operator");
+    {
+        let mut file = std::fs::File::create(&fast_path)?;
+        writeln!(file, "#!/bin/sh")?;
+        writeln!(file, "cat")?;
+    }
+    std::fs::set_permissions(&fast_path, std::fs::Permissions::from_mode(0o755))?;
+
+    // Start the node service with both operators.
+    let port = get_node_port().await;
+    let operators = vec![
+        ("failing".to_string(), failing_path),
+        ("fast".to_string(), fast_path),
+    ];
+    let mut node_service = client
+        .run_node_service_with_options(port, ProcessInbox::Skip, &[app_id], &operators, false)
+        .await?;
+
+    node_service.ensure_is_running()?;
+
+    // Subscribe to notifications for the chain.
+    let mut notifications = Box::pin(node_service.notifications(chain).await?);
+
+    let app = node_service.make_application(&chain, &app_id.with_abi::<TaskProcessorAbi>())?;
+
+    // Submit both tasks in a single block, the failing one first.
+    app.multiple_mutate(&[
+        r#"requestTask(operator: "failing", input: "never_stored")"#.to_string(),
+        r#"requestTask(operator: "fast", input: "fast_result")"#.to_string(),
+    ])
+    .await?;
+
+    // Wait for the block containing the RequestTask operations, then for the block
+    // containing the StoreResult operation of the task that succeeded.
+    notifications.wait_for_block(None).await?;
+    notifications.wait_for_block(None).await?;
+
+    let task_count: u64 = app.query_json("taskCount").await?;
+    assert_eq!(task_count, 1);
+    let results: Vec<String> = app.query_json("results").await?;
+    assert_eq!(results, vec!["fast_result"]);
+
+    // The failing task is still pending, and is the only one retried.
+    let response = app.query("nextActions(now: 0)").await?;
+    let tasks = response["nextActions"]["execute_tasks"]
+        .as_array()
+        .expect("expected a list of tasks")
+        .clone();
+    assert_eq!(
+        tasks.len(),
+        1,
+        "Expected only the failing task, got: {tasks:?}"
+    );
+    assert_eq!(tasks[0]["operator"], "failing");
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
 /// Test that the node service read-only mode disables mutations and prevents query-triggered operations.
 #[cfg(feature = "storage-service")]
 #[test_log::test(tokio::test)]
