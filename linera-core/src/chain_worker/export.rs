@@ -468,13 +468,32 @@ impl ChainRecord {
     /// unrepresentable: a record with no cursors is invisible to the requeue loop and trivially
     /// "converged" to the sweep, so such a chain would be abandoned in silence. One creation
     /// path used to miss the seeding, and nothing in the suite could see it.
-    fn new<N>(now: Instant, destinations: &HashMap<ValidatorPublicKey, DestState<N>>) -> Self {
+    fn new<N>(
+        now: Instant,
+        destinations: &HashMap<ValidatorPublicKey, DestState<N>>,
+        exported_heights: &BTreeMap<ValidatorPublicKey, BlockHeight>,
+    ) -> Self {
         ChainRecord {
             tip: BlockHeight::ZERO,
             last_activity: now,
             dests: destinations
                 .keys()
-                .map(|validator| (*validator, ChainDest::default()))
+                .map(|validator| {
+                    // Seeded here rather than by a later fill: a cursor pre-populated as `None`
+                    // and then only `or_insert`-ed would silently swallow the persisted height,
+                    // leaving `exported_heights` write-only and costing a query per destination
+                    // on every restart.
+                    let next_height = exported_heights
+                        .get(validator)
+                        .and_then(|height| height.try_add_one().ok());
+                    (
+                        *validator,
+                        ChainDest {
+                            next_height,
+                            ..ChainDest::default()
+                        },
+                    )
+                })
                 .collect(),
         }
     }
@@ -662,8 +681,10 @@ where
         {
             self.announced_epoch = Some(block.epoch);
         }
-        // Per committee change, not per block: the rebuild walks every tracked chain.
-        if self.committee_dirty || self.destinations.is_empty() {
+        // Per committee change only. Never on "destinations are empty": when a committee's
+        // addresses cannot be resolved that stays true, and the rebuild walks every tracked
+        // chain and re-warns per member — on the block-execution path. The tick retries it.
+        if self.committee_dirty {
             self.sync_destinations();
         }
 
@@ -672,20 +693,19 @@ where
         let record = self
             .chains
             .entry(chain_id)
-            .or_insert_with(|| ChainRecord::new(now, &self.destinations));
+            .or_insert_with(|| ChainRecord::new(now, &self.destinations, &block.exported_heights));
         record.tip = record.tip.max(tip);
         record.last_activity = now;
-        // Seed *missing* pairs from what the chain last persisted — on every block, not only at
-        // record creation, so a record the tick created from a dropped block's tip still picks
-        // the cursors up. At worst one block per destination is re-offered and skipped, instead
-        // of one query per destination per restart.
-        for (validator, height) in &block.exported_heights {
-            if let Ok(next) = height.try_add_one() {
-                record.dests.entry(*validator).or_insert_with(|| ChainDest {
-                    next_height: Some(next),
-                    ..ChainDest::default()
-                });
-            }
+        // A destination that joined after this record did still needs a cursor, and the chain's
+        // persisted height is a better start than none.
+        for validator in self.destinations.keys() {
+            record.dests.entry(*validator).or_insert_with(|| ChainDest {
+                next_height: block
+                    .exported_heights
+                    .get(validator)
+                    .and_then(|height| height.try_add_one().ok()),
+                ..ChainDest::default()
+            });
         }
         let validators = self.destinations.keys().copied().collect::<Vec<_>>();
         for validator in validators {
@@ -931,7 +951,7 @@ where
             let record = self
                 .chains
                 .entry(chain_id)
-                .or_insert_with(|| ChainRecord::new(now, &self.destinations));
+                .or_insert_with(|| ChainRecord::new(now, &self.destinations, &BTreeMap::new()));
             record.tip = record.tip.max(tip);
         }
         // When the destination set changed, every destination gets a cursor on every tracked
@@ -1081,6 +1101,8 @@ where
         };
         self.committee_dirty = false;
         let mut rebuilt = Vec::new();
+        #[cfg(with_metrics)]
+        let mut rebuilt_addresses = Vec::new();
         self.destinations.retain(|validator, dest| {
             let keep = committee
                 .validators()
@@ -1088,11 +1110,27 @@ where
                 .is_some_and(|state| state.network_address == dest.address);
             if !keep {
                 rebuilt.push(*validator);
+                #[cfg(with_metrics)]
+                rebuilt_addresses.push(dest.address.clone());
             }
             keep
         });
         if !rebuilt.is_empty() {
             self.destinations_changed = true;
+        }
+        // Drop the metric series of every address that just went away, so a departed validator
+        // does not leave a window gauge frozen at its last value and a lag histogram that never
+        // moves again — both read as a live destination that simply stopped changing.
+        #[cfg(with_metrics)]
+        for address in &rebuilt_addresses {
+            // A series that was never created is simply absent; nothing to report either way.
+            metrics::DESTINATION_WINDOW
+                .remove_label_values(&[address])
+                .ok();
+            metrics::SEND_LATENCY.remove_label_values(&[address]).ok();
+            metrics::DESTINATION_LAG
+                .remove_label_values(&[address])
+                .ok();
         }
         // A dropped DestState takes its ready list with it, so clear the queued marks that
         // pointed into it — a queued pair is invisible to every requeue path.
@@ -1530,6 +1568,50 @@ mod tests {
         ];
         for config in invalid {
             assert!(config.check().is_err(), "accepted: {config:?}");
+        }
+    }
+
+    /// A record starts from what the chain persisted, so a restart does not re-query every
+    /// destination of every chain.
+    ///
+    /// This is the one place the persisted `exported_heights` enters the queue. It regressed
+    /// twice — once when the seeding ran only at record creation and the tick could create
+    /// records without it, once when adding the cursor-always-present invariant made the seeding
+    /// a silent no-op — and neither showed up in any behavioural test, because a missing seed
+    /// only costs a query.
+    #[test]
+    fn records_start_from_the_persisted_heights() {
+        let validator = ValidatorPublicKey::test_key(1);
+        let other = ValidatorPublicKey::test_key(2);
+        let destinations: HashMap<ValidatorPublicKey, DestState<()>> =
+            [(validator, test_dest_state()), (other, test_dest_state())]
+                .into_iter()
+                .collect();
+        let exported = [(validator, BlockHeight(41))].into_iter().collect();
+
+        let record = ChainRecord::new(Instant::now(), &destinations, &exported);
+
+        assert_eq!(
+            record.dests[&validator].next_height,
+            Some(BlockHeight(42)),
+            "a persisted height must seed the cursor for the block after it",
+        );
+        assert_eq!(
+            record.dests[&other].next_height, None,
+            "a destination with nothing persisted must be queried, not assumed",
+        );
+    }
+
+    fn test_dest_state() -> DestState<()> {
+        DestState {
+            node: (),
+            address: "grpc:localhost:1".to_string(),
+            generation: 1,
+            in_flight: 0,
+            window: 1,
+            retry_at: None,
+            failures: 0,
+            ready: VecDeque::new(),
         }
     }
 

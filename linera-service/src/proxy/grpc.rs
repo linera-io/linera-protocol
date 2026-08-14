@@ -339,15 +339,17 @@ where
         let mut found = Vec::new();
         let mut scanned_to = start;
         if start == 0 {
-            // Epoch 0 comes from the genesis blob, not an event.
+            // Epoch 0 comes from the genesis blob, not an event. The frontier only moves past it
+            // once it has actually loaded: on a network that has never changed epochs it is the
+            // only committee there is, so burning past it would refuse every validator forever.
             if let Some(committee) = self.0.storage.get_or_load_committee(Epoch(0)).await? {
                 found.extend(
                     committee
                         .validator_addresses()
                         .map(|(_, address)| address.to_owned()),
                 );
+                scanned_to = 1;
             }
-            scanned_to = 1;
         }
         for event in events {
             let loaded = match self
