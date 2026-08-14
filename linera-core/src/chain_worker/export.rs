@@ -675,9 +675,16 @@ impl<N> DestState<N> {
     }
 
     /// Moves the cursor past the last chain considered, so the next round advances.
+    ///
+    /// A round that considered nothing — a saturated destination breaks before looking at its
+    /// first candidate — leaves the cursor alone. Clearing it there restarts the next drain at
+    /// the lowest chain id, which is the starvation the cursor exists to prevent, and a busy
+    /// destination is saturated on almost every tick.
     fn advance_cursor(&mut self, last_considered: Option<ChainId>) {
-        self.lagging_cursor =
-            last_considered.and_then(|id| self.lagging.range(id..).nth(1).copied());
+        let Some(last) = last_considered else {
+            return;
+        };
+        self.lagging_cursor = self.lagging.range(last..).nth(1).copied();
     }
 }
 
@@ -1499,7 +1506,7 @@ where
         jobs: &mut FuturesUnordered<JobFuture>,
         now: Instant,
     ) {
-        if dest.retry_at.is_some_and(|at| at > now) {
+        if dest.retry_at.is_some_and(|at| at > now) || dest.in_flight >= dest.window {
             return;
         }
         // Only as far as the window allows, so the cost is the sends we are about to make and
@@ -1511,6 +1518,7 @@ where
         // a backlog of ineligible entries cannot turn this back into a full scan.
         let ordered = dest.drain_candidates(dest.window.saturating_mul(LAGGING_SCAN_FACTOR));
         let mut spawn = Vec::new();
+        let mut stale = Vec::new();
         let mut last_visited = None;
         for chain_id in ordered {
             if dest.in_flight + spawn.len() >= dest.window {
@@ -1518,6 +1526,9 @@ where
             }
             last_visited = Some(chain_id);
             let Some(record) = chains.get(&chain_id) else {
+                // The chain was forgotten under us; drop the entry rather than walk past it on
+                // every drain from here on.
+                stale.push(chain_id);
                 continue;
             };
             let Some(chain_dest) = record.dest(index) else {
@@ -1532,6 +1543,9 @@ where
             }
         }
         dest.advance_cursor(last_visited);
+        for chain_id in stale {
+            dest.lagging.remove(&chain_id);
+        }
         for chain_id in spawn {
             let Some(record) = chains.get_mut(&chain_id) else {
                 continue;
@@ -1867,45 +1881,66 @@ mod tests {
 
     /// The drain rotates through the backlog instead of always serving its lowest chain ids.
     ///
-    /// The maintained set replaced a FIFO, and a set is *ordered* — iterating it from the start
+    /// The maintained set replaced a FIFO, and a set is *ordered* — walking it from the start
     /// every tick hands the whole window to the same few chains and starves everything after
     /// them, which at a large backlog means those chains are never exported at all.
     #[test]
     fn draining_rotates_through_the_backlog() {
         let mut dest = test_dest_state();
-        dest.window = 2;
-        let ids = (0..6u8)
-            .map(|i| ChainId(CryptoHash::test_hash(format!("chain{i}"))))
-            .collect::<Vec<_>>();
-        dest.lagging = ids.iter().copied().collect();
+        dest.lagging = test_chain_ids(6).into_iter().collect();
 
-        // Two passes with the window's worth of work each; the second must move on.
-        let first = drained(&dest, 2);
-        dest.lagging_cursor = first
-            .last()
-            .and_then(|id| dest.lagging.range(*id..).nth(1).copied());
-        let second = drained(&dest, 2);
+        // Two rounds of a two-chain window; the second must move past the first.
+        let first = dest.drain_candidates(2);
+        dest.advance_cursor(first.last().copied());
+        let second = dest.drain_candidates(2);
 
         assert_eq!(first.len(), 2);
         assert_eq!(second.len(), 2);
         assert!(
             first.iter().all(|id| !second.contains(id)),
-            "the second pass repeated the first: {first:?} then {second:?}",
+            "the second round repeated the first: {first:?} then {second:?}",
         );
     }
 
-    /// The candidate ordering `drain_ready` walks, without the spawning around it.
-    fn drained(dest: &DestState<()>, budget: usize) -> Vec<ChainId> {
-        match dest.lagging_cursor {
-            Some(cursor) => dest
-                .lagging
-                .range(cursor..)
-                .chain(dest.lagging.iter().take_while(|id| **id < cursor))
-                .copied()
-                .take(budget)
-                .collect(),
-            None => dest.lagging.iter().copied().take(budget).collect(),
-        }
+    /// A round that considered nothing must not throw the rotation away.
+    ///
+    /// `drain_ready` returns before looking at a single candidate when the destination is
+    /// already at its window, which for a destination with a backlog is almost every tick. If
+    /// that round reset the cursor, the next one would restart at the lowest chain id and the
+    /// tail of the backlog would never be reached — the starvation the cursor exists to prevent,
+    /// reintroduced by the cursor's own bookkeeping.
+    #[test]
+    fn a_round_that_visits_nothing_keeps_its_place() {
+        let mut dest = test_dest_state();
+        let ids = test_chain_ids(6);
+        dest.lagging = ids.iter().copied().collect();
+
+        let first = dest.drain_candidates(2);
+        dest.advance_cursor(first.last().copied());
+        let parked = dest.lagging_cursor;
+        assert!(parked.is_some(), "the first round must park the cursor");
+
+        // The saturated round: no candidate is visited, so nothing was considered.
+        dest.advance_cursor(None);
+
+        assert_eq!(
+            dest.lagging_cursor, parked,
+            "a round that visited nothing moved the cursor",
+        );
+        let resumed = dest.drain_candidates(2);
+        assert!(
+            resumed.iter().all(|id| !first.contains(id)),
+            "the drain restarted at the front of the backlog: {first:?} then {resumed:?}",
+        );
+    }
+
+    /// Chain ids in the order `lagging` holds them, so a test can name "the front" of a backlog.
+    fn test_chain_ids(count: usize) -> Vec<ChainId> {
+        let mut ids = (0..count)
+            .map(|i| ChainId(CryptoHash::test_hash(format!("chain{i}"))))
+            .collect::<Vec<_>>();
+        ids.sort_unstable();
+        ids
     }
 
     /// Destinations indexed the way `sync_destinations` assigns them: in registration order.
