@@ -142,11 +142,11 @@ impl ServerContext {
 
             #[cfg(with_metrics)]
             if let Some(port) = shard.metrics_port {
-                linera_service::init_metrics();
                 monitoring_server::start_metrics(
                     (listen_address.clone(), port),
                     shutdown_signal.clone(),
                     monitoring_server::MemoryProfiling::from(enable_memory_profiling),
+                    linera_service::init_metrics,
                 );
             }
 
@@ -192,11 +192,11 @@ impl ServerContext {
         for (state, shard_id, shard) in states {
             #[cfg(with_metrics)]
             if let Some(port) = shard.metrics_port {
-                linera_service::init_metrics();
                 monitoring_server::start_metrics(
                     (listen_address.to_string(), port),
                     shutdown_signal.clone(),
                     monitoring_server::MemoryProfiling::from(enable_memory_profiling),
+                    linera_service::init_metrics,
                 );
             }
 

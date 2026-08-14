@@ -306,14 +306,14 @@ where
         let mut join_set = JoinSet::new();
 
         #[cfg(with_metrics)]
-        linera_service::init_metrics();
-        #[cfg(with_metrics)]
-        metrics::init_metrics();
-        #[cfg(with_metrics)]
         monitoring_server::start_metrics_with_profiling(
             self.metrics_address(),
             shutdown_signal.clone(),
             enable_memory_profiling,
+            || {
+                linera_service::init_metrics();
+                metrics::init_metrics();
+            },
         )
         .await;
 

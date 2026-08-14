@@ -1424,12 +1424,11 @@ where
             axum::routing::get(util::graphiql).post(Self::application_handler);
 
         #[cfg(with_metrics)]
-        crate::init_metrics();
-        #[cfg(with_metrics)]
         monitoring_server::start_metrics_with_profiling(
             self.metrics_address(),
             cancellation_token.clone(),
             self.enable_memory_profiling,
+            crate::init_metrics,
         )
         .await;
 

@@ -873,11 +873,11 @@ impl Runnable for Job {
                         #[cfg(with_metrics)]
                         {
                             let metrics_address = std::net::SocketAddr::from(([127, 0, 0, 1], 0));
-                            linera_service::init_metrics();
                             monitoring_server::start_metrics(
                                 metrics_address,
                                 shutdown_notifier.clone(),
                                 monitoring_server::MemoryProfiling::Disabled,
+                                linera_service::init_metrics,
                             );
                         }
 
@@ -1181,11 +1181,11 @@ impl Runnable for Job {
                         #[cfg(with_metrics)]
                         {
                             let metrics_address = std::net::SocketAddr::from(([127, 0, 0, 1], 0));
-                            linera_service::init_metrics();
                             monitoring_server::start_metrics(
                                 metrics_address,
                                 shutdown_notifier.clone(),
                                 monitoring_server::MemoryProfiling::Disabled,
+                                linera_service::init_metrics,
                             );
                         }
 

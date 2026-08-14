@@ -5,10 +5,10 @@
 
 use prometheus::{
     core::{MetricVec, MetricVecBuilder},
-    exponential_buckets, histogram_opts, linear_buckets, register_gauge_vec, register_histogram,
-    register_histogram_vec, register_int_counter, register_int_counter_vec, register_int_gauge,
-    register_int_gauge_vec, GaugeVec, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge,
-    IntGaugeVec, Opts,
+    exponential_buckets, histogram_opts, linear_buckets, register_gauge, register_gauge_vec,
+    register_histogram, register_histogram_vec, register_int_counter, register_int_counter_vec,
+    register_int_gauge, register_int_gauge_vec, Gauge, GaugeVec, Histogram, HistogramVec,
+    IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Opts,
 };
 
 use crate::time::Instant;
@@ -194,6 +194,35 @@ pub fn register_int_gauge_vec(name: &str, description: &str, label_names: &[&str
         register_int_gauge_vec!(gauge_opts, label_names).expect("IntGauge can be created"),
         label_names,
     )
+}
+
+/// Wrapper around Prometheus `register_gauge!` macro (floating-point gauge) which also sets the
+/// `linera` namespace.
+pub fn register_gauge(name: &str, description: &str) -> Gauge {
+    let gauge_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
+    register_gauge!(gauge_opts).expect("Gauge can be created")
+}
+
+/// Wrapper around Prometheus `register_gauge!` macro with `linera` namespace and a subsystem.
+/// Results in metrics named `linera_<subsystem>_<name>`.
+pub fn register_gauge_with_subsystem(subsystem: &str, name: &str, description: &str) -> Gauge {
+    let gauge_opts = Opts::new(name, description)
+        .namespace(LINERA_NAMESPACE)
+        .subsystem(subsystem);
+    register_gauge!(gauge_opts).expect("Gauge can be created")
+}
+
+/// Wrapper around Prometheus `register_int_counter!` macro with `linera` namespace and a
+/// subsystem. Results in metrics named `linera_<subsystem>_<name>`.
+pub fn register_int_counter_with_subsystem(
+    subsystem: &str,
+    name: &str,
+    description: &str,
+) -> IntCounter {
+    let counter_opts = Opts::new(name, description)
+        .namespace(LINERA_NAMESPACE)
+        .subsystem(subsystem);
+    register_int_counter!(counter_opts).expect("IntCounter can be created")
 }
 
 /// Wrapper around Prometheus `register_gauge_vec!` macro (floating-point gauge) which also sets
@@ -388,6 +417,21 @@ impl MeasureLatency for Histogram {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Pins the naming contract the `_with_subsystem` helpers document, so callers can drop a
+    /// hand-written prefix from every metric name and rely on the subsystem instead.
+    #[test]
+    fn subsystem_is_inserted_between_namespace_and_name() {
+        register_int_counter_with_subsystem(
+            "testsubsystem",
+            "testname",
+            "Pins the namespace/subsystem/name composition",
+        );
+
+        assert!(prometheus::gather()
+            .iter()
+            .any(|family| family.get_name() == "linera_testsubsystem_testname"));
+    }
 
     // Helper function for approximate floating point comparison
     fn assert_float_vec_eq(left: &[f64], right: &[f64]) {

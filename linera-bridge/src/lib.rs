@@ -57,9 +57,11 @@ pub(crate) mod test_helpers;
 /// rarely-taken path leaves its panels blank and makes a routine restart look like the metric
 /// was removed.
 ///
-/// Ungated, unlike the equivalents in the other crates: this crate compiles its metrics
-/// unconditionally and has no `with_metrics` alias. It also serves no `/metrics` endpoint of
-/// its own, so it does not initialize its dependencies' metrics.
+/// Gated on `relay` rather than the `with_metrics` alias the other crates use: this crate has
+/// no such alias, and its metrics live in `relay`, which is itself behind that feature. It
+/// serves no `/metrics` endpoint of its own, so it does not initialize its dependencies'
+/// metrics.
+#[cfg(feature = "relay")]
 pub fn init_metrics() {
     relay::metrics::init_metrics();
 }
