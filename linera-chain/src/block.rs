@@ -23,7 +23,7 @@ use thiserror::Error;
 use crate::{
     data_types::{
         BlockExecutionOutcome, IncomingBundle, MessageBundle, OperationResult, OutgoingMessageExt,
-        ProposedBlock, Transaction,
+        OwnerAuthorization, ProposedBlock, Transaction,
     },
     types::CertificateValue,
 };
@@ -281,17 +281,45 @@ pub enum ConversionError {
 /// and operations to execute which define a state transition of the chain.
 /// Resulting messages produced by the operations are also included in the block body,
 /// together with oracle responses and events.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, SimpleObject, Allocative)]
+#[derive(Debug, Clone, SimpleObject, Allocative)]
 pub struct Block {
     /// Header of the block containing metadata of the block.
     pub header: BlockHeader,
     /// Body of the block containing all of the data.
     pub body: BlockBody,
+    /// The chain owner's signature over the block's proposal content, if retained.
+    ///
+    /// This field is *not* covered by [`Block::hash`], which commits to the header only:
+    /// the same block can be authorized by proposals in different rounds, so a block's
+    /// identity must not depend on which of those signatures happens to accompany it.
+    /// A block with an `authenticated_owner` is only valid together with a valid
+    /// authorization by that owner (see
+    /// [`OwnerAuthorization::check_block_authorization`]).
+    pub owner_authorization: Option<OwnerAuthorization>,
+}
+
+/// Two blocks are equal when they have the same header and body. The owner authorization
+/// is deliberately excluded, so that equality agrees with [`Block::hash`], which the
+/// protocol uses as the block's identity: a block re-proposed in a later round carrying a
+/// different (but equally valid) authorization is the *same* block.
+impl PartialEq for Block {
+    fn eq(&self, other: &Self) -> bool {
+        self.header == other.header && self.body == other.body
+    }
+}
+
+impl Eq for Block {}
+
+impl std::hash::Hash for Block {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.header.hash(state);
+        self.body.hash(state);
+    }
 }
 
 impl Serialize for Block {
     fn serialize<S: serde::ser::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut state = serializer.serialize_struct("Block", 2)?;
+        let mut state = serializer.serialize_struct("Block", 3)?;
 
         let header = SerializedHeader {
             chain_id: self.header.chain_id,
@@ -304,6 +332,7 @@ impl Serialize for Block {
         };
         state.serialize_field("header", &header)?;
         state.serialize_field("body", &self.body)?;
+        state.serialize_field("owner_authorization", &self.owner_authorization)?;
         state.end()
     }
 }
@@ -315,6 +344,7 @@ impl<'de> Deserialize<'de> for Block {
         struct Inner {
             header: SerializedHeader,
             body: BlockBody,
+            owner_authorization: Option<OwnerAuthorization>,
         }
         let inner = Inner::deserialize(deserializer)?;
 
@@ -352,6 +382,7 @@ impl<'de> Deserialize<'de> for Block {
         Ok(Self {
             header,
             body: inner.body,
+            owner_authorization: inner.owner_authorization,
         })
     }
 }
@@ -506,7 +537,18 @@ impl Block {
             operation_results: outcome.operation_results,
         };
 
-        Self { header, body }
+        Self {
+            header,
+            body,
+            owner_authorization: None,
+        }
+    }
+
+    /// Sets the chain owner's signature over this block's proposal content. Does not affect
+    /// [`Block::hash`].
+    pub fn with_owner_authorization(mut self, authorization: Option<OwnerAuthorization>) -> Self {
+        self.owner_authorization = authorization;
+        self
     }
 
     /// Returns the hash of this block, which commits to the entire block via its header.
@@ -690,6 +732,20 @@ impl Block {
             && self.body.events == *events
             && self.body.blobs == *blobs
             && self.body.operation_results == *operation_results
+    }
+
+    /// Returns the proposed block this block was created from, cloning the
+    /// transactions but not the execution outcome.
+    pub fn to_proposed(&self) -> ProposedBlock {
+        ProposedBlock {
+            chain_id: self.header.chain_id,
+            epoch: self.header.epoch,
+            transactions: self.body.transactions.clone(),
+            height: self.header.height,
+            timestamp: self.header.timestamp,
+            authenticated_owner: self.header.authenticated_owner,
+            previous_block_hash: self.header.previous_block_hash,
+        }
     }
 
     /// Splits this block back into the proposed block and its execution outcome.

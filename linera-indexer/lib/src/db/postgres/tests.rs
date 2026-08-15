@@ -322,5 +322,6 @@ fn create_test_block(chain_id: ChainId, height: BlockHeight) -> Block {
             blobs: vec![],
             operation_results: vec![],
         },
+        owner_authorization: None,
     }
 }

@@ -824,8 +824,8 @@ pub trait ProcessableCertificate: CertificateValue + Sized + 'static {
     /// justification chain).
     type Certificate: Certified<Value = Self> + Clone + Send + Sync + 'static;
 
-    /// Builds the concrete certificate from a signed quorum and a justification chain. The chain
-    /// is ignored for values (such as `Timeout`) that carry no justification.
+    /// Builds the concrete certificate from a signed quorum and a justification chain. The
+    /// chain is ignored for values (such as `Timeout`) that do not carry one.
     fn make_certificate(
         quorum: GenericCertificate<Self>,
         justification: linera_chain::justification::JustificationChain,

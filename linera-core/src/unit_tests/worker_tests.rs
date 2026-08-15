@@ -30,7 +30,7 @@ macro_rules! assert_outcome_matches {
 mod wasm;
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     iter,
     sync::{Arc, Mutex},
     time::Duration,
@@ -50,14 +50,15 @@ use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, ChainAndHeight,
         IncomingBundle, LiteValue, LiteVote, MessageAction, MessageBundle, OperationResult,
-        PostedMessage, ProposedBlock, Transaction, Vote,
+        OwnerAuthorization, PostedMessage, ProposalContent, ProposedBlock, Transaction, Vote,
     },
     justification::{JustificationChain, JustificationLink},
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
-        CertificateKind, CertificateValue, Certified, ConfirmedBlock, ConfirmedBlockCertificate,
-        Timeout, ValidatedBlock, ValidatedBlockCertificate,
+        Block, CertificateKind, CertificateValue, Certified, ConfirmedBlock,
+        ConfirmedBlockCertificate, GenericCertificate, Timeout, ValidatedBlock,
+        ValidatedBlockCertificate,
     },
     ChainError, ChainExecutionContext, ChainStateView,
 };
@@ -110,6 +111,9 @@ struct TestEnvironment<S: Storage> {
     admin_keypair: AccountSecretKey,
     admin_description: ChainDescription,
     other_chains: BTreeMap<ChainId, ChainDescription>,
+    // Secret keys of chain owners, used to produce the `OwnerAuthorization` that
+    // certificates of blocks with an `authenticated_owner` must retain.
+    owner_keys: HashMap<AccountOwner, AccountSecretKey>,
 }
 
 impl<S> TestEnvironment<S>
@@ -192,6 +196,8 @@ where
         let worker = make_worker(ValidatorKeypair::generate()).await;
         let executing_worker = make_worker(validator_keypair).await;
 
+        let mut owner_keys = HashMap::new();
+        owner_keys.insert(account_secret.public().into(), account_secret.copy());
         Ok(Self {
             committee,
             worker,
@@ -199,6 +205,45 @@ where
             admin_description,
             admin_keypair: account_secret,
             other_chains: BTreeMap::new(),
+            owner_keys,
+        })
+    }
+
+    /// Registers a chain owner's secret key, so that the environment can produce the
+    /// [`OwnerAuthorization`] required by certificates of blocks with an
+    /// `authenticated_owner`.
+    fn register_owner(&mut self, key_pair: &AccountSecretKey) -> AccountOwner {
+        let owner = key_pair.public().into();
+        self.owner_keys.insert(owner, key_pair.copy());
+        owner
+    }
+
+    /// Registers all secret keys held by the given signer. See [`Self::register_owner`].
+    fn register_signer_owners(&mut self, signer: &InMemorySigner) {
+        for (owner, bytes) in signer.keys() {
+            let key_pair: AccountSecretKey =
+                serde_json::from_slice(&bytes).expect("deserializing a secret key");
+            self.owner_keys.insert(owner, key_pair);
+        }
+    }
+
+    /// Returns the owner authorization required for the given block, signed with the
+    /// registered key of the block's `authenticated_owner`, if any.
+    fn owner_authorization_for(&self, block: &Block) -> Option<OwnerAuthorization> {
+        let owner = block.header.authenticated_owner?;
+        let key_pair = self.owner_keys.get(&owner).expect(
+            "the authenticated owner's key must be registered; call `env.register_owner` \
+             or `env.register_signer_owners` in the test setup",
+        );
+        let round = Round::MultiLeader(0);
+        let content = ProposalContent {
+            block: block.to_proposed(),
+            round,
+            outcome: None,
+        };
+        Some(OwnerAuthorization {
+            round,
+            signature: key_pair.sign(&content),
         })
     }
 
@@ -330,6 +375,31 @@ where
         T: ProcessableCertificate,
     {
         self.make_certificate_with_round(value, Round::MultiLeader(0))
+    }
+
+    /// Attaches the owner authorization required for blocks with an `authenticated_owner`.
+    fn authorize(&self, block: Block) -> Block {
+        let authorization = self.owner_authorization_for(&block);
+        block.with_owner_authorization(authorization)
+    }
+
+    /// Like [`Self::make_certificate`], but the certified block carries the owner
+    /// authorization required for blocks with an `authenticated_owner`.
+    fn make_confirmed_certificate(&self, value: ConfirmedBlock) -> ConfirmedBlockCertificate {
+        self.make_certificate(ConfirmedBlock::new(self.authorize(value.into_block())))
+    }
+
+    /// Like [`Self::make_certificate`], but the certified block carries the owner
+    /// authorization required for blocks with an `authenticated_owner`.
+    fn make_validated_certificate_with_round(
+        &self,
+        value: ValidatedBlock,
+        round: Round,
+    ) -> ValidatedBlockCertificate {
+        self.make_certificate_with_round(
+            ValidatedBlock::new(self.authorize(value.into_inner())),
+            round,
+        )
     }
 
     fn make_certificate_with_round<T>(&self, value: T, round: Round) -> T::Certificate
@@ -577,7 +647,7 @@ where
             }
             .with(block),
         );
-        self.make_certificate(value)
+        self.make_confirmed_certificate(value)
     }
 
     pub fn system_execution_state(&self, chain_id: &ChainId) -> SystemExecutionState {
@@ -610,7 +680,7 @@ where
             .executing_worker
             .stage_block_execution(proposal, None, blobs, BundleExecutionPolicy::committed())
             .await?;
-        let certificate = self.make_certificate(ConfirmedBlock::new(block));
+        let certificate = self.make_confirmed_certificate(ConfirmedBlock::new(block));
         self.executing_worker
             .fully_handle_certificate_with_notifications(certificate.clone(), &())
             .await?;
@@ -705,6 +775,7 @@ where
     let sender_public_key = signer.generate_new();
     let sender_owner = sender_public_key.into();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_signer_owners(&signer);
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -751,6 +822,55 @@ where
     Ok(())
 }
 
+/// An explicit authorization is evidence of an *earlier* proposal. One for the proposal's own
+/// round would let a third party propose a block on the authenticated owner's behalf, which
+/// this PR does not allow — even though the signature itself is perfectly valid.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_handle_block_proposal_authorization_for_own_round<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let sender_owner = signer.generate_new().into();
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_signer_owners(&signer);
+    let chain_1 = env
+        .add_root_chain(1, sender_owner, Amount::from_tokens(5))
+        .await
+        .id();
+    let chain_2 = env
+        .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ZERO)
+        .await
+        .id();
+    let proposal = make_first_block(chain_1)
+        .with_simple_transfer(chain_2, Amount::ONE)
+        .with_authenticated_owner(Some(sender_owner))
+        .into_first_proposal(sender_owner, &signer)
+        .await
+        .unwrap();
+    // The proposal's own signature *is* a valid authorization for its own round, so this
+    // attaches genuine evidence — it is just not evidence of a retry.
+    let authorization = OwnerAuthorization {
+        round: proposal.content.round,
+        signature: proposal.signature,
+    };
+    let proposal = proposal.with_owner_authorization(Some(authorization));
+    assert!(authorization
+        .verify_proposed_block(proposal.content.block.clone())
+        .is_ok());
+    assert_matches!(
+        env.executing_worker()
+            .handle_block_proposal(proposal)
+            .await
+            .0,
+        Err(WorkerError::InvalidSigner(_))
+    );
+    Ok(())
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -762,6 +882,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let sender_owner = signer.generate_new().into();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_signer_owners(&signer);
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -810,6 +931,7 @@ where
     let balance = Amount::from_tokens(5);
     let small_transfer = Amount::from_micros(1);
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_signer_owners(&signer);
     let clock = storage_builder.clock();
     let chain_1_desc = env.add_root_chain(1, owner, balance).await;
     let chain_2_desc = env.add_root_chain(2, owner, balance).await;
@@ -898,6 +1020,7 @@ where
     let balance = Amount::from_tokens(5);
     let small_transfer = Amount::from_micros(1);
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_signer_owners(&signer);
     let clock = storage_builder.clock();
     let chain_1_desc = env.add_root_chain(1, owner, balance).await;
     let chain_2_desc = env.add_root_chain(2, owner, balance).await;
@@ -935,7 +1058,7 @@ where
         .handle_block_proposal(block_proposal)
         .await;
     assert!(result.is_ok(), "Past timestamp should be accepted");
-    let certificate = env.make_certificate(ConfirmedBlock::new(block));
+    let certificate = env.make_confirmed_certificate(ConfirmedBlock::new(block));
     env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
@@ -966,7 +1089,7 @@ where
         .handle_block_proposal(block_proposal)
         .await;
     assert!(result.is_ok(), "Current timestamp should be accepted");
-    let certificate = env.make_certificate(ConfirmedBlock::new(block));
+    let certificate = env.make_confirmed_certificate(ConfirmedBlock::new(block));
     env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
@@ -1017,7 +1140,7 @@ where
         result.is_ok(),
         "Future timestamp within grace period should succeed after delay"
     );
-    let certificate = env.make_certificate(ConfirmedBlock::new(block));
+    let certificate = env.make_confirmed_certificate(ConfirmedBlock::new(block));
     env.executing_worker()
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
@@ -1056,6 +1179,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let sender_public_key = signer.generate_new();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_signer_owners(&signer);
     let chain_1_desc = env
         .add_root_chain(1, sender_public_key.into(), Amount::from_tokens(5))
         .await;
@@ -1098,6 +1222,7 @@ where
     let sender_public_key = signer.generate_new();
     let sender_owner = sender_public_key.into();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_signer_owners(&signer);
     let chain_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -1150,8 +1275,10 @@ where
     // Multi-leader round - it's not confirmed yet.
     assert!(block.matches_proposed_block(&block_proposal0.content.block));
     assert!(chain.manager.confirmed_vote().is_none());
-    let block_certificate0 =
-        env.make_certificate(chain.manager.validated_vote().unwrap().value().clone());
+    let block_certificate0 = env.make_validated_certificate_with_round(
+        chain.manager.validated_vote().unwrap().value().clone(),
+        Round::MultiLeader(0),
+    );
     drop(chain);
     env.worker()
         .handle_validated_certificate(block_certificate0)
@@ -1204,6 +1331,7 @@ where
     let sender_public_key = signer.generate_new();
     let sender_owner = sender_public_key.into();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_signer_owners(&signer);
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -1333,6 +1461,7 @@ where
     let recipient_public_key = signer.generate_new();
     let recipient_owner = recipient_public_key.into();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_signer_owners(&signer);
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(6))
         .await;
@@ -1679,6 +1808,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let sender_owner = signer.generate_new().into();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_signer_owners(&signer);
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -1719,6 +1849,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let sender_owner = signer.generate_new().into();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_signer_owners(&signer);
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -1744,8 +1875,10 @@ where
     assert!(chain.is_active().await?);
     assert!(chain.manager.confirmed_vote().is_none()); // It was a multi-leader
                                                        // round.
-    let validated_certificate =
-        env.make_certificate(chain.manager.validated_vote().unwrap().value().clone());
+    let validated_certificate = env.make_validated_certificate_with_round(
+        chain.manager.validated_vote().unwrap().value().clone(),
+        Round::MultiLeader(0),
+    );
     drop(chain);
 
     let (chain_info_response, _actions) = env
@@ -1775,6 +1908,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let sender_owner = signer.generate_new().into();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_signer_owners(&signer);
     let chain_1_desc = env
         .add_root_chain(1, sender_owner, Amount::from_tokens(5))
         .await;
@@ -1809,6 +1943,82 @@ where
     Ok(())
 }
 
+/// Rebuilds a confirmed certificate with the owner authorization stripped from its block.
+/// The block's hash, and therefore the validator signatures, are unaffected.
+fn without_owner_authorization(
+    certificate: ConfirmedBlockCertificate,
+) -> ConfirmedBlockCertificate {
+    let round = certificate.round();
+    let first_round = certificate.quorum().first_round();
+    let justification_commitment = certificate.quorum().justification_commitment();
+    let signatures = certificate.signatures().clone();
+    let (quorum, justification) = certificate.into_parts();
+    let mut block = quorum.into_value().into_block();
+    block.owner_authorization = None;
+    let quorum = GenericCertificate::new_with_payload(
+        ConfirmedBlock::new(block),
+        round,
+        None,
+        first_round,
+        justification_commitment,
+        signatures,
+    );
+    ConfirmedBlockCertificate::from_parts(quorum, justification)
+}
+
+/// A block that declares an authenticated owner is only valid together with that owner's
+/// signature, which the certified block carries but its hash does not cover.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_handle_certificate_without_owner_authorization<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let key_pair = AccountSecretKey::generate();
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_owner(&key_pair);
+    let chain_1 = env
+        .add_root_chain(1, key_pair.public().into(), Amount::from_tokens(5))
+        .await
+        .id();
+    let chain_2 = env
+        .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ZERO)
+        .await
+        .id();
+    let certificate = env
+        .make_simple_transfer_certificate(
+            chain_1,
+            key_pair.public(),
+            chain_2,
+            Amount::ONE,
+            vec![],
+            None,
+        )
+        .await;
+    assert!(certificate.block().owner_authorization.is_some());
+
+    // Stripping the authorization leaves the certificate's signatures valid, but the block
+    // is no longer authorized, so the worker rejects it.
+    let stripped = without_owner_authorization(certificate.clone());
+    assert_eq!(stripped.hash(), certificate.hash());
+    stripped.check(env.committee())?;
+    assert_matches!(
+        env.worker()
+            .fully_handle_certificate_with_notifications(stripped, &())
+            .await,
+        Err(WorkerError::ChainError(error))
+            if matches!(*error, ChainError::MissingOwnerAuthorization)
+    );
+
+    // The same certificate with the authorization retained is accepted.
+    env.worker()
+        .fully_handle_certificate_with_notifications(certificate, &())
+        .await?;
+    Ok(())
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
@@ -1821,6 +2031,7 @@ where
     let sender_pubkey = signer.generate_new();
     let test_pubkey = signer.generate_new();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_signer_owners(&signer);
     let chain_2_desc = env
         .add_root_chain(2, test_pubkey.into(), Amount::ZERO)
         .await;
@@ -1861,6 +2072,7 @@ where
 {
     let sender_key_pair = AccountSecretKey::generate();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_owner(&sender_key_pair);
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(5))
         .await;
@@ -1900,6 +2112,7 @@ where
 {
     let key_pair = AccountSecretKey::generate();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_owner(&key_pair);
     let chain_1_desc = env
         .add_root_chain(1, key_pair.public().into(), Amount::from_tokens(5))
         .await;
@@ -2005,6 +2218,7 @@ where
 {
     let sender_key_pair = AccountSecretKey::generate();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_owner(&sender_key_pair);
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::ONE)
         .await;
@@ -2067,6 +2281,7 @@ where
     let key_pair = AccountSecretKey::generate();
     let owner = key_pair.public().into();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_owner(&key_pair);
     let chain_1_desc = env.add_root_chain(1, owner, Amount::ONE).await;
     let chain_1 = chain_1_desc.id();
 
@@ -2113,6 +2328,7 @@ where
     let key_pair = AccountSecretKey::generate();
     let owner = key_pair.public().into();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_owner(&key_pair);
     let chain_1_desc = env.add_root_chain(1, owner, Amount::ONE).await;
     let chain_1 = chain_1_desc.id();
     let chain_2_desc = env.add_root_chain(2, owner, Amount::ZERO).await;
@@ -2195,6 +2411,7 @@ where
     let sender_key_pair = AccountSecretKey::generate();
     let sender_public_key = sender_key_pair.public();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_owner(&sender_key_pair);
     let chain_1_desc = env
         .add_root_chain(1, sender_public_key.into(), Amount::from_tokens(20))
         .await;
@@ -2268,6 +2485,7 @@ where
 {
     let sender_key_pair = AccountSecretKey::generate();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_owner(&sender_key_pair);
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(10))
         .await;
@@ -2306,6 +2524,7 @@ where
 {
     let sender_key_pair = AccountSecretKey::generate();
     let mut env = TestEnvironment::new(&mut storage_builder, true, false).await?;
+    env.register_owner(&sender_key_pair);
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(10))
         .await;
@@ -2358,6 +2577,8 @@ where
     let sender_key_pair = AccountSecretKey::generate();
     let recipient_key_pair = AccountSecretKey::generate();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_owner(&sender_key_pair);
+    env.register_owner(&recipient_key_pair);
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(5))
         .await;
@@ -2525,6 +2746,7 @@ where
 {
     let sender_key_pair = AccountSecretKey::generate();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_owner(&sender_key_pair);
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(5))
         .await;
@@ -2573,6 +2795,8 @@ where
     let recipient = AccountOwner::from(recipient_pubkey);
 
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_owner(&sender_key_pair);
+    env.register_owner(&recipient_key_pair);
     let chain_1_desc = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(6))
         .await;
@@ -2964,8 +3188,9 @@ async fn test_transfers_and_committee_creation<B>(mut storage_builder: B) -> any
 where
     B: StorageBuilder,
 {
-    let owner1 = AccountSecretKey::generate().public().into();
+    let owner1_key = AccountSecretKey::generate();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    let owner1 = env.register_owner(&owner1_key);
     let chain_1_desc = env.add_root_chain(1, owner1, Amount::from_tokens(3)).await;
     let mut committees = BTreeMap::new();
     let committee = env.committee().clone();
@@ -3099,7 +3324,8 @@ where
 {
     let mut env =
         TestEnvironment::new_with_amount(&mut storage_builder, false, false, Amount::ZERO).await?;
-    let owner1 = AccountSecretKey::generate().public().into();
+    let owner1_key = AccountSecretKey::generate();
+    let owner1 = env.register_owner(&owner1_key);
     let chain_1_desc = env.add_root_chain(1, owner1, Amount::from_tokens(3)).await;
     let mut committees = BTreeMap::new();
     let committee = env.committee().clone();
@@ -3335,6 +3561,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
 
     let chain_0 = env.admin_description.clone();
     let key_pair0 = AccountSecretKey::generate();
+    env.register_owner(&key_pair0);
     let id0 = chain_0.id();
     let id1 = chain_1.id();
 
@@ -3519,6 +3746,7 @@ where
     let owner0 = AccountOwner::from(key_pairs[0]);
     let owner1 = AccountOwner::from(key_pairs[1]);
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_signer_owners(&signer);
     let clock = storage_builder.clock();
     let chain_1_desc = env.add_root_chain(1, owner0, Amount::from_tokens(2)).await;
     let small_transfer = Amount::from_micros(1);
@@ -3546,7 +3774,7 @@ where
         )
         .await?;
     let value0 = ConfirmedBlock::new(block0);
-    let certificate0 = env.make_certificate(value0.clone());
+    let certificate0 = env.make_confirmed_certificate(value0.clone());
     let response = env
         .executing_worker()
         .fully_handle_certificate_with_notifications(certificate0, &())
@@ -3641,7 +3869,7 @@ where
         .handle_block_proposal(proposal1)
         .await
         .0?;
-    let value1 = ValidatedBlock::new(block1.clone());
+    let value1 = ValidatedBlock::new(env.authorize(block1.clone()));
 
     // If we send the validated block certificate to the worker, it votes to confirm.
     let vote = response.info.manager.pending.clone().unwrap();
@@ -3684,7 +3912,8 @@ where
 
     // Since round 3 is already over, the validator won't vote for a validated block from round 3.
     let value2 = ValidatedBlock::new(block2.clone());
-    let certificate = env.make_certificate_with_round(value2.clone(), Round::SingleLeader(2));
+    let certificate =
+        env.make_validated_certificate_with_round(value2.clone(), Round::SingleLeader(2));
     env.executing_worker()
         .handle_validated_certificate(certificate)
         .await?;
@@ -3715,7 +3944,8 @@ where
     );
 
     // But with the validated block certificate for block2, it is allowed.
-    let certificate2 = env.make_certificate_with_round(value2.clone(), Round::SingleLeader(4));
+    let certificate2 =
+        env.make_validated_certificate_with_round(value2.clone(), Round::SingleLeader(4));
 
     let proposal = BlockProposal::new_retry_regular(
         owner1,
@@ -3778,7 +4008,7 @@ where
 
     // The worker updates its locking block even if it's from a past round and it doesn't sign
     // to confirm.
-    let certificate = env.make_certificate_with_round(value1, Round::SingleLeader(7));
+    let certificate = env.make_validated_certificate_with_round(value1, Round::SingleLeader(7));
     let worker = env.executing_worker().clone();
     worker
         .handle_validated_certificate(certificate.clone())
@@ -3808,6 +4038,7 @@ where
     let owner0 = AccountOwner::from(key_pairs[0]);
     let owner1 = AccountOwner::from(key_pairs[1]);
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_signer_owners(&signer);
     let clock = storage_builder.clock();
     let chain_1_desc = env.add_root_chain(1, owner0, Amount::from_tokens(2)).await;
     let small_transfer = Amount::from_micros(1);
@@ -3836,7 +4067,7 @@ where
         )
         .await?;
     let value0 = ConfirmedBlock::new(block0);
-    let certificate0 = env.make_certificate(value0.clone());
+    let certificate0 = env.make_confirmed_certificate(value0.clone());
     let response = env
         .executing_worker()
         .fully_handle_certificate_with_notifications(certificate0, &())
@@ -3932,6 +4163,7 @@ where
     let owner0 = AccountOwner::from(key_pairs[0]);
     let owner1 = AccountOwner::from(key_pairs[1]);
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_signer_owners(&signer);
     let clock = storage_builder.clock();
     let chain_1_desc = env.add_root_chain(1, owner0, Amount::from_tokens(2)).await;
     let chain_id = chain_1_desc.id();
@@ -3965,7 +4197,7 @@ where
         )
         .await?;
     let value0 = ConfirmedBlock::new(block0);
-    let certificate0 = env.make_certificate(value0.clone());
+    let certificate0 = env.make_confirmed_certificate(value0.clone());
     let response = env
         .executing_worker()
         .fully_handle_certificate_with_notifications(certificate0, &())
@@ -4021,10 +4253,18 @@ where
     assert_eq!(response.info.manager.leader, None);
 
     // Now any owner can propose a block. But block1 is locked. Re-proposing it is allowed.
-    let proposal1b =
-        BlockProposal::new_retry_fast(owner1, Round::MultiLeader(0), proposal1.clone(), &signer)
-            .await
-            .unwrap();
+    let proposal1b = BlockProposal::new_initial(
+        owner1,
+        Round::MultiLeader(0),
+        proposal1.content.block.clone(),
+        &signer,
+    )
+    .await
+    .unwrap()
+    .with_owner_authorization(Some(OwnerAuthorization {
+        round: Round::Fast,
+        signature: proposal1.signature,
+    }));
     let response = env
         .executing_worker()
         .handle_block_proposal(proposal1b)
@@ -4051,10 +4291,18 @@ where
     assert_matches!(result, Err(WorkerError::ChainError(err))
         if matches!(*err, ChainError::HasIncompatibleConfirmedVote(_, Round::Fast))
     );
-    let proposal3 =
-        BlockProposal::new_retry_fast(owner0, Round::MultiLeader(2), proposal1.clone(), &signer)
-            .await
-            .unwrap();
+    let proposal3 = BlockProposal::new_initial(
+        owner0,
+        Round::MultiLeader(2),
+        proposal1.content.block.clone(),
+        &signer,
+    )
+    .await
+    .unwrap()
+    .with_owner_authorization(Some(OwnerAuthorization {
+        round: Round::Fast,
+        signature: proposal1.signature,
+    }));
     env.executing_worker()
         .handle_block_proposal(proposal3)
         .await
@@ -4071,7 +4319,8 @@ where
         )
         .await?;
     let value2 = ValidatedBlock::new(block2.clone());
-    let certificate2 = env.make_certificate_with_round(value2.clone(), Round::MultiLeader(0));
+    let certificate2 =
+        env.make_validated_certificate_with_round(value2.clone(), Round::MultiLeader(0));
     let proposal = BlockProposal::new_retry_regular(
         owner1,
         Round::MultiLeader(3),
@@ -4113,6 +4362,7 @@ where
     let mut signer = InMemorySigner::new(None);
     let public_key = signer.generate_new();
     let mut env = TestEnvironment::new(&mut storage_builder, true, false).await?;
+    env.register_signer_owners(&signer);
     let clock = storage_builder.clock();
     let committee = env.committee().clone();
     let admin_chain_id = env.admin_description.id();
@@ -4302,6 +4552,7 @@ where
     let small_transfer = Amount::from_micros(1);
 
     let mut env = TestEnvironment::new(&mut storage_builder, false, true).await?;
+    env.register_signer_owners(&signer);
     let clock = storage_builder.clock();
     let chain_1_desc = env.add_root_chain(1, owner, balance).await;
     let chain_2_desc = env.add_root_chain(2, owner, balance).await;
@@ -4461,6 +4712,7 @@ where
     let receiver_public_key = signer.generate_new();
     let owner = receiver_public_key.into();
     let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    env.register_signer_owners(&signer);
     let chain_1_desc = env.add_root_chain(1, owner, Amount::from_tokens(10)).await;
     let chain_2_desc = env.add_root_chain(2, owner, Amount::ZERO).await;
     let chain_1 = chain_1_desc.id();
@@ -4616,6 +4868,7 @@ where
 {
     let sender_key_pair = AccountSecretKey::generate();
     let mut env = TestEnvironment::new(&mut storage_builder, true, false).await?;
+    env.register_owner(&sender_key_pair);
     env.worker = env.worker.with_allow_revert_confirm(true);
     let chain_1 = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(100))
@@ -4774,6 +5027,7 @@ where
 {
     let sender_key_pair = AccountSecretKey::generate();
     let mut env = TestEnvironment::new(&mut storage_builder, true, false).await?;
+    env.register_owner(&sender_key_pair);
     let chain_id = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(100))
         .await
@@ -4991,6 +5245,7 @@ where
     let mut env = TestEnvironment::new(&mut storage_builder, true, false)
         .await?
         .with_cross_chain_message_chunk_limit(1);
+    env.register_owner(&sender_key_pair);
 
     let chain_1 = env
         .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(100))
@@ -5111,6 +5366,7 @@ where
     let mut env = TestEnvironment::new(&mut storage_builder, true, false)
         .await?
         .with_cross_chain_message_chunk_limit(1);
+    env.register_owner(&sender_key_pair);
     env.worker = env.worker.with_allow_revert_confirm(true);
 
     let chain_1 = env
@@ -5221,6 +5477,7 @@ where
 {
     let sender_key_pair = AccountSecretKey::generate();
     let mut env = TestEnvironment::new(&mut storage_builder, true, false).await?;
+    env.register_owner(&sender_key_pair);
     // Run the worker as a client; share the tracked-set map so later inserts are visible to the
     // chain worker (which holds a clone of the `Arc`).
     let chain_modes = Arc::new(std::sync::RwLock::new(crate::client::ChainModes::default()));
@@ -5296,6 +5553,7 @@ where
 {
     let sender_key_pair = AccountSecretKey::generate();
     let mut env = TestEnvironment::new(&mut storage_builder, true, false).await?;
+    env.register_owner(&sender_key_pair);
     let chain_modes = Arc::new(std::sync::RwLock::new(crate::client::ChainModes::default()));
     env.worker.chain_modes = Some(chain_modes.clone());
 
@@ -5374,6 +5632,7 @@ where
 {
     let sender_key_pair = AccountSecretKey::generate();
     let mut env = TestEnvironment::new(&mut storage_builder, true, false).await?;
+    env.register_owner(&sender_key_pair);
     let chain_modes = Arc::new(std::sync::RwLock::new(crate::client::ChainModes::default()));
     env.worker.chain_modes = Some(chain_modes.clone());
 
@@ -5466,6 +5725,7 @@ where
 {
     let key_pair = AccountSecretKey::generate();
     let mut env = TestEnvironment::new(&mut storage_builder, true, false).await?;
+    env.register_owner(&key_pair);
     let chain_1 = env
         .add_root_chain(1, key_pair.public().into(), Amount::from_tokens(10))
         .await

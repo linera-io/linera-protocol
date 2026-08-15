@@ -58,31 +58,55 @@ pub trait ValidatorVote {}
 
 /// **Definition (Proposal).** A *proposal* is a [`BlockProposal`]: an owner's signature over a
 /// [`ProposalContent`] — a [`ProposedBlock`], a [`Round`](linera_base::data_types::Round) and an
-/// optional [`BlockExecutionOutcome`] — plus an optional [`OriginalProposal`] recording which
-/// earlier attempt it retries. The three retry shapes are:
+/// optional [`BlockExecutionOutcome`] — plus two independent optional fields recording which
+/// earlier attempt it retries: an [`OwnerAuthorization`] (the chain owner's signature over the
+/// outcome-less content, in the round it was signed for) and a [`ValidatedBlockCertificate`].
+/// The three retry shapes are:
 ///
-/// * `original_proposal == None`: a **fresh proposal**, carrying no outcome;
-/// * [`OriginalProposal::Fast`]: a **fast retry**, re-proposing a block first proposed in
-///   [`Round::Fast`](linera_base::data_types::Round::Fast), carrying the super owner's original
-///   signature and no outcome;
-/// * [`OriginalProposal::Regular`]: a **regular retry**, re-proposing a block that already
-///   carries a [`ValidatedBlockCertificate`], carrying that certificate and the outcome it
-///   certifies.
+/// * no certificate, and either no [`OwnerAuthorization`] or one for the proposal's *own*
+///   round: a **fresh proposal**, carrying no outcome. The proposer's own signature doubles as
+///   the authorization when the field is absent; when it is present, the owner signed the block
+///   for this round and someone else is proposing it;
+/// * an [`OwnerAuthorization`] in [`Round::Fast`](linera_base::data_types::Round::Fast),
+///   strictly below the proposal's round, and no certificate: a **fast retry**, re-proposing a
+///   block first proposed in the fast round, carrying the super owner's original signature and
+///   no outcome;
+/// * a [`ValidatedBlockCertificate`]: a **regular retry**, re-proposing a block that was already
+///   validated, carrying that certificate and the outcome it certifies, plus the block's
+///   original authorization.
 ///
-/// [`BlockProposal::check_invariants`] enforces that exactly these three shapes are well-formed,
-/// that a retry's round is *strictly greater* than the round it retries, and that a regular
-/// retry's certificate certifies exactly the block and outcome being re-proposed. The
-/// specification uses all three facts.
+/// The three shapes are enforced in *two* places, and the split matters because only the first
+/// travels with the type:
+///
+/// * [`BlockProposal::check_invariants`] requires `content.round >= authorization.round` — so an
+///   authorization is never for a *later* round than the proposal carrying it — that a carried
+///   outcome accompanies a certificate and vice versa, and that a regular retry satisfies
+///   `content.round > certificate.round` and certifies exactly the block and outcome being
+///   re-proposed.
+/// * `ChainWorkerState::try_handle_block_proposal` rejects an explicit [`OwnerAuthorization`]
+///   that is neither a fast retry nor accompanied by a certificate:
+///
+///   ```text
+///   let retries_fast_round = authorization.round.is_fast() && authorization.round < content.round;
+///   ensure!(retries_fast_round || validated_certificate.is_some(), WorkerError::InvalidSigner(owner));
+///   ```
+///
+///   Without it, a fourth shape — an explicit authorization for a non-fast *earlier* round, with
+///   no certificate — passes `check_invariants`. Note this is also where the fast retry's round
+///   becomes *strictly* greater than the round it retries: `check_invariants` alone only gives
+///   `>=`, and strictness for a regular retry comes from `content.round > certificate.round`.
+///
+/// This is another instance of the pattern [`ProposalGate`] records: the guard lives at the call
+/// site rather than in the type, so a new caller must reproduce it.
 ///
 /// [`BlockProposal`]: crate::data_types::BlockProposal
 /// [`BlockProposal::check_invariants`]: crate::data_types::BlockProposal::check_invariants
 /// [`ProposalContent`]: crate::data_types::ProposalContent
 /// [`ProposedBlock`]: crate::data_types::ProposedBlock
 /// [`BlockExecutionOutcome`]: crate::data_types::BlockExecutionOutcome
-/// [`OriginalProposal`]: crate::data_types::OriginalProposal
-/// [`OriginalProposal::Fast`]: crate::data_types::OriginalProposal::Fast
-/// [`OriginalProposal::Regular`]: crate::data_types::OriginalProposal::Regular
+/// [`OwnerAuthorization`]: crate::data_types::OwnerAuthorization
 /// [`ValidatedBlockCertificate`]: crate::types::ValidatedBlockCertificate
+/// [`ProposalGate`]: crate::manager::proof::voting::ProposalGate
 pub trait SignedProposal {}
 
 /// **Definition (Certificate).** A *certificate* is a [`GenericCertificate<T>`] together with

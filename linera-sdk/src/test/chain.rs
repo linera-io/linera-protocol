@@ -263,7 +263,8 @@ impl ActiveChain {
         block_builder(&mut block);
 
         // TODO(#2066): Remove boxing once call-stack is shallower
-        let (certificate, resource_tracker) = Box::pin(block.try_sign(&blobs)).await?;
+        let (certificate, resource_tracker) =
+            Box::pin(block.try_sign(&blobs, &self.key_pair)).await?;
 
         let result = self
             .validator

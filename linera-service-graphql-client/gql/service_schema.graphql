@@ -32,6 +32,11 @@ A unique identifier for a user or an application.
 scalar AccountOwner
 
 """
+A signature by the owner of an account
+"""
+scalar AccountSignature
+
+"""
 Admin operation metadata.
 """
 type AdminOperationMetadata {
@@ -140,6 +145,17 @@ type Block {
 	Body of the block containing all of the data.
 	"""
 	body: BlockBody!
+	"""
+	The chain owner's signature over the block's proposal content, if retained.
+	
+	This field is *not* covered by [`Block::hash`], which commits to the header only:
+	the same block can be authorized by proposals in different rounds, so a block's
+	identity must not depend on which of those signatures happens to accompany it.
+	A block with an `authenticated_owner` is only valid together with a valid
+	authorization by that owner (see
+	[`OwnerAuthorization::check_block_authorization`]).
+	"""
+	ownerAuthorization: OwnerAuthorization
 }
 
 """
@@ -1396,6 +1412,39 @@ type OutgoingMessage {
 	The message itself.
 	"""
 	message: Message!
+}
+
+"""
+Evidence that a chain owner authorized a block: the owner's signature over the
+block's [`ProposalContent`], without execution outcome.
+
+Every block is first proposed without an execution outcome — an outcome appears in
+a proposal only when re-proposing an already validated block — so such a signature
+always exists, and it is the one validators checked against the block's
+`authenticated_owner`. Retaining it on the block lets anyone verify that a chain
+owner really authorized the block without trusting the validator quorum. A certified
+block with an `authenticated_owner` is *not valid* without this signature (see
+[`OwnerAuthorization::check_block_authorization`]); for other blocks it is optional
+provenance.
+
+This value is carried by [`Block::owner_authorization`] but is not covered by
+[`Block::hash`] or by the validator signatures: the same block can be authorized by
+proposals in different rounds, and a block's identity must not depend on which of
+those signatures accompanies it. Given the block, anyone can reconstruct the signed
+proposal content and check the signature, so it cannot be forged — only withheld,
+which [`OwnerAuthorization::check_block_authorization`] rejects for blocks with an
+authenticated owner.
+"""
+type OwnerAuthorization {
+	"""
+	The round of the proposal whose signature was retained.
+	"""
+	round: Round!
+	"""
+	The owner's signature over the [`ProposalContent`] consisting of the block's
+	proposed content, `round`, and no execution outcome.
+	"""
+	signature: AccountSignature!
 }
 
 """

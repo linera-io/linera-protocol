@@ -334,3 +334,71 @@ fn round_ordering() {
     assert!(Round::SingleLeader(2) < Round::Validator(0));
     assert!(Round::Validator(1) < Round::Validator(2))
 }
+
+#[test]
+fn owner_authorization_verifies_against_block() {
+    let key = AccountSecretKey::Ed25519(Ed25519SecretKey::generate());
+    let owner: AccountOwner = key.public().into();
+    let mut block = sample_block();
+    block.header.authenticated_owner = Some(owner);
+    let round = Round::MultiLeader(0);
+    let content = ProposalContent {
+        block: block.to_proposed(),
+        round,
+        outcome: None,
+    };
+    let authorization = OwnerAuthorization {
+        round,
+        signature: key.sign(&content),
+    };
+    assert_eq!(authorization.verify(&block).unwrap(), owner);
+
+    // A signature over a different round does not verify.
+    let wrong_round = OwnerAuthorization {
+        round: Round::MultiLeader(1),
+        ..authorization
+    };
+    assert!(wrong_round.verify(&block).is_err());
+
+    // A valid signature by a signer other than the authenticated owner does not verify.
+    let other_key = AccountSecretKey::Secp256k1(Secp256k1SecretKey::generate());
+    let other_authorization = OwnerAuthorization {
+        round,
+        signature: other_key.sign(&content),
+    };
+    assert!(other_authorization.verify(&block).is_err());
+
+    // A block with an authenticated owner is invalid without the authorization.
+    assert_matches::assert_matches!(
+        OwnerAuthorization::check_block_authorization(&block),
+        Err(ChainError::MissingOwnerAuthorization)
+    );
+    block.owner_authorization = Some(authorization);
+    assert!(OwnerAuthorization::check_block_authorization(&block).is_ok());
+
+    // The authorization is not covered by the block hash: attaching it leaves the block's
+    // identity, and its equality with the unauthorized block, unchanged.
+    let mut unauthorized = block.clone();
+    unauthorized.owner_authorization = None;
+    assert_eq!(block.hash(), unauthorized.hash());
+    assert_eq!(block, unauthorized);
+
+    // Without an authenticated owner, the authorization is optional, and any owner's
+    // valid signature is accepted.
+    block.header.authenticated_owner = None;
+    block.owner_authorization = None;
+    assert!(OwnerAuthorization::check_block_authorization(&block).is_ok());
+    let content = ProposalContent {
+        block: block.to_proposed(),
+        round,
+        outcome: None,
+    };
+    let authorization = OwnerAuthorization {
+        round,
+        signature: other_key.sign(&content),
+    };
+    assert_eq!(
+        authorization.verify(&block).unwrap(),
+        other_key.public().into()
+    );
+}

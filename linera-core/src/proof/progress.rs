@@ -220,13 +220,14 @@ pub trait LockRecovery:
 /// * *Confirmed vote.* This is the one that needs [`LockRecovery`]. If `v` has a confirmed vote
 ///   in round `p`, then by [`LockRecovery`] the driver's recovered lock has round `t ≥ p` and
 ///   certifies the same block `B` that `v` confirmed if `t = p`. The driver proposes `B` as a
-///   [`Regular`] retry carrying that certificate (`process_pending_block_inner` takes the
+///   regular retry carrying that certificate (`process_pending_block_inner` takes the
 ///   `if let Some(locking) = info.manager.requested_locking` branch and builds
 ///   `BlockProposal::new_retry_regular`). By [`UnlockingRequiresHigherCertificate`] the guard
 ///   then requires `p ≤ t` when the blocks match, which holds. (When `t > p` and the blocks
 ///   differ, the guard requires `p < t`, which also holds.)
 ///
-/// A `LockingBlock::Fast` lock is retried as `BlockProposal::new_retry_fast`, and the same guard
+/// A `LockingBlock::Fast` lock is retried as a `BlockProposal::new_initial` carrying the fast
+/// proposal's signature as its `owner_authorization`, and the same guard
 /// requires `v.confirmed_vote.round.is_fast()` and a matching block, which holds because a fast
 /// confirmation is the only confirmation possible below the fast round's successor. ∎
 ///
@@ -235,7 +236,6 @@ pub trait LockRecovery:
 /// [`ChainManager::check_proposed_block`]: linera_chain::manager::ChainManager::check_proposed_block
 /// [`Accept`]: linera_chain::manager::Outcome::Accept
 /// [`ValidatedBlockCertificate`]: linera_chain::types::ValidatedBlockCertificate
-/// [`Regular`]: linera_chain::data_types::OriginalProposal::Regular
 /// [`VoteRoundBelowCurrentRound`]: linera_chain::manager::proof::rounds::VoteRoundBelowCurrentRound
 /// [`CertificateCarriesCorrectVote`]: linera_chain::data_types::proof::quorum::CertificateCarriesCorrectVote
 /// [`RoundFloor`]: linera_chain::manager::proof::rounds::RoundFloor
@@ -259,8 +259,7 @@ pub trait ProposalAccepted:
 /// for the block in round `r`. Every such vote carries the same signed payload: same block hash,
 /// same round, and the same `unlocking_round`/`justification_commitment` pair, which
 /// [`ChainManager::create_vote`] derives from the proposal's own
-/// [`Regular`](linera_chain::data_types::OriginalProposal::Regular) certificate — identical
-/// across validators because the proposal is. So all correct votes fall into one group of
+/// [`ValidatedBlockCertificate`] — identical across validators because the proposal is. So all correct votes fall into one group of
 /// `communicate_with_quorum`, which by [`CorrectValidatorsFormQuorum`] reaches the quorum
 /// threshold; by [`CorrectValidatorAvailability`] and [`EventualSynchrony`] they arrive within Δ.
 /// `Client::submit_block_proposal` assembles them into a certificate, whose justification chain
