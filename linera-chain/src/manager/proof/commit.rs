@@ -180,7 +180,7 @@ pub trait CertifiedBlockWasExecuted:
 /// *Proof.* `try_handle_block_proposal` calls
 /// `remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())` before executing
 /// and voting. For each bundle that helper calls `Inbox::remove_bundle` and, because
-/// `must_be_present` is set, rejects with [`ChainError::MissingCrossChainUpdate`] unless it
+/// `must_be_present` is set, rejects with [`ChainError::MissingCrossChainUpdates`] unless it
 /// returned `true` — which happens only on the branch that found a bundle already in
 /// `added_bundles` and checked `bundle == &previous_bundle`. So a bundle the validator has not
 /// received, or one that differs in any field from what it received, blocks the vote. ∎
@@ -210,7 +210,7 @@ pub trait CertifiedBlockWasExecuted:
 /// (see [`AccountabilityScope`]).
 ///
 /// [`IncomingBundle`]: crate::data_types::IncomingBundle
-/// [`ChainError::MissingCrossChainUpdate`]: crate::ChainError::MissingCrossChainUpdate
+/// [`ChainError::MissingCrossChainUpdates`]: crate::ChainError::MissingCrossChainUpdates
 /// [`MaxByzantineWeight`]: crate::manager::proof::model::MaxByzantineWeight
 /// [`AccountabilityScope`]: crate::justification::proof::AccountabilityScope
 pub trait IncomingBundlesAreSelfDerived: ProposalGate + CertifiedBlockWasExecuted {}
