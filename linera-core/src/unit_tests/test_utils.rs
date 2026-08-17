@@ -1057,6 +1057,7 @@ where
         let open_chain_config = InitialChainConfig {
             ownership: make_ownership(public_key.into()),
             epoch: Epoch(0),
+            account: AccountOwner::CHAIN,
             balance,
             application_permissions: ApplicationPermissions::default(),
         };

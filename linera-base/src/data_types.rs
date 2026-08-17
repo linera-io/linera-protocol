@@ -32,7 +32,8 @@ use crate::{
     crypto::{BcsHashable, CryptoError, CryptoHash},
     doc_scalar, hex_debug, http,
     identifiers::{
-        ApplicationId, BlobId, BlobType, ChainId, EventId, GenericApplicationId, ModuleId, StreamId,
+        AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, GenericApplicationId,
+        ModuleId, StreamId,
     },
     limited_writer::{LimitedWriter, LimitedWriterError},
     ownership::ChainOwnership,
@@ -1226,7 +1227,10 @@ pub struct InitialChainConfig {
     pub ownership: ChainOwnership,
     /// The epoch in which the chain is created.
     pub epoch: Epoch,
-    /// The initial chain balance.
+    /// The account on the new chain credited with `balance`. Use [`AccountOwner::CHAIN`] to
+    /// fund the chain account itself.
+    pub account: AccountOwner,
+    /// The initial balance of `account`.
     pub balance: Amount,
     /// The initial application permissions.
     pub application_permissions: ApplicationPermissions,

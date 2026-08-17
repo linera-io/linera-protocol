@@ -1094,11 +1094,12 @@ pub trait ContractRuntime: BaseRuntime {
         query: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError>;
 
-    /// Opens a new chain.
+    /// Opens a new chain, crediting `balance` to `account` on it.
     fn open_chain(
         &mut self,
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
+        account: AccountOwner,
         balance: Amount,
     ) -> Result<ChainId, ExecutionError>;
 

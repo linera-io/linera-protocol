@@ -680,7 +680,7 @@ mod tests {
             Amount, ApplicationPermissions, Blob, BlockHeight, ChainDescription, ChainOrigin,
             Epoch, InitialChainConfig, NetworkDescription, Round, Timestamp,
         },
-        identifiers::{BlobId, BlobType, ChainId, EventId, StreamId},
+        identifiers::{AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
         ownership::ChainOwnership,
     };
     use linera_chain::{
@@ -723,6 +723,7 @@ mod tests {
             InitialChainConfig {
                 ownership: ChainOwnership::single(AccountPublicKey::test_key(0).into()),
                 epoch: Epoch::ZERO,
+                account: AccountOwner::CHAIN,
                 balance: Amount::ZERO,
                 application_permissions: ApplicationPermissions::default(),
             },

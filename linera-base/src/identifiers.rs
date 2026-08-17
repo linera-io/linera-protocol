@@ -1334,6 +1334,7 @@ mod tests {
         let example_chain_config = InitialChainConfig {
             epoch: Epoch::ZERO,
             ownership: ChainOwnership::single(AccountOwner::Reserved(0)),
+            account: AccountOwner::CHAIN,
             balance: Amount::ZERO,
             application_permissions: Default::default(),
         };
@@ -1344,7 +1345,7 @@ mod tests {
         );
         assert_eq!(
             description.id().to_string(),
-            "372e43034b962ee04f8242bce87fa9cd405dd824a31b6673cef4d24b937d0de5"
+            "bfd664d8c9bee7196b6baee3190abdf8c42d936f720c8cf7e5c6f7557f75fbeb"
         );
     }
 
