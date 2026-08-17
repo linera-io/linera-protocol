@@ -9,7 +9,7 @@ use futures::lock::Mutex;
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, InMemorySigner, TestString},
     data_types::{Amount, Epoch, Timestamp},
-    identifiers::{AccountOwner, ChainId},
+    identifiers::{Account, AccountOwner, ChainId},
 };
 use linera_client::chain_listener;
 use linera_core::{
@@ -17,8 +17,8 @@ use linera_core::{
     environment,
     test_utils::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
 };
-use linera_execution::ResourceControlPolicy;
-use linera_storage::TestClock;
+use linera_execution::{Operation, ResourceControlPolicy, SystemOperation};
+use linera_storage::{Storage as _, TestClock};
 use tempfile::TempDir;
 use tokio::sync::{oneshot, Notify};
 use tokio_util::sync::CancellationToken;
@@ -715,6 +715,29 @@ async fn test_daily_claim_flow() -> anyhow::Result<()> {
         .expect("Daily claim should succeed after 25 hours");
     assert_eq!(outcome.chain_id, chain_id);
     assert_eq!(outcome.amount, daily_amount);
+
+    // The tokens go to the chain balance, not to the owner's account.
+    let certificate = env
+        .client
+        .storage_client()
+        .read_certificate(outcome.certificate_hash)
+        .await?
+        .expect("Certificate of the daily claim should be in storage");
+    let operations = certificate.block().body.operations().collect::<Vec<_>>();
+    let [Operation::System(operation)] = &*operations else {
+        panic!("Unexpected operations in the daily claim block: {operations:?}");
+    };
+    assert_eq!(
+        **operation,
+        SystemOperation::Transfer {
+            owner: AccountOwner::CHAIN,
+            recipient: Account {
+                chain_id,
+                owner: AccountOwner::CHAIN,
+            },
+            amount: daily_amount,
+        }
+    );
 
     // Step 6: Second daily claim in the same period should fail.
     let daily_duplicate = env.root.do_daily_claim(test_owner).await;

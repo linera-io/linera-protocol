@@ -168,7 +168,7 @@ impl Faucet {
             .claim)
     }
 
-    /// Claims daily tokens for the given owner.
+    /// Claims daily tokens for the given owner, credited to the balance of their chain.
     /// The user must have already claimed a chain. Each user can claim once per
     /// 24-hour period.
     pub async fn daily_claim(
