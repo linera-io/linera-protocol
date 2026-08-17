@@ -324,3 +324,27 @@ jobs:
             "${SOURCES[@]}"
 
           docker buildx imagetools inspect "${REPO}:${GITHUB_SHA:0:7}"
+
+      # linera-infra's linera-utils image is linera-client plus the shell tooling
+      # its CronJobs need, so it is stale the moment this tag moves. Telling it
+      # to rebuild is what keeps the two in lockstep; linera-infra decides which
+      # of its tags (if any) tracks this branch.
+      - name: Ask linera-infra to rebuild linera-utils
+        env:
+          GH_TOKEN: ${{ secrets.LINERA_INFRA_DISPATCH_TOKEN }}
+          HEAD_REF: ${{ github.head_ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::warning::LINERA_INFRA_DISPATCH_TOKEN unset — linera-utils will lag until its nightly rebuild"
+            exit 0
+          fi
+          BRANCH_NAME="${HEAD_REF:-${REF_NAME}}"
+          # Send the BRANCH, not the tag: linera-infra maps branch -> image tag,
+          # so the mapping lives in the repo that owns those tags.
+          gh api -X POST repos/linera-io/linera-infra/dispatches \
+            -f event_type=linera-client-built \
+            -f "client_payload[branch]=${BRANCH_NAME}" \
+            -f "client_payload[commit]=${GITHUB_SHA}"
+          echo "notified linera-infra: linera-client:${BRANCH_NAME} rebuilt"
