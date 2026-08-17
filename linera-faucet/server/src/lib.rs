@@ -450,7 +450,7 @@ where
         record_claim_latency(self.do_claim(owner)).await
     }
 
-    /// Transfers a daily amount of tokens to the user's existing chain.
+    /// Transfers a daily amount of tokens to the balance of the user's existing chain.
     /// The user must have already claimed a chain. Each user can claim once per 24-hour
     /// period, measured from their initial claim time.
     async fn daily_claim(&self, owner: AccountOwner) -> Result<ClaimOutcome, Error> {
@@ -906,11 +906,13 @@ where
         let mut operations = Vec::new();
         for request in &requests {
             let operation = if let Some(target_chain_id) = request.target_chain_id {
+                // Credit the chain balance, like the initial claim does, so that the tokens
+                // can pay for fees on blocks that are not authenticated by the owner.
                 Operation::system(SystemOperation::Transfer {
                     owner: AccountOwner::CHAIN,
                     recipient: Account {
                         chain_id: target_chain_id,
-                        owner: request.owner,
+                        owner: AccountOwner::CHAIN,
                     },
                     amount: request.amount,
                 })
