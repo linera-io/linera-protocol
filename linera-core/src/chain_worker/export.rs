@@ -355,7 +355,9 @@ impl ProgressMap {
         for chain_id in forgotten {
             self.heights.remove(chain_id);
         }
-        if self.heights.capacity() > self.heights.len().saturating_mul(4) {
+        if self.heights.len() <= MAX_FORGET_PER_SWEEP
+            && self.heights.capacity() > self.heights.len().saturating_mul(4)
+        {
             let survivors = self.heights.drain().collect();
             return Some(std::mem::replace(&mut self.heights, survivors));
         }
@@ -705,7 +707,12 @@ impl ChainDest {
         } else {
             return None;
         }
-        reported.try_sub_one().ok()
+        // Never acknowledge past our own tip. A destination legitimately runs ahead of us — the
+        // client broadcasts to everyone — but the height is *its* claim, and this one is merged
+        // into the chain's persisted `exported_heights` by maximum. An over-report would write a
+        // permanent "converged" marker that survives restarts, ending export to that pair for
+        // good and taking the regression check with it.
+        reported.min(tip).try_sub_one().ok()
     }
 }
 
@@ -2060,6 +2067,27 @@ mod tests {
         );
     }
 
+    /// A destination claiming a height above our own tip is acknowledged only up to that tip.
+    ///
+    /// The acknowledged height is merged into the chain's persisted `exported_heights` by
+    /// maximum, so believing an over-report would write a "converged" marker that outlives the
+    /// process and silently ends export to that pair. Being *ahead* is normal — the client
+    /// broadcasts to everyone — so the report cannot simply be rejected either.
+    #[test]
+    fn a_height_above_our_tip_is_acknowledged_only_up_to_it() {
+        let config = BlockExportConfig::default();
+        let tip = BlockHeight(100);
+        let mut dest = ChainDest::default();
+
+        let acked = dest.record_reached(BlockHeight(u64::MAX), tip, Instant::now(), &config);
+
+        assert_eq!(
+            acked,
+            Some(BlockHeight(99)),
+            "acknowledged a height we never exported",
+        );
+    }
+
     /// The regression counter has to be free: this is per (chain, destination), and a down peer
     /// holds one per tracked chain.
     #[test]
@@ -2076,24 +2104,38 @@ mod tests {
     #[test]
     fn forgetting_a_drained_burst_returns_its_table() {
         let mut progress = ProgressMap::default();
-        let chains = test_chain_ids(MAX_FORGET_PER_SWEEP + 100);
+        let chains = test_chain_ids(20_000);
         for chain_id in &chains {
             progress.heights.insert(*chain_id, Vec::new());
         }
         let peak_capacity = progress.heights.capacity();
 
-        // Still above the budget: the table must stay, however much was just forgotten.
-        // `capacity()` is derived from occupancy, so compare magnitudes, not exact values.
-        let (first, rest) = chains.split_at(50);
-        assert!(progress.forget_chains(first).is_none());
-        assert!(progress.heights.capacity() > peak_capacity / 2);
+        // Still holding more than one sweep's budget: no rebuild, however oversized the table.
+        // This is the case that separates the two halves of the guard — the table below is
+        // several times too big, so a capacity test on its own would rebuild it here, under the
+        // mutex, at a size the sweep's budget was written to exclude.
+        let keep = MAX_FORGET_PER_SWEEP + 1000;
+        let (bulk, _) = chains.split_at(chains.len() - keep);
+        assert!(
+            progress.forget_chains(bulk).is_none(),
+            "rebuilt a map still holding {} entries, past the {MAX_FORGET_PER_SWEEP} budget",
+            progress.heights.len(),
+        );
+        assert!(
+            progress.heights.capacity() > progress.heights.len().saturating_mul(4),
+            "the table has to be oversized here or the case proves nothing",
+        );
 
-        // Down to a handful of survivors: the peak table is handed back, not freed in place.
-        let (bulk, survivors) = rest.split_at(rest.len() - 10);
-        let old_table = progress.forget_chains(bulk);
-        assert!(old_table.is_some_and(|table| table.capacity() > peak_capacity / 2));
+        // Down to within the budget: the peak table is handed back, not freed in place.
+        let survivors = 10;
+        let within_budget = chains.len() - survivors;
+        let old_table = progress.forget_chains(&chains[chains.len() - keep..within_budget]);
+        assert!(
+            old_table.is_some_and(|table| table.capacity() > peak_capacity / 2),
+            "the peak-sized table was not handed back for freeing off the mutex",
+        );
         assert!(progress.heights.capacity() < peak_capacity / 4);
-        assert_eq!(progress.heights.len(), survivors.len());
+        assert_eq!(progress.heights.len(), survivors);
     }
 
     /// Chain ids in the order `lagging` holds them, so a test can name "the front" of a backlog.
