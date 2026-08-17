@@ -685,6 +685,15 @@ impl ChainDest {
         now: Instant,
         config: &BlockExportConfig,
     ) -> Option<BlockHeight> {
+        // Clamped once, here, so the cursor, the counters and the acknowledgement all read the
+        // same height. A destination legitimately runs ahead of us — the client broadcasts to
+        // everyone — but the value is *its* claim, and storing a claim above our tip satisfies
+        // none of the "behind" predicates that schedule work, while satisfying every
+        // "converged" one. Since only a completed send can rewrite the cursor, and no send is
+        // ever scheduled for a pair that looks converged, an over-report would strand that pair
+        // for the life of the process. Clamped, it is self-correcting: the pair re-enters the
+        // work set as soon as our own tip passes the clamp.
+        let reported = reported.min(tip);
         let previous = self.next_height;
         let advanced = previous.is_none_or(|height| reported > height);
         let regressed = previous.is_some_and(|height| reported < height);
@@ -707,12 +716,7 @@ impl ChainDest {
         } else {
             return None;
         }
-        // Never acknowledge past our own tip. A destination legitimately runs ahead of us — the
-        // client broadcasts to everyone — but the height is *its* claim, and this one is merged
-        // into the chain's persisted `exported_heights` by maximum. An over-report would write a
-        // permanent "converged" marker that survives restarts, ending export to that pair for
-        // good and taking the regression check with it.
-        reported.min(tip).try_sub_one().ok()
+        reported.try_sub_one().ok()
     }
 }
 
@@ -2077,15 +2081,33 @@ mod tests {
     fn a_height_above_our_tip_is_acknowledged_only_up_to_it() {
         let config = BlockExportConfig::default();
         let tip = BlockHeight(100);
-        let mut dest = ChainDest::default();
 
-        let acked = dest.record_reached(BlockHeight(u64::MAX), tip, Instant::now(), &config);
-
+        // An over-report is clamped — in the acknowledgement AND in the stored cursor. Leaving
+        // the cursor raw satisfies every "converged" predicate and no "behind" one, and only a
+        // completed send can rewrite it, so the pair would never be scheduled again.
+        let mut liar = ChainDest::default();
+        let acked = liar.record_reached(BlockHeight(u64::MAX), tip, Instant::now(), &config);
         assert_eq!(
             acked,
             Some(BlockHeight(99)),
             "acknowledged a height we never exported",
         );
+        assert_eq!(
+            liar.next_height,
+            Some(tip),
+            "stored a cursor above our tip: the pair is now unschedulable and reads as converged",
+        );
+
+        // And an honest report below the tip is taken at its word, not rounded up to it —
+        // otherwise "always acknowledge tip - 1" would satisfy the clamp just as well.
+        let mut honest = ChainDest::default();
+        let acked = honest.record_reached(BlockHeight(40), tip, Instant::now(), &config);
+        assert_eq!(
+            acked,
+            Some(BlockHeight(39)),
+            "acknowledged more than the destination reported",
+        );
+        assert_eq!(honest.next_height, Some(BlockHeight(40)));
     }
 
     /// The regression counter has to be free: this is per (chain, destination), and a down peer
