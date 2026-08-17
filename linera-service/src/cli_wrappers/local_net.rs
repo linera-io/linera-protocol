@@ -547,7 +547,8 @@ impl LocalNet {
         test_offset_port() + 1000 + validator * self.num_proxies + proxy_id + 1
     }
 
-    fn shard_metrics_port(&self, validator: usize, shard: usize) -> usize {
+    /// Returns the metrics port of the given shard of the given validator.
+    pub fn shard_metrics_port(&self, validator: usize, shard: usize) -> usize {
         test_offset_port() + 2000 + validator * self.num_shards + shard + 1
     }
 

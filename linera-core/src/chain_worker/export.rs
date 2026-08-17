@@ -598,12 +598,13 @@ impl ChainRecord {
         exported_heights: &BTreeMap<ValidatorPublicKey, BlockHeight>,
     ) {
         for (index, dest) in destinations {
-            let seed = exported_heights
-                .get(&dest.validator)
-                .and_then(|height| height.try_add_one().ok());
             let chain_dest = self.dest_entry(*index);
+            // Guard first: this runs per block, and in the steady state every cursor is set, so
+            // the pubkey lookup would be pure waste.
             if chain_dest.next_height.is_none() && chain_dest.in_flight.is_none() {
-                chain_dest.next_height = seed;
+                chain_dest.next_height = exported_heights
+                    .get(&dest.validator)
+                    .and_then(|height| height.try_add_one().ok());
             }
         }
     }
@@ -1203,6 +1204,11 @@ where
                 .expect("progress mutex is never poisoned");
             for chain_id in &forgotten {
                 progress.heights.remove(chain_id);
+            }
+            // Same reason as `chains` above: `remove` never shrinks the table, and this one is
+            // sized by the same burst.
+            if progress.heights.capacity() > progress.heights.len().saturating_mul(4) {
+                progress.heights.shrink_to_fit();
             }
         }
 

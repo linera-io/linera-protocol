@@ -69,6 +69,36 @@ async fn relayed_requests(net: &LocalNet, validator: usize) -> Result<u64> {
     Ok(total)
 }
 
+/// Export sends the first shard of `validator` reports having started, over all destinations.
+/// The counterpart of [`relayed_requests`] for the direct transport, where no proxy sees the
+/// traffic and only the sender itself can attest that any happened.
+async fn export_sends(net: &LocalNet, validator: usize) -> Result<u64> {
+    let port = net.shard_metrics_port(validator, 0);
+    let metrics = reqwest::get(format!("http://127.0.0.1:{port}/metrics"))
+        .await?
+        .text()
+        .await?;
+    anyhow::ensure!(
+        metrics.lines().any(|line| line.starts_with("# TYPE")),
+        "the metrics scrape of validator {validator}'s shard returned no Prometheus payload",
+    );
+    let mut total = 0;
+    for line in metrics.lines() {
+        // e.g. `linera_block_export_send_latency_count{remote_address="..."} 4`
+        if line.starts_with('#') || !line.contains("block_export_send_latency_count") {
+            continue;
+        }
+        let value = line
+            .rsplit(' ')
+            .next()
+            .expect("rsplit yields at least one piece");
+        total += value
+            .parse::<u64>()
+            .with_context(|| format!("unparseable metric line: {line}"))?;
+    }
+    Ok(total)
+}
+
 #[ignore]
 #[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
@@ -277,8 +307,10 @@ async fn test_export_survives_a_dead_proxy(database: Database, network: Network)
             .await?;
     }
 
-    // Every validator still converges, which can only happen if the destinations that were using
-    // the dead proxy were re-pointed at the surviving one.
+    // The load-bearing assertion is the surviving proxy's relay counter growing: the chains
+    // converging proves nothing, since the client broadcasts every block to every validator
+    // whether export works or not. New relay traffic on proxy 0 after proxy 1 died is what shows
+    // the destinations were re-pointed rather than stranded.
     let target = net
         .validator_client(0)?
         .handle_chain_info_query(ChainInfoQuery::new(chain))
@@ -286,7 +318,7 @@ async fn test_export_survives_a_dead_proxy(database: Database, network: Network)
         .info
         .next_block_height;
     for _ in 0..60 {
-        let mut all = true;
+        let mut all = relayed_requests(&net, 0).await? > before;
         for validator in 1..4 {
             let info = net
                 .validator_client(validator)?
@@ -300,7 +332,11 @@ async fn test_export_survives_a_dead_proxy(database: Database, network: Network)
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
-    panic!("export did not recover after one of the proxies was killed");
+    panic!(
+        "export did not recover after one of the proxies was killed: surviving-proxy relays \
+         {} (was {before} before the kill)",
+        relayed_requests(&net, 0).await?,
+    );
 }
 
 /// The proxy refuses to relay to a host that is not in any committee.
@@ -388,7 +424,23 @@ async fn test_block_export_direct_bypasses_the_proxy(
             .transfer_with_silent_logs(1.into(), chain, chain)
             .await?;
     }
-    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    // The load-bearing positive assertion: the sender itself reports export sends. The blocks
+    // reaching every validator proves nothing (the client broadcasts to all of them), and the
+    // relay counters staying at zero is also satisfied by a transport that exports nothing —
+    // this is what rules that out.
+    let mut sends = 0;
+    for _ in 0..30 {
+        sends = export_sends(&net, 0).await?;
+        if sends > 0 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    assert!(
+        sends > 0,
+        "the direct transport never started a single send"
+    );
 
     // The blocks still reach every validator...
     for validator in 0..4 {
