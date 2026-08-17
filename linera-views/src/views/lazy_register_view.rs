@@ -42,17 +42,17 @@ mod metrics {
 #[allocative(bound = "C, T: Allocative")]
 pub struct LazyRegisterView<C, T> {
     /// Whether to clear storage before applying updates.
-    delete_storage_first: bool,
+    pub(crate) delete_storage_first: bool,
     /// The view context.
     #[allocative(skip)]
-    context: C,
+    pub(crate) context: C,
     /// The value persisted in storage, loaded lazily on first access.
     /// `OnceLock` replaces both the `Mutex` and the `Option` that were
     /// previously used: empty means not yet loaded, set means loaded.
     #[allocative(skip)]
-    stored_value: OnceLock<Box<T>>,
+    pub(crate) stored_value: OnceLock<Box<T>>,
     /// Pending update not yet persisted to storage.
-    update: Option<Box<T>>,
+    pub(crate) update: Option<Box<T>>,
 }
 
 impl<C, T, C2> ReplaceContext<C2> for LazyRegisterView<C, T>
@@ -104,30 +104,51 @@ where
     }
 
     fn rollback(&mut self) {
+        self.base_rollback();
+    }
+
+    async fn has_pending_changes(&self) -> bool {
+        self.base_has_pending_changes()
+    }
+
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
+        self.base_pre_save(batch, self.context.base_key().bytes.clone())
+    }
+
+    fn post_save(&mut self) {
+        self.base_post_save();
+    }
+
+    fn clear(&mut self) {
+        self.base_clear();
+    }
+}
+
+impl<C, T> LazyRegisterView<C, T> {
+    /// Shared implementation of `rollback`.
+    pub(crate) fn base_rollback(&mut self) {
         self.delete_storage_first = false;
         self.update = None;
     }
 
-    async fn has_pending_changes(&self) -> bool {
+    /// Shared implementation of `has_pending_changes`.
+    pub(crate) fn base_has_pending_changes(&self) -> bool {
         if self.delete_storage_first {
             return true;
         }
         self.update.is_some()
     }
+}
 
-    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
-        let mut delete_view = false;
-        if self.delete_storage_first {
-            batch.delete_key(self.context.base_key().bytes.clone());
-            delete_view = true;
-        } else if let Some(value) = &self.update {
-            let key = self.context.base_key().bytes.clone();
-            batch.put_key_value(key, value)?;
-        }
-        Ok(delete_view)
+impl<C, T: Default> LazyRegisterView<C, T> {
+    /// Shared implementation of `clear`.
+    pub(crate) fn base_clear(&mut self) {
+        self.delete_storage_first = true;
+        self.update = Some(Box::default());
     }
 
-    fn post_save(&mut self) {
+    /// Shared implementation of `post_save`.
+    pub(crate) fn base_post_save(&mut self) {
         if self.delete_storage_first {
             self.stored_value = OnceLock::from(Box::<T>::default());
         } else if let Some(value) = self.update.take() {
@@ -136,10 +157,24 @@ where
         self.delete_storage_first = false;
         self.update = None;
     }
+}
 
-    fn clear(&mut self) {
-        self.delete_storage_first = true;
-        self.update = Some(Box::default());
+impl<C, T: Serialize> LazyRegisterView<C, T> {
+    /// Shared implementation of `pre_save`. Takes `base_key_bytes` to avoid
+    /// requiring a specific context trait.
+    pub(crate) fn base_pre_save(
+        &self,
+        batch: &mut Batch,
+        base_key_bytes: Vec<u8>,
+    ) -> Result<bool, ViewError> {
+        let mut delete_view = false;
+        if self.delete_storage_first {
+            batch.delete_key(base_key_bytes);
+            delete_view = true;
+        } else if let Some(value) = &self.update {
+            batch.put_key_value(base_key_bytes, value)?;
+        }
+        Ok(delete_view)
     }
 }
 

@@ -31,7 +31,6 @@ impl Service for EventSubscriberService {
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
         let state = EventSubscriberState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         EventSubscriberService {
             state: Arc::new(state),

@@ -55,7 +55,7 @@ on their chain, it decreases their account balance and sends a `Credit` message
 to the recipient's chain:
 
 ```rust,ignore
-async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
+fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
 {{#include ../../../examples/fungible/src/contract.rs:execute_operation_transfer}}
             // ...
@@ -71,7 +71,7 @@ On the recipient's chain, `execute_message` is called, which increases their
 account balance.
 
 ```rust,ignore
-    async fn execute_message(&mut self, message: Message) {
+    fn execute_message(&mut self, message: Message) {
         match message {
 {{#include ../../../examples/fungible/src/contract.rs:execute_message_credit}}
             // ...
