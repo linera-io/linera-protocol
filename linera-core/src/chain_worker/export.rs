@@ -338,6 +338,33 @@ struct ProgressMap {
     heights: HashMap<ChainId, Vec<(DestIndex, BlockHeight)>>,
 }
 
+impl ProgressMap {
+    /// Drops the given chains, and returns a burst's peak-sized table for the caller to free
+    /// *outside* the mutex.
+    ///
+    /// `remove` never shrinks, so a drained burst would otherwise pin its peak allocation
+    /// forever. The obvious `shrink_to_fit` is not usable here: it frees the peak-sized bucket
+    /// array in place, and this runs under the mutex every chain worker takes per executed block
+    /// — whose hold `MAX_FORGET_PER_SWEEP` exists to bound. Rebuilding the few survivors into a
+    /// fitted map costs within that budget; handing the old table back moves the
+    /// peak-proportional free off the lock.
+    fn forget_chains(
+        &mut self,
+        forgotten: &[ChainId],
+    ) -> Option<HashMap<ChainId, Vec<(DestIndex, BlockHeight)>>> {
+        for chain_id in forgotten {
+            self.heights.remove(chain_id);
+        }
+        if self.heights.len() <= MAX_FORGET_PER_SWEEP
+            && self.heights.capacity() > self.heights.len().saturating_mul(4)
+        {
+            let survivors = self.heights.drain().collect();
+            return Some(std::mem::replace(&mut self.heights, survivors));
+        }
+        None
+    }
+}
+
 type SharedProgress = Arc<Mutex<ProgressMap>>;
 
 /// The height after each chain's newest announced block. Written on every `export` call before
@@ -1022,9 +1049,23 @@ where
                         // converged pairs instead would cost a query per chain per destination
                         // forever, to catch something only a restore causes.
                         chain_dest.next_height = Some(*next_height);
-                        if advanced || previous.is_some_and(|n| *next_height < n) {
-                            chain_dest.failures = 0;
-                            chain_dest.retry_at = None;
+                        let regressed = previous.is_some_and(|n| *next_height < n);
+                        if advanced || regressed {
+                            // A regression is believed but backed off, not cleared: a real
+                            // restore pays one delay once, while a peer oscillating its
+                            // reported height would otherwise hold this pair in a zero-delay
+                            // re-send loop for as long as it keeps lying.
+                            if advanced {
+                                chain_dest.failures = 0;
+                                chain_dest.retry_at = None;
+                            } else {
+                                back_off(
+                                    &mut chain_dest.failures,
+                                    &mut chain_dest.retry_at,
+                                    now,
+                                    &self.config,
+                                );
+                            }
                             if let Ok(acked) = next_height.try_sub_one() {
                                 let mut progress = self
                                     .progress
@@ -1212,23 +1253,15 @@ where
             self.ticks_until_sweep -= 1;
         }
         if !forgotten.is_empty() {
-            let mut progress = self
+            let peak_table = self
                 .progress
                 .lock()
-                .expect("progress mutex is never poisoned");
-            for chain_id in &forgotten {
-                progress.heights.remove(chain_id);
-            }
-            // Same reason as `chains` above: `remove` never shrinks the table, and this one is
-            // sized by the same burst. But this shrink runs under the mutex whose hold
-            // `MAX_FORGET_PER_SWEEP` exists to bound, so it must obey the same budget: only once
-            // the survivors fit in it — a burst that drains fully still gives its memory back at
-            // the tail, and one that plateaus keeps a table it needs anyway.
-            if progress.heights.len() <= MAX_FORGET_PER_SWEEP
-                && progress.heights.capacity() > progress.heights.len().saturating_mul(4)
-            {
-                progress.heights.shrink_to_fit();
-            }
+                .expect("progress mutex is never poisoned")
+                .forget_chains(&forgotten);
+            // The free of a burst's peak-sized table happens here, after the guard above is
+            // gone — measured at milliseconds per gigabyte-scale table, which is fine for the
+            // queue task and was not fine under the mutex.
+            drop(peak_table);
         }
 
         #[cfg(with_metrics)]
@@ -1960,6 +1993,35 @@ mod tests {
             resumed.iter().all(|id| !first.contains(id)),
             "the drain restarted at the front of the backlog: {first:?} then {resumed:?}",
         );
+    }
+
+    /// A drained burst hands back its peak-sized table for freeing off the mutex; a live one
+    /// keeps its table.
+    ///
+    /// Pinned because the sweep's mutex-hold budget has been broken twice: once by never
+    /// shrinking at all, once by an in-place shrink whose free of the peak table ran under the
+    /// lock.
+    #[test]
+    fn forgetting_a_drained_burst_returns_its_table() {
+        let mut progress = ProgressMap::default();
+        let chains = test_chain_ids(MAX_FORGET_PER_SWEEP + 100);
+        for chain_id in &chains {
+            progress.heights.insert(*chain_id, Vec::new());
+        }
+        let peak_capacity = progress.heights.capacity();
+
+        // Still above the budget: the table must stay, however much was just forgotten.
+        // `capacity()` is derived from occupancy, so compare magnitudes, not exact values.
+        let (first, rest) = chains.split_at(50);
+        assert!(progress.forget_chains(first).is_none());
+        assert!(progress.heights.capacity() > peak_capacity / 2);
+
+        // Down to a handful of survivors: the peak table is handed back, not freed in place.
+        let (bulk, survivors) = rest.split_at(rest.len() - 10);
+        let old_table = progress.forget_chains(bulk);
+        assert!(old_table.is_some_and(|table| table.capacity() > peak_capacity / 2));
+        assert!(progress.heights.capacity() < peak_capacity / 4);
+        assert_eq!(progress.heights.len(), survivors.len());
     }
 
     /// Chain ids in the order `lagging` holds them, so a test can name "the front" of a backlog.

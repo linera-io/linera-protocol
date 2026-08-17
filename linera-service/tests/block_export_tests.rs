@@ -305,21 +305,26 @@ async fn test_export_survives_a_dead_proxy(database: Database, network: Network)
     );
     // Every destination must have been reached at least once before the kill, so that "its
     // counter grew afterwards" is meaningful for all three.
-    let mut successes_before = std::collections::BTreeMap::new();
+    let mut reached = std::collections::BTreeMap::new();
     for _ in 0..30 {
-        successes_before = export_successes(&net, 0).await?;
-        if successes_before.len() >= 3 && successes_before.values().all(|count| *count > 0) {
+        reached = export_successes(&net, 0).await?;
+        if reached.len() >= 3 && reached.values().all(|count| *count > 0) {
             break;
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
     assert!(
-        successes_before.len() >= 3 && successes_before.values().all(|count| *count > 0),
-        "not every destination was reached before the kill: {successes_before:?}",
+        reached.len() >= 3 && reached.values().all(|count| *count > 0),
+        "not every destination was reached before the kill: {reached:?}",
     );
 
     // Kill one of validator 0's two proxies. Destinations pinned to it must move to the other.
     net.kill_proxy(0, 1).await?;
+
+    // The baseline is taken *after* the kill: a send that completed between an earlier snapshot
+    // and the proxy actually dying would count towards "grew afterwards" while proving nothing.
+    // Growth beyond this baseline can only come through the surviving proxy.
+    let successes_before = export_successes(&net, 0).await?;
 
     // The load-bearing assertion: *every* destination's acknowledged-send counter grows after
     // the kill. The chains converging proves nothing (the client broadcasts every block to every
