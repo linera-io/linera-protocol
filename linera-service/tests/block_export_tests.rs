@@ -69,10 +69,14 @@ async fn relayed_requests(net: &LocalNet, validator: usize) -> Result<u64> {
     Ok(total)
 }
 
-/// Export sends the first shard of `validator` reports having started, over all destinations.
-/// The counterpart of [`relayed_requests`] for the direct transport, where no proxy sees the
-/// traffic and only the sender itself can attest that any happened.
-async fn export_sends(net: &LocalNet, validator: usize) -> Result<u64> {
+/// Export sends each destination *acknowledged*, per destination address, from the first shard
+/// of `validator`. Successes, not attempts: the latency histogram counts failed sends too, so a
+/// transport that cannot deliver anything still moves it — this counter only moves when the
+/// destination answered.
+async fn export_successes(
+    net: &LocalNet,
+    validator: usize,
+) -> Result<std::collections::BTreeMap<String, u64>> {
     let port = net.shard_metrics_port(validator, 0);
     let metrics = reqwest::get(format!("http://127.0.0.1:{port}/metrics"))
         .await?
@@ -82,21 +86,23 @@ async fn export_sends(net: &LocalNet, validator: usize) -> Result<u64> {
         metrics.lines().any(|line| line.starts_with("# TYPE")),
         "the metrics scrape of validator {validator}'s shard returned no Prometheus payload",
     );
-    let mut total = 0;
+    let mut per_destination = std::collections::BTreeMap::new();
     for line in metrics.lines() {
-        // e.g. `linera_block_export_send_latency_count{remote_address="..."} 4`
-        if line.starts_with('#') || !line.contains("block_export_send_latency_count") {
+        // e.g. `linera_block_export_sends_succeeded{validator="grpc:127.0.0.1:9001"} 4`
+        if line.starts_with('#') || !line.contains("block_export_sends_succeeded") {
             continue;
         }
-        let value = line
-            .rsplit(' ')
-            .next()
-            .expect("rsplit yields at least one piece");
-        total += value
-            .parse::<u64>()
+        let (labels, value) = line
+            .rsplit_once(' ')
             .with_context(|| format!("unparseable metric line: {line}"))?;
+        per_destination.insert(
+            labels.to_owned(),
+            value
+                .parse::<u64>()
+                .with_context(|| format!("unparseable metric line: {line}"))?,
+        );
     }
-    Ok(total)
+    Ok(per_destination)
 }
 
 #[ignore]
@@ -297,46 +303,52 @@ async fn test_export_survives_a_dead_proxy(database: Database, network: Network)
         before > 0,
         "export should be relaying before the proxy is killed"
     );
+    // Every destination must have been reached at least once before the kill, so that "its
+    // counter grew afterwards" is meaningful for all three.
+    let mut successes_before = std::collections::BTreeMap::new();
+    for _ in 0..30 {
+        successes_before = export_successes(&net, 0).await?;
+        if successes_before.len() >= 3 && successes_before.values().all(|count| *count > 0) {
+            break;
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    assert!(
+        successes_before.len() >= 3 && successes_before.values().all(|count| *count > 0),
+        "not every destination was reached before the kill: {successes_before:?}",
+    );
 
     // Kill one of validator 0's two proxies. Destinations pinned to it must move to the other.
     net.kill_proxy(0, 1).await?;
 
-    for _ in 0..4 {
+    // The load-bearing assertion: *every* destination's acknowledged-send counter grows after
+    // the kill. The chains converging proves nothing (the client broadcasts every block to every
+    // validator whether export works or not), and total relay traffic on the surviving proxy
+    // proves little more — the destinations round-robined onto proxy 0 keep it growing even
+    // with the destination stranded on the dead proxy never re-pointed. A frozen per-destination
+    // counter is that stranding, directly. Blocks are produced inside the loop so a lagging
+    // recovery still has traffic to prove itself on.
+    for attempt in 0..30 {
         client
             .transfer_with_silent_logs(1.into(), chain, chain)
             .await?;
-    }
-
-    // The load-bearing assertion is the surviving proxy's relay counter growing: the chains
-    // converging proves nothing, since the client broadcasts every block to every validator
-    // whether export works or not. New relay traffic on proxy 0 after proxy 1 died is what shows
-    // the destinations were re-pointed rather than stranded.
-    let target = net
-        .validator_client(0)?
-        .handle_chain_info_query(ChainInfoQuery::new(chain))
-        .await?
-        .info
-        .next_block_height;
-    for _ in 0..60 {
-        let mut all = relayed_requests(&net, 0).await? > before;
-        for validator in 1..4 {
-            let info = net
-                .validator_client(validator)?
-                .handle_chain_info_query(ChainInfoQuery::new(chain))
-                .await?;
-            all &= info.info.next_block_height >= target;
-        }
-        if all {
+        let successes = export_successes(&net, 0).await?;
+        let all_grew = successes_before
+            .iter()
+            .all(|(address, before)| successes.get(address).is_some_and(|now| now > before));
+        if all_grew {
             net.terminate().await?;
             return Ok(());
         }
+        if attempt == 29 {
+            panic!(
+                "a destination stopped being reached after its proxy was killed: \
+                 {successes_before:?} before, {successes:?} after",
+            );
+        }
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
-    panic!(
-        "export did not recover after one of the proxies was killed: surviving-proxy relays \
-         {} (was {before} before the kill)",
-        relayed_requests(&net, 0).await?,
-    );
+    unreachable!("the loop either returns or panics on its last attempt");
 }
 
 /// The proxy refuses to relay to a host that is not in any committee.
@@ -425,21 +437,21 @@ async fn test_block_export_direct_bypasses_the_proxy(
             .await?;
     }
 
-    // The load-bearing positive assertion: the sender itself reports export sends. The blocks
-    // reaching every validator proves nothing (the client broadcasts to all of them), and the
-    // relay counters staying at zero is also satisfied by a transport that exports nothing —
-    // this is what rules that out.
-    let mut sends = 0;
+    // The load-bearing positive assertion: every destination *acknowledged* a direct send. The
+    // blocks reaching every validator proves nothing (the client broadcasts to all of them), the
+    // relay counters staying at zero is also satisfied by a transport that exports nothing, and
+    // counting send *attempts* would also be satisfied by one that fails every time.
+    let mut successes = std::collections::BTreeMap::new();
     for _ in 0..30 {
-        sends = export_sends(&net, 0).await?;
-        if sends > 0 {
+        successes = export_successes(&net, 0).await?;
+        if successes.len() >= 3 && successes.values().all(|count| *count > 0) {
             break;
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
     assert!(
-        sends > 0,
-        "the direct transport never started a single send"
+        successes.len() >= 3 && successes.values().all(|count| *count > 0),
+        "the direct transport was not acknowledged by every destination: {successes:?}",
     );
 
     // The blocks still reach every validator...

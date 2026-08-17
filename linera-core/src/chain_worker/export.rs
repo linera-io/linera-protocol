@@ -155,6 +155,16 @@ mod metrics {
         )
     });
 
+    /// Sends the destination actually answered, as opposed to attempts: `SEND_LATENCY` counts
+    /// every completion, failures included, so success rate needs its own counter.
+    pub static SENDS_SUCCEEDED: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "block_export_sends_succeeded",
+            "Export sends acknowledged by the destination validator",
+            &["validator"],
+        )
+    });
+
     /// How many blocks the destination was behind when we pushed to it: zero whenever the block
     /// was contiguous there, and the size of the gap we had to fill otherwise.
     pub static DESTINATION_LAG: LazyLock<HistogramVec> = LazyLock::new(|| {
@@ -949,6 +959,10 @@ where
                 dest.failures = 0;
                 dest.retry_at = None;
                 dest.window = (dest.window + 1).min(self.config.max_in_flight_per_destination);
+                #[cfg(with_metrics)]
+                metrics::SENDS_SUCCEEDED
+                    .with_label_values(&[&dest.address])
+                    .inc();
             }
             SendOutcome::ChainScoped(_) => {}
             SendOutcome::DestinationScoped(error) => {
@@ -1206,8 +1220,13 @@ where
                 progress.heights.remove(chain_id);
             }
             // Same reason as `chains` above: `remove` never shrinks the table, and this one is
-            // sized by the same burst.
-            if progress.heights.capacity() > progress.heights.len().saturating_mul(4) {
+            // sized by the same burst. But this shrink runs under the mutex whose hold
+            // `MAX_FORGET_PER_SWEEP` exists to bound, so it must obey the same budget: only once
+            // the survivors fit in it — a burst that drains fully still gives its memory back at
+            // the tail, and one that plateaus keeps a table it needs anyway.
+            if progress.heights.len() <= MAX_FORGET_PER_SWEEP
+                && progress.heights.capacity() > progress.heights.len().saturating_mul(4)
+            {
                 progress.heights.shrink_to_fit();
             }
         }
@@ -1335,6 +1354,9 @@ where
                 .remove_label_values(&[address])
                 .ok();
             metrics::SEND_LATENCY.remove_label_values(&[address]).ok();
+            metrics::SENDS_SUCCEEDED
+                .remove_label_values(&[address])
+                .ok();
             metrics::DESTINATION_LAG
                 .remove_label_values(&[address])
                 .ok();
