@@ -355,9 +355,7 @@ impl ProgressMap {
         for chain_id in forgotten {
             self.heights.remove(chain_id);
         }
-        if self.heights.len() <= MAX_FORGET_PER_SWEEP
-            && self.heights.capacity() > self.heights.len().saturating_mul(4)
-        {
+        if self.heights.capacity() > self.heights.len().saturating_mul(4) {
             let survivors = self.heights.drain().collect();
             return Some(std::mem::replace(&mut self.heights, survivors));
         }
@@ -661,6 +659,54 @@ struct ChainDest {
     /// chain yet, e.g. it lacks the committee and the admin chain's export has not reached it.
     retry_at: Option<Instant>,
     failures: u32,
+    /// How many times this destination has reported a *lower* height than it had. Counted apart
+    /// from `failures` because an advance clears those, and a peer alternating advance with
+    /// regression would otherwise reset its own penalty on every second answer and never
+    /// escalate. Fits in `ChainDest`'s existing padding.
+    regressions: u32,
+}
+
+impl ChainDest {
+    /// Folds in a height the destination reported, returning the height to record as
+    /// acknowledged, if any.
+    ///
+    /// The validator is authoritative about its own height in *both* directions: only one send
+    /// per pair is ever in flight and stale generations are filtered out, so a lower report is
+    /// not a race. One restored from a backup reports lower, and refusing to believe it would
+    /// leave that gap unrepaired for good — we would think it caught up and never re-send what
+    /// it lost. Believing it is therefore required; paying for it is what stops a peer from
+    /// lying its way into an unthrottled re-send loop.
+    fn record_reached(
+        &mut self,
+        reported: BlockHeight,
+        tip: BlockHeight,
+        now: Instant,
+        config: &BlockExportConfig,
+    ) -> Option<BlockHeight> {
+        let previous = self.next_height;
+        let advanced = previous.is_none_or(|height| reported > height);
+        let regressed = previous.is_some_and(|height| reported < height);
+        self.next_height = Some(reported);
+        if advanced {
+            self.failures = 0;
+            self.retry_at = None;
+        } else if regressed {
+            // Escalates on the regression count, which an advance does not clear: a genuine
+            // restore regresses once and pays one delay, an oscillating peer pays double each
+            // time it lies.
+            let attempt = self.failures.max(self.regressions);
+            self.retry_at = Some(now + backoff_delay(attempt, config));
+            self.regressions = self.regressions.saturating_add(1);
+        } else if reported < tip {
+            // Answered but moved nothing — a gap our storage cannot fill — so back this pair
+            // off rather than spinning on it.
+            back_off(&mut self.failures, &mut self.retry_at, now, config);
+            return None;
+        } else {
+            return None;
+        }
+        reported.try_sub_one().ok()
+    }
 }
 
 /// One destination validator: its connection and the health state every chain shares.
@@ -1032,60 +1078,18 @@ where
                 }
                 match &outcome {
                     SendOutcome::Reached(next_height) => {
-                        let previous = chain_dest.next_height;
-                        let advanced = previous.is_none_or(|n| *next_height > n);
-                        // The validator is authoritative about its own height, in both
-                        // directions: only one send per pair is ever in flight and stale
-                        // generations are filtered above, so this is not a race. One restored
-                        // from a backup reports a *lower* height, and refusing to believe it
-                        // would leave that gap unrepaired for good — we would think it caught
-                        // up and never send the blocks it lost.
-                        //
-                        // Untested: the in-process harness has no way to make a validator lose
-                        // state, so this direction rests on the argument above rather than on a
-                        // failing-first test. A regression is noticed only once a send happens,
-                        // which needs the chain's tip to be above the cursor. One that regresses while we
-                        // believe it fully converged waits for the chain's next block; probing
-                        // converged pairs instead would cost a query per chain per destination
-                        // forever, to catch something only a restore causes.
-                        chain_dest.next_height = Some(*next_height);
-                        let regressed = previous.is_some_and(|n| *next_height < n);
-                        if advanced || regressed {
-                            // A regression is believed but backed off, not cleared: a real
-                            // restore pays one delay once, while a peer oscillating its
-                            // reported height would otherwise hold this pair in a zero-delay
-                            // re-send loop for as long as it keeps lying.
-                            if advanced {
-                                chain_dest.failures = 0;
-                                chain_dest.retry_at = None;
-                            } else {
-                                back_off(
-                                    &mut chain_dest.failures,
-                                    &mut chain_dest.retry_at,
-                                    now,
-                                    &self.config,
-                                );
+                        if let Some(acked) =
+                            chain_dest.record_reached(*next_height, record_tip, now, &self.config)
+                        {
+                            let mut progress = self
+                                .progress
+                                .lock()
+                                .expect("progress mutex is never poisoned");
+                            let heights = progress.heights.entry(chain_id).or_default();
+                            match heights.binary_search_by_key(&index, |(at, _)| *at) {
+                                Ok(at) => heights[at].1 = acked,
+                                Err(at) => heights.insert(at, (index, acked)),
                             }
-                            if let Ok(acked) = next_height.try_sub_one() {
-                                let mut progress = self
-                                    .progress
-                                    .lock()
-                                    .expect("progress mutex is never poisoned");
-                                let heights = progress.heights.entry(chain_id).or_default();
-                                match heights.binary_search_by_key(&index, |(at, _)| *at) {
-                                    Ok(at) => heights[at].1 = acked,
-                                    Err(at) => heights.insert(at, (index, acked)),
-                                }
-                            }
-                        } else if *next_height < record_tip {
-                            // Answered but moved nothing — a gap our storage cannot fill — so
-                            // back this pair off rather than spinning on it.
-                            back_off(
-                                &mut chain_dest.failures,
-                                &mut chain_dest.retry_at,
-                                now,
-                                &self.config,
-                            );
                         }
                     }
                     SendOutcome::ChainScoped(error) => {
@@ -1647,12 +1651,16 @@ fn back_off(
     now: Instant,
     config: &BlockExportConfig,
 ) {
-    let backoff = config
-        .retry_delay
-        .saturating_mul(1u32.checked_shl(*failures).unwrap_or(u32::MAX))
-        .min(config.max_retry_delay);
-    *retry_at = Some(now + backoff);
+    *retry_at = Some(now + backoff_delay(*failures, config));
     *failures = failures.saturating_add(1);
+}
+
+/// The delay after `attempt` consecutive failures: doubles per attempt, capped.
+fn backoff_delay(attempt: u32, config: &BlockExportConfig) -> linera_base::time::Duration {
+    config
+        .retry_delay
+        .saturating_mul(1u32.checked_shl(attempt).unwrap_or(u32::MAX))
+        .min(config.max_retry_delay)
 }
 
 /// Sends this validator's blocks to one other validator, reading everything it needs from
@@ -1993,6 +2001,70 @@ mod tests {
             resumed.iter().all(|id| !first.contains(id)),
             "the drain restarted at the front of the backlog: {first:?} then {resumed:?}",
         );
+    }
+
+    /// A peer that alternates advancing and regressing its reported height pays a doubling
+    /// penalty, while one that genuinely restored pays a single delay.
+    ///
+    /// The first attempt at this backed a regression off using the shared `failures` counter,
+    /// which an advance resets — so alternating answers pinned the delay at the base value
+    /// forever and the "throttled" peer kept a pair re-reading its whole catch-up window at
+    /// roughly two sends a second.
+    #[test]
+    fn an_oscillating_peer_escalates_but_a_restored_one_does_not() {
+        let config = BlockExportConfig {
+            retry_delay: Duration::from_millis(100),
+            max_retry_delay: Duration::from_secs(60),
+            ..BlockExportConfig::default()
+        };
+        let now = Instant::now();
+        let tip = BlockHeight(100);
+
+        // A genuine restore: one regression, then it advances from there for good.
+        let mut restored = ChainDest {
+            next_height: Some(BlockHeight(50)),
+            ..ChainDest::default()
+        };
+        assert!(restored
+            .record_reached(BlockHeight(10), tip, now, &config)
+            .is_some());
+        let restore_penalty = restored.retry_at.expect("a regression backs the pair off");
+        assert_eq!(restore_penalty, now + Duration::from_millis(100));
+        restored.record_reached(BlockHeight(20), tip, now, &config);
+        assert_eq!(
+            restored.retry_at, None,
+            "an advance after the restore must clear the penalty",
+        );
+
+        // An oscillator: every regression costs double the last, however many advances it
+        // interleaves.
+        let mut liar = ChainDest {
+            next_height: Some(BlockHeight(50)),
+            ..ChainDest::default()
+        };
+        let mut penalties = Vec::new();
+        for round in 0..4 {
+            liar.record_reached(BlockHeight(10), tip, now, &config);
+            penalties.push(liar.retry_at.expect("a regression backs the pair off") - now);
+            liar.record_reached(BlockHeight(50 + round), tip, now, &config);
+        }
+        assert_eq!(
+            penalties,
+            vec![
+                Duration::from_millis(100),
+                Duration::from_millis(200),
+                Duration::from_millis(400),
+                Duration::from_millis(800),
+            ],
+            "an advance between regressions reset the penalty",
+        );
+    }
+
+    /// The regression counter has to be free: this is per (chain, destination), and a down peer
+    /// holds one per tracked chain.
+    #[test]
+    fn the_regression_counter_costs_no_memory() {
+        assert_eq!(size_of::<ChainDest>(), 56);
     }
 
     /// A drained burst hands back its peak-sized table for freeing off the mutex; a live one
