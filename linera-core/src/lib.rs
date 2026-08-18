@@ -3,6 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module defines the core Linera protocol.
+//!
+//! The consensus protocol it drives is specified and proved correct in the `linera-spec` crate,
+//! which indexes both halves of the argument: safety and accountability in `linera_chain`, and
+//! progress and liveness in [`proof`], next to the client code that discharges them.
 
 #![recursion_limit = "256"]
 #![deny(missing_docs)]
@@ -22,6 +26,7 @@ mod local_node;
 pub mod node;
 /// Utilities for notifying subscribers about chain events.
 pub mod notifier;
+pub mod proof;
 mod remote_node;
 /// Helpers for writing tests against the core protocol.
 #[cfg(with_testing)]
