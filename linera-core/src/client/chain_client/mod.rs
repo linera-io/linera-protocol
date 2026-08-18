@@ -331,9 +331,7 @@ pub enum Error {
     #[error(
         "Chain {chain_id} height {height}: a quorum of validators voted for a different \
          execution of our proposal in {round}. Their {kind:?} value hashes to {hash}, ours \
-         to {expected_hash}. The block they agreed on is valid; what differs is our local \
-         prediction of its execution outcome, so this client's chain state has drifted from \
-         the network's. Retrying will fail the same way until it is resynchronized."
+         to {expected_hash}."
     )]
     DivergentExecution {
         chain_id: ChainId,
@@ -346,7 +344,7 @@ pub enum Error {
 
     #[error(
         "Chain {chain_id} height {height}: a quorum of validators voted in {round}, but we \
-         proposed in {expected_round}; our view of the current round is stale."
+         proposed in {expected_round}."
     )]
     StaleQuorumRound {
         chain_id: ChainId,
