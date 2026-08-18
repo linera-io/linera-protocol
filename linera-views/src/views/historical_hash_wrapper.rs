@@ -19,22 +19,20 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
     use prometheus::HistogramVec;
 
-    /// The runtime of hash computation
-    pub static HISTORICALLY_HASHABLE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> =
-        LazyLock::new(|| {
+    linera_base::declare_metrics! {
+        /// The runtime of hash computation
+        pub static HISTORICALLY_HASHABLE_VIEW_HASH_RUNTIME: HistogramVec =
             register_histogram_vec(
                 "historically_hashable_view_hash_runtime",
                 "HistoricallyHashableView hash runtime",
                 &[],
                 exponential_bucket_latencies(5.0),
-            )
-        });
+            );
+    }
 }
 
 /// Wrapper to compute the hash of the view based on its history of modifications.

@@ -407,6 +407,18 @@ jobs:
       run: |
         ./scripts/check_chain_loads.sh
 
+  lint-metrics-registration:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+    - uses: actions/checkout@v6.0.2
+    - name: Check that every metric is registered at startup
+      run: |
+        ./scripts/check_metrics_registration.sh
+
   lint-check-copyright-headers:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'

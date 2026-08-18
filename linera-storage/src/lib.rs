@@ -646,3 +646,18 @@ pub trait Clock {
         .await
     }
 }
+
+/// Registers every metric this crate declares.
+///
+/// Without this, a metric is only exported after the code path that observes it has run, so a
+/// rarely-taken path leaves its panels blank and makes a routine restart look like the metric
+/// was removed.
+#[cfg(with_metrics)]
+pub fn init_metrics() {
+    linera_base::init_metrics();
+    linera_cache::init_metrics();
+    linera_chain::init_metrics();
+    linera_execution::init_metrics();
+    linera_views::init_metrics();
+    db_storage::metrics::init_metrics();
+}

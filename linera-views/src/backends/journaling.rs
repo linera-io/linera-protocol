@@ -24,54 +24,49 @@ use static_assertions as sa;
 use thiserror::Error;
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{
         exponential_bucket_interval, register_histogram, register_int_counter,
     };
     use prometheus::{Histogram, IntCounter};
 
-    /// Number of write_batch calls that used the fast path (single atomic batch).
-    pub static JOURNAL_FASTPATH_COUNT: LazyLock<IntCounter> = LazyLock::new(|| {
-        register_int_counter(
-            "journal_fastpath_count",
-            "Number of write_batch calls using the fast path",
-        )
-    });
+    linera_base::declare_metrics! {
+        /// Number of write_batch calls that used the fast path (single atomic batch).
+        pub static JOURNAL_FASTPATH_COUNT: IntCounter =
+            register_int_counter(
+                "journal_fastpath_count",
+                "Number of write_batch calls using the fast path",
+            );
 
-    /// Number of write_batch calls that required journaling.
-    pub static JOURNAL_SLOWPATH_COUNT: LazyLock<IntCounter> = LazyLock::new(|| {
-        register_int_counter(
-            "journal_slowpath_count",
-            "Number of write_batch calls requiring journaling",
-        )
-    });
+        /// Number of write_batch calls that required journaling.
+        pub static JOURNAL_SLOWPATH_COUNT: IntCounter =
+            register_int_counter(
+                "journal_slowpath_count",
+                "Number of write_batch calls requiring journaling",
+            );
 
-    /// Number of journal resolution failures.
-    pub static JOURNAL_RESOLUTION_FAILURES: LazyLock<IntCounter> = LazyLock::new(|| {
-        register_int_counter(
-            "journal_resolution_failures",
-            "Number of journal resolution failures (potential data inconsistency)",
-        )
-    });
+        /// Number of journal resolution failures.
+        pub static JOURNAL_RESOLUTION_FAILURES: IntCounter =
+            register_int_counter(
+                "journal_resolution_failures",
+                "Number of journal resolution failures (potential data inconsistency)",
+            );
 
-    /// Number of pending journals found during `clear_journal` (on chain reload).
-    pub static JOURNAL_PENDING_ON_LOAD: LazyLock<IntCounter> = LazyLock::new(|| {
-        register_int_counter(
-            "journal_pending_on_load",
-            "Number of pending journals found during chain reload",
-        )
-    });
+        /// Number of pending journals found during `clear_journal` (on chain reload).
+        pub static JOURNAL_PENDING_ON_LOAD: IntCounter =
+            register_int_counter(
+                "journal_pending_on_load",
+                "Number of pending journals found during chain reload",
+            );
 
-    /// Histogram of batch sizes (number of operations) for write_batch calls.
-    pub static JOURNAL_BATCH_LEN: LazyLock<Histogram> = LazyLock::new(|| {
-        register_histogram(
-            "journal_batch_len",
-            "Number of operations in write_batch calls",
-            exponential_bucket_interval(1.0, 10000.0),
-        )
-    });
+        /// Histogram of batch sizes (number of operations) for write_batch calls.
+        pub static JOURNAL_BATCH_LEN: Histogram =
+            register_histogram(
+                "journal_batch_len",
+                "Number of operations in write_batch calls",
+                exponential_bucket_interval(1.0, 10000.0),
+            );
+    }
 }
 
 use crate::{

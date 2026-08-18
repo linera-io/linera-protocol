@@ -23,28 +23,26 @@ use tracing::{error, trace, warn};
 use crate::config::ShardId;
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{
         exponential_bucket_latencies, register_histogram, register_int_gauge,
     };
     use prometheus::{Histogram, IntGauge};
 
-    pub static CROSS_CHAIN_MESSAGE_TASKS: LazyLock<IntGauge> = LazyLock::new(|| {
-        register_int_gauge(
-            "cross_chain_message_tasks",
-            "Number of concurrent cross-chain message tasks",
-        )
-    });
+    linera_base::declare_metrics! {
+        pub static CROSS_CHAIN_MESSAGE_TASKS: IntGauge =
+            register_int_gauge(
+                "cross_chain_message_tasks",
+                "Number of concurrent cross-chain message tasks",
+            );
 
-    pub static CROSS_CHAIN_QUEUE_WAIT_TIME: LazyLock<Histogram> = LazyLock::new(|| {
-        register_histogram(
-            "cross_chain_queue_wait_time",
-            "Time (ms) a cross-chain message waits in queue before handle_request is called",
-            exponential_bucket_latencies(10_000.0),
-        )
-    });
+        pub static CROSS_CHAIN_QUEUE_WAIT_TIME: Histogram =
+            register_histogram(
+                "cross_chain_queue_wait_time",
+                "Time (ms) a cross-chain message waits in queue before handle_request is called",
+                exponential_bucket_latencies(10_000.0),
+            );
+    }
 }
 
 #[expect(clippy::too_many_arguments)]

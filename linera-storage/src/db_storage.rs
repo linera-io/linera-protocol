@@ -49,8 +49,6 @@ use crate::{ChainRuntimeContext, Clock, Storage};
 /// Prometheus metrics counting storage reads, writes and cache hits.
 #[cfg(with_metrics)]
 pub mod metrics {
-    use std::sync::LazyLock;
-
     use linera_base::prometheus_util::{
         exponential_bucket_latencies, register_histogram_vec, register_int_counter,
         register_int_counter_vec,
@@ -64,189 +62,170 @@ pub mod metrics {
     /// Label value for items served from the database.
     pub(super) const DB: &str = "db";
 
-    /// The metric counting how often a blob is tested for existence from storage
-    pub(super) static CONTAINS_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "contains_blob",
-            "The metric counting how often a blob is tested for existence from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+    linera_base::declare_metrics! {
+        /// The metric counting how often a blob is tested for existence from storage
+        pub(super) static CONTAINS_BLOB_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "contains_blob",
+                "The metric counting how often a blob is tested for existence from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often multiple blobs are tested for existence from storage
-    pub(super) static CONTAINS_BLOBS_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "contains_blobs",
-            "The metric counting how often multiple blobs are tested for existence from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often multiple blobs are tested for existence from storage
+        pub(super) static CONTAINS_BLOBS_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "contains_blobs",
+                "The metric counting how often multiple blobs are tested for existence from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often a blob state is tested for existence from storage
-    pub(super) static CONTAINS_BLOB_STATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "contains_blob_state",
-            "The metric counting how often a blob state is tested for existence from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often a blob state is tested for existence from storage
+        pub(super) static CONTAINS_BLOB_STATE_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "contains_blob_state",
+                "The metric counting how often a blob state is tested for existence from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often a certificate is tested for existence from storage.
-    pub(super) static CONTAINS_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "contains_certificate",
-            "The metric counting how often a certificate is tested for existence from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often a certificate is tested for existence from storage.
+        pub(super) static CONTAINS_CERTIFICATE_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "contains_certificate",
+                "The metric counting how often a certificate is tested for existence from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often a hashed certificate value is read from storage.
-    #[doc(hidden)]
-    pub static READ_CONFIRMED_BLOCK_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "read_confirmed_block",
-            "The metric counting how often a hashed confirmed block is read from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often a hashed certificate value is read from storage.
+        #[doc(hidden)]
+        pub static READ_CONFIRMED_BLOCK_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "read_confirmed_block",
+                "The metric counting how often a hashed confirmed block is read from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often confirmed blocks are read from storage.
-    #[doc(hidden)]
-    pub(super) static READ_CONFIRMED_BLOCKS_COUNTER: LazyLock<IntCounterVec> =
-        LazyLock::new(|| {
+        /// The metric counting how often confirmed blocks are read from storage.
+        #[doc(hidden)]
+        pub(super) static READ_CONFIRMED_BLOCKS_COUNTER: IntCounterVec =
             register_int_counter_vec(
                 "read_confirmed_blocks",
                 "The metric counting how often confirmed blocks are read from storage",
                 &[SOURCE_LABEL],
-            )
-        });
+            );
 
-    /// The metric counting how often a blob is read from storage.
-    #[doc(hidden)]
-    pub(super) static READ_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "read_blob",
-            "The metric counting how often a blob is read from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often a blob is read from storage.
+        #[doc(hidden)]
+        pub(super) static READ_BLOB_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "read_blob",
+                "The metric counting how often a blob is read from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often a blob state is read from storage.
-    #[doc(hidden)]
-    pub(super) static READ_BLOB_STATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "read_blob_state",
-            "The metric counting how often a blob state is read from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often a blob state is read from storage.
+        #[doc(hidden)]
+        pub(super) static READ_BLOB_STATE_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "read_blob_state",
+                "The metric counting how often a blob state is read from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often a blob is written to storage.
-    #[doc(hidden)]
-    pub(super) static WRITE_BLOB_COUNTER: LazyLock<IntCounter> = LazyLock::new(|| {
-        register_int_counter(
-            "write_blob",
-            "The metric counting how often a blob is written to storage",
-        )
-    });
+        /// The metric counting how often a blob is written to storage.
+        #[doc(hidden)]
+        pub(super) static WRITE_BLOB_COUNTER: IntCounter =
+            register_int_counter(
+                "write_blob",
+                "The metric counting how often a blob is written to storage",
+            );
 
-    /// The metric counting how often a certificate is read from storage.
-    #[doc(hidden)]
-    pub static READ_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "read_certificate",
-            "The metric counting how often a certificate is read from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often a certificate is read from storage.
+        #[doc(hidden)]
+        pub static READ_CERTIFICATE_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "read_certificate",
+                "The metric counting how often a certificate is read from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often certificates are read from storage.
-    #[doc(hidden)]
-    pub(super) static READ_CERTIFICATES_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "read_certificates",
-            "The metric counting how often certificate are read from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often certificates are read from storage.
+        #[doc(hidden)]
+        pub(super) static READ_CERTIFICATES_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "read_certificates",
+                "The metric counting how often certificate are read from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often a certificate is written to storage.
-    #[doc(hidden)]
-    pub static WRITE_CERTIFICATE_COUNTER: LazyLock<IntCounter> = LazyLock::new(|| {
-        register_int_counter(
-            "write_certificate",
-            "The metric counting how often a certificate is written to storage",
-        )
-    });
+        /// The metric counting how often a certificate is written to storage.
+        #[doc(hidden)]
+        pub static WRITE_CERTIFICATE_COUNTER: IntCounter =
+            register_int_counter(
+                "write_certificate",
+                "The metric counting how often a certificate is written to storage",
+            );
 
-    /// The latency to load a chain state.
-    #[doc(hidden)]
-    pub(crate) static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "load_chain_latency",
-            "The latency to load a chain state",
-            &[],
-            exponential_bucket_latencies(1000.0),
-        )
-    });
+        /// The latency to load a chain state.
+        #[doc(hidden)]
+        pub(crate) static LOAD_CHAIN_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "load_chain_latency",
+                "The latency to load a chain state",
+                &[],
+                exponential_bucket_latencies(1000.0),
+            );
 
-    /// The metric counting how often an event is read from storage.
-    #[doc(hidden)]
-    pub(super) static READ_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "read_event",
-            "The metric counting how often an event is read from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often an event is read from storage.
+        #[doc(hidden)]
+        pub(super) static READ_EVENT_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "read_event",
+                "The metric counting how often an event is read from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often an event is tested for existence from storage
-    pub(super) static CONTAINS_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "contains_event",
-            "The metric counting how often an event is tested for existence from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often an event is tested for existence from storage
+        pub(super) static CONTAINS_EVENT_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "contains_event",
+                "The metric counting how often an event is tested for existence from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often an event is written to storage.
-    #[doc(hidden)]
-    pub(super) static WRITE_EVENT_COUNTER: LazyLock<IntCounter> = LazyLock::new(|| {
-        register_int_counter(
-            "write_event",
-            "The metric counting how often an event is written to storage",
-        )
-    });
+        /// The metric counting how often an event is written to storage.
+        #[doc(hidden)]
+        pub(super) static WRITE_EVENT_COUNTER: IntCounter =
+            register_int_counter(
+                "write_event",
+                "The metric counting how often an event is written to storage",
+            );
 
-    /// The metric counting how often a block hash is read by height from storage.
-    #[doc(hidden)]
-    pub(super) static READ_BLOCK_HASH_BY_HEIGHT_COUNTER: LazyLock<IntCounterVec> =
-        LazyLock::new(|| {
+        /// The metric counting how often a block hash is read by height from storage.
+        #[doc(hidden)]
+        pub(super) static READ_BLOCK_HASH_BY_HEIGHT_COUNTER: IntCounterVec =
             register_int_counter_vec(
                 "read_block_hash_by_height",
                 "The metric counting how often a block hash is read by height from storage",
                 &[SOURCE_LABEL],
-            )
-        });
+            );
 
-    /// The metric counting how often the network description is read from storage.
-    #[doc(hidden)]
-    pub(super) static READ_NETWORK_DESCRIPTION: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "network_description",
-            "The metric counting how often the network description is read from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often the network description is read from storage.
+        #[doc(hidden)]
+        pub(super) static READ_NETWORK_DESCRIPTION: IntCounterVec =
+            register_int_counter_vec(
+                "network_description",
+                "The metric counting how often the network description is read from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often the network description is written to storage.
-    #[doc(hidden)]
-    pub(super) static WRITE_NETWORK_DESCRIPTION: LazyLock<IntCounter> = LazyLock::new(|| {
-        register_int_counter(
-            "write_network_description",
-            "The metric counting how often the network description is written to storage",
-        )
-    });
+        /// The metric counting how often the network description is written to storage.
+        #[doc(hidden)]
+        pub(super) static WRITE_NETWORK_DESCRIPTION: IntCounter =
+            register_int_counter(
+                "write_network_description",
+                "The metric counting how often the network description is written to storage",
+            );
+    }
 }
 
 /// The key used for blobs. The Blob ID itself is contained in the root key.

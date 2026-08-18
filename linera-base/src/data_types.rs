@@ -2015,43 +2015,40 @@ doc_scalar!(
 doc_scalar!(ApplicationDescription, "Description of a user application");
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use prometheus::HistogramVec;
 
     use crate::prometheus_util::{
         exponential_bucket_interval, exponential_bucket_latencies, register_histogram_vec,
     };
 
-    /// The time it takes to compress a bytecode.
-    pub static BYTECODE_COMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "bytecode_compression_latency",
-            "Bytecode compression latency",
-            &[],
-            exponential_bucket_latencies(10.0),
-        )
-    });
+    crate::declare_metrics! {
+        /// The time it takes to compress a bytecode.
+        pub static BYTECODE_COMPRESSION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "bytecode_compression_latency",
+                "Bytecode compression latency",
+                &[],
+                exponential_bucket_latencies(10.0),
+            );
 
-    /// The time it takes to decompress a bytecode.
-    pub static BYTECODE_DECOMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "bytecode_decompression_latency",
-            "Bytecode decompression latency",
-            &[],
-            exponential_bucket_latencies(10.0),
-        )
-    });
+        /// The time it takes to decompress a bytecode.
+        pub static BYTECODE_DECOMPRESSION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "bytecode_decompression_latency",
+                "Bytecode decompression latency",
+                &[],
+                exponential_bucket_latencies(10.0),
+            );
 
-    pub static BYTECODE_DECOMPRESSED_SIZE_BYTES: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "wasm_bytecode_decompressed_size_bytes",
-            "Decompressed size in bytes of WASM bytecodes stored on-chain",
-            &[],
-            exponential_bucket_interval(10_000.0, 100_000_000.0),
-        )
-    });
+        pub static BYTECODE_DECOMPRESSED_SIZE_BYTES: HistogramVec =
+            register_histogram_vec(
+                "wasm_bytecode_decompressed_size_bytes",
+                "Decompressed size in bytes of WASM bytecodes stored on-chain",
+                &[],
+                exponential_bucket_interval(10_000.0, 100_000_000.0),
+            );
+    }
 }
 
 #[cfg(test)]

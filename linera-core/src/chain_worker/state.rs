@@ -58,46 +58,42 @@ use crate::{
 pub(crate) type EventSubscriptionsResult = Vec<((ChainId, StreamId), EventSubscriptions)>;
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{
         exponential_bucket_interval, exponential_bucket_latencies, register_histogram,
         register_histogram_vec, register_int_counter, register_int_counter_vec,
     };
     use prometheus::{Histogram, HistogramVec, IntCounter, IntCounterVec};
 
-    pub static CREATE_NETWORK_ACTIONS_LATENCY: LazyLock<Histogram> = LazyLock::new(|| {
-        register_histogram(
-            "create_network_actions_latency",
-            "Time (ms) to create network actions",
-            exponential_bucket_latencies(10_000.0),
-        )
-    });
+    linera_base::declare_metrics! {
+        pub static CREATE_NETWORK_ACTIONS_LATENCY: Histogram =
+            register_histogram(
+                "create_network_actions_latency",
+                "Time (ms) to create network actions",
+                exponential_bucket_latencies(10_000.0),
+            );
 
-    pub static NUM_INBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "num_inboxes",
-            "Number of inboxes",
-            &[],
-            exponential_bucket_interval(1.0, 10_000.0),
-        )
-    });
+        pub static NUM_INBOXES: HistogramVec =
+            register_histogram_vec(
+                "num_inboxes",
+                "Number of inboxes",
+                &[],
+                exponential_bucket_interval(1.0, 10_000.0),
+            );
 
-    pub static BLOCK_PROPOSALS_RECEIVED_TOTAL: LazyLock<IntCounter> = LazyLock::new(|| {
-        register_int_counter(
-            "block_proposals_received_total",
-            "Total number of block proposals received by the worker",
-        )
-    });
+        pub static BLOCK_PROPOSALS_RECEIVED_TOTAL: IntCounter =
+            register_int_counter(
+                "block_proposals_received_total",
+                "Total number of block proposals received by the worker",
+            );
 
-    pub static BLOCK_PROPOSALS_REJECTED_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "block_proposals_rejected_total",
-            "Total number of block proposals rejected by the worker, labelled by error type",
-            &["error_type"],
-        )
-    });
+        pub static BLOCK_PROPOSALS_REJECTED_TOTAL: IntCounterVec =
+            register_int_counter_vec(
+                "block_proposals_rejected_total",
+                "Total number of block proposals rejected by the worker, labelled by error type",
+                &["error_type"],
+            );
+    }
 }
 
 /// The state of the chain worker.

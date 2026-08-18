@@ -178,6 +178,7 @@ async fn start_health_server(
             shutdown_signal,
             memory_profiling,
             Some(health_router),
+            linera_exporter::init_metrics,
         );
     }
 

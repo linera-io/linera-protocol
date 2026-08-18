@@ -1724,3 +1724,20 @@ doc_scalar!(
     "A message to be sent and possibly executed in the receiver's block."
 );
 doc_scalar!(MessageKind, "The kind of outgoing message being sent");
+
+/// Registers every metric this crate declares.
+///
+/// Without this, a metric is only exported after the code path that observes it has run, so a
+/// rarely-taken path leaves its panels blank and makes a routine restart look like the metric
+/// was removed.
+#[cfg(with_metrics)]
+pub fn init_metrics() {
+    linera_base::init_metrics();
+    linera_views::init_metrics();
+    #[cfg(with_revm)]
+    evm::revm::metrics::init_metrics();
+    execution_state_actor::metrics::init_metrics();
+    system::metrics::init_metrics();
+    #[cfg(with_wasm_runtime)]
+    wasm::metrics::init_metrics();
+}

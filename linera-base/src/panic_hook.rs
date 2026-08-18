@@ -15,21 +15,21 @@ use std::{
 };
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use prometheus::IntCounter;
 
     use crate::prometheus_util::register_int_counter;
 
-    /// Panics observed by the hook installed by [`super::init`].
-    ///
-    /// A panic does not stop the process, so this counter is often the only durable signal
-    /// that one happened: whatever the panicking task was responsible for has stopped, and
-    /// the effect on the rest of the process depends entirely on who was joining it. Any
-    /// increase deserves investigation.
-    pub(super) static PANICS: LazyLock<IntCounter> =
-        LazyLock::new(|| register_int_counter("linera_panics_total", "Number of panics observed"));
+    crate::declare_metrics! {
+        /// Panics observed by the hook installed by [`super::init`].
+        ///
+        /// A panic does not stop the process, so this counter is often the only durable signal
+        /// that one happened: whatever the panicking task was responsible for has stopped, and
+        /// the effect on the rest of the process depends entirely on who was joining it. Any
+        /// increase deserves investigation.
+        pub(crate) static PANICS: IntCounter =
+            register_int_counter("panics_total", "Number of panics observed");
+    }
 }
 
 /// A panic hook, in the form [`std::panic::take_hook`] returns it.
@@ -49,6 +49,8 @@ static INIT: Once = Once::new();
 /// recorded about it.
 pub fn init() {
     INIT.call_once(|| {
+        #[cfg(with_metrics)]
+        metrics::init_metrics();
         *PREVIOUS_HOOK.lock().expect("hook mutex is never poisoned") =
             Some(std::panic::take_hook());
         std::panic::set_hook(Box::new(report_panic));
@@ -118,5 +120,21 @@ mod tests {
             1,
             "the hook installed before `init` ran exactly once",
         );
+    }
+
+    /// `register_int_counter` applies the `linera` namespace itself, so a name that already
+    /// carries the prefix is exported twice over, as `linera_linera_panics_total`.
+    #[cfg(with_metrics)]
+    #[test]
+    fn the_counter_is_exported_under_a_single_linera_prefix() {
+        crate::init_metrics();
+
+        let names = prometheus::gather()
+            .iter()
+            .map(|family| family.get_name().to_owned())
+            .collect::<Vec<_>>();
+
+        assert!(names.iter().any(|name| name == "linera_panics_total"));
+        assert!(!names.iter().any(|name| name.contains("linera_linera")));
     }
 }

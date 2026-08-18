@@ -74,67 +74,60 @@ mod received_log;
 mod validator_trackers;
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{
         exponential_bucket_latencies, register_histogram_vec, register_int_counter_vec,
     };
     use prometheus::{HistogramVec, IntCounterVec};
 
-    pub static PROCESS_INBOX_WITHOUT_PREPARE_LATENCY: LazyLock<HistogramVec> =
-        LazyLock::new(|| {
+    linera_base::declare_metrics! {
+        pub static PROCESS_INBOX_WITHOUT_PREPARE_LATENCY: HistogramVec =
             register_histogram_vec(
                 "process_inbox_latency",
                 "process_inbox latency",
                 &[],
                 exponential_bucket_latencies(10_000.0),
-            )
-        });
+            );
 
-    pub static PREPARE_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "prepare_chain_latency",
-            "prepare_chain latency",
-            &[],
-            exponential_bucket_latencies(10_000.0),
-        )
-    });
+        pub static PREPARE_CHAIN_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "prepare_chain_latency",
+                "prepare_chain latency",
+                &[],
+                exponential_bucket_latencies(10_000.0),
+            );
 
-    pub static SYNCHRONIZE_CHAIN_STATE_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "synchronize_chain_state_latency",
-            "synchronize_chain_state latency",
-            &[],
-            exponential_bucket_latencies(10_000.0),
-        )
-    });
+        pub static SYNCHRONIZE_CHAIN_STATE_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "synchronize_chain_state_latency",
+                "synchronize_chain_state latency",
+                &[],
+                exponential_bucket_latencies(10_000.0),
+            );
 
-    pub static EXECUTE_BLOCK_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "execute_block_latency",
-            "execute_block latency",
-            &[],
-            exponential_bucket_latencies(10_000.0),
-        )
-    });
+        pub static EXECUTE_BLOCK_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "execute_block_latency",
+                "execute_block latency",
+                &[],
+                exponential_bucket_latencies(10_000.0),
+            );
 
-    pub static FIND_RECEIVED_CERTIFICATES_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "find_received_certificates_latency",
-            "find_received_certificates latency",
-            &[],
-            exponential_bucket_latencies(10_000.0),
-        )
-    });
+        pub static FIND_RECEIVED_CERTIFICATES_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "find_received_certificates_latency",
+                "find_received_certificates latency",
+                &[],
+                exponential_bucket_latencies(10_000.0),
+            );
 
-    pub static BLOCK_STAGING_FAILURES_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "block_staging_failures_total",
-            "Total number of client block staging (execute_block) failures, labelled by error type",
-            &["error_type"],
-        )
-    });
+        pub static BLOCK_STAGING_FAILURES_TOTAL: IntCounterVec =
+            register_int_counter_vec(
+                "block_staging_failures_total",
+                "Total number of client block staging (execute_block) failures, labelled by error type",
+                &["error_type"],
+            );
+    }
 }
 
 /// Default number of certificates to download in a single batch.

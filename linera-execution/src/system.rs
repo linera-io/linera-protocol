@@ -49,19 +49,18 @@ pub static REMOVED_EPOCH_STREAM_NAME: &[u8] = &[1];
 
 /// The number of times the [`SystemOperation::OpenChain`] was executed.
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::register_int_counter_vec;
     use prometheus::IntCounterVec;
 
-    pub static OPEN_CHAIN_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "open_chain_count",
-            "The number of times the `OpenChain` operation was executed",
-            &[],
-        )
-    });
+    linera_base::declare_metrics! {
+        pub static OPEN_CHAIN_COUNT: IntCounterVec =
+            register_int_counter_vec(
+                "open_chain_count",
+                "The number of times the `OpenChain` operation was executed",
+                &[],
+            );
+    }
 }
 
 /// A view accessing the execution state of the system of a chain.

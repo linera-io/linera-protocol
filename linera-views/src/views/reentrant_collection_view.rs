@@ -28,22 +28,20 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
     use prometheus::HistogramVec;
 
-    /// The runtime of hash computation
-    pub static REENTRANT_COLLECTION_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> =
-        LazyLock::new(|| {
+    linera_base::declare_metrics! {
+        /// The runtime of hash computation
+        pub static REENTRANT_COLLECTION_VIEW_HASH_RUNTIME: HistogramVec =
             register_histogram_vec(
                 "reentrant_collection_view_hash_runtime",
                 "ReentrantCollectionView hash runtime",
                 &[],
                 exponential_bucket_latencies(5.0),
-            )
-        });
+            );
+    }
 }
 
 /// A read-only accessor for a particular subview in a [`ReentrantCollectionView`].

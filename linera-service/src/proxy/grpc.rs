@@ -65,46 +65,43 @@ use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, info, instrument, Instrument as _, Level};
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{
         linear_bucket_interval, register_histogram_vec, register_int_counter_vec,
     };
     use linera_rpc::grpc::{ERROR_TYPE_LABEL, METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL};
     use prometheus::{HistogramVec, IntCounterVec};
 
-    pub static PROXY_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "proxy_request_latency",
-            "Proxy request latency",
-            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
-            linear_bucket_interval(1.0, 50.0, 5000.0),
-        )
-    });
-    pub static PROXY_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "proxy_request_count",
-            "Proxy request count",
-            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
-        )
-    });
+    linera_base::declare_metrics! {
+        pub static PROXY_REQUEST_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "proxy_request_latency",
+                "Proxy request latency",
+                &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
+                linear_bucket_interval(1.0, 50.0, 5000.0),
+            );
 
-    pub static PROXY_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "proxy_request_success",
-            "Proxy request success",
-            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
-        )
-    });
+        pub static PROXY_REQUEST_COUNT: IntCounterVec =
+            register_int_counter_vec(
+                "proxy_request_count",
+                "Proxy request count",
+                &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
+            );
 
-    pub static PROXY_REQUEST_ERROR: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "proxy_request_error",
-            "Proxy request error",
-            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL, ERROR_TYPE_LABEL],
-        )
-    });
+        pub static PROXY_REQUEST_SUCCESS: IntCounterVec =
+            register_int_counter_vec(
+                "proxy_request_success",
+                "Proxy request success",
+                &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
+            );
+
+        pub static PROXY_REQUEST_ERROR: IntCounterVec =
+            register_int_counter_vec(
+                "proxy_request_error",
+                "Proxy request error",
+                &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL, ERROR_TYPE_LABEL],
+            );
+    }
 }
 
 #[cfg(with_metrics)]
@@ -309,6 +306,10 @@ where
             self.metrics_address(),
             shutdown_signal.clone(),
             enable_memory_profiling,
+            || {
+                linera_service::init_metrics();
+                metrics::init_metrics();
+            },
         )
         .await;
 
