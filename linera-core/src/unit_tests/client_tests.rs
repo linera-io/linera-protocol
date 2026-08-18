@@ -4688,6 +4688,10 @@ where
     // Three peers, one down, so exactly two are ever recorded. Which one is down is deliberately
     // not asserted: `set_fault_type` indexes creation order, the committee map is keyed by public
     // key, and the count is the property that matters.
+    // A block per iteration, because `exported_heights` is only folded while a block is being
+    // processed: progress acknowledged after the last block has nothing to write it. The clock
+    // advance is what lets the export tick run at all — it reads the storage clock, so under the
+    // test clock it only moves when the test moves it.
     let mut exported = BTreeMap::new();
     for _ in 0..40 {
         exported = builder.exported_heights(0, chain_id).await;
@@ -4698,6 +4702,14 @@ where
             .clock()
             .add(linera_base::data_types::TimeDelta::from_millis(100));
         linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(100)).await;
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
     }
     assert_eq!(
         exported.len(),
