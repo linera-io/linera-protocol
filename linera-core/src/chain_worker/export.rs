@@ -1691,10 +1691,17 @@ where
         // Shared across destinations so one enormous backlog cannot spend the whole budget and
         // leave every later destination reporting zero.
         let mut remaining = MAX_CENSUS_PAIRS;
+        let mut unvisited = self.destinations.len();
         for (index, dest) in &self.destinations {
             let mut owed = 0u64;
             let mut worst = 0u64;
-            let per_destination = remaining / self.destinations.len().max(1);
+            // Divided by the destinations still to come, not by all of them: dividing by the
+            // total while `remaining` shrinks gives each successive destination a smaller share
+            // than the last, so the ones late in the index order would under-report their
+            // backlog. This way a destination that needs less than its share leaves the surplus
+            // to the rest, and the last one may use whatever is left.
+            let per_destination = remaining / unvisited.max(1);
+            unvisited = unvisited.saturating_sub(1);
             let mut examined = 0usize;
             for chain_id in &dest.lagging {
                 if examined >= per_destination {
