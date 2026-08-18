@@ -15,7 +15,7 @@ use linera_base::{
     data_types::{BlockHeight, Round, TimeDelta},
     ensure,
     identifiers::{BlobId, BlobType, ChainId, StreamId},
-    time::Instant,
+    time::{timer::timeout, Duration, Instant},
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
@@ -37,6 +37,14 @@ use crate::{
     remote_node::RemoteNode,
     LocalNodeError,
 };
+
+/// A ceiling, in real time, on how long a single wait for validator responses may last.
+///
+/// The grace period below is measured and waited on the caller's clock, which is the right
+/// choice for a logical delay but offers no protection if that clock never advances — a
+/// simulated clock nobody drives, or a validator whose response simply never arrives. This
+/// bounds both cases so the loop always terminates.
+const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24); // 1 day.
 
 /// The default amount of time we wait for additional validators to contribute
 /// to the result, as a fraction of how long it took to reach a quorum.
@@ -186,6 +194,10 @@ pub enum CommunicationError<E: fmt::Debug> {
 /// wait that follows it, so that the grace period means the same thing under a simulated clock
 /// as it does in production. The measurement uses the clock's monotonic reading, so that a
 /// step of the system clock cannot turn the grace period into a nonsense duration.
+///
+/// A test driving a simulated clock must therefore advance it for the grace period to elapse.
+/// Until it does, this waits — bounded by [`MAX_TIMEOUT`] in real time — which is deadlock-shaped
+/// if the outstanding responses are themselves waiting on that same clock.
 pub async fn communicate_with_quorum<'a, A, V, K, F, R, G, C>(
     validator_clients: &'a [RemoteNode<A>],
     committee: &Committee,
@@ -254,17 +266,21 @@ where
 
     'vote_wait: loop {
         // Before a quorum there is no deadline; after one, stop when the grace period ends.
-        let next = match deadline {
-            None => responses.next().await,
-            Some(deadline) => {
-                let remaining = deadline.saturating_duration_since(clock.instant());
-                futures::select! {
-                    response = responses.next() => response,
-                    () = clock.sleep_for(remaining).fuse() => None,
+        // Either way [`MAX_TIMEOUT`] bounds the wait in real time, so neither a response
+        // that never arrives nor a clock that never advances can stall this loop forever.
+        let wait = async {
+            match deadline {
+                None => responses.next().await,
+                Some(deadline) => {
+                    let remaining = deadline.saturating_duration_since(clock.instant());
+                    futures::select! {
+                        response = responses.next() => response,
+                        () = clock.sleep_for(remaining).fuse() => None,
+                    }
                 }
             }
         };
-        let Some((name, result)) = next else {
+        let Some((name, result)) = timeout(MAX_TIMEOUT, wait).await.unwrap_or(None) else {
             break 'vote_wait;
         };
         remaining_votes -= committee.weight(&name);
