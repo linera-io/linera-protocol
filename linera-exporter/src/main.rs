@@ -212,6 +212,7 @@ fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
+    linera_base::panic_hook::init();
     let cli = <Cli as clap::Parser>::parse();
     match cli.command {
         Command::Run(options) => options.run(),
