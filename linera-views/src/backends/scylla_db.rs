@@ -40,6 +40,7 @@ use scylla::{
     value::CqlValue,
 };
 use serde::{Deserialize, Serialize};
+use static_assertions as sa;
 use thiserror::Error;
 
 #[cfg(with_metrics)]
@@ -65,12 +66,34 @@ const MAX_MULTI_KEYS: usize = 100 - 1;
 /// https://www.scylladb.com/2019/03/27/best-practices-for-scylla-applications/
 /// "There is a hard limit at 16 MiB, and nothing bigger than that can arrive at once
 ///  at the database at any particular time"
-/// So, we set up the maximal size of 16 MiB - 10 KiB for the values and 10 KiB for the keys
-/// We also arbitrarily decrease the size by 4000 bytes because an amount of size is
-/// taken internally by the database.
-const RAW_MAX_VALUE_SIZE: usize = 16 * 1024 * 1024 - 10 * 1024 - 4000;
+const MAX_OPERATION_SIZE: usize = 16 * 1024 * 1024;
+
+/// The constant 14000 is an empirical constant that was found to be necessary
+/// to make the ScyllaDB system work. We have not been able to find this or
+/// a similar constant in the source code or the documentation.
+/// An experimental approach gets us that 14796 is the latest value that is
+/// correct.
+const MAX_BATCH_SIZE: usize = 5000;
+
+/// A batch is issued as one unlogged batch whose statements all share the partition key,
+/// so ScyllaDB merges them into a single mutation weighed against `MAX_OPERATION_SIZE`.
+/// The batch size limits below only account for the keys and the values, while each
+/// statement additionally carries its clustering key framing, cell metadata and write
+/// timestamp. Reserving this much per statement keeps a batch of up to `MAX_BATCH_SIZE`
+/// statements under the limit.
+const BATCH_STATEMENT_OVERHEAD: usize = 256;
+
+/// So, we set up the maximal size of 16 MiB minus 10 KiB for the keys and minus the
+/// per-statement reserve for the values.
+const RAW_MAX_VALUE_SIZE: usize =
+    MAX_OPERATION_SIZE - MAX_KEY_SIZE - MAX_BATCH_SIZE * BATCH_STATEMENT_OVERHEAD;
 const MAX_KEY_SIZE: usize = 10 * 1024;
 const MAX_BATCH_TOTAL_SIZE: usize = RAW_MAX_VALUE_SIZE + MAX_KEY_SIZE;
+
+// A full batch and its per-statement reserve must fit in a single ScyllaDB operation.
+sa::const_assert!(
+    MAX_BATCH_TOTAL_SIZE + MAX_BATCH_SIZE * BATCH_STATEMENT_OVERHEAD <= MAX_OPERATION_SIZE
+);
 
 /// The `RAW_MAX_VALUE_SIZE` is the maximum size on the ScyllaDB storage.
 /// However, the value being written can also be the serialization of a `SimpleUnorderedBatch`
@@ -83,19 +106,12 @@ const MAX_BATCH_TOTAL_SIZE: usize = RAW_MAX_VALUE_SIZE + MAX_KEY_SIZE;
 /// * We write 4 because `get_uleb128_size(RAW_MAX_VALUE_SIZE) = 4)`
 /// * We write `1 + 1 + 1`  because the `UnorderedBatch` has three entries.
 ///
-/// This gets us to a maximal value of 16752727.
+/// This gets us to a maximal value of 15476727.
 const VISIBLE_MAX_VALUE_SIZE: usize = RAW_MAX_VALUE_SIZE
     - MAX_KEY_SIZE
     - get_uleb128_size(RAW_MAX_VALUE_SIZE)
     - get_uleb128_size(MAX_KEY_SIZE)
     - 3;
-
-/// The constant 14000 is an empirical constant that was found to be necessary
-/// to make the ScyllaDB system work. We have not been able to find this or
-/// a similar constant in the source code or the documentation.
-/// An experimental approach gets us that 14796 is the latest value that is
-/// correct.
-const MAX_BATCH_SIZE: usize = 5000;
 
 /// The keyspace to use for the ScyllaDB database.
 const KEYSPACE: &str = "kv";
