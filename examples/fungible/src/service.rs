@@ -6,11 +6,12 @@
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use fungible::{state::FungibleTokenState, Parameters};
+use fungible::{
+    state::FungibleTokenState, Fungible, FungibleAmount, FungibleOperation, Parameters,
+};
 use linera_sdk::{
-    abis::fungible::FungibleOperation,
     graphql::GraphQLMutationRoot as _,
-    linera_base_types::{AccountOwner, Amount, OwnerSpender, WithServiceAbi},
+    linera_base_types::{AccountOwner, OwnerSpender, WithServiceAbi},
     views::{MapView, View},
     Service, ServiceRuntime,
 };
@@ -24,13 +25,14 @@ pub struct FungibleTokenService {
 linera_sdk::service!(FungibleTokenService);
 
 impl WithServiceAbi for FungibleTokenService {
-    type Abi = fungible::FungibleTokenAbi;
+    type Abi = fungible::FungibleTokenAbi<Fungible>;
 }
 
 impl Service for FungibleTokenService {
     type Parameters = Parameters;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
+        Fungible::configure_decimals(runtime.application_parameters().decimals);
         let state = FungibleTokenState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
@@ -43,7 +45,7 @@ impl Service for FungibleTokenService {
     async fn handle_query(&self, request: Request) -> Response {
         let schema = Schema::build(
             self.clone(),
-            FungibleOperation::mutation_root(self.runtime.clone()),
+            FungibleOperation::<Fungible>::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
         .finish();
@@ -53,11 +55,11 @@ impl Service for FungibleTokenService {
 
 #[Object]
 impl FungibleTokenService {
-    async fn accounts(&self) -> &MapView<AccountOwner, Amount> {
+    async fn accounts(&self) -> &MapView<AccountOwner, FungibleAmount> {
         &self.state.accounts
     }
 
-    async fn allowances(&self) -> &MapView<OwnerSpender, Amount> {
+    async fn allowances(&self) -> &MapView<OwnerSpender, FungibleAmount> {
         &self.state.allowances
     }
 

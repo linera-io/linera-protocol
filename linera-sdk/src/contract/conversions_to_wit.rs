@@ -55,10 +55,10 @@ impl From<[u8; 20]> for wit_contract_api::Array20 {
     }
 }
 
-impl From<Amount> for wit_contract_api::Amount {
+impl From<Amount> for wit_contract_api::TokenAmount {
     fn from(host: Amount) -> Self {
-        wit_contract_api::Amount {
-            inner0: (host.lower_half(), host.upper_half()),
+        wit_contract_api::TokenAmount {
+            inner: (host.lower_half(), host.upper_half()),
         }
     }
 }
