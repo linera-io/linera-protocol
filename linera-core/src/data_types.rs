@@ -114,6 +114,38 @@ impl ChainInfoQuery {
         self
     }
 
+    /// Returns whether this query only pages the received log — the shape issued by
+    /// the received-certificate sync. Such queries request no votes, no pending
+    /// message bundles, and nothing else that requires mutable access to the chain
+    /// state, so a worker may serve them from a read lock, without a state hash.
+    pub fn is_received_log_page(&self) -> bool {
+        // Exhaustively destructured (no `..`) on purpose: adding a field to
+        // `ChainInfoQuery` must force a decision here on whether the read-only page
+        // handler can serve or must reject queries carrying it.
+        let Self {
+            chain_id: _,
+            test_next_block_height,
+            request_owner_balance: _,
+            request_pending_message_bundles,
+            request_received_log_excluding_first_n,
+            request_manager_values,
+            request_leader_timeout,
+            request_fallback,
+            request_sent_certificate_hashes_by_heights,
+            request_previous_event_blocks,
+            request_latest_checkpoint_height,
+        } = self;
+        request_received_log_excluding_first_n.is_some()
+            && test_next_block_height.is_none()
+            && !request_pending_message_bundles
+            && !request_manager_values
+            && request_leader_timeout.is_none()
+            && !request_fallback
+            && request_sent_certificate_hashes_by_heights.is_empty()
+            && request_previous_event_blocks.is_empty()
+            && !request_latest_checkpoint_height
+    }
+
     /// Also requests the values from the chain manager, not just the votes.
     pub fn with_manager_values(mut self) -> Self {
         self.request_manager_values = true;
@@ -283,6 +315,22 @@ impl ChainInfo {
         C: Context<Extra = ChainRuntimeContext<S>> + Clone + 'static,
         ChainRuntimeContext<S>: ExecutionRuntimeContext,
     {
+        let mut info = Self::from_chain_view_without_state_hash(view).await?;
+        info.state_hash = Some(view.execution_state.crypto_hash_mut().await?);
+        Ok(info)
+    }
+
+    /// Same as [`Self::from_chain_view`], but leaves `state_hash` unset. Computing the
+    /// hash memoizes it in the view and therefore needs a mutable reference; this
+    /// variant allows building the response under a read lock for queries that do not
+    /// consume the state hash.
+    pub async fn from_chain_view_without_state_hash<C, S>(
+        view: &ChainStateView<C>,
+    ) -> Result<Self, ViewError>
+    where
+        C: Context<Extra = ChainRuntimeContext<S>> + Clone + 'static,
+        ChainRuntimeContext<S>: ExecutionRuntimeContext,
+    {
         let system_state = &view.execution_state.system;
         let tip_state = view.tip_state.get();
         Ok(ChainInfo {
@@ -294,7 +342,7 @@ impl ChainInfo {
             block_hash: tip_state.block_hash,
             next_block_height: tip_state.next_block_height,
             timestamp: view.execution_state.system.progress.get().timestamp,
-            state_hash: Some(view.execution_state.crypto_hash_mut().await?),
+            state_hash: None,
             committee_hash: *view.execution_state.system.committee_hash.get(),
             requested_owner_balance: None,
             requested_pending_message_bundles: Vec::new(),
