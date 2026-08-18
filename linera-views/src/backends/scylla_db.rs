@@ -91,8 +91,8 @@ sa::const_assert!(
 /// The `RAW_MAX_VALUE_SIZE` is the maximum size on the ScyllaDB storage.
 /// However, the value being written can also be the serialization of a `SimpleUnorderedBatch`
 /// Therefore the actual `MAX_VALUE_SIZE` is lower.
-/// At the maximum the key size is 1024 bytes (see below) and we pack just one entry.
-/// So if the key has 1024 bytes this gets us the inequality
+/// At the maximum the key size is `MAX_KEY_SIZE` bytes and we pack just one entry.
+/// So if the key has 10240 bytes this gets us the inequality
 /// `1 + 1 + 1 + serialized_size(MAX_KEY_SIZE)? + serialized_size(x)? <= RAW_MAX_VALUE_SIZE`.
 /// and so this simplifies to `1 + 1 + 1 + (2 + 10240) + (4 + x) <= RAW_MAX_VALUE_SIZE`
 /// Note on the above formula:
@@ -100,7 +100,7 @@ sa::const_assert!(
 /// * We write `1 + 1 + 1`  because the `UnorderedBatch` has three entries.
 ///
 /// This gets us to a maximal value of 15476727.
-const VISIBLE_MAX_VALUE_SIZE: usize = RAW_MAX_VALUE_SIZE
+const MAX_VALUE_SIZE: usize = RAW_MAX_VALUE_SIZE
     - MAX_KEY_SIZE
     - get_uleb128_size(RAW_MAX_VALUE_SIZE)
     - get_uleb128_size(MAX_KEY_SIZE)
@@ -923,7 +923,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
 impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
     const MAX_BATCH_SIZE: usize = MAX_BATCH_SIZE;
     const MAX_BATCH_TOTAL_SIZE: usize = MAX_BATCH_TOTAL_SIZE;
-    const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_SIZE;
+    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
 
     // ScyllaDB cannot take a `crate::batch::Batch` directly. Indeed, if a delete is
     // followed by a write, then the delete takes priority. See the sentence "The first
