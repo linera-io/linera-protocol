@@ -68,13 +68,6 @@ const MAX_MULTI_KEYS: usize = 100 - 1;
 ///  at the database at any particular time"
 const MAX_OPERATION_SIZE: usize = 16 * 1024 * 1024;
 
-/// The constant 14000 is an empirical constant that was found to be necessary
-/// to make the ScyllaDB system work. We have not been able to find this or
-/// a similar constant in the source code or the documentation.
-/// An experimental approach gets us that 14796 is the latest value that is
-/// correct.
-const MAX_BATCH_SIZE: usize = 5000;
-
 /// A batch is issued as one unlogged batch whose statements all share the partition key,
 /// so ScyllaDB merges them into a single mutation weighed against `MAX_OPERATION_SIZE`.
 /// The batch size limits below only account for the keys and the values, while each
@@ -112,6 +105,10 @@ const VISIBLE_MAX_VALUE_SIZE: usize = RAW_MAX_VALUE_SIZE
     - get_uleb128_size(RAW_MAX_VALUE_SIZE)
     - get_uleb128_size(MAX_KEY_SIZE)
     - 3;
+
+/// The maximal number of statements in a single batch. ScyllaDB rejects batches of more
+/// than 14796 statements; this stays well below that.
+const MAX_BATCH_SIZE: usize = 5000;
 
 /// The keyspace to use for the ScyllaDB database.
 const KEYSPACE: &str = "kv";
