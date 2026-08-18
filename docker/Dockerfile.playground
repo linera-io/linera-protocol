@@ -43,13 +43,17 @@ RUN rustup show
 
 # build.bash strips the WASM with wasm-split when it is on PATH; without it the
 # `--keep-debug` build ships unstripped (~10x larger). Same version as CI.
+# `--retry-all-errors` is required rather than plain `--retry`: curl counts only
+# timeouts and some HTTP/FTP status codes as transient, so a TLS handshake
+# failure (exit 35) against github.com is otherwise never retried.
 ARG TARGETARCH
 RUN case "${TARGETARCH}" in \
       arm64) arch=aarch64 ;; \
       amd64) arch=x86_64 ;; \
       *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
     esac && \
-    curl -fsSL -o /usr/local/bin/wasm-split \
+    curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors \
+      -o /usr/local/bin/wasm-split \
       "https://github.com/getsentry/symbolicator/releases/download/26.3.0/wasm-split-Linux-${arch}" && \
     chmod +x /usr/local/bin/wasm-split
 

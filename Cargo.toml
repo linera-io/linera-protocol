@@ -23,6 +23,7 @@ members = [
     "linera-sdk-derive",
     "linera-service",
     "linera-service-graphql-client",
+    "linera-spec",
     "linera-storage",
     "linera-storage-runtime",
     "linera-storage-service",
@@ -59,6 +60,7 @@ default-members = [
     "linera-sdk-derive",
     "linera-service",
     "linera-service-graphql-client",
+    "linera-spec",
     "linera-storage",
     "linera-storage-runtime",
     "linera-storage-service",
@@ -339,6 +341,7 @@ linera-sdk = { version = "0.16.0", path = "./linera-sdk" }
 linera-sdk-derive = { version = "0.16.0", path = "./linera-sdk-derive" }
 linera-service = { version = "0.16.0", path = "./linera-service", default-features = false }
 linera-service-graphql-client = { version = "0.16.0", path = "./linera-service-graphql-client" }
+linera-spec = { version = "0.16.0", path = "./linera-spec" }
 linera-storage = { version = "0.16.0", path = "./linera-storage", default-features = false }
 linera-storage-runtime = { version = "0.16.0", path = "./linera-storage-runtime", default-features = false }
 linera-storage-service = { version = "0.16.0", path = "./linera-storage-service", default-features = false }

@@ -276,13 +276,13 @@ pub enum NodeError {
 
     // This error must be normalized during conversions.
     #[error(
-        "Cannot vote for block proposal of chain {chain_id} because a message \
-         from chain {origin} at height {height} has not been received yet"
+        "Validator is missing {} cross-chain message bundle(s) to validate the block for \
+         chain {chain_id}",
+        bundles.len()
     )]
-    MissingCrossChainUpdate {
+    MissingCrossChainUpdates {
         chain_id: ChainId,
-        origin: ChainId,
-        height: BlockHeight,
+        bundles: Vec<(ChainId, BlockHeight)>,
     },
 
     #[error("Blobs not found: {0:?}")]
@@ -382,7 +382,7 @@ impl NodeError {
             NodeError::BlobsNotFound(_)
             | NodeError::BlocksNotFound(_)
             | NodeError::EventsNotFound(_)
-            | NodeError::MissingCrossChainUpdate { .. }
+            | NodeError::MissingCrossChainUpdates { .. }
             | NodeError::WrongRound(_)
             | NodeError::UnexpectedBlockHeight { .. }
             | NodeError::InactiveChain(_)
@@ -473,15 +473,9 @@ impl From<CryptoError> for NodeError {
 impl From<ChainError> for NodeError {
     fn from(error: ChainError) -> Self {
         match error {
-            ChainError::MissingCrossChainUpdate {
-                chain_id,
-                origin,
-                height,
-            } => Self::MissingCrossChainUpdate {
-                chain_id,
-                origin,
-                height,
-            },
+            ChainError::MissingCrossChainUpdates { chain_id, bundles } => {
+                Self::MissingCrossChainUpdates { chain_id, bundles }
+            }
             ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
             ChainError::ExecutionError(execution_error, context) => match *execution_error {
                 ExecutionError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
