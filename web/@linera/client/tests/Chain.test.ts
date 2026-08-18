@@ -19,7 +19,7 @@ async function freshChain() {
   // The chain was just claimed, so pull its state into the local node before the tests
   // read from it (balance, ownership, round are all local reads).
   await chain.synchronize();
-  return { chain, owner };
+  return { chain, chainId, owner };
 }
 
 test("nextRoundInfo reports a well-formed multi-leader round for a fresh chain", async () => {
@@ -61,6 +61,20 @@ test("ownerWeight reads owner weights", async () => {
   // Re-adding an existing owner overwrites its weight.
   await chain.addOwner(owner, { weight: 250 });
   expect(await chain.ownerWeight(owner)).toBe(250);
+}, 150000);
+
+test("ownerBalance reads the owner account, which is not the chain balance", async () => {
+  const { chain, chainId, owner } = await freshChain();
+
+  // The faucet funds the chain account. The owner's account on that same chain
+  // is a different pot, and starts empty.
+  expect(Number(await chain.balance())).toBeGreaterThan(0);
+  expect(Number(await chain.ownerBalance(owner))).toBe(0);
+
+  // A transfer addressed to `{ chain_id, owner }` lands in the owner account,
+  // and only `ownerBalance` can see it.
+  await chain.transfer({ recipient: { chain_id: chainId, owner }, amount: 1 });
+  expect(Number(await chain.ownerBalance(owner))).toBe(1);
 }, 150000);
 
 test("clearPendingProposal is a no-op when nothing is pending", async () => {

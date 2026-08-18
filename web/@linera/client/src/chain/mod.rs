@@ -121,6 +121,25 @@ impl Chain {
         Ok(self.chain_client.query_balance().await?.to_string())
     }
 
+    /// Gets the balance of `owner`'s account on this chain.
+    ///
+    /// This is the account a cross-chain transfer addressed to
+    /// `Account { chain_id, owner }` credits, and is distinct from
+    /// [`balance`](Self::balance), which reports the chain account. Block fees
+    /// are paid from the chain account plus the account of whoever signed the
+    /// block, so the two together are what a signer can actually spend.
+    ///
+    /// # Errors
+    /// If the chain couldn't be established.
+    #[wasm_bindgen(js_name = ownerBalance)]
+    pub async fn owner_balance(&self, owner: AccountOwner) -> Result<String> {
+        Ok(self
+            .chain_client
+            .query_owner_balance(owner)
+            .await?
+            .to_string())
+    }
+
     /// Gets the identity of the default chain.
     ///
     /// # Errors
