@@ -55,7 +55,6 @@ use crate::{
         DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
         WithError,
     },
-    value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
 
 /// Fundamental constant in ScyllaDB: The maximum size of a multi keys query
@@ -1301,26 +1300,25 @@ impl TestKeyValueDatabase for JournalingKeyValueDatabase<ScyllaDbDatabaseInterna
     }
 }
 
-/// The `ScyllaDbDatabase` composed type with metrics
+/// The `ScyllaDbDatabase` composed type with metrics.
+///
+/// Values are stored as-is, so a single value must not exceed
+/// `VISIBLE_MAX_VALUE_SIZE`.
 #[cfg(with_metrics)]
 pub type ScyllaDbDatabase = MeteredDatabase<
-    LruCachingDatabase<
-        MeteredDatabase<
-            ValueSplittingDatabase<
-                MeteredDatabase<JournalingKeyValueDatabase<ScyllaDbDatabaseInternal>>,
-            >,
-        >,
-    >,
+    LruCachingDatabase<MeteredDatabase<JournalingKeyValueDatabase<ScyllaDbDatabaseInternal>>>,
 >;
 
-/// The `ScyllaDbDatabase` composed type
+/// The `ScyllaDbDatabase` composed type.
+///
+/// Values are stored as-is, so a single value must not exceed
+/// `VISIBLE_MAX_VALUE_SIZE`.
 #[cfg(not(with_metrics))]
-pub type ScyllaDbDatabase = LruCachingDatabase<
-    ValueSplittingDatabase<JournalingKeyValueDatabase<ScyllaDbDatabaseInternal>>,
->;
+pub type ScyllaDbDatabase =
+    LruCachingDatabase<JournalingKeyValueDatabase<ScyllaDbDatabaseInternal>>;
 
 /// The `ScyllaDbStoreConfig` input type
 pub type ScyllaDbStoreConfig = LruCachingConfig<ScyllaDbStoreInternalConfig>;
 
 /// The combined error type for the `ScyllaDbDatabase`.
-pub type ScyllaDbStoreError = ValueSplittingError<JournalingError<ScyllaDbStoreInternalError>>;
+pub type ScyllaDbStoreError = JournalingError<ScyllaDbStoreInternalError>;
