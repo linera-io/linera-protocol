@@ -245,7 +245,7 @@ function pendingBundleCount(): number {
                                     <span v-if="msg.messageMetadata?.systemMessage?.systemMessageType">
                                       {{ msg.messageMetadata.systemMessage.systemMessageType }}
                                       <span v-if="msg.messageMetadata.systemMessage.credit" class="ms-1">
-                                        {{ displayValue(msg.messageMetadata.systemMessage.credit.amount) }} to {{ short_hash(msg.messageMetadata.systemMessage.credit.target) }}
+                                        {{ displayValue(msg.messageMetadata.systemMessage.credit.amount) }} to {{ short_id(msg.messageMetadata.systemMessage.credit.target) }}
                                       </span>
                                       <span v-if="msg.messageMetadata.systemMessage.withdraw" class="ms-1">
                                         {{ displayValue(msg.messageMetadata.systemMessage.withdraw.amount) }}
