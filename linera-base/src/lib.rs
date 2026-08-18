@@ -207,4 +207,5 @@ pub async fn listen_for_shutdown_signals(shutdown_sender: CancellationToken) {
 #[cfg(with_metrics)]
 pub fn init_metrics() {
     data_types::metrics::init_metrics();
+    panic_hook::metrics::init_metrics();
 }

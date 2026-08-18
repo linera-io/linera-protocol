@@ -26,6 +26,27 @@ crate_dir_of() {
     echo "$dir"
 }
 
+# 0. Every metric registration must go through `declare_metrics!`, so a new module cannot
+# reintroduce a hand-rolled `LazyLock` that no init_metrics knows about.
+#
+# prometheus_util.rs defines the helpers themselves; metering.rs registers one set per store
+# instance under names built at runtime, which a macro over statics cannot express; and
+# linera-explorer-new is a separate cargo workspace with its own metrics.
+while read -r file; do
+    case "$file" in
+        linera-base/src/prometheus_util.rs) continue ;;
+        linera-views/src/backends/metering.rs) continue ;;
+        linera-explorer-new/*) continue ;;
+    esac
+    if ! grep -qa 'declare_metrics!' "$file"; then
+        echo "ERROR: $file registers metrics without declare_metrics!."
+        echo "       Declare them with linera_base::declare_metrics! so that the generated"
+        echo "       init_metrics() registers them at startup instead of on first use."
+        status=1
+    fi
+done < <(grep -rlaE 'register_(histogram|int_counter|int_gauge|gauge)' --include='*.rs' \
+         linera-*/src linera-*/*/src 2>/dev/null)
+
 # 1. Every module that declares metrics must be called from somewhere in its own crate.
 while read -r file; do
     crate="$(crate_dir_of "$file")"
