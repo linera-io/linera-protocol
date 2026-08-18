@@ -1104,7 +1104,10 @@ impl KeyValueStoreError for RocksDbStoreInternalError {
     const BACKEND: &'static str = "rocks_db";
 
     fn must_reload_view(&self) -> bool {
-        matches!(self, Self::WriteBatchError(_))
+        // `TokioJoinError` covers a panic in the `spawn_blocking` closure, which is the one
+        // that runs `write_batch_internal`: the batch may or may not have reached the database,
+        // exactly like an explicit write failure.
+        matches!(self, Self::WriteBatchError(_) | Self::TokioJoinError(_))
     }
 }
 

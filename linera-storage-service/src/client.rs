@@ -382,7 +382,8 @@ impl StorageServiceStoreInternal {
             let _response = client
                 .process_write_batch_extended(request)
                 .make_sync()
-                .await?;
+                .await
+                .map_err(|status| StorageServiceStoreError::WriteBatchError(Box::new(status)))?;
         }
         Ok(())
     }
