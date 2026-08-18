@@ -4539,7 +4539,10 @@ where
         if exported.len() == 3 && exported.values().all(|height| *height >= BlockHeight(1)) {
             break;
         }
-        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(50)).await;
+        builder
+            .clock()
+            .add(linera_base::data_types::TimeDelta::from_millis(50));
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(20)).await;
     }
 
     // One entry per *other* committee member: a validator never exports to itself.
@@ -4639,7 +4642,10 @@ where
         if builder.next_block_height(3, chain_id).await == tip {
             return Ok(());
         }
-        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(100)).await;
+        builder
+            .clock()
+            .add(linera_base::data_types::TimeDelta::from_millis(100));
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(20)).await;
     }
     panic!(
         "export did not catch the lagging validator up to {tip} while idle; it is at {}",
@@ -4688,7 +4694,10 @@ where
         if exported.len() >= 2 {
             break;
         }
-        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(100)).await;
+        builder
+            .clock()
+            .add(linera_base::data_types::TimeDelta::from_millis(100));
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(20)).await;
     }
     assert_eq!(
         exported.len(),
@@ -4846,7 +4855,10 @@ where
         if builder.next_block_height(3, chain_id).await == tip {
             return Ok(());
         }
-        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(100)).await;
+        builder
+            .clock()
+            .add(linera_base::data_types::TimeDelta::from_millis(100));
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(20)).await;
     }
     panic!(
         "export did not drain a backlog of {BACKLOG} in rounds of {MAX_CATCH_UP_BLOCKS}; it \
@@ -4964,7 +4976,10 @@ where
         if builder.resident_chain_workers(0).await == 0 {
             return Ok(());
         }
-        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(100)).await;
+        builder
+            .clock()
+            .add(linera_base::data_types::TimeDelta::from_millis(100));
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(20)).await;
     }
     panic!(
         "{} chain workers still resident 10s after the last activity, with a TTL of 500ms — \

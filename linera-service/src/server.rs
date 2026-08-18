@@ -613,6 +613,12 @@ enum ServerCommand {
         #[arg(long, default_value_t = BlockExportConfig::default().max_in_flight_per_destination)]
         block_export_max_in_flight: usize,
 
+        /// The most concurrent sends across all destinations. Each one can read up to
+        /// `--block-export-max-catch-up-blocks` certificates, so this is what bounds the load
+        /// catch-up puts on storage; export halves it whenever a read fails.
+        #[arg(long, default_value_t = BlockExportConfig::default().max_in_flight_total)]
+        block_export_max_in_flight_total: usize,
+
         /// How long export remembers a fully caught-up chain before dropping its bookkeeping.
         #[arg(
             long = "block-export-converged-retention-ms",
@@ -806,6 +812,7 @@ async fn run(options: ServerOptions) {
             block_export_queue_size,
             block_export_queue_bytes,
             block_export_max_in_flight,
+            block_export_max_in_flight_total,
             block_export_converged_retention,
             block_export_idle_interval,
             block_export_retry_delay,
@@ -840,6 +847,7 @@ async fn run(options: ServerOptions) {
                         queue_size: block_export_queue_size,
                         queue_bytes: block_export_queue_bytes,
                         max_in_flight_per_destination: block_export_max_in_flight,
+                        max_in_flight_total: block_export_max_in_flight_total,
                         max_catch_up_blocks: block_export_max_catch_up_blocks,
                         idle_catch_up_interval: block_export_idle_interval,
                         retry_delay: block_export_retry_delay,

@@ -50,13 +50,13 @@ use futures::{stream::FuturesUnordered, FutureExt as _, StreamExt as _};
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::ValidatorPublicKey,
-    data_types::{Blob, BlockHeight, Epoch},
+    data_types::{Blob, BlockHeight, Epoch, TimeDelta, Timestamp},
     identifiers::{BlobId, ChainId, StreamId},
-    time::{timer::timeout, Duration, Instant},
+    time::{timer::timeout, Duration},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
-use linera_storage::{Arc as CacheArc, Storage};
+use linera_storage::{Arc as CacheArc, Clock as _, Storage};
 use tokio::sync::mpsc;
 use tracing::{debug, instrument, warn};
 
@@ -155,6 +155,33 @@ mod metrics {
         )
     });
 
+    /// Destinations currently resolved. Zero with export enabled means the committee could not
+    /// be loaded or no address resolved — on a dashboard that is otherwise indistinguishable
+    /// from a healthy validator with nothing to send.
+    pub static DESTINATIONS: LazyLock<IntGauge> = LazyLock::new(|| {
+        register_int_gauge(
+            "block_export_destinations",
+            "Committee members this validator is currently exporting to",
+        )
+    });
+
+    /// Lagging (chain, destination) *pairs*, which is what the queue's memory tracks — a chain
+    /// behind on ten destinations costs ten times one behind on one.
+    pub static LAGGING_PAIRS: LazyLock<IntGauge> = LazyLock::new(|| {
+        register_int_gauge(
+            "block_export_lagging_pairs",
+            "Chain-destination pairs currently behind, summed over destinations",
+        )
+    });
+
+    /// The queue-wide in-flight budget, halved whenever our own storage fails a read.
+    pub static TOTAL_WINDOW: LazyLock<IntGauge> = LazyLock::new(|| {
+        register_int_gauge(
+            "block_export_total_window",
+            "Concurrent sends allowed across all destinations (AIMD on local storage failures)",
+        )
+    });
+
     /// Sends the destination actually answered, as opposed to attempts: `SEND_LATENCY` counts
     /// every completion, failures included, so success rate needs its own counter.
     pub static SENDS_SUCCEEDED: LazyLock<IntCounterVec> = LazyLock::new(|| {
@@ -191,6 +218,11 @@ pub struct BlockExportConfig {
     pub queue_bytes: usize,
     /// The most concurrent sends one destination is ever allowed — the AIMD window's ceiling.
     pub max_in_flight_per_destination: usize,
+    /// The most concurrent sends across *all* destinations. Each one can be reading up to
+    /// `max_catch_up_blocks` certificates, so without this the aggregate read concurrency is
+    /// the per-destination window times the committee size, and nothing shrinks it when our own
+    /// storage is the bottleneck.
+    pub max_in_flight_total: usize,
     /// How long a destination is skipped after a failed push, doubling up to `max_retry_delay`.
     /// Coarser than the transport's per-request retries: those decide whether one call is worth
     /// repeating, this decides whether the destination is worth attempting at all right now.
@@ -232,6 +264,18 @@ impl BlockExportConfig {
             // No destination could ever be sent anything.
             return Err("block export in-flight ceiling must be greater than zero".into());
         }
+        if self.max_in_flight_total == 0 {
+            // The queue-wide budget would admit nothing, so no send would ever start.
+            return Err("block export total in-flight budget must be greater than zero".into());
+        }
+        if self.max_in_flight_total < self.max_in_flight_per_destination {
+            // One destination could never reach its own ceiling, and the AIMD window would
+            // advertise a capacity the queue refuses to grant.
+            return Err(
+                "block export total in-flight budget must be at least the per-destination ceiling"
+                    .into(),
+            );
+        }
         if self.max_catch_up_blocks == 0 {
             // Every gap would stay open forever, silently.
             return Err("block export catch-up bound must be greater than zero".into());
@@ -267,6 +311,7 @@ impl Default for BlockExportConfig {
             queue_size: 1024,
             queue_bytes: 256 * 1024 * 1024,
             max_in_flight_per_destination: 8,
+            max_in_flight_total: 64,
             retry_delay: Duration::from_secs(1),
             max_retry_delay: Duration::from_secs(60),
             idle_catch_up_interval: Duration::from_millis(200),
@@ -293,7 +338,9 @@ struct ExportedBlock {
     /// byte budget.
     blob_bytes: usize,
     #[cfg(with_metrics)]
-    queued_at: Instant,
+    /// Wall clock, not the storage clock: this only feeds the queue-latency histogram, and a
+    /// simulated clock would report time that no operator waited.
+    queued_at: linera_base::time::Instant,
 }
 
 /// The chain workers' end of the export queue: hands blocks over and reads back progress.
@@ -420,7 +467,7 @@ impl BlockExportHandle {
             exported_heights,
             blob_bytes,
             #[cfg(with_metrics)]
-            queued_at: Instant::now(),
+            queued_at: linera_base::time::Instant::now(),
         };
         match self.blocks.try_send(block) {
             Ok(()) => {
@@ -501,6 +548,7 @@ where
     let tips: SharedTips = Arc::default();
     let queued_bytes = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let queue_bytes_budget = config.queue_bytes;
+    let max_in_flight_total = config.max_in_flight_total;
 
     let task = BlockExportQueue {
         storage,
@@ -517,6 +565,7 @@ where
         destinations: BTreeMap::new(),
         dest_indices: BTreeMap::new(),
         next_generation: 0,
+        total_window: max_in_flight_total,
         announced_epoch: None,
         scan_attempted_for: None,
         destinations_changed: false,
@@ -544,7 +593,7 @@ struct ChainRecord {
     /// caught up.
     tip: BlockHeight,
     /// When this chain last saw a block or a completed send, for the convergence sweep.
-    last_activity: Instant,
+    last_activity: Timestamp,
     /// Sorted by index, so lookups binary-search integers. A flat vector rather than a map
     /// because this is allocated per tracked chain: a `BTreeMap` pays for an eleven-slot leaf
     /// whatever the committee size.
@@ -559,7 +608,7 @@ impl ChainRecord {
     /// "converged" to the sweep, so such a chain would be abandoned in silence. One creation
     /// path used to miss the seeding, and nothing in the suite could see it.
     fn new<N>(
-        now: Instant,
+        now: Timestamp,
         destinations: &BTreeMap<DestIndex, DestState<N>>,
         exported_heights: &BTreeMap<ValidatorPublicKey, BlockHeight>,
     ) -> Self {
@@ -659,7 +708,7 @@ struct ChainDest {
     in_flight: Option<u64>,
     /// Backoff for *chain-scoped* failures — the destination is healthy but cannot accept this
     /// chain yet, e.g. it lacks the committee and the admin chain's export has not reached it.
-    retry_at: Option<Instant>,
+    retry_at: Option<Timestamp>,
     failures: u32,
     /// How many times this destination has reported a *lower* height than it had. Counted apart
     /// from `failures` because an advance clears those, and a peer alternating advance with
@@ -682,7 +731,7 @@ impl ChainDest {
         &mut self,
         reported: BlockHeight,
         tip: BlockHeight,
-        now: Instant,
+        now: Timestamp,
         config: &BlockExportConfig,
     ) -> Option<BlockHeight> {
         // Clamped once, here, so the cursor, the counters and the acknowledgement all read the
@@ -706,7 +755,7 @@ impl ChainDest {
             // restore regresses once and pays one delay, an oscillating peer pays double each
             // time it lies.
             let attempt = self.failures.max(self.regressions);
-            self.retry_at = Some(now + backoff_delay(attempt, config));
+            self.retry_at = Some(now.saturating_add(backoff_delay(attempt, config)));
             self.regressions = self.regressions.saturating_add(1);
         } else if reported < tip {
             // Answered but moved nothing — a gap our storage cannot fill — so back this pair
@@ -735,7 +784,7 @@ struct DestState<N> {
     /// configured ceiling, halved per transport failure down to 1.
     window: usize,
     /// Backoff for *destination-scoped* failures: transport errors and timeouts.
-    retry_at: Option<Instant>,
+    retry_at: Option<Timestamp>,
     failures: u32,
     /// Chains this destination is behind on, maintained as pairs fall behind and converge
     /// rather than rediscovered by scanning every chain each tick — that scan was O(tracked
@@ -791,6 +840,8 @@ enum SendOutcome {
     ChainScoped(Box<chain_client::Error>),
     /// The failure is about the destination itself.
     DestinationScoped(Box<chain_client::Error>),
+    /// Our own storage failed. Nobody's health signal but ours.
+    LocalScoped(Box<chain_client::Error>),
 }
 
 /// The body of the process-wide export queue task.
@@ -825,6 +876,11 @@ where
     dest_indices: BTreeMap<ValidatorPublicKey, DestIndex>,
     /// The last destination generation handed out; never reused within this queue's lifetime.
     next_generation: u64,
+    /// Concurrent sends allowed across all destinations right now: halved when our own storage
+    /// fails a read, restored one slot per success up to `max_in_flight_total`. A destination's
+    /// own window bounds what one peer can consume; this bounds what the queue as a whole asks
+    /// of storage.
+    total_window: usize,
     /// The newest epoch any exported block has announced; the tick loads its committee when it
     /// is ahead of `latest_epoch`.
     announced_epoch: Option<Epoch>,
@@ -882,12 +938,21 @@ where
         // would die every tick-only duty (drop repair, backoff expiry, the committee scan, the
         // convergence sweep).
         let interval = self.config.idle_catch_up_interval;
-        let mut next_tick = Instant::now() + interval;
+        let tick_delta = TimeDelta::from_micros(interval.as_micros() as u64);
+        let mut next_tick = self
+            .storage
+            .clock()
+            .current_time()
+            .saturating_add(tick_delta);
         loop {
-            let now = Instant::now();
+            let now = self.storage.clock().current_time();
             if now >= next_tick {
                 self.tick(&mut jobs).await;
-                next_tick = Instant::now() + interval;
+                next_tick = self
+                    .storage
+                    .clock()
+                    .current_time()
+                    .saturating_add(tick_delta);
                 continue;
             }
             let until_tick = next_tick.duration_since(now);
@@ -902,7 +967,7 @@ where
                 futures::select_biased! {
                     done = jobs.next() => Wake::Done(done.expect("jobs is not empty")),
                     received = receiver.recv().fuse() => Wake::Block(received),
-                    _ = linera_base::time::timer::sleep(until_tick).fuse() => Wake::Tick,
+                    _ = self.storage.clock().sleep_for(until_tick).fuse() => Wake::Tick,
                 }
             };
             match wake {
@@ -911,7 +976,11 @@ where
                 Wake::Block(None) => break,
                 Wake::Tick => {
                     self.tick(&mut jobs).await;
-                    next_tick = Instant::now() + interval;
+                    next_tick = self
+                        .storage
+                        .clock()
+                        .current_time()
+                        .saturating_add(tick_delta);
                 }
             }
         }
@@ -953,7 +1022,7 @@ where
             self.sync_destinations();
         }
 
-        let now = Instant::now();
+        let now = self.storage.clock().current_time();
         let tip = height.try_add_one().unwrap_or(BlockHeight::MAX);
         let record = self
             .chains
@@ -964,6 +1033,7 @@ where
         record.seed_missing_cursors(&self.destinations, &block.exported_heights);
         let indices = self.destinations.keys().copied().collect::<Vec<_>>();
         for index in indices {
+            let budget = self.budget_remaining();
             let record = self.chains.get_mut(&chain_id).expect("inserted above");
             let record_tip = record.tip;
             let chain_dest = record.dest_entry(index);
@@ -1001,6 +1071,7 @@ where
                         dest,
                         jobs,
                         now,
+                        budget,
                     );
                 }
             }
@@ -1013,7 +1084,7 @@ where
         (chain_id, index, generation, outcome): JobDone,
         jobs: &mut FuturesUnordered<JobFuture>,
     ) {
-        let now = Instant::now();
+        let now = self.storage.clock().current_time();
         let Some(dest) = self.destinations.get_mut(&index) else {
             return; // The validator left the committee while its send was in flight.
         };
@@ -1043,12 +1114,26 @@ where
                 dest.failures = 0;
                 dest.retry_at = None;
                 dest.window = (dest.window + 1).min(self.config.max_in_flight_per_destination);
+                self.total_window = (self.total_window + 1).min(self.config.max_in_flight_total);
                 #[cfg(with_metrics)]
                 metrics::SENDS_SUCCEEDED
                     .with_label_values(&[&dest.address])
                     .inc();
             }
             SendOutcome::ChainScoped(_) => {}
+            SendOutcome::LocalScoped(error) => {
+                // Our storage, not the peer: leave the destination's window alone and halve the
+                // queue's own budget, so the pressure is relieved across every destination
+                // rather than one pair at a time while the rest keep reading.
+                warn!(
+                    %chain_id, %error,
+                    "Export could not read from local storage; halving the queue's total \
+                     in-flight budget",
+                );
+                self.total_window = (self.total_window / 2).max(1);
+                #[cfg(with_metrics)]
+                metrics::TOTAL_WINDOW.set(self.total_window as i64);
+            }
             SendOutcome::DestinationScoped(error) => {
                 warn!(
                     validator = %dest.address, %chain_id, %error,
@@ -1103,6 +1188,16 @@ where
                             }
                         }
                     }
+                    SendOutcome::LocalScoped(_) => {
+                        // The global budget already shrank; back the pair off too so the same
+                        // unreadable range is not retried immediately.
+                        back_off(
+                            &mut chain_dest.failures,
+                            &mut chain_dest.retry_at,
+                            now,
+                            &self.config,
+                        );
+                    }
                     SendOutcome::ChainScoped(error) => {
                         debug!(
                             %chain_id, %validator, %error,
@@ -1132,6 +1227,7 @@ where
         }
         // A pair that advanced but is still behind continues on the next free slot rather than
         // waiting for a tick — multi-round catch-up must not depend on a process-wide lull.
+        let budget = self.budget_remaining();
         let dest = self.destinations.get_mut(&index).expect("checked above");
         if let Some(record) = self.chains.get_mut(&chain_id) {
             let tip = record.tip;
@@ -1153,12 +1249,13 @@ where
             dest,
             jobs,
             now,
+            budget,
         );
     }
 
     /// An idle moment: pick up committee changes from storage and requeue expired backoffs.
     async fn tick(&mut self, jobs: &mut FuturesUnordered<JobFuture>) {
-        let now = Instant::now();
+        let now = self.storage.clock().current_time();
         // Occasionally scan storage for committees no block has carried — how a validator
         // admitted while every chain is idle still becomes a destination. On its own cadence
         // because the probe reads storage, and ticks now fire even under load.
@@ -1280,13 +1377,29 @@ where
         }
 
         #[cfg(with_metrics)]
-        metrics::TRACKED_CHAINS.set(self.chains.len() as i64);
+        {
+            metrics::TRACKED_CHAINS.set(self.chains.len() as i64);
+            metrics::DESTINATIONS.set(self.destinations.len() as i64);
+            let lagging_pairs = self
+                .destinations
+                .values()
+                .map(|dest| dest.lagging.len())
+                .sum::<usize>();
+            metrics::LAGGING_PAIRS.set(lagging_pairs as i64);
+            metrics::TOTAL_WINDOW.set(self.total_window as i64);
+        }
 
         // No requeue scan: each destination's `lagging` set already *is* the list of chains it
         // owes work on, kept current as pairs fall behind and converge. Draining it is
         // proportional to the work available, not to how much state the process is holding.
+        let mut budget = self.total_window.saturating_sub(
+            self.destinations
+                .values()
+                .map(|dest| dest.in_flight)
+                .sum::<usize>(),
+        );
         for (index, dest) in &mut self.destinations {
-            Self::drain_ready(
+            budget -= Self::drain_ready(
                 &mut self.chains,
                 &self.storage,
                 &self.config,
@@ -1294,6 +1407,7 @@ where
                 dest,
                 jobs,
                 now,
+                budget,
             );
         }
     }
@@ -1471,6 +1585,17 @@ where
         }
     }
 
+    /// Sends the queue-wide budget still allows, summed from the destinations rather than
+    /// tracked in a counter that could drift out of step with them.
+    fn budget_remaining(&self) -> usize {
+        let in_flight = self
+            .destinations
+            .values()
+            .map(|dest| dest.in_flight)
+            .sum::<usize>();
+        self.total_window.saturating_sub(in_flight)
+    }
+
     /// The index `validator`'s per-chain state is keyed by, registering it on first sight.
     ///
     /// Published to the handles under the progress mutex, because the chain workers read that
@@ -1561,6 +1686,7 @@ where
             };
             let outcome = match result {
                 Ok(next_height) => SendOutcome::Reached(next_height),
+                Err(error) if is_local_scoped(&error) => SendOutcome::LocalScoped(Box::new(error)),
                 Err(error) if is_chain_scoped(&error) => SendOutcome::ChainScoped(Box::new(error)),
                 Err(error) => SendOutcome::DestinationScoped(Box::new(error)),
             };
@@ -1573,6 +1699,7 @@ where
     }
 
     /// Starts catch-up sends from this destination's ready list until its window is full.
+    #[expect(clippy::too_many_arguments)]
     fn drain_ready(
         chains: &mut HashMap<ChainId, ChainRecord>,
         storage: &S,
@@ -1580,10 +1707,12 @@ where
         index: DestIndex,
         dest: &mut DestState<P::Node>,
         jobs: &mut FuturesUnordered<JobFuture>,
-        now: Instant,
-    ) {
-        if dest.retry_at.is_some_and(|at| at > now) || dest.in_flight >= dest.window {
-            return;
+        now: Timestamp,
+        budget: usize,
+    ) -> usize {
+        if dest.retry_at.is_some_and(|at| at > now) || dest.in_flight >= dest.window || budget == 0
+        {
+            return 0;
         }
         // Only as far as the window allows, so the cost is the sends we are about to make and
         // not the size of the backlog. Entries stay in `lagging` until they converge: one that
@@ -1597,7 +1726,7 @@ where
         let mut stale = Vec::new();
         let mut last_visited = None;
         for chain_id in ordered {
-            if dest.in_flight + spawn.len() >= dest.window {
+            if dest.in_flight + spawn.len() >= dest.window || spawn.len() >= budget {
                 break;
             }
             last_visited = Some(chain_id);
@@ -1622,6 +1751,7 @@ where
         for chain_id in stale {
             dest.lagging.remove(&chain_id);
         }
+        let spawned = spawn.len();
         for chain_id in spawn {
             let Some(record) = chains.get_mut(&chain_id) else {
                 continue;
@@ -1634,6 +1764,7 @@ where
                 jobs, storage, config, chain_id, index, dest, chain_dest, tip, None,
             );
         }
+        spawned
     }
 }
 
@@ -1647,10 +1778,19 @@ fn is_chain_scoped(error: &chain_client::Error) -> bool {
             NodeError::EventsNotFound(_)
                 | NodeError::BlobsNotFound(_)
                 | NodeError::InactiveChain(_)
-        ) | chain_client::Error::ReadCertificatesError(_)
-            // Our own storage failing to read is nobody's health signal; halving the
-            // destination's window for it would punish the wrong side.
-            | chain_client::Error::ViewError(_)
+        )
+    )
+}
+
+/// Whether this failure is our own storage rather than anything about the destination.
+///
+/// Halving the destination's window for it would punish the wrong side, but backing off only the
+/// one pair leaves every other pair reading at full rate — so the control loop cannot see the
+/// bottleneck it is creating. These shrink the queue's *global* budget instead.
+fn is_local_scoped(error: &chain_client::Error) -> bool {
+    matches!(
+        error,
+        chain_client::Error::ReadCertificatesError(_) | chain_client::Error::ViewError(_)
     )
 }
 
@@ -1658,20 +1798,21 @@ fn is_chain_scoped(error: &chain_client::Error) -> bool {
 /// capped at `max_retry_delay`.
 fn back_off(
     failures: &mut u32,
-    retry_at: &mut Option<Instant>,
-    now: Instant,
+    retry_at: &mut Option<Timestamp>,
+    now: Timestamp,
     config: &BlockExportConfig,
 ) {
-    *retry_at = Some(now + backoff_delay(*failures, config));
+    *retry_at = Some(now.saturating_add(backoff_delay(*failures, config)));
     *failures = failures.saturating_add(1);
 }
 
 /// The delay after `attempt` consecutive failures: doubles per attempt, capped.
-fn backoff_delay(attempt: u32, config: &BlockExportConfig) -> linera_base::time::Duration {
-    config
+fn backoff_delay(attempt: u32, config: &BlockExportConfig) -> TimeDelta {
+    let delay = config
         .retry_delay
         .saturating_mul(1u32.checked_shl(attempt).unwrap_or(u32::MAX))
-        .min(config.max_retry_delay)
+        .min(config.max_retry_delay);
+    TimeDelta::from_micros(delay.as_micros() as u64)
 }
 
 /// Sends this validator's blocks to one other validator, reading everything it needs from
@@ -1919,7 +2060,7 @@ mod tests {
         let destinations = test_destinations([validator, other]);
         let exported = [(validator, BlockHeight(41))].into_iter().collect();
 
-        let record = ChainRecord::new(Instant::now(), &destinations, &exported);
+        let record = ChainRecord::new(Timestamp::now(), &destinations, &exported);
 
         assert_eq!(
             record.dest(0).unwrap().next_height,
@@ -1946,7 +2087,7 @@ mod tests {
         let exported: BTreeMap<_, _> = [(validator, BlockHeight(7))].into_iter().collect();
 
         // As the tick builds it: no heights to hand over, so the cursor starts unset.
-        let mut record = ChainRecord::new(Instant::now(), &destinations, &BTreeMap::new());
+        let mut record = ChainRecord::new(Timestamp::now(), &destinations, &BTreeMap::new());
         assert_eq!(record.dest(0).unwrap().next_height, None);
 
         // The fill `on_block` performs once a block for that chain arrives.
@@ -2028,7 +2169,7 @@ mod tests {
             max_retry_delay: Duration::from_secs(60),
             ..BlockExportConfig::default()
         };
-        let now = Instant::now();
+        let now = Timestamp::now();
         let tip = BlockHeight(100);
 
         // A genuine restore: one regression, then it advances from there for good.
@@ -2040,7 +2181,10 @@ mod tests {
             .record_reached(BlockHeight(10), tip, now, &config)
             .is_some());
         let restore_penalty = restored.retry_at.expect("a regression backs the pair off");
-        assert_eq!(restore_penalty, now + Duration::from_millis(100));
+        assert_eq!(
+            restore_penalty,
+            now.saturating_add(TimeDelta::from_millis(100))
+        );
         restored.record_reached(BlockHeight(20), tip, now, &config);
         assert_eq!(
             restored.retry_at, None,
@@ -2056,16 +2200,20 @@ mod tests {
         let mut penalties = Vec::new();
         for round in 0..4 {
             liar.record_reached(BlockHeight(10), tip, now, &config);
-            penalties.push(liar.retry_at.expect("a regression backs the pair off") - now);
+            penalties.push(
+                liar.retry_at
+                    .expect("a regression backs the pair off")
+                    .delta_since(now),
+            );
             liar.record_reached(BlockHeight(50 + round), tip, now, &config);
         }
         assert_eq!(
             penalties,
             vec![
-                Duration::from_millis(100),
-                Duration::from_millis(200),
-                Duration::from_millis(400),
-                Duration::from_millis(800),
+                TimeDelta::from_millis(100),
+                TimeDelta::from_millis(200),
+                TimeDelta::from_millis(400),
+                TimeDelta::from_millis(800),
             ],
             "an advance between regressions reset the penalty",
         );
@@ -2086,7 +2234,7 @@ mod tests {
         // the cursor raw satisfies every "converged" predicate and no "behind" one, and only a
         // completed send can rewrite it, so the pair would never be scheduled again.
         let mut liar = ChainDest::default();
-        let acked = liar.record_reached(BlockHeight(u64::MAX), tip, Instant::now(), &config);
+        let acked = liar.record_reached(BlockHeight(u64::MAX), tip, Timestamp::now(), &config);
         assert_eq!(
             acked,
             Some(BlockHeight(99)),
@@ -2101,7 +2249,7 @@ mod tests {
         // And an honest report below the tip is taken at its word, not rounded up to it —
         // otherwise "always acknowledge tip - 1" would satisfy the clamp just as well.
         let mut honest = ChainDest::default();
-        let acked = honest.record_reached(BlockHeight(40), tip, Instant::now(), &config);
+        let acked = honest.record_reached(BlockHeight(40), tip, Timestamp::now(), &config);
         assert_eq!(
             acked,
             Some(BlockHeight(39)),
@@ -2115,6 +2263,30 @@ mod tests {
     #[test]
     fn the_regression_counter_costs_no_memory() {
         assert_eq!(size_of::<ChainDest>(), 56);
+    }
+
+    /// Our own storage failing is not the destination's fault, and not one pair's problem
+    /// either: it shrinks the queue-wide budget, leaving the peer's window alone.
+    ///
+    /// Classifying it per-pair (as `ChainScoped` did) backs off one pair at a time while every
+    /// other pair keeps reading at full rate, so the control loop cannot see the bottleneck it
+    /// is creating.
+    #[test]
+    fn local_storage_errors_are_neither_chain_nor_destination_scoped() {
+        let view_error = chain_client::Error::ViewError(linera_views::ViewError::NotFound(
+            "storage is unhappy".to_owned(),
+        ));
+        assert!(is_local_scoped(&view_error));
+        assert!(
+            !is_chain_scoped(&view_error),
+            "a storage failure would back off one pair and leave the budget untouched",
+        );
+
+        // A destination genuinely lacking the chain's events stays chain-scoped.
+        let events_missing =
+            chain_client::Error::RemoteNodeError(NodeError::EventsNotFound(vec![]));
+        assert!(is_chain_scoped(&events_missing));
+        assert!(!is_local_scoped(&events_missing));
     }
 
     /// A drained burst hands back its peak-sized table for freeing off the mutex; a live one
@@ -2212,19 +2384,19 @@ mod tests {
         };
         let mut failures = 0;
         let mut retry_at = None;
-        let now = Instant::now();
+        let now = Timestamp::now();
         let mut delays = Vec::new();
         for _ in 0..4 {
             back_off(&mut failures, &mut retry_at, now, &config);
-            delays.push(retry_at.expect("set by back_off") - now);
+            delays.push(retry_at.expect("set by back_off").delta_since(now));
         }
         assert_eq!(
             delays,
             [
-                Duration::from_millis(100),
-                Duration::from_millis(200),
-                Duration::from_millis(400),
-                Duration::from_millis(450),
+                TimeDelta::from_millis(100),
+                TimeDelta::from_millis(200),
+                TimeDelta::from_millis(400),
+                TimeDelta::from_millis(450),
             ],
         );
     }

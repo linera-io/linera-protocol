@@ -898,6 +898,12 @@ impl<B> TestBuilder<B>
 where
     B: StorageBuilder,
 {
+    /// The simulated clock every storage here shares, so a test can drive the export queue's
+    /// tick in virtual time instead of sleeping through it.
+    pub fn clock(&self) -> &TestClock {
+        self.storage_builder.clock()
+    }
+
     /// Creates a test setup with `count` validators, `with_faulty_validators` of which are faulty.
     pub async fn new(
         storage_builder: B,
