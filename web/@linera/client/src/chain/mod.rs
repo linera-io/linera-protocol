@@ -133,7 +133,11 @@ impl Chain {
     /// If the chain couldn't be established.
     #[wasm_bindgen(js_name = ownerBalance)]
     pub async fn owner_balance(&self, owner: AccountOwner) -> JsResult<String> {
-        Ok(self.chain_client.query_owner_balance(owner).await?.to_string())
+        Ok(self
+            .chain_client
+            .query_owner_balance(owner)
+            .await?
+            .to_string())
     }
 
     /// Gets the identity of the default chain.
