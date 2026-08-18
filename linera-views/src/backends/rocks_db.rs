@@ -40,7 +40,6 @@ use crate::{
         KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
-    value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
 
 /// The prefixes being used in the system
@@ -1097,21 +1096,22 @@ impl KeyValueStoreError for RocksDbStoreInternalError {
 }
 
 /// The composed error type for the `RocksDbStore`
-pub type RocksDbStoreError = ValueSplittingError<RocksDbStoreInternalError>;
+pub type RocksDbStoreError = RocksDbStoreInternalError;
 
 /// The composed config type for the `RocksDbStore`
 pub type RocksDbStoreConfig = LruCachingConfig<RocksDbStoreInternalConfig>;
 
-/// The `RocksDbDatabase` composed type with metrics
+/// The `RocksDbDatabase` composed type with metrics.
+///
+/// Values are stored as-is, so a single value must not exceed `MAX_VALUE_SIZE`.
 #[cfg(with_metrics)]
-pub type RocksDbDatabase = MeteredDatabase<
-    LruCachingDatabase<
-        MeteredDatabase<ValueSplittingDatabase<MeteredDatabase<RocksDbDatabaseInternal>>>,
-    >,
->;
-/// The `RocksDbDatabase` composed type
+pub type RocksDbDatabase =
+    MeteredDatabase<LruCachingDatabase<MeteredDatabase<RocksDbDatabaseInternal>>>;
+/// The `RocksDbDatabase` composed type.
+///
+/// Values are stored as-is, so a single value must not exceed `MAX_VALUE_SIZE`.
 #[cfg(not(with_metrics))]
-pub type RocksDbDatabase = LruCachingDatabase<ValueSplittingDatabase<RocksDbDatabaseInternal>>;
+pub type RocksDbDatabase = LruCachingDatabase<RocksDbDatabaseInternal>;
 
 #[cfg(with_testing)]
 impl crate::backends::DatabaseBackup for RocksDbDatabaseInternal {
