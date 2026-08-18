@@ -72,6 +72,7 @@ pub fn init_metrics() {
     linera_execution::init_metrics();
     linera_storage::init_metrics();
     linera_views::init_metrics();
+    chain_worker::export::metrics::init_metrics();
     chain_worker::state::metrics::init_metrics();
     client::metrics::init_metrics();
     client::requests_scheduler::init_metrics();

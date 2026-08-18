@@ -68,9 +68,7 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{
         exponential_bucket_interval, exponential_bucket_latencies, register_histogram,
         register_histogram_vec, register_int_counter, register_int_counter_vec, register_int_gauge,
@@ -78,151 +76,123 @@ mod metrics {
     };
     use prometheus::{Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec};
 
-    /// Sends refused for a reason about one chain rather than the destination — most often a
-    /// committee the destination has not learned yet. Self-healing, so a rising rate is the
-    /// signal, not the count: one that stays flat and non-zero means a destination is stuck on
-    /// some chain and nothing is repairing it.
-    pub static CHAIN_SCOPED_BACKOFFS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
+    linera_base::declare_metrics! {
+        /// Sends refused for a reason about one chain rather than the destination — most often a
+        /// committee the destination has not learned yet. Self-healing, so a rising rate is the
+        /// signal, not the count: one that stays flat and non-zero means a destination is stuck on
+        /// some chain and nothing is repairing it.
+        pub static CHAIN_SCOPED_BACKOFFS: IntCounterVec = register_int_counter_vec(
             "block_export_chain_scoped_backoffs",
             "Sends deferred because a destination cannot accept a particular chain yet",
             &["validator"],
-        )
-    });
+        );
 
-    /// Chains the queue is tracking: those with a destination still behind, plus recently
-    /// converged ones inside the retention window. A destination that is down holds every chain
-    /// that produced a block during the outage here — that is the work-list its catch-up needs,
-    /// and this is how an operator sees it growing.
-    pub static TRACKED_CHAINS: LazyLock<IntGauge> = LazyLock::new(|| {
-        register_int_gauge(
+        /// Chains the queue is tracking: those with a destination still behind, plus recently
+        /// converged ones inside the retention window. A destination that is down holds every chain
+        /// that produced a block during the outage here — that is the work-list its catch-up needs,
+        /// and this is how an operator sees it growing.
+        pub static TRACKED_CHAINS: IntGauge = register_int_gauge(
             "block_export_tracked_chains",
             "Chains the export queue is tracking for catch-up",
-        )
-    });
+        );
 
-    /// Blocks waiting in the export queue.
-    pub static QUEUE_SIZE: LazyLock<IntGauge> = LazyLock::new(|| {
-        register_int_gauge(
+        /// Blocks waiting in the export queue.
+        pub static QUEUE_SIZE: IntGauge = register_int_gauge(
             "block_export_queue_size",
             "Blocks queued for export in this process",
-        )
-    });
+        );
 
-    /// Blob payload bytes held by queued blocks, since a block count alone hides the memory a
-    /// backlog of large blobs pins.
-    pub static QUEUE_BYTES: LazyLock<IntGauge> = LazyLock::new(|| {
-        register_int_gauge(
+        /// Blob payload bytes held by queued blocks, since a block count alone hides the memory a
+        /// backlog of large blobs pins.
+        pub static QUEUE_BYTES: IntGauge = register_int_gauge(
             "block_export_queue_bytes",
             "Blob bytes held by blocks queued for export in this process",
-        )
-    });
+        );
 
-    /// Blocks dropped because the queue was full. Each is repaired by a later catch-up round, so
-    /// this counting up means latency, not loss.
-    pub static DROPPED_BLOCKS: LazyLock<IntCounter> = LazyLock::new(|| {
-        register_int_counter(
+        /// Blocks dropped because the queue was full. Each is repaired by a later catch-up round, so
+        /// this counting up means latency, not loss.
+        pub static DROPPED_BLOCKS: IntCounter = register_int_counter(
             "block_export_dropped_blocks",
             "Blocks dropped from a full export queue, to be re-sent from storage",
-        )
-    });
+        );
 
-    /// Time from a block being queued to its sends being scheduled.
-    pub static EXPORT_LATENCY: LazyLock<Histogram> = LazyLock::new(|| {
-        register_histogram(
+        /// Time from a block being queued to its sends being scheduled.
+        pub static EXPORT_LATENCY: Histogram = register_histogram(
             "block_export_latency",
             "Time (ms) a block waits in the export queue before its sends are scheduled",
             exponential_bucket_latencies(60_000.0),
-        )
-    });
+        );
 
-    /// Time for one push to one destination, including any catch-up it triggered.
-    pub static SEND_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
+        /// Time for one push to one destination, including any catch-up it triggered.
+        pub static SEND_LATENCY: HistogramVec = register_histogram_vec(
             "block_export_send_latency",
             "Time (ms) to push one block to one destination validator",
             &["validator"],
             exponential_bucket_latencies(60_000.0),
-        )
-    });
+        );
 
-    /// How many concurrent sends each destination is currently allowed.
-    pub static DESTINATION_WINDOW: LazyLock<IntGaugeVec> = LazyLock::new(|| {
-        register_int_gauge_vec(
+        /// How many concurrent sends each destination is currently allowed.
+        pub static DESTINATION_WINDOW: IntGaugeVec = register_int_gauge_vec(
             "block_export_destination_window",
             "AIMD in-flight window per destination validator",
             &["validator"],
-        )
-    });
+        );
 
-    /// Destinations currently resolved. Zero with export enabled means the committee could not
-    /// be loaded or no address resolved — on a dashboard that is otherwise indistinguishable
-    /// from a healthy validator with nothing to send.
-    pub static DESTINATIONS: LazyLock<IntGauge> = LazyLock::new(|| {
-        register_int_gauge(
+        /// Destinations currently resolved. Zero with export enabled means the committee could not
+        /// be loaded or no address resolved — on a dashboard that is otherwise indistinguishable
+        /// from a healthy validator with nothing to send.
+        pub static DESTINATIONS: IntGauge = register_int_gauge(
             "block_export_destinations",
             "Committee members this validator is currently exporting to",
-        )
-    });
+        );
 
-    /// Lagging (chain, destination) *pairs*, which is what the queue's memory tracks — a chain
-    /// behind on ten destinations costs ten times one behind on one.
-    pub static LAGGING_PAIRS: LazyLock<IntGauge> = LazyLock::new(|| {
-        register_int_gauge(
+        /// Lagging (chain, destination) *pairs*, which is what the queue's memory tracks — a chain
+        /// behind on ten destinations costs ten times one behind on one.
+        pub static LAGGING_PAIRS: IntGauge = register_int_gauge(
             "block_export_lagging_pairs",
             "Chain-destination pairs currently behind, summed over destinations",
-        )
-    });
+        );
 
-    /// Blocks this validator still owes each destination, summed over every chain it is behind
-    /// on. The aggregate backlog, which is what "is that validator caught up" actually asks.
-    pub static BLOCKS_OWED: LazyLock<IntGaugeVec> = LazyLock::new(|| {
-        register_int_gauge_vec(
+        /// Blocks this validator still owes each destination, summed over every chain it is behind
+        /// on. The aggregate backlog, which is what "is that validator caught up" actually asks.
+        pub static BLOCKS_OWED: IntGaugeVec = register_int_gauge_vec(
             "block_export_blocks_owed",
             "Blocks still to send to a destination validator, summed over all chains",
             &["validator"],
-        )
-    });
+        );
 
-    /// The furthest behind any single chain is for a destination. A quantile over chains would
-    /// need a per-pair observation, measured at 150 ms per sweep at a million pairs against
-    /// 2 ms for this; and the maximum is the tail a quantile would hide anyway.
-    pub static MAX_CHAIN_GAP: LazyLock<IntGaugeVec> = LazyLock::new(|| {
-        register_int_gauge_vec(
+        /// The furthest behind any single chain is for a destination. A quantile over chains would
+        /// need a per-pair observation, measured at 150 ms per sweep at a million pairs against
+        /// 2 ms for this; and the maximum is the tail a quantile would hide anyway.
+        pub static MAX_CHAIN_GAP: IntGaugeVec = register_int_gauge_vec(
             "block_export_max_chain_gap",
             "Blocks the furthest-behind chain owes a destination validator",
             &["validator"],
-        )
-    });
+        );
 
-    /// The queue-wide in-flight budget, halved whenever our own storage fails a read.
-    pub static TOTAL_WINDOW: LazyLock<IntGauge> = LazyLock::new(|| {
-        register_int_gauge(
+        /// The queue-wide in-flight budget, halved whenever our own storage fails a read.
+        pub static TOTAL_WINDOW: IntGauge = register_int_gauge(
             "block_export_total_window",
             "Concurrent sends allowed across all destinations (AIMD on local storage failures)",
-        )
-    });
+        );
 
-    /// Sends the destination actually answered, as opposed to attempts: `SEND_LATENCY` counts
-    /// every completion, failures included, so success rate needs its own counter.
-    pub static SENDS_SUCCEEDED: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
+        /// Sends the destination actually answered, as opposed to attempts: `SEND_LATENCY` counts
+        /// every completion, failures included, so success rate needs its own counter.
+        pub static SENDS_SUCCEEDED: IntCounterVec = register_int_counter_vec(
             "block_export_sends_succeeded",
             "Export sends acknowledged by the destination validator",
             &["validator"],
-        )
-    });
+        );
 
-    /// How many blocks the destination was behind when we pushed to it: zero whenever the block
-    /// was contiguous there, and the size of the gap we had to fill otherwise.
-    pub static DESTINATION_LAG: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
+        /// How many blocks the destination was behind when we pushed to it: zero whenever the block
+        /// was contiguous there, and the size of the gap we had to fill otherwise.
+        pub static DESTINATION_LAG: HistogramVec = register_histogram_vec(
             "block_export_destination_lag",
             "Blocks a destination validator was missing when a block was pushed to it",
             &["validator"],
             exponential_bucket_interval(1.0, 10_000_000.0),
-        )
-    });
+        );
+    }
 }
 
 /// Configuration for pushing executed blocks to the other committee validators.
@@ -495,7 +465,7 @@ impl BlockExportHandle {
                 #[cfg(with_metrics)]
                 {
                     metrics::QUEUE_SIZE.inc();
-                    metrics::QUEUE_BYTES.add(blob_bytes as i64);
+                    metrics::QUEUE_BYTES.add(i64::try_from(blob_bytes).unwrap_or(i64::MAX));
                 }
             }
             Err(mpsc::error::TrySendError::Full(block)) => {
@@ -1002,7 +972,8 @@ where
         // would die every tick-only duty (drop repair, backoff expiry, the committee scan, the
         // convergence sweep).
         let interval = self.config.idle_catch_up_interval;
-        let tick_delta = TimeDelta::from_micros(interval.as_micros() as u64);
+        let tick_delta =
+            TimeDelta::from_micros(u64::try_from(interval.as_micros()).unwrap_or(u64::MAX));
         let mut next_tick = self
             .storage
             .clock()
@@ -1073,7 +1044,7 @@ where
         #[cfg(with_metrics)]
         {
             metrics::QUEUE_SIZE.dec();
-            metrics::QUEUE_BYTES.sub(block.blob_bytes as i64);
+            metrics::QUEUE_BYTES.sub(i64::try_from(block.blob_bytes).unwrap_or(i64::MAX));
             metrics::EXPORT_LATENCY
                 .finish_measurement(block.queued_at.elapsed().as_secs_f64() * 1000.0);
         }
@@ -1204,7 +1175,7 @@ where
                 );
                 self.total_window = (self.total_window / 2).max(1);
                 #[cfg(with_metrics)]
-                metrics::TOTAL_WINDOW.set(self.total_window as i64);
+                metrics::TOTAL_WINDOW.set(i64::try_from(self.total_window).unwrap_or(i64::MAX));
             }
             SendOutcome::DestinationScoped(error) => {
                 warn!(
@@ -1235,7 +1206,7 @@ where
         #[cfg(with_metrics)]
         metrics::DESTINATION_WINDOW
             .with_label_values(&[&dest.address])
-            .set(dest.window as i64);
+            .set(i64::try_from(dest.window).unwrap_or(i64::MAX));
 
         if let Some(record) = self.chains.get_mut(&chain_id) {
             record.last_activity = now;
@@ -1450,15 +1421,15 @@ where
 
         #[cfg(with_metrics)]
         {
-            metrics::TRACKED_CHAINS.set(self.chains.len() as i64);
-            metrics::DESTINATIONS.set(self.destinations.len() as i64);
+            metrics::TRACKED_CHAINS.set(i64::try_from(self.chains.len()).unwrap_or(i64::MAX));
+            metrics::DESTINATIONS.set(i64::try_from(self.destinations.len()).unwrap_or(i64::MAX));
             let lagging_pairs = self
                 .destinations
                 .values()
                 .map(|dest| dest.lagging.len())
                 .sum::<usize>();
-            metrics::LAGGING_PAIRS.set(lagging_pairs as i64);
-            metrics::TOTAL_WINDOW.set(self.total_window as i64);
+            metrics::LAGGING_PAIRS.set(i64::try_from(lagging_pairs).unwrap_or(i64::MAX));
+            metrics::TOTAL_WINDOW.set(i64::try_from(self.total_window).unwrap_or(i64::MAX));
             if self.ticks_until_census == 0 {
                 self.ticks_until_census = TICKS_PER_BACKLOG_CENSUS;
                 self.publish_backlog();
@@ -1724,10 +1695,10 @@ where
             // value would read as a permanent debt after the peer caught up.
             metrics::BLOCKS_OWED
                 .with_label_values(&[&dest.address])
-                .set(owed as i64);
+                .set(i64::try_from(owed).unwrap_or(i64::MAX));
             metrics::MAX_CHAIN_GAP
                 .with_label_values(&[&dest.address])
-                .set(worst as i64);
+                .set(i64::try_from(worst).unwrap_or(i64::MAX));
             remaining = remaining.saturating_sub(examined);
         }
     }
@@ -1755,7 +1726,8 @@ where
             .progress
             .lock()
             .expect("progress mutex is never poisoned");
-        let index = progress.validators.len() as DestIndex;
+        let index = DestIndex::try_from(progress.validators.len())
+            .expect("a committee cannot hold four billion validators");
         progress.validators.push(validator);
         self.dest_indices.insert(validator, index);
         index
@@ -1959,7 +1931,7 @@ fn backoff_delay(attempt: u32, config: &BlockExportConfig) -> TimeDelta {
         .retry_delay
         .saturating_mul(1u32.checked_shl(attempt).unwrap_or(u32::MAX))
         .min(config.max_retry_delay);
-    TimeDelta::from_micros(delay.as_micros() as u64)
+    TimeDelta::from_micros(u64::try_from(delay.as_micros()).unwrap_or(u64::MAX))
 }
 
 /// Sends this validator's blocks to one other validator, reading everything it needs from
@@ -2039,7 +2011,8 @@ where
             .0
             .min(next_height.0.saturating_add(max_blocks));
         let heights = (next_height.0..last).map(BlockHeight).collect::<Vec<_>>();
-        for chunk in heights.chunks(self.certificate_upload_batch_size as usize) {
+        let batch = usize::try_from(self.certificate_upload_batch_size).unwrap_or(usize::MAX);
+        for chunk in heights.chunks(batch) {
             let certificates = self
                 .storage
                 .read_certificates_by_heights(chain_id, chunk)
@@ -2525,7 +2498,10 @@ mod tests {
                     validator,
                     ..test_dest_state()
                 };
-                (index as DestIndex, dest)
+                (
+                    DestIndex::try_from(index).expect("test committees are small"),
+                    dest,
+                )
             })
             .collect()
     }
