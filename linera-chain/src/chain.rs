@@ -400,6 +400,13 @@ where
     /// they have never been filtered — a pre-existing database entry (migration), or a validator
     /// that tracks all chains and never filters.
     pub outbox_index_tracked_hash: RegisterView<C, Option<CryptoHash>>,
+
+    // A lower bound, not an exact record: progress is reported asynchronously, so a crash loses
+    // whatever was not folded in. Deliberate — a re-sent block the destination already has is
+    // skipped on an integer compare, whereas under-sending would leave a permanent gap.
+    /// The highest block of this chain pushed to each other committee validator. A validator with
+    /// no entry is queried before its first push; ones that leave the committee are pruned.
+    pub exported_heights: RegisterView<C, NonCanonicalBTreeMap<ValidatorPublicKey, BlockHeight>>,
 }
 
 /// Block-chaining state.

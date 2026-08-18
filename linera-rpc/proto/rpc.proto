@@ -10,6 +10,54 @@ service NotifierService {
   rpc NotifyBatch(NotificationBatch) returns (google.protobuf.Empty);
 }
 
+// A service run by the proxy which forwards a shard's requests to another validator.
+//
+// Shards hold the validator's secret key, so the proxy is the only component that opens outbound
+// connections. A shard names the validator its request is meant for and the proxy performs it.
+// Limited to the operations block export needs, so reaching this service does not confer the
+// ability to make the proxy issue arbitrary requests.
+service ValidatorRelay {
+  // Forward a lite certificate to another validator.
+  rpc RelayLiteCertificate(RelayLiteCertificateRequest) returns (ChainInfoResult);
+
+  // Forward a confirmed certificate to another validator.
+  rpc RelayConfirmedCertificate(RelayConfirmedCertificateRequest) returns (ChainInfoResult);
+
+  // Ask another validator for the state of a chain.
+  rpc RelayChainInfoQuery(RelayChainInfoQueryRequest) returns (ChainInfoResult);
+
+  // Upload a blob to another validator.
+  rpc RelayUploadBlob(RelayUploadBlobRequest) returns (BlobId);
+}
+
+// A lite certificate, and the validator it is for.
+message RelayLiteCertificateRequest {
+  // The public network address of the destination validator.
+  string destination = 1;
+  LiteCertificate inner = 2;
+}
+
+// A confirmed certificate, and the validator it is for.
+message RelayConfirmedCertificateRequest {
+  // The public network address of the destination validator.
+  string destination = 1;
+  HandleConfirmedCertificateRequest inner = 2;
+}
+
+// A chain info query, and the validator it is for.
+message RelayChainInfoQueryRequest {
+  // The public network address of the destination validator.
+  string destination = 1;
+  ChainInfoQuery inner = 2;
+}
+
+// A blob, and the validator it is for.
+message RelayUploadBlobRequest {
+  // The public network address of the destination validator.
+  string destination = 1;
+  BlobContent inner = 2;
+}
+
 // Interface provided by each physical shard (aka "worker") of a validator or a local node.
 // * All commands return either the current chain info or an error.
 // * Repeating commands produces no changes and returns no error.

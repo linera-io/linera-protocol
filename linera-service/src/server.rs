@@ -33,7 +33,8 @@ use linera_base::{
 };
 use linera_client::config::{CommitteeConfig, ValidatorConfig, ValidatorServerConfig};
 use linera_core::{
-    worker::WorkerState, ChainWorkerConfig, JoinSetExt as _, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
+    spawn_block_export_queue, worker::WorkerState, BlockExportConfig, BlockExportHandle,
+    ChainWorkerConfig, JoinSetExt as _, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
 use linera_execution::{WasmRuntime, WithWasmDefault};
 #[cfg(with_metrics)]
@@ -45,10 +46,11 @@ use linera_rpc::{
         ShardConfig, ShardId, TlsConfig, ValidatorInternalNetworkConfig,
         ValidatorPublicNetworkConfig,
     },
-    grpc, simple,
+    grpc, simple, NodeOptions,
 };
 use linera_sdk::linera_base_types::{AccountSecretKey, ValidatorKeypair};
 use linera_service::{
+    config::BlockExportTransport,
     storage::{AssertStorageV1, CommonStorageOptions, Runnable, StorageConfig},
     util,
 };
@@ -73,6 +75,12 @@ struct ServerContext {
     allow_revert_confirm: bool,
     reset_on_corrupted_chain_state_mins: Option<u64>,
     recovery_whitelist: Option<HashSet<ChainId>>,
+    /// How to push executed blocks to the other committee validators, or `None` to not push them.
+    block_export_config: Option<BlockExportConfig>,
+    /// The transport options for the connections block export makes.
+    block_export_node_options: NodeOptions,
+    /// How block export reaches the other validators.
+    block_export_transport: BlockExportTransport,
     #[cfg(with_metrics)]
     enable_memory_profiling: bool,
 }
@@ -83,6 +91,7 @@ impl ServerContext {
         local_ip_addr: &str,
         shard_id: ShardId,
         storage: S,
+        block_export: Option<BlockExportHandle>,
     ) -> (WorkerState<S>, ShardId, ShardConfig)
     where
         S: Storage + Clone + Send + Sync + 'static,
@@ -112,8 +121,58 @@ impl ServerContext {
             cross_chain_message_chunk_limit: self.cross_chain_message_chunk_limit,
             ..ChainWorkerConfig::default()
         };
-        let state = WorkerState::new(storage, config, None);
+        let mut state = WorkerState::new(storage, config, None);
+        if let Some(handle) = block_export {
+            state = state.with_block_export(handle);
+        }
         (state, shard_id, shard.clone())
+    }
+
+    /// Spawns the process-wide block export queue, if export is enabled. One per process: every
+    /// shard in it hands blocks to the same queue, so a peer costs one connection pool and one
+    /// rate-limit window rather than one per shard.
+    fn spawn_block_export<S>(&self, storage: S) -> Option<BlockExportHandle>
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+    {
+        let export_config = self.block_export_config.clone()?;
+        let own_public_key = self.server_config.validator_secret.public();
+        let node_options = self.block_export_node_options;
+        // Both arms get the destination's committee address and differ only in who dials it. In
+        // neither do the retry fields of `node_options` take effect — the relay pool drops them,
+        // the direct provider gets zeros — because retrying is the export queue's job.
+        let handle = match self.block_export_transport {
+            BlockExportTransport::Relay => {
+                let internal_network = &self.server_config.internal_network;
+                // All of this validator's proxies, rotated over by the provider: each export
+                // leaves through exactly one of them, but successive destinations draw different
+                // ones so the egress is spread rather than landing entirely on the first.
+                let relay_addresses = internal_network
+                    .proxies
+                    .iter()
+                    .map(|proxy| proxy.internal_address(&internal_network.protocol))
+                    .collect::<Vec<_>>();
+                assert!(
+                    !relay_addresses.is_empty(),
+                    "relaying exported blocks needs at least one proxy to relay through, but this \
+                     validator's internal network configures none; use \
+                     `--block-export-transport direct` to send without a proxy",
+                );
+                spawn_block_export_queue(
+                    storage,
+                    Arc::new(grpc::RelayNodeProvider::new(relay_addresses, node_options)),
+                    export_config,
+                    Some(own_public_key),
+                )
+            }
+            BlockExportTransport::Direct => spawn_block_export_queue(
+                storage,
+                Arc::new(linera_rpc::NodeProvider::new(node_options)),
+                export_config,
+                Some(own_public_key),
+            ),
+        };
+        Some(handle)
     }
 
     #[cfg_attr(not(with_metrics), allow(unused_variables))]
@@ -256,17 +315,27 @@ impl Runnable for ServerContext {
         #[cfg(not(with_metrics))]
         let enable_memory_profiling = false;
 
+        // One export queue per process, shared by every shard this process runs.
+        let block_export = self.spawn_block_export(storage.clone());
+
         // Run the server
         let states = match self.shard {
             Some(shard) => {
                 info!("Running shard number {}", shard);
-                vec![self.make_shard_state(&listen_address, shard, storage)]
+                vec![self.make_shard_state(&listen_address, shard, storage, block_export)]
             }
             None => {
                 info!("Running all shards");
                 let num_shards = self.server_config.internal_network.shards.len();
                 (0..num_shards)
-                    .map(|shard| self.make_shard_state(&listen_address, shard, storage.clone()))
+                    .map(|shard| {
+                        self.make_shard_state(
+                            &listen_address,
+                            shard,
+                            storage.clone(),
+                            block_export.clone(),
+                        )
+                    })
                     .collect()
             }
         };
@@ -499,6 +568,107 @@ enum ServerCommand {
         #[arg(long, value_delimiter = ',')]
         recovery_whitelist: Option<Vec<ChainId>>,
 
+        /// Push each block this validator executes to the other committee validators, so every
+        /// validator holds every chain rather than only the quorum that signed each block.
+        #[arg(
+            long,
+            default_value_t = false,
+            env = "LINERA_EXPORT_BLOCKS_TO_COMMITTEE"
+        )]
+        export_blocks_to_committee: bool,
+
+        /// How exported blocks reach the other validators: relayed through this validator's own
+        /// proxy, or sent straight from the shards. Relaying keeps shards off the internet;
+        /// sending directly removes the proxy from the path if relaying proves too expensive.
+        #[arg(
+            long,
+            value_enum,
+            default_value_t = BlockExportTransport::Relay,
+            env = "LINERA_BLOCK_EXPORT_TRANSPORT"
+        )]
+        block_export_transport: BlockExportTransport,
+
+        /// How many certificates are read from storage and pushed per batch when a block export
+        /// has to catch a lagging validator up. Only used with `--export-blocks-to-committee`.
+        #[arg(long, default_value_t = BlockExportConfig::default().certificate_upload_batch_size)]
+        block_export_batch_size: u64,
+
+        /// How many missing blocks block export pushes to one validator per round. Bounds how
+        /// long a freshly-joined validator's backfill can delay a live block.
+        #[arg(long, default_value_t = BlockExportConfig::default().max_catch_up_blocks)]
+        block_export_max_catch_up_blocks: u64,
+
+        /// How many blocks the export queue holds; a full queue drops blocks for catch-up to
+        /// re-send from storage.
+        #[arg(long, default_value_t = BlockExportConfig::default().queue_size)]
+        block_export_queue_size: usize,
+
+        /// The most blob payload bytes queued blocks may pin; past it blocks are dropped for
+        /// catch-up to re-send from storage.
+        #[arg(long, default_value_t = BlockExportConfig::default().queue_bytes)]
+        block_export_queue_bytes: usize,
+
+        /// The most concurrent sends to one destination validator. Export backs off from this
+        /// ceiling on its own when a destination slows down or fails.
+        #[arg(long, default_value_t = BlockExportConfig::default().max_in_flight_per_destination)]
+        block_export_max_in_flight: usize,
+
+        /// The most concurrent sends across all destinations. Each one can read up to
+        /// `--block-export-max-catch-up-blocks` certificates, so this is what bounds the load
+        /// catch-up puts on storage; export halves it whenever a read fails.
+        #[arg(long, default_value_t = BlockExportConfig::default().max_in_flight_total)]
+        block_export_max_in_flight_total: usize,
+
+        /// How long export remembers a fully caught-up chain before dropping its bookkeeping.
+        #[arg(
+            long = "block-export-converged-retention-ms",
+            default_value = "300000",
+            value_parser = util::parse_millis
+        )]
+        block_export_converged_retention: Duration,
+
+        /// How long block export waits for a new block before spending a round backfilling
+        /// validators that are behind. With the catch-up bound, this sets the backfill rate.
+        #[arg(
+            long = "block-export-idle-interval-ms",
+            default_value = "200",
+            value_parser = util::parse_millis
+        )]
+        block_export_idle_interval: Duration,
+
+        /// How long block export skips a validator after a failed push, doubling up to
+        /// `--block-export-max-retry-delay-ms` while it keeps failing.
+        #[arg(
+            long = "block-export-retry-delay-ms",
+            default_value = "1000",
+            value_parser = util::parse_millis
+        )]
+        block_export_retry_delay: Duration,
+
+        /// The longest block export skips a failing validator for.
+        #[arg(
+            long = "block-export-max-retry-delay-ms",
+            default_value = "60000",
+            value_parser = util::parse_millis
+        )]
+        block_export_max_retry_delay: Duration,
+
+        /// How long block export waits to open a connection to one of this validator's proxies.
+        #[arg(
+            long = "block-export-send-timeout-ms",
+            default_value = "4000",
+            value_parser = util::parse_millis
+        )]
+        block_export_send_timeout: Duration,
+
+        /// How long block export waits for a proxy to answer a relayed request.
+        #[arg(
+            long = "block-export-recv-timeout-ms",
+            default_value = "4000",
+            value_parser = util::parse_millis
+        )]
+        block_export_recv_timeout: Duration,
+
         /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
         #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
         otlp_exporter_endpoint: Option<String>,
@@ -635,6 +805,20 @@ async fn run(options: ServerOptions) {
             allow_revert_confirm,
             reset_on_corrupted_chain_state_mins,
             recovery_whitelist,
+            export_blocks_to_committee,
+            block_export_transport,
+            block_export_batch_size,
+            block_export_max_catch_up_blocks,
+            block_export_queue_size,
+            block_export_queue_bytes,
+            block_export_max_in_flight,
+            block_export_max_in_flight_total,
+            block_export_converged_retention,
+            block_export_idle_interval,
+            block_export_retry_delay,
+            block_export_max_retry_delay,
+            block_export_send_timeout,
+            block_export_recv_timeout,
             otlp_exporter_endpoint: _,
         } => {
             linera_version::VERSION_INFO.log();
@@ -657,6 +841,28 @@ async fn run(options: ServerOptions) {
                 allow_revert_confirm,
                 reset_on_corrupted_chain_state_mins,
                 recovery_whitelist: recovery_whitelist.map(HashSet::from_iter),
+                block_export_config: export_blocks_to_committee.then(|| {
+                    let config = BlockExportConfig {
+                        certificate_upload_batch_size: block_export_batch_size,
+                        queue_size: block_export_queue_size,
+                        queue_bytes: block_export_queue_bytes,
+                        max_in_flight_per_destination: block_export_max_in_flight,
+                        max_in_flight_total: block_export_max_in_flight_total,
+                        max_catch_up_blocks: block_export_max_catch_up_blocks,
+                        idle_catch_up_interval: block_export_idle_interval,
+                        retry_delay: block_export_retry_delay,
+                        max_retry_delay: block_export_max_retry_delay,
+                        converged_chain_retention: block_export_converged_retention,
+                    };
+                    config.check().expect("invalid block export configuration");
+                    config
+                }),
+                block_export_transport,
+                block_export_node_options: NodeOptions {
+                    send_timeout: block_export_send_timeout,
+                    recv_timeout: block_export_recv_timeout,
+                    ..NodeOptions::default()
+                },
                 #[cfg(with_metrics)]
                 enable_memory_profiling,
             };

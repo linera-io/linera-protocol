@@ -1304,7 +1304,7 @@ impl<Env: Environment> Client<Env> {
     fn remote_node_updater(
         &self,
         remote_node: RemoteNode<Env::ValidatorNode>,
-    ) -> RemoteNodeUpdater<Env> {
+    ) -> RemoteNodeUpdater<Env::Storage, Env::ValidatorNode> {
         RemoteNodeUpdater {
             remote_node,
             local_node: self.local_node.clone(),
