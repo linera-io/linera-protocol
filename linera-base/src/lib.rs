@@ -198,3 +198,14 @@ pub async fn listen_for_shutdown_signals(shutdown_sender: CancellationToken) {
         debug!("Received Ctrl+C");
     }
 }
+
+/// Registers every metric this crate declares.
+///
+/// Without this, a metric is only exported after the code path that observes it has run, so a
+/// rarely-taken path leaves its panels blank and makes a routine restart look like the metric
+/// was removed.
+#[cfg(with_metrics)]
+pub fn init_metrics() {
+    data_types::metrics::init_metrics();
+    panic_hook::metrics::init_metrics();
+}

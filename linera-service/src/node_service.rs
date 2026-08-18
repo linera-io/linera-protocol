@@ -1075,38 +1075,34 @@ where
 }
 
 #[cfg(with_metrics)]
-mod query_cache_metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod query_cache_metrics {
     use linera_base::prometheus_util::{register_int_counter_vec, register_int_gauge};
     use prometheus::{IntCounterVec, IntGauge};
 
-    pub static QUERY_CACHE_HIT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec("query_response_cache_hit", "Query response cache hits", &[])
-    });
+    linera_base::declare_metrics! {
+        pub static QUERY_CACHE_HIT: IntCounterVec =
+            register_int_counter_vec("query_response_cache_hit", "Query response cache hits", &[]);
 
-    pub static QUERY_CACHE_MISS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "query_response_cache_miss",
-            "Query response cache misses",
-            &[],
-        )
-    });
+        pub static QUERY_CACHE_MISS: IntCounterVec =
+            register_int_counter_vec(
+                "query_response_cache_miss",
+                "Query response cache misses",
+                &[],
+            );
 
-    pub static QUERY_CACHE_INVALIDATION: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "query_response_cache_invalidation",
-            "Query response cache invalidations (per chain)",
-            &[],
-        )
-    });
+        pub static QUERY_CACHE_INVALIDATION: IntCounterVec =
+            register_int_counter_vec(
+                "query_response_cache_invalidation",
+                "Query response cache invalidations (per chain)",
+                &[],
+            );
 
-    pub static QUERY_CACHE_ENTRIES: LazyLock<IntGauge> = LazyLock::new(|| {
-        register_int_gauge(
-            "query_response_cache_entries",
-            "Current number of cached query responses across all chains",
-        )
-    });
+        pub static QUERY_CACHE_ENTRIES: IntGauge =
+            register_int_gauge(
+                "query_response_cache_entries",
+                "Current number of cached query responses across all chains",
+            );
+    }
 }
 
 /// Per-chain cache state: an LRU map plus the `next_block_height` at the time the
@@ -1432,6 +1428,7 @@ where
             self.metrics_address(),
             cancellation_token.clone(),
             self.enable_memory_profiling,
+            crate::init_metrics,
         )
         .await;
 

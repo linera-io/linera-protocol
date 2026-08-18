@@ -35,58 +35,53 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-pub(super) mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{
         exponential_bucket_latencies, register_histogram_vec, register_int_counter,
         register_int_counter_vec,
     };
     use prometheus::{HistogramVec, IntCounter, IntCounterVec};
 
-    /// Histogram of response times per validator (in milliseconds)
-    pub(super) static VALIDATOR_RESPONSE_TIME: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "requests_scheduler_response_time_ms",
-            "Response time for requests to validators in milliseconds",
-            &["validator", "address"],
-            exponential_bucket_latencies(10000.0), // up to 10 seconds
-        )
-    });
+    linera_base::declare_metrics! {
+        /// Histogram of response times per validator (in milliseconds)
+        pub(super) static VALIDATOR_RESPONSE_TIME: HistogramVec =
+            register_histogram_vec(
+                "requests_scheduler_response_time_ms",
+                "Response time for requests to validators in milliseconds",
+                &["validator", "address"],
+                exponential_bucket_latencies(10000.0), // up to 10 seconds
+            );
 
-    /// Counter of total requests made to each validator
-    pub(super) static VALIDATOR_REQUEST_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "requests_scheduler_request_total",
-            "Total number of requests made to each validator",
-            &["validator", "address"],
-        )
-    });
+        /// Counter of total requests made to each validator
+        pub(super) static VALIDATOR_REQUEST_TOTAL: IntCounterVec =
+            register_int_counter_vec(
+                "requests_scheduler_request_total",
+                "Total number of requests made to each validator",
+                &["validator", "address"],
+            );
 
-    /// Counter of successful requests per validator
-    pub(super) static VALIDATOR_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "requests_scheduler_request_success",
-            "Number of successful requests to each validator",
-            &["validator", "address"],
-        )
-    });
+        /// Counter of successful requests per validator
+        pub(super) static VALIDATOR_REQUEST_SUCCESS: IntCounterVec =
+            register_int_counter_vec(
+                "requests_scheduler_request_success",
+                "Number of successful requests to each validator",
+                &["validator", "address"],
+            );
 
-    /// Counter for requests that were resolved from the response cache.
-    pub(super) static REQUEST_CACHE_DEDUPLICATION: LazyLock<IntCounter> = LazyLock::new(|| {
-        register_int_counter(
-            "requests_scheduler_request_deduplication_total",
-            "Number of requests that were deduplicated by finding the result in the cache.",
-        )
-    });
+        /// Counter for requests that were resolved from the response cache.
+        pub(super) static REQUEST_CACHE_DEDUPLICATION: IntCounter =
+            register_int_counter(
+                "requests_scheduler_request_deduplication_total",
+                "Number of requests that were deduplicated by finding the result in the cache.",
+            );
 
-    /// Counter for requests that were served from cache
-    pub static REQUEST_CACHE_HIT: LazyLock<IntCounter> = LazyLock::new(|| {
-        register_int_counter(
-            "requests_scheduler_request_cache_hit_total",
-            "Number of requests that were served from cache",
-        )
-    });
+        /// Counter for requests that were served from cache
+        pub static REQUEST_CACHE_HIT: IntCounter =
+            register_int_counter(
+                "requests_scheduler_request_cache_hit_total",
+                "Number of requests that were served from cache",
+            );
+    }
 }
 
 /// Manages a pool of validator nodes with intelligent load balancing and performance tracking.

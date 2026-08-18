@@ -101,99 +101,13 @@ pub(crate) fn wrap_future<F: std::future::Future>(f: F) -> F {
 }
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{
         exponential_bucket_interval, register_histogram, register_histogram_vec,
         register_int_counter, register_int_counter_vec,
     };
     use linera_chain::{data_types::MessageAction, types::ConfirmedBlockCertificate};
     use prometheus::{Histogram, HistogramVec, IntCounter, IntCounterVec};
-
-    pub static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "num_rounds_in_certificate",
-            "Number of rounds in certificate",
-            &["certificate_value", "round_type"],
-            exponential_bucket_interval(0.1, 50.0),
-        )
-    });
-
-    pub static NUM_ROUNDS_IN_BLOCK_PROPOSAL: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "num_rounds_in_block_proposal",
-            "Number of rounds in block proposal",
-            &["round_type"],
-            exponential_bucket_interval(0.1, 50.0),
-        )
-    });
-
-    pub static TRANSACTION_COUNT: LazyLock<IntCounterVec> =
-        LazyLock::new(|| register_int_counter_vec("transaction_count", "Transaction count", &[]));
-
-    pub static INCOMING_BUNDLE_COUNT: LazyLock<IntCounter> =
-        LazyLock::new(|| register_int_counter("incoming_bundle_count", "Incoming bundle count"));
-
-    pub static REJECTED_BUNDLE_COUNT: LazyLock<IntCounter> =
-        LazyLock::new(|| register_int_counter("rejected_bundle_count", "Rejected bundle count"));
-
-    pub static INCOMING_MESSAGE_COUNT: LazyLock<IntCounter> =
-        LazyLock::new(|| register_int_counter("incoming_message_count", "Incoming message count"));
-
-    pub static OPERATION_COUNT: LazyLock<IntCounter> =
-        LazyLock::new(|| register_int_counter("operation_count", "Operation count"));
-
-    pub static OPERATIONS_PER_BLOCK: LazyLock<Histogram> = LazyLock::new(|| {
-        register_histogram(
-            "operations_per_block",
-            "Number of operations per block",
-            exponential_bucket_interval(1.0, 10000.0),
-        )
-    });
-
-    pub static INCOMING_BUNDLES_PER_BLOCK: LazyLock<Histogram> = LazyLock::new(|| {
-        register_histogram(
-            "incoming_bundles_per_block",
-            "Number of incoming bundles per block",
-            exponential_bucket_interval(1.0, 10000.0),
-        )
-    });
-
-    pub static TRANSACTIONS_PER_BLOCK: LazyLock<Histogram> = LazyLock::new(|| {
-        register_histogram(
-            "transactions_per_block",
-            "Number of transactions per block",
-            exponential_bucket_interval(1.0, 10000.0),
-        )
-    });
-
-    pub static NUM_BLOCKS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec("num_blocks", "Number of blocks added to chains", &[])
-    });
-
-    pub static CERTIFICATES_SIGNED: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "certificates_signed",
-            "Number of confirmed block certificates signed by each validator",
-            &["validator_name"],
-        )
-    });
-
-    pub static CHAIN_INFO_QUERIES: LazyLock<IntCounter> = LazyLock::new(|| {
-        register_int_counter(
-            "chain_info_queries",
-            "Number of chain info queries processed",
-        )
-    });
-
-    pub static CROSS_CHAIN_BATCH_SIZE: LazyLock<Histogram> = LazyLock::new(|| {
-        register_histogram(
-            "cross_chain_batch_size",
-            "Number of cross-chain requests coalesced into a single per-chain batch",
-            exponential_bucket_interval(1.0, 1000.0),
-        )
-    });
 
     /// Holds metrics data extracted from a confirmed block certificate.
     pub struct MetricsData {
@@ -272,6 +186,83 @@ mod metrics {
                     .inc();
             }
         }
+    }
+
+    linera_base::declare_metrics! {
+        pub static NUM_ROUNDS_IN_CERTIFICATE: HistogramVec =
+            register_histogram_vec(
+                "num_rounds_in_certificate",
+                "Number of rounds in certificate",
+                &["certificate_value", "round_type"],
+                exponential_bucket_interval(0.1, 50.0),
+            );
+
+        pub static NUM_ROUNDS_IN_BLOCK_PROPOSAL: HistogramVec =
+            register_histogram_vec(
+                "num_rounds_in_block_proposal",
+                "Number of rounds in block proposal",
+                &["round_type"],
+                exponential_bucket_interval(0.1, 50.0),
+            );
+
+        pub static TRANSACTION_COUNT: IntCounterVec =
+            register_int_counter_vec("transaction_count", "Transaction count", &[]);
+
+        pub static INCOMING_BUNDLE_COUNT: IntCounter =
+            register_int_counter("incoming_bundle_count", "Incoming bundle count");
+
+        pub static REJECTED_BUNDLE_COUNT: IntCounter =
+            register_int_counter("rejected_bundle_count", "Rejected bundle count");
+
+        pub static INCOMING_MESSAGE_COUNT: IntCounter =
+            register_int_counter("incoming_message_count", "Incoming message count");
+
+        pub static OPERATION_COUNT: IntCounter =
+            register_int_counter("operation_count", "Operation count");
+
+        pub static OPERATIONS_PER_BLOCK: Histogram =
+            register_histogram(
+                "operations_per_block",
+                "Number of operations per block",
+                exponential_bucket_interval(1.0, 10000.0),
+            );
+
+        pub static INCOMING_BUNDLES_PER_BLOCK: Histogram =
+            register_histogram(
+                "incoming_bundles_per_block",
+                "Number of incoming bundles per block",
+                exponential_bucket_interval(1.0, 10000.0),
+            );
+
+        pub static TRANSACTIONS_PER_BLOCK: Histogram =
+            register_histogram(
+                "transactions_per_block",
+                "Number of transactions per block",
+                exponential_bucket_interval(1.0, 10000.0),
+            );
+
+        pub static NUM_BLOCKS: IntCounterVec =
+            register_int_counter_vec("num_blocks", "Number of blocks added to chains", &[]);
+
+        pub static CERTIFICATES_SIGNED: IntCounterVec =
+            register_int_counter_vec(
+                "certificates_signed",
+                "Number of confirmed block certificates signed by each validator",
+                &["validator_name"],
+            );
+
+        pub static CHAIN_INFO_QUERIES: IntCounter =
+            register_int_counter(
+                "chain_info_queries",
+                "Number of chain info queries processed",
+            );
+
+        pub static CROSS_CHAIN_BATCH_SIZE: Histogram =
+            register_histogram(
+                "cross_chain_batch_size",
+                "Number of cross-chain requests coalesced into a single per-chain batch",
+                exponential_bucket_interval(1.0, 1000.0),
+            );
     }
 }
 

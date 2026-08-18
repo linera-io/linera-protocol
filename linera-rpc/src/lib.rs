@@ -104,3 +104,19 @@ pub(crate) fn jittered_backoff_delay(
     let max_delay_ms = capped_delay_ms * 6 / 5; // 120%
     std::time::Duration::from_millis(rand::thread_rng().gen_range(min_delay_ms..=max_delay_ms))
 }
+
+/// Registers every metric this crate declares.
+///
+/// Without this, a metric is only exported after the code path that observes it has run, so a
+/// rarely-taken path leaves its panels blank and makes a routine restart look like the metric
+/// was removed.
+#[cfg(with_metrics)]
+pub fn init_metrics() {
+    linera_base::init_metrics();
+    linera_chain::init_metrics();
+    linera_core::init_metrics();
+    linera_execution::init_metrics();
+    linera_storage::init_metrics();
+    cross_chain_message_queue::metrics::init_metrics();
+    grpc::init_metrics();
+}

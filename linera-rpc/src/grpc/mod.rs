@@ -107,6 +107,13 @@ pub fn extract_grpc_method_name(path: &str) -> &str {
     }
 }
 
+#[cfg(with_metrics)]
+pub(crate) fn init_metrics() {
+    client::metrics::init_metrics();
+    #[cfg(with_server)]
+    server::metrics::init_metrics();
+}
+
 #[cfg(test)]
 mod method_name_tests {
     use super::*;

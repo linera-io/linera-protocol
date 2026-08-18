@@ -877,6 +877,7 @@ impl Runnable for Job {
                                 metrics_address,
                                 shutdown_notifier.clone(),
                                 monitoring_server::MemoryProfiling::Disabled,
+                                linera_service::init_metrics,
                             );
                         }
 
@@ -1184,6 +1185,7 @@ impl Runnable for Job {
                                 metrics_address,
                                 shutdown_notifier.clone(),
                                 monitoring_server::MemoryProfiling::Disabled,
+                                linera_service::init_metrics,
                             );
                         }
 
