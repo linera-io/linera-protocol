@@ -584,6 +584,7 @@ where
         ticks_until_sweep: TICKS_PER_CONVERGENCE_SWEEP,
         #[cfg(with_metrics)]
         ticks_until_census: 0,
+        drain_cursor: None,
         chains: HashMap::new(),
         destinations: BTreeMap::new(),
         dest_indices: BTreeMap::new(),
@@ -894,6 +895,8 @@ where
     /// Ticks until the next backlog census.
     #[cfg(with_metrics)]
     ticks_until_census: u32,
+    /// Which destination the queue-wide budget is offered to first, rotated every tick.
+    drain_cursor: Option<DestIndex>,
     chains: HashMap<ChainId, ChainRecord>,
     destinations: BTreeMap<DestIndex, DestState<P::Node>>,
     /// Every validator ever registered as a destination, and the index its per-chain state uses.
@@ -942,6 +945,36 @@ const TICKS_PER_CONVERGENCE_SWEEP: u32 = 25;
 #[cfg(with_metrics)]
 const TICKS_PER_BACKLOG_CENSUS: u32 = 300;
 
+/// Destinations in the order the queue-wide budget is offered to them, resuming past `cursor`
+/// and wrapping. Rotating matters because the budget is shared: served in index order every
+/// time, the first `max_in_flight_total / max_in_flight_per_destination` destinations absorb all
+/// of it and the rest never get a catch-up slot.
+fn rotated_order(indices: &[DestIndex], cursor: Option<DestIndex>) -> Vec<DestIndex> {
+    match cursor {
+        Some(at) => indices
+            .iter()
+            .copied()
+            .skip_while(|index| *index < at)
+            .chain(indices.iter().copied().take_while(|index| *index < at))
+            .collect(),
+        None => indices.to_vec(),
+    }
+}
+
+/// Where the next round starts: past the destination this one served first.
+fn next_drain_cursor(indices: &[DestIndex], served_first: Option<DestIndex>) -> Option<DestIndex> {
+    let first = served_first?;
+    indices.iter().copied().find(|index| *index > first)
+}
+
+/// The most (chain, destination) pairs one census walks. Each is a random lookup into the chain
+/// map plus a search of its cursors — measured at roughly half a microsecond per pair, so this
+/// caps the stall at about 25 ms however deep the backlog is. Past the cap the gauges are a
+/// floor rather than a total, which is the right trade for a number read off a dashboard:
+/// `block_export_lagging_pairs` is exact and free, and says how far past the cap we are.
+#[cfg(with_metrics)]
+const MAX_CENSUS_PAIRS: usize = 50_000;
+
 /// How many chains one sweep may forget, bounding how long it holds the progress mutex that every
 /// chain worker takes on every block.
 const MAX_FORGET_PER_SWEEP: usize = 4096;
@@ -977,6 +1010,14 @@ where
             .saturating_add(tick_delta);
         loop {
             let now = self.storage.clock().current_time();
+            // The storage clock is the wall clock in production, so it can step backwards (NTP,
+            // a restored snapshot). The deadline is a timestamp but the wait is real time, so a
+            // backward step of N seconds would otherwise suspend every tick-only duty — backoff
+            // expiry, drop repair, the committee scan — for N seconds. Never wait longer than
+            // one interval.
+            if next_tick.duration_since(now) > interval {
+                next_tick = now.saturating_add(tick_delta);
+            }
             if now >= next_tick {
                 self.tick(&mut jobs).await;
                 next_tick = self
@@ -1435,12 +1476,22 @@ where
                 .map(|dest| dest.in_flight)
                 .sum::<usize>(),
         );
-        for (index, dest) in &mut self.destinations {
+        // Resume where the last round stopped. The budget is queue-wide, so serving destinations
+        // in index order every time lets the first `total_window / window` of them absorb all of
+        // it — at a committee larger than that ratio (8 with the defaults) the rest would get no
+        // catch-up at all. Same starvation the per-chain cursor exists to prevent, one level up.
+        let indices = self.destinations.keys().copied().collect::<Vec<_>>();
+        let order = rotated_order(&indices, self.drain_cursor);
+        self.drain_cursor = next_drain_cursor(&indices, order.first().copied());
+        for index in order {
+            let Some(dest) = self.destinations.get_mut(&index) else {
+                continue;
+            };
             budget -= Self::drain_ready(
                 &mut self.chains,
                 &self.storage,
                 &self.config,
-                *index,
+                index,
                 dest,
                 jobs,
                 now,
@@ -1637,10 +1688,19 @@ where
     /// sweep at a million pairs, and the maximum is the tail a quantile would hide anyway.
     #[cfg(with_metrics)]
     fn publish_backlog(&self) {
+        // Shared across destinations so one enormous backlog cannot spend the whole budget and
+        // leave every later destination reporting zero.
+        let mut remaining = MAX_CENSUS_PAIRS;
         for (index, dest) in &self.destinations {
             let mut owed = 0u64;
             let mut worst = 0u64;
+            let per_destination = remaining / self.destinations.len().max(1);
+            let mut examined = 0usize;
             for chain_id in &dest.lagging {
+                if examined >= per_destination {
+                    break;
+                }
+                examined += 1;
                 let Some(record) = self.chains.get(chain_id) else {
                     continue;
                 };
@@ -1661,6 +1721,7 @@ where
             metrics::MAX_CHAIN_GAP
                 .with_label_values(&[&dest.address])
                 .set(worst as i64);
+            remaining = remaining.saturating_sub(examined);
         }
     }
 
@@ -2366,6 +2427,31 @@ mod tests {
             chain_client::Error::RemoteNodeError(NodeError::EventsNotFound(vec![]));
         assert!(is_chain_scoped(&events_missing));
         assert!(!is_local_scoped(&events_missing));
+    }
+
+    /// The queue-wide budget is offered to a different destination each round.
+    ///
+    /// It is shared across destinations, so serving them in index order every time lets the
+    /// first `max_in_flight_total / max_in_flight_per_destination` of them absorb all of it —
+    /// with the defaults that is eight, and every destination past the eighth in a larger
+    /// committee would get no catch-up at all.
+    #[test]
+    fn the_budget_is_offered_to_a_different_destination_each_round() {
+        let indices = (0..12 as DestIndex).collect::<Vec<_>>();
+        let mut cursor = None;
+        let mut first_served = Vec::new();
+
+        for _ in 0..12 {
+            let order = rotated_order(&indices, cursor);
+            first_served.push(order[0]);
+            cursor = next_drain_cursor(&indices, order.first().copied());
+        }
+
+        assert_eq!(
+            first_served,
+            vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+            "the same destinations kept first claim on the budget",
+        );
     }
 
     /// A drained burst hands back its peak-sized table for freeing off the mutex; a live one
