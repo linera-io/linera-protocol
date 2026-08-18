@@ -50,12 +50,6 @@ test("reports the message of a thrown `Error`", async () => {
   expect(error.message).toContain("the vault is on fire");
 }, 150000);
 
-test("carries the stack of the thrown error", async () => {
-  const original = new Error("the vault is on fire");
-  const error = await refusing(original);
-  expect(error.stack).toBe(original.stack);
-}, 150000);
-
 test("reports the `name` of a thrown error that is not a plain `Error`", async () => {
   const error = await refusing(
     new DOMException("the user said no", "NotAllowedError"),

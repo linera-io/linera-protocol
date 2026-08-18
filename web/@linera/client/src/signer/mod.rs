@@ -18,7 +18,7 @@ pub enum Error {
     /// `cause` chain.
     //
     // Not `#[error(transparent)]`: that forwards `source` past the `Thrown` to its cause,
-    // putting the stack out of reach of `to_js_error`.
+    // so a caller walking the chain never sees the throw itself.
     #[error("{0}")]
     Thrown(#[from] Thrown),
 

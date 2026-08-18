@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
+use wasm_bindgen::{prelude::wasm_bindgen, JsError, JsValue};
 
 use crate::lock;
 
@@ -23,7 +23,7 @@ extern "C" {
 
 pub enum Error {
     Lock(lock::Error),
-    Other(js_sys::Error),
+    Other(JsError),
 }
 
 impl From<lock::Error> for Error {
@@ -32,16 +32,16 @@ impl From<lock::Error> for Error {
     }
 }
 
-impl<E: std::error::Error + 'static> From<E> for Error {
+impl<E: std::error::Error> From<E> for Error {
     fn from(error: E) -> Self {
-        Self::Other(to_js_error(&error))
+        Self::Other(error.into())
     }
 }
 
 impl Error {
     #[must_use]
     pub fn new(message: &str) -> Self {
-        Self::Other(js_sys::Error::new(message))
+        Self::Other(JsError::new(message))
     }
 }
 
@@ -54,30 +54,6 @@ impl From<Error> for JsValue {
     }
 }
 
-/// Builds the JavaScript `Error` thrown in place of a Rust error.
-///
-/// Each layer of a Rust error chain prints the layer below it, so the message already
-/// carries the whole chain. What it cannot carry is the stack of the JavaScript throw
-/// that started it, so that is restored from the first [`Thrown`] in the chain.
-fn to_js_error(error: &(dyn std::error::Error + 'static)) -> js_sys::Error {
-    let js_error = js_sys::Error::new(&error.to_string());
-
-    let mut next = Some(error);
-    while let Some(error) = next {
-        if let Some(stack) = error.downcast_ref::<Thrown>().and_then(Thrown::stack) {
-            let _ = js_sys::Reflect::set(
-                &js_error,
-                &JsValue::from_str("stack"),
-                &JsValue::from_str(stack),
-            );
-            break;
-        }
-        next = error.source();
-    }
-
-    js_error
-}
-
 /// The depth at which a `cause` chain stops being followed. A chain can be cyclic, since
 /// nothing stops JavaScript from making an error its own cause.
 const MAX_CAUSE_DEPTH: usize = 8;
@@ -85,27 +61,20 @@ const MAX_CAUSE_DEPTH: usize = 8;
 /// A value thrown by JavaScript, captured on the Rust side.
 ///
 /// JavaScript can throw any value at all, so rather than mapping the throw onto a fixed
-/// set of Rust variants this records what it carried: its `name` and `message`, its stack
-/// trace, and its `cause`, recursively. Properties are read reflectively, so
-/// `DOMException`s, user-defined error classes and errors thrown in another realm are
-/// captured too — none of those are `instanceof Error` on this side.
+/// set of Rust variants this records what it carried: its `name` and `message`, and its
+/// `cause`, recursively. Properties are read reflectively, so `DOMException`s,
+/// user-defined error classes and errors thrown in another realm are captured too — none
+/// of those are `instanceof Error` on this side.
 ///
 /// What is captured is owned, rather than the `JsValue` it came from, so the error is
 /// `Send + Sync` and satisfies `TaskSendable` on both sides of the `cfg(web)` split.
 #[derive(Debug)]
 pub struct Thrown {
     description: String,
-    stack: Option<String>,
     cause: Option<Box<Thrown>>,
 }
 
 impl Thrown {
-    /// The JavaScript stack trace of the thrown value, if it carried one.
-    #[must_use]
-    pub fn stack(&self) -> Option<&str> {
-        self.stack.as_deref()
-    }
-
     fn capture(value: &JsValue, depth: usize) -> Self {
         let property = |key: &str| {
             js_sys::Reflect::get(value, &JsValue::from_str(key))
@@ -132,7 +101,6 @@ impl Thrown {
             } else {
                 description
             },
-            stack: property("stack").and_then(|stack| stack.as_string()),
             cause: property("cause").map(|cause| {
                 Box::new(if depth < MAX_CAUSE_DEPTH {
                     Self::capture(&cause, depth + 1)
@@ -146,7 +114,6 @@ impl Thrown {
     fn leaf(description: String) -> Self {
         Self {
             description,
-            stack: None,
             cause: None,
         }
     }
