@@ -57,9 +57,12 @@ linera_base::declare_metrics! {
 
 #[cfg(test)]
 mod tests {
+    /// Calls the specific modules' initializers rather than `crate::init_metrics`: this crate
+    /// carries a self dev-dependency, so its test binary links two copies of these statics and
+    /// eagerly registering every module from both trips Prometheus's duplicate-collector check.
     #[test]
     fn label_free_metrics_are_exported_before_their_code_path_runs() {
-        crate::init_metrics();
+        crate::views::key_value_store_view::metrics::init_metrics();
 
         let families = prometheus::gather();
         let contains_keys = families
@@ -81,7 +84,7 @@ mod tests {
     /// workload-gated.
     #[test]
     fn labelled_metrics_stay_absent_until_a_label_combination_is_observed() {
-        crate::init_metrics();
+        super::init_metrics();
 
         let exported = prometheus::gather().iter().any(|family| {
             family.get_name() == "linera_load_view" && !family.get_metric().is_empty()

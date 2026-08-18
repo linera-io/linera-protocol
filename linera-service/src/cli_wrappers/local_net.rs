@@ -16,6 +16,7 @@ use anyhow::{anyhow, bail, ensure, Context, Result};
 #[cfg(with_testing)]
 use async_lock::RwLock;
 use async_trait::async_trait;
+use clap::ValueEnum as _;
 use linera_base::{
     command::{resolve_binary, CommandExt},
     data_types::Amount,
@@ -42,6 +43,7 @@ use crate::{
     cli_wrappers::{
         ClientWrapper, LineraNet, LineraNetConfig, Network, NetworkConfig, OnClientDrop,
     },
+    config::BlockExportTransport,
     storage::{InnerStorageConfig, StorageConfig},
     util::ChildExt,
 };
@@ -224,6 +226,12 @@ pub struct LocalNetConfig {
     pub path_provider: PathProvider,
     /// The setup describing how block exporters are run or reached.
     pub block_exporters: ExportersSetup,
+    /// Whether the validators push each block they execute to the rest of the committee,
+    /// through their own proxies.
+    pub export_blocks_to_committee: bool,
+    /// How exporting validators reach the others: through their own proxy, or straight from the
+    /// shards.
+    pub block_export_transport: BlockExportTransport,
 }
 
 /// The setup for the block exporters.
@@ -268,6 +276,8 @@ pub struct LocalNet {
     cross_chain_config: CrossChainConfig,
     path_provider: PathProvider,
     block_exporters: ExportersSetup,
+    export_blocks_to_committee: bool,
+    block_export_transport: BlockExportTransport,
 }
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -316,6 +326,20 @@ impl Validator {
 
     fn add_proxy(&mut self, proxy: Child) {
         self.proxies.push(proxy)
+    }
+
+    /// Kills one of this validator's proxies, leaving the rest running.
+    #[cfg(with_testing)]
+    async fn kill_proxy(&mut self, proxy_id: usize) -> Result<()> {
+        ensure!(
+            proxy_id < self.proxies.len(),
+            "no proxy {proxy_id} to kill; this validator runs {}",
+            self.proxies.len()
+        );
+        // Removed rather than killed in place, as `terminate_server` does: `terminate()` later
+        // kills whatever remains in the vec, and must not have to reason about dead entries.
+        let mut proxy = self.proxies.remove(proxy_id);
+        proxy.kill().await.context("killing validator proxy")
     }
 
     fn add_server(&mut self, server: Child) {
@@ -378,6 +402,8 @@ impl LocalNetConfig {
             path_provider,
             block_exporters: ExportersSetup::Local(vec![]),
             http_request_allow_list: Some(vec!["localhost".to_string()]),
+            export_blocks_to_committee: false,
+            block_export_transport: BlockExportTransport::Relay,
         }
     }
 }
@@ -399,6 +425,8 @@ impl LineraNetConfig for LocalNetConfig {
             self.cross_chain_config,
             self.path_provider,
             self.block_exporters,
+            self.export_blocks_to_committee,
+            self.block_export_transport,
         );
         let client = net.make_client().await;
         ensure!(
@@ -473,6 +501,8 @@ impl LocalNet {
         cross_chain_config: CrossChainConfig,
         path_provider: PathProvider,
         block_exporters: ExportersSetup,
+        export_blocks_to_committee: bool,
+        block_export_transport: BlockExportTransport,
     ) -> Self {
         Self {
             network,
@@ -489,6 +519,8 @@ impl LocalNet {
             cross_chain_config,
             path_provider,
             block_exporters,
+            export_blocks_to_committee,
+            block_export_transport,
         }
     }
 
@@ -510,15 +542,18 @@ impl LocalNet {
         test_offset_port() + validator * self.num_shards + shard + 1
     }
 
-    fn proxy_internal_port(&self, validator: usize, proxy_id: usize) -> usize {
+    /// Returns the internal port of the given proxy, which its own shards use to reach it.
+    pub fn proxy_internal_port(&self, validator: usize, proxy_id: usize) -> usize {
         test_offset_port() + 1000 + validator * self.num_proxies + proxy_id + 1
     }
 
-    fn shard_metrics_port(&self, validator: usize, shard: usize) -> usize {
+    /// Returns the metrics port of the given shard of the given validator.
+    pub fn shard_metrics_port(&self, validator: usize, shard: usize) -> usize {
         test_offset_port() + 2000 + validator * self.num_shards + shard + 1
     }
 
-    fn proxy_metrics_port(&self, validator: usize, proxy_id: usize) -> usize {
+    /// Returns the metrics port of the given proxy of the given validator.
+    pub fn proxy_metrics_port(&self, validator: usize, proxy_id: usize) -> usize {
         test_offset_port() + 3000 + validator * self.num_proxies + proxy_id + 1
     }
 
@@ -949,6 +984,16 @@ impl LocalNet {
             .args(["--server", &format!("server_{validator}.json")])
             .args(["--shard", &shard.to_string()])
             .args(self.cross_chain_config.to_args());
+        if self.export_blocks_to_committee {
+            command.arg("--export-blocks-to-committee");
+            command.args([
+                "--block-export-transport",
+                self.block_export_transport
+                    .to_possible_value()
+                    .expect("every transport is a selectable value")
+                    .get_name(),
+            ]);
+        }
         let child = command.spawn_into()?;
 
         let port = self.shard_port(validator, shard);
@@ -1042,6 +1087,16 @@ impl LocalNet {
 
 #[cfg(with_testing)]
 impl LocalNet {
+    /// Kills one proxy of the given validator, leaving its other proxies and shards running, to
+    /// check that traffic relayed through it moves to another rather than being stranded.
+    pub async fn kill_proxy(&mut self, validator: usize, proxy_id: usize) -> Result<()> {
+        self.running_validators
+            .get_mut(&validator)
+            .context("no such validator")?
+            .kill_proxy(proxy_id)
+            .await
+    }
+
     /// Returns the validating key and an account key of the validator.
     pub fn validator_keys(&self, validator: usize) -> Option<&(String, String)> {
         self.validator_keys.get(&validator)

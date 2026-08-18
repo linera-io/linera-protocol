@@ -10,7 +10,10 @@
 #![allow(async_fn_in_trait)]
 
 mod chain_worker;
-pub use chain_worker::{ChainWorkerConfig, ProcessConfirmedBlockMode};
+pub use chain_worker::{
+    spawn_block_export_queue, BlockExportConfig, BlockExportHandle, ChainWorkerConfig,
+    ProcessConfirmedBlockMode,
+};
 /// The high-level client for interacting with chains and validators.
 pub mod client;
 pub use client::Client;
@@ -64,6 +67,7 @@ pub fn init_metrics() {
     linera_execution::init_metrics();
     linera_storage::init_metrics();
     linera_views::init_metrics();
+    chain_worker::export::metrics::init_metrics();
     chain_worker::state::metrics::init_metrics();
     client::metrics::init_metrics();
     client::requests_scheduler::init_metrics();

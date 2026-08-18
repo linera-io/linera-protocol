@@ -153,6 +153,8 @@ pub async fn handle_net_up_service(
         block_exporter_port,
     );
     let config = LocalNetConfig {
+        block_export_transport: crate::config::BlockExportTransport::Relay,
+        export_blocks_to_committee: false,
         network,
         database,
         testing_prng_seed,

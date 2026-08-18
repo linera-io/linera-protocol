@@ -64,8 +64,8 @@ impl<S: Storage> std::ops::Deref for ChainStateViewReadGuard<S> {
 pub(crate) use crate::chain_worker::EventSubscriptionsResult;
 use crate::{
     chain_worker::{
-        handle, state::ChainWorkerState, BlockOutcome, ChainWorkerConfig, CrossChainUpdateResult,
-        DeliveryNotifier, ProcessConfirmedBlockMode,
+        handle, state::ChainWorkerState, BlockExportHandle, BlockOutcome, ChainWorkerConfig,
+        CrossChainUpdateResult, DeliveryNotifier, ProcessConfirmedBlockMode,
     },
     client::{ChainModes, ListeningMode},
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -710,6 +710,9 @@ pub struct WorkerState<StorageClient: Storage> {
     /// corrupted chain. The RPC server layer installs this; without it, we fall
     /// back to dispatching locally through `handle_cross_chain_request`.
     outbound_cross_chain_sender: Option<OutboundCrossChainSender>,
+    /// The process-wide export queue, installed by the server binary — the only layer that
+    /// knows how to reach another validator. `None` means blocks are not exported.
+    block_export: Option<BlockExportHandle>,
 }
 
 /// Dispatcher for outbound cross-chain requests that handles the source-shard-to-
@@ -731,6 +734,7 @@ where
             chain_workers: self.chain_workers.clone(),
             chain_batches: self.chain_batches.clone(),
             outbound_cross_chain_sender: self.outbound_cross_chain_sender.clone(),
+            block_export: self.block_export.clone(),
         }
     }
 }
@@ -878,7 +882,16 @@ where
             #[cfg_attr(web, expect(clippy::arc_with_non_send_sync))]
             chain_batches: Arc::new(papaya::HashMap::new()),
             outbound_cross_chain_sender: None,
+            block_export: None,
         }
+    }
+
+    /// Installs the process-wide block export queue. Must be called before any chain worker is
+    /// created: workers capture the handle as they load, so one created earlier would never
+    /// export.
+    pub fn with_block_export(mut self, handle: BlockExportHandle) -> Self {
+        self.block_export = Some(handle);
+        self
     }
 
     /// Installs a shard-routing dispatcher used for outbound cross-chain requests
@@ -1085,6 +1098,19 @@ where
         .forget();
     }
 
+    /// Returns how many chain workers are currently resident in memory. Used to assert that
+    /// workers expire at their TTL — a task that keeps touching one holds it forever.
+    #[cfg(with_testing)]
+    pub fn resident_chain_worker_count(&self) -> usize {
+        self.chain_workers
+            .pin()
+            .iter()
+            .filter(
+                |(_, future)| matches!(future.peek(), Some(Ok(weak)) if weak.strong_count() > 0),
+            )
+            .count()
+    }
+
     /// Evicts a poisoned chain worker from the cache, but only if the entry still
     /// points to the same instance. This avoids removing a fresh replacement that
     /// another task may have already loaded.
@@ -1261,6 +1287,7 @@ where
             chain_id,
             service_runtime_endpoint,
             service_runtime_task,
+            self.block_export.clone(),
         )
         .await?;
 
