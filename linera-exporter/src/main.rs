@@ -171,6 +171,7 @@ impl Runnable for ExporterContext {
             self.config.metrics_address(),
             shutdown_notifier.clone(),
             self.enable_memory_profiling,
+            linera_exporter::init_metrics,
         )
         .await;
 

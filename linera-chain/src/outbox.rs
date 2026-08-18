@@ -21,19 +21,18 @@ mod outbox_tests;
 
 #[cfg(with_metrics)]
 pub(crate) mod metrics {
-    use std::sync::LazyLock;
-
     use linera_base::prometheus_util::{exponential_bucket_interval, register_histogram_vec};
     use prometheus::HistogramVec;
 
-    pub static OUTBOX_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "outbox_size",
-            "Outbox size",
-            &[],
-            exponential_bucket_interval(1.0, 1_000_000.0),
-        )
-    });
+    linera_base::declare_metrics! {
+        pub static OUTBOX_SIZE: HistogramVec =
+            register_histogram_vec(
+                "outbox_size",
+                "Outbox size",
+                &[],
+                exponential_bucket_interval(1.0, 1_000_000.0),
+            );
+    }
 }
 
 /// The state of an outbox

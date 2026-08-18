@@ -318,3 +318,19 @@ where
         self.map_err(|error| ChainError::ExecutionError(Box::new(error.into()), context))
     }
 }
+
+/// Registers every metric this crate declares.
+///
+/// Without this, a metric is only exported after the code path that observes it has run, so a
+/// rarely-taken path leaves its panels blank and makes a routine restart look like the metric
+/// was removed.
+#[cfg(with_metrics)]
+pub fn init_metrics() {
+    linera_base::init_metrics();
+    linera_execution::init_metrics();
+    linera_views::init_metrics();
+    chain::metrics::init_metrics();
+    inbox::metrics::init_metrics();
+    justification::metrics::init_metrics();
+    outbox::metrics::init_metrics();
+}

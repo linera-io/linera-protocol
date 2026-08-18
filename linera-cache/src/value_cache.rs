@@ -295,9 +295,7 @@ impl<V: Clone + Send + Sync + 'static> ValueCache<CryptoHash, V> {
 }
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{register_int_counter_vec, register_int_gauge_vec};
     use prometheus::{IntCounterVec, IntGaugeVec};
 
@@ -306,30 +304,28 @@ mod metrics {
     /// the same key/value types within one process.
     const LABELS: &[&str] = &["cache", "key_type", "value_type"];
 
-    pub static CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec("value_cache_hit", "Cache hits in `ValueCache`", LABELS)
-    });
+    linera_base::declare_metrics! {
+        pub static CACHE_HIT_COUNT: IntCounterVec =
+            register_int_counter_vec("value_cache_hit", "Cache hits in `ValueCache`", LABELS);
 
-    pub static CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec("value_cache_miss", "Cache misses in `ValueCache`", LABELS)
-    });
+        pub static CACHE_MISS_COUNT: IntCounterVec =
+            register_int_counter_vec("value_cache_miss", "Cache misses in `ValueCache`", LABELS);
 
-    pub static CACHE_ENTRIES: LazyLock<IntGaugeVec> = LazyLock::new(|| {
-        register_int_gauge_vec(
-            "value_cache_entries",
-            "Number of entries held in the bounded `ValueCache`, sampled at \
-             each cleanup sweep",
-            LABELS,
-        )
-    });
+        pub static CACHE_ENTRIES: IntGaugeVec =
+            register_int_gauge_vec(
+                "value_cache_entries",
+                "Number of entries held in the bounded `ValueCache`, sampled at \
+                 each cleanup sweep",
+                LABELS,
+            );
 
-    pub static CACHE_CAPACITY: LazyLock<IntGaugeVec> = LazyLock::new(|| {
-        register_int_gauge_vec(
-            "value_cache_capacity",
-            "Maximum number of entries of the bounded `ValueCache`",
-            LABELS,
-        )
-    });
+        pub static CACHE_CAPACITY: IntGaugeVec =
+            register_int_gauge_vec(
+                "value_cache_capacity",
+                "Maximum number of entries of the bounded `ValueCache`",
+                LABELS,
+            );
+    }
 }
 
 #[cfg(test)]

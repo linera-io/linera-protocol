@@ -50,9 +50,7 @@ type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest
 type NotificationSender = tokio::sync::broadcast::Sender<Notification>;
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{
         exponential_bucket_interval, linear_bucket_interval, register_histogram_vec,
         register_int_counter_vec,
@@ -61,87 +59,79 @@ mod metrics {
 
     use super::super::{ERROR_TYPE_LABEL, METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL};
 
-    pub static SERVER_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "server_request_latency",
-            "Server request latency",
-            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
-            linear_bucket_interval(1.0, 50.0, 5000.0),
-        )
-    });
+    linera_base::declare_metrics! {
+        pub static SERVER_REQUEST_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "server_request_latency",
+                "Server request latency",
+                &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
+                linear_bucket_interval(1.0, 50.0, 5000.0),
+            );
 
-    pub static SERVER_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "server_request_count",
-            "Server request count",
-            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
-        )
-    });
+        pub static SERVER_REQUEST_COUNT: IntCounterVec =
+            register_int_counter_vec(
+                "server_request_count",
+                "Server request count",
+                &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
+            );
 
-    pub static SERVER_REQUEST_SUCCESS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "server_request_success",
-            "Server request success",
-            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
-        )
-    });
+        pub static SERVER_REQUEST_SUCCESS: IntCounterVec =
+            register_int_counter_vec(
+                "server_request_success",
+                "Server request success",
+                &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
+            );
 
-    pub static SERVER_REQUEST_ERROR: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "server_request_error",
-            "Server request error",
-            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL, ERROR_TYPE_LABEL],
-        )
-    });
+        pub static SERVER_REQUEST_ERROR: IntCounterVec =
+            register_int_counter_vec(
+                "server_request_error",
+                "Server request error",
+                &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL, ERROR_TYPE_LABEL],
+            );
 
-    pub static SERVER_REQUEST_CANCELLED: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "server_request_cancelled",
-            "Server requests whose handler future was dropped before completion (e.g. client-side timeout / disconnect)",
-            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
-        )
-    });
+        pub static SERVER_REQUEST_CANCELLED: IntCounterVec =
+            register_int_counter_vec(
+                "server_request_cancelled",
+                "Server requests whose handler future was dropped before completion (e.g. client-side timeout / disconnect)",
+                &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
+            );
 
-    pub static CROSS_CHAIN_MESSAGE_CHANNEL_FULL: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "cross_chain_message_channel_full",
-            "Cross-chain message channel full",
-            &[],
-        )
-    });
+        pub static CROSS_CHAIN_MESSAGE_CHANNEL_FULL: IntCounterVec =
+            register_int_counter_vec(
+                "cross_chain_message_channel_full",
+                "Cross-chain message channel full",
+                &[],
+            );
 
-    pub static NOTIFICATIONS_SKIPPED_RECEIVER_LAG: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "notifications_skipped_receiver_lag",
-            "Number of notifications skipped because receiver lagged behind sender",
-            &[],
-        )
-    });
+        pub static NOTIFICATIONS_SKIPPED_RECEIVER_LAG: IntCounterVec =
+            register_int_counter_vec(
+                "notifications_skipped_receiver_lag",
+                "Number of notifications skipped because receiver lagged behind sender",
+                &[],
+            );
 
-    pub static NOTIFICATIONS_DROPPED_NO_RECEIVER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "notifications_dropped_no_receiver",
-            "Number of notifications dropped because no receiver was available",
-            &[],
-        )
-    });
+        pub static NOTIFICATIONS_DROPPED_NO_RECEIVER: IntCounterVec =
+            register_int_counter_vec(
+                "notifications_dropped_no_receiver",
+                "Number of notifications dropped because no receiver was available",
+                &[],
+            );
 
-    pub static NOTIFICATION_BATCH_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "notification_batch_size",
-            "Number of notifications per batch sent to proxy",
-            &[],
-            exponential_bucket_interval(1.0, 250.0),
-        )
-    });
+        pub static NOTIFICATION_BATCH_SIZE: HistogramVec =
+            register_histogram_vec(
+                "notification_batch_size",
+                "Number of notifications per batch sent to proxy",
+                &[],
+                exponential_bucket_interval(1.0, 250.0),
+            );
 
-    pub static NOTIFICATION_BATCHES_SENT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "notification_batches_sent",
-            "Total notification batches sent",
-            &["status"],
-        )
-    });
+        pub static NOTIFICATION_BATCHES_SENT: IntCounterVec =
+            register_int_counter_vec(
+                "notification_batches_sent",
+                "Total notification batches sent",
+                &["status"],
+            );
+    }
 }
 
 /// Handles batched forwarding of notifications to proxy and exporters.
