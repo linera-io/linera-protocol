@@ -1562,12 +1562,23 @@ impl<Env: Environment> Client<Env> {
             }
         };
         ensure!(
-            (votes_hash, votes_round) == (value.hash(), action.round()),
-            chain_client::Error::UnexpectedQuorum {
-                hash: votes_hash,
+            votes_round == action.round(),
+            chain_client::Error::StaleQuorumRound {
+                chain_id: value.chain_id(),
+                height: value.height(),
                 round: votes_round,
-                expected_hash: value.hash(),
                 expected_round: action.round(),
+            }
+        );
+        ensure!(
+            votes_hash == value.hash(),
+            chain_client::Error::DivergentExecution {
+                chain_id: value.chain_id(),
+                height: value.height(),
+                round: votes_round,
+                kind: T::KIND,
+                hash: votes_hash,
+                expected_hash: value.hash(),
             }
         );
         // Certificate is valid because
