@@ -5904,6 +5904,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-spec"
+version = "0.16.0"
+dependencies = [
+ "linera-chain",
+ "linera-core",
+ "linera-execution",
+]
+
+[[package]]
 name = "linera-storage"
 version = "0.16.0"
 dependencies = [

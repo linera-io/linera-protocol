@@ -106,6 +106,36 @@ Two things to keep in mind:
   unawaited futures or unhandled errors. `let _x =` should only be used for RAII guards.
 
 
+## Panics
+
+We build with unwinding, and Tokio catches a panic at the task boundary rather than
+stopping the runtime. A panicking task therefore does not stop the process by itself: what
+happens next is decided entirely by whoever joins that task. Choose deliberately.
+
+* **Report every panic.** `linera_base::panic_hook::init` is installed by
+  `linera_service::tracing::init`, so panics reach the log as a `tracing` event and
+  increment `linera_panics_total`. Do not add a panic hook of your own to a binary that
+  already calls it.
+
+* **Prefer crashing over running degraded.** When a task's death silently disables a
+  subsystem — a cross-chain message forwarder, a notification fan-out, a chain listener —
+  the process should exit and be restarted rather than keep serving without it. Whoever
+  joins such a task must re-raise its panic rather than discard it.
+
+* **Except for work that is scoped to one request or one chain.** Handling a single RPC,
+  or executing a block for a single chain, must not be able to take the process down: a
+  panic reachable from user input would otherwise be a way for one crafted message to stop
+  every validator at once. Contain those panics, log them, and let the caller retry.
+
+* **Never swallow a panic silently.** `catch_unwind` is acceptable at a boundary where the
+  containment is the point, but log at `error!` and say in a comment why continuing is
+  safer than exiting.
+
+* `panic!`, `unwrap` and `expect` are for invariants that a bug in *our* code would break,
+  never for input we receive from a peer, a client or an application. Prefer returning an
+  error for anything reachable from outside the process.
+
+
 ## Hash-consed types and `linera_cache::Arc<T>`
 
 Any content-addressed immutable data (also known as hash-consed data) — for
