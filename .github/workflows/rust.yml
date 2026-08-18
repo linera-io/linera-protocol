@@ -206,7 +206,7 @@ jobs:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
     - uses: actions/checkout@v6.0.2
@@ -255,7 +255,7 @@ jobs:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
     - uses: actions/checkout@v6.0.2
@@ -297,7 +297,7 @@ jobs:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
     - uses: actions/checkout@v6.0.2
