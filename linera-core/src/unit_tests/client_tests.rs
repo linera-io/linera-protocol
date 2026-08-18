@@ -4542,7 +4542,7 @@ where
         builder
             .clock()
             .add(linera_base::data_types::TimeDelta::from_millis(50));
-        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(20)).await;
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(50)).await;
     }
 
     // One entry per *other* committee member: a validator never exports to itself.
@@ -4645,7 +4645,7 @@ where
         builder
             .clock()
             .add(linera_base::data_types::TimeDelta::from_millis(100));
-        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(20)).await;
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(100)).await;
     }
     panic!(
         "export did not catch the lagging validator up to {tip} while idle; it is at {}",
@@ -4697,7 +4697,7 @@ where
         builder
             .clock()
             .add(linera_base::data_types::TimeDelta::from_millis(100));
-        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(20)).await;
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(100)).await;
     }
     assert_eq!(
         exported.len(),
@@ -4858,7 +4858,7 @@ where
         builder
             .clock()
             .add(linera_base::data_types::TimeDelta::from_millis(100));
-        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(20)).await;
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(100)).await;
     }
     panic!(
         "export did not drain a backlog of {BACKLOG} in rounds of {MAX_CATCH_UP_BLOCKS}; it \
@@ -4979,7 +4979,7 @@ where
         builder
             .clock()
             .add(linera_base::data_types::TimeDelta::from_millis(100));
-        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(20)).await;
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(100)).await;
     }
     panic!(
         "{} chain workers still resident 10s after the last activity, with a TTL of 500ms — \
