@@ -1101,15 +1101,11 @@ pub type RocksDbStoreError = RocksDbStoreInternalError;
 /// The composed config type for the `RocksDbStore`
 pub type RocksDbStoreConfig = LruCachingConfig<RocksDbStoreInternalConfig>;
 
-/// The `RocksDbDatabase` composed type with metrics.
-///
-/// Values are stored as-is, so a single value must not exceed `MAX_VALUE_SIZE`.
+/// The `RocksDbDatabase` composed type with metrics
 #[cfg(with_metrics)]
 pub type RocksDbDatabase =
     MeteredDatabase<LruCachingDatabase<MeteredDatabase<RocksDbDatabaseInternal>>>;
-/// The `RocksDbDatabase` composed type.
-///
-/// Values are stored as-is, so a single value must not exceed `MAX_VALUE_SIZE`.
+/// The `RocksDbDatabase` composed type
 #[cfg(not(with_metrics))]
 pub type RocksDbDatabase = LruCachingDatabase<RocksDbDatabaseInternal>;
 
