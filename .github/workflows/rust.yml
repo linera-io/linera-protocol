@@ -326,6 +326,9 @@ jobs:
     - name: Run the storage-service tests
       run: |
         cargo test --features storage-service,opentelemetry -- storage_service --nocapture
+    - name: Run the block export integration test
+      run: |
+        cargo test -p linera-service --test block_export_tests --features storage-service,metrics -- --ignored --nocapture
 
   check-wit-files:
     needs: changed-files
