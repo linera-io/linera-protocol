@@ -1313,19 +1313,13 @@ impl TestKeyValueDatabase for JournalingKeyValueDatabase<ScyllaDbDatabaseInterna
     }
 }
 
-/// The `ScyllaDbDatabase` composed type with metrics.
-///
-/// Values are stored as-is, so a single value must not exceed
-/// `VISIBLE_MAX_VALUE_SIZE`.
+/// The `ScyllaDbDatabase` composed type with metrics
 #[cfg(with_metrics)]
 pub type ScyllaDbDatabase = MeteredDatabase<
     LruCachingDatabase<MeteredDatabase<JournalingKeyValueDatabase<ScyllaDbDatabaseInternal>>>,
 >;
 
-/// The `ScyllaDbDatabase` composed type.
-///
-/// Values are stored as-is, so a single value must not exceed
-/// `VISIBLE_MAX_VALUE_SIZE`.
+/// The `ScyllaDbDatabase` composed type
 #[cfg(not(with_metrics))]
 pub type ScyllaDbDatabase =
     LruCachingDatabase<JournalingKeyValueDatabase<ScyllaDbDatabaseInternal>>;
