@@ -16,12 +16,15 @@ use crate::error::Thrown;
 pub enum Error {
     /// The signer threw. The thrown value is reported as it was received, including its
     /// `cause` chain.
-    #[error(transparent)]
+    //
+    // Not `#[error(transparent)]`: that forwards `source` past the `Thrown` to its cause,
+    // putting the stack out of reach of `to_js_error`.
+    #[error("{0}")]
     Thrown(#[from] Thrown),
 
-    /// The signer returned a value that is not a signature of the scheme its owner uses.
-    #[error("the signer returned a value that is not a valid {scheme} signature")]
-    SignatureFormat { scheme: &'static str },
+    /// The signer returned a value that is not a signature of the scheme this owner uses.
+    #[error("the signer returned a value that is not a valid signature for owner {0}")]
+    SignatureFormat(AccountOwner),
 
     /// `getPublicKey` returned a value that is not an Ed25519 public key.
     #[error("the signer returned a value that is not a valid Ed25519 public key")]
@@ -89,9 +92,9 @@ impl linera_base::crypto::Signer for Signer {
 
         match owner {
             AccountOwner::Address20(address) => {
-                let signature = sig_str.parse().map_err(|_| Error::SignatureFormat {
-                    scheme: "secp256k1",
-                })?;
+                let signature = sig_str
+                    .parse()
+                    .map_err(|_| Error::SignatureFormat(*owner))?;
                 Ok(AccountSignature::EvmSecp256k1 {
                     signature,
                     address: *address,
@@ -101,8 +104,8 @@ impl linera_base::crypto::Signer for Signer {
                 let pub_str: String = self.get_public_key(*owner).await?.into();
                 let public_key =
                     parse_ed25519_public_key(&pub_str).ok_or(Error::PublicKeyFormat)?;
-                let signature = parse_ed25519_signature(&sig_str)
-                    .ok_or(Error::SignatureFormat { scheme: "Ed25519" })?;
+                let signature =
+                    parse_ed25519_signature(&sig_str).ok_or(Error::SignatureFormat(*owner))?;
                 // Error early if signer returns a valid signature with the wrong public key.
                 let actual = AccountOwner::from(public_key);
                 if actual != *owner {
