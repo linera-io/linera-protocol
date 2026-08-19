@@ -80,9 +80,10 @@ mod validator_trackers;
 #[cfg(with_metrics)]
 pub(crate) mod metrics {
     use linera_base::prometheus_util::{
-        exponential_bucket_latencies, register_histogram_vec, register_int_counter_vec,
+        exponential_bucket_interval, exponential_bucket_latencies, register_histogram_vec,
+        register_int_counter, register_int_counter_vec,
     };
-    use prometheus::{HistogramVec, IntCounterVec};
+    use prometheus::{HistogramVec, IntCounter, IntCounterVec};
 
     linera_base::declare_metrics! {
         pub static PROCESS_INBOX_WITHOUT_PREPARE_LATENCY: HistogramVec =
@@ -90,7 +91,7 @@ pub(crate) mod metrics {
                 "process_inbox_latency",
                 "process_inbox latency",
                 &[],
-                exponential_bucket_latencies(10_000.0),
+                exponential_bucket_latencies(60_000.0),
             );
 
         pub static PREPARE_CHAIN_LATENCY: HistogramVec =
@@ -98,7 +99,7 @@ pub(crate) mod metrics {
                 "prepare_chain_latency",
                 "prepare_chain latency",
                 &[],
-                exponential_bucket_latencies(10_000.0),
+                exponential_bucket_latencies(60_000.0),
             );
 
         pub static SYNCHRONIZE_CHAIN_STATE_LATENCY: HistogramVec =
@@ -106,7 +107,7 @@ pub(crate) mod metrics {
                 "synchronize_chain_state_latency",
                 "synchronize_chain_state latency",
                 &[],
-                exponential_bucket_latencies(10_000.0),
+                exponential_bucket_latencies(600_000.0),
             );
 
         pub static EXECUTE_BLOCK_LATENCY: HistogramVec =
@@ -122,7 +123,35 @@ pub(crate) mod metrics {
                 "find_received_certificates_latency",
                 "find_received_certificates latency",
                 &[],
-                exponential_bucket_latencies(10_000.0),
+                exponential_bucket_latencies(600_000.0),
+            );
+
+        pub static FIND_RECEIVED_CERTIFICATES_LOG_ENTRIES: HistogramVec =
+            register_histogram_vec(
+                "find_received_certificates_log_entries",
+                "Number of received-log entries collected from the validators, per call",
+                &[],
+                exponential_bucket_interval(1.0, 1_000_000.0),
+            );
+
+        pub static FIND_RECEIVED_CERTIFICATES_SENDER_CHAINS: HistogramVec =
+            register_histogram_vec(
+                "find_received_certificates_sender_chains",
+                "Number of distinct sender chains to synchronize, per call",
+                &[],
+                exponential_bucket_interval(1.0, 100_000.0),
+            );
+
+        pub static SENDER_CERTIFICATES_DISCOVERED_TOTAL: IntCounter =
+            register_int_counter(
+                "sender_certificates_discovered_total",
+                "Total number of sender certificates advertised by the validators' received logs",
+            );
+
+        pub static SENDER_CERTIFICATES_MISSING_TOTAL: IntCounter =
+            register_int_counter(
+                "sender_certificates_missing_total",
+                "Total number of sender certificates not already known locally, hence downloaded",
             );
 
         pub static BLOCK_STAGING_FAILURES_TOTAL: IntCounterVec =
