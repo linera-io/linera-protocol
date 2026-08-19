@@ -70,10 +70,6 @@ const MAX_OPERATION_SIZE: usize = 16 * 1024 * 1024;
 
 /// A batch is issued as one unlogged batch whose statements all share the partition key,
 /// so ScyllaDB merges them into a single mutation weighed against `MAX_OPERATION_SIZE`.
-/// The batch size limits below only account for the keys and the values, while each
-/// statement additionally carries its clustering key framing, cell metadata and write
-/// timestamp. Reserving this much per statement keeps a batch of up to `MAX_BATCH_SIZE`
-/// statements under the limit.
 const BATCH_STATEMENT_OVERHEAD: usize = 256;
 
 /// So, we set up the maximal size of 16 MiB minus 10 KiB for the keys and minus the
