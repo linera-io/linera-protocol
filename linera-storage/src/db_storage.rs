@@ -1115,6 +1115,11 @@ where
         self.caches.blob.intern(&blob.id(), blob)
     }
 
+    #[cfg(with_testing)]
+    fn forget_cached_blob(&self, blob_id: BlobId) {
+        self.caches.blob.remove(&blob_id);
+    }
+
     fn intern_confirmed_block(&self, block: ConfirmedBlock) -> CacheArc<ConfirmedBlock> {
         self.caches.confirmed_block.intern(&block.hash(), block)
     }

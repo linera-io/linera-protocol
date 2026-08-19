@@ -256,6 +256,15 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     /// Tests existence of the event with the given ID.
     async fn contains_event(&self, id: EventId) -> Result<bool, ViewError>;
 
+    /// Drops a blob from the in-memory record of what storage holds, so that the next
+    /// read and the next write both have to consult storage again.
+    ///
+    /// Tests that mean to assert a blob really reached the database need this: reads and
+    /// the write elision both answer from that record, so without it a read-back can be
+    /// satisfied by the value the write itself cached.
+    #[cfg(with_testing)]
+    fn forget_cached_blob(&self, blob_id: BlobId);
+
     /// Lists all the events from a starting index
     async fn read_events_from_index(
         &self,
@@ -784,36 +793,42 @@ mod tests {
 
         // Test single blob write
         storage.write_blob(&test_blob1).await?;
+        storage.forget_cached_blob(blob_id1);
         assert!(storage.contains_blob(blob_id1).await?);
 
-        // Rewriting an already-stored blob is elided but must remain readable.
+        // Rewriting an already-stored blob is elided, and the stored copy is unaffected.
         storage.write_blob(&test_blob1).await?;
+        storage.forget_cached_blob(blob_id1);
         assert_eq!(
-            storage.read_blob(blob_id1).await?.map(|blob| blob.id()),
-            Some(blob_id1)
+            storage.read_blob(blob_id1).await?.as_deref(),
+            Some(&test_blob1)
         );
 
         // Interning does not mark a blob as stored, so a later write must not be elided.
+        // The `CacheArc` is held across the write: dropping it would empty the weak index
+        // and let the assertion pass even if interning had populated the stored set.
         let interned_blob = Blob::new_data(vec![70, 80, 90]);
         let interned_blob_id = interned_blob.id();
-        storage.intern_blob(interned_blob.clone());
+        let interned_arc = storage.intern_blob(interned_blob.clone());
         storage.write_blob(&interned_blob).await?;
+        storage.forget_cached_blob(interned_blob_id);
+        drop(interned_arc);
         assert_eq!(
-            storage
-                .read_blob(interned_blob_id)
-                .await?
-                .map(|blob| blob.id()),
-            Some(interned_blob_id)
+            storage.read_blob(interned_blob_id).await?.as_deref(),
+            Some(&interned_blob)
         );
 
         // Test multiple blob write (write_blobs)
         storage
             .write_blobs(&[test_blob2.clone(), test_blob3.clone()])
             .await?;
+        storage.forget_cached_blob(blob_id2);
+        storage.forget_cached_blob(blob_id3);
         assert!(storage.contains_blob(blob_id2).await?);
         assert!(storage.contains_blob(blob_id3).await?);
 
         // Test single blob read
+        storage.forget_cached_blob(blob_id1);
         let read_blob = storage.read_blob(blob_id1).await?;
         assert_eq!(read_blob.as_deref(), Some(&test_blob1));
 

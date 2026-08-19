@@ -108,15 +108,18 @@ where
         self.cache.is_empty()
     }
 
-    /// Records `value` as present in storage, returning the canonical [`crate::Arc`].
+    /// Records `value` in the bounded cache, returning the canonical [`crate::Arc`].
     ///
-    /// **The caller asserts durability.** Call this only after the value has been read
-    /// from storage, or after a write to storage has been confirmed — never before. The
-    /// bounded cache is the process's record of what storage already holds, and
-    /// [`Self::is_stored`] answers from it; inserting an unwritten value here makes that
-    /// answer wrong and can cause a write to be skipped that was never performed.
+    /// The bounded cache is what [`Self::is_stored`] answers from. **In a cache whose
+    /// `is_stored` is relied on as a durability oracle, call this only after the value has
+    /// been read from storage or a write has been confirmed** — inserting an unwritten
+    /// value there makes `is_stored` wrong and can cause a write to be skipped that was
+    /// never performed. Not every cache is used that way: a cache that deliberately serves
+    /// values before they are persisted may insert freely, and simply must not have
+    /// `is_stored` used on it.
     ///
-    /// To share an allocation without claiming durability, use [`Self::intern`].
+    /// To share an allocation without entering the bounded cache at all, use
+    /// [`Self::intern`].
     ///
     /// If a live `Arc` for this key already exists, that allocation is reused and the
     /// passed-in `value` is dropped.
@@ -140,12 +143,19 @@ where
         self.canonicalize(key, crate::Arc(Arc::new(value)))
     }
 
-    /// Returns `true` if this key is known to be in storage.
+    /// Returns `true` if this key is in the bounded cache.
     ///
-    /// Answers from the bounded cache alone, which only [`Self::insert`] populates, so a
-    /// `true` result means some code path has confirmed the value is persisted. `false`
-    /// means "not known" — the entry may have been evicted, or only interned — so it is
-    /// safe to use to *skip* work but never to conclude that a value is absent.
+    /// [`Self::intern`] never puts anything here, so this is only ever true of a value that
+    /// went through [`Self::insert`] or [`Self::insert_hashed`]. **Reading it as "this is in
+    /// storage" is therefore a property of the individual cache, not of `ValueCache`:** it
+    /// holds only where every insert site for that cache is known to be durable.
+    ///
+    /// It holds for `linera_storage`'s blob cache, which is what makes eliding a blob write
+    /// on a hit sound. It deliberately does **not** hold for the chain worker's
+    /// `block_values`, which caches blocks it has voted on but not yet persisted.
+    ///
+    /// `false` means "not known" — the entry may have been evicted, or only interned — so it
+    /// is safe to use to *skip* work but never to conclude that a value is absent.
     pub fn is_stored(&self, key: &K) -> bool {
         self.cache.peek(key).is_some()
     }
