@@ -117,29 +117,27 @@ pub const ALREADY_CREATED_CONTRACT_SELECTOR: &[u8] = &[23, 47, 106, 235];
 pub const JSON_EMPTY_VECTOR: &[u8] = &[91, 93];
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
     use prometheus::HistogramVec;
 
-    pub static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "evm_contract_instantiation_latency",
-            "EVM contract instantiation latency",
-            &[],
-            exponential_bucket_latencies(100.0),
-        )
-    });
+    linera_base::declare_metrics! {
+        pub static CONTRACT_INSTANTIATION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "evm_contract_instantiation_latency",
+                "EVM contract instantiation latency",
+                &[],
+                exponential_bucket_latencies(100.0),
+            );
 
-    pub static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "evm_service_instantiation_latency",
-            "EVM service instantiation latency",
-            &[],
-            exponential_bucket_latencies(100.0),
-        )
-    });
+        pub static SERVICE_INSTANTIATION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "evm_service_instantiation_latency",
+                "EVM service instantiation latency",
+                &[],
+                exponential_bucket_latencies(100.0),
+            );
+    }
 }
 
 /// A user contract in a compiled EVM module.

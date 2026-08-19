@@ -28,3 +28,5 @@ linera-faucet-server
 linera-exporter
 linera-service
 linera-service-graphql-client
+# Documentation-only: the index to the consensus correctness specification.
+linera-spec

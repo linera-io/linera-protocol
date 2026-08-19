@@ -925,11 +925,11 @@
           "disableTextWrap": false,
           "editorMode": "builder",
           "exemplar": false,
-          "expr": "rate(block_execution_latency_bucket{service=\"shards\"}[$__rate_interval])",
+          "expr": "rate(linera_block_execution_latency_bucket{job=\"shards\"}[$__rate_interval])",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
-          "legendFormat": "{{pod}} - {{le}}",
+          "legendFormat": "{{instance}} - {{le}}",
           "range": true,
           "refId": "A",
           "useBackend": false

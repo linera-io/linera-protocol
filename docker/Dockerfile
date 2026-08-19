@@ -44,7 +44,12 @@ ARG build_date
 ARG build_flag=--release
 ARG build_folder=release
 ARG build_features=scylladb,metrics,jemalloc
-ARG rustflags="-C force-frame-pointers=yes -L /usr/lib/x86_64-linux-gnu"
+# The `-L` lets the linker find libunwind, jemalloc's stack-trace backend (#5602).
+# Debian's multiarch lib dir is arch-dependent (x86_64-linux-gnu vs
+# aarch64-linux-gnu), so this points at a stable symlink that cook_base resolves
+# from the build machine. Hardcoding one arch would silently drop libunwind on
+# the other.
+ARG rustflags="-C force-frame-pointers=yes -L /usr/lib/deb-multiarch"
 
 # ── Stage 0: chef base (rust + cargo-chef + system deps) ──
 FROM rust:1.86-slim-bookworm AS chef
@@ -129,6 +134,10 @@ COPY linera-sdk/wit linera-sdk/wit
 COPY --from=planner /examples-stubs examples
 
 ENV GIT_COMMIT=${git_commit}
+
+# Resolve the multiarch lib dir from the machine actually doing the build, so
+# `rustflags` above stays arch-agnostic and amd64/arm64 need no separate value.
+RUN ln -s "/usr/lib/$(uname -m)-linux-gnu" /usr/lib/deb-multiarch
 ENV RUSTFLAGS=${rustflags}
 
 # ── Stage 3a: builder_src — all three binaries, for the `tests` image only ──
@@ -214,6 +223,14 @@ FROM cook_base AS client_builder
 ARG build_flag
 ARG build_folder
 ARG build_features
+
+# `[profile.release] debug = true` (root Cargo.toml) is there so production
+# binaries can be profiled, and it costs a LOT: the client links to 1693 MB with
+# debuginfo versus 123 MB without, while keeping ~212k symbols either way, so
+# panic backtraces still symbolicate. Linking that with thin LTO does not fit in
+# a 16 GB arm64 runner. The validator keeps debuginfo — it is the one being
+# profiled — so this is set on the client stage only, not in cook_base.
+ENV CARGO_PROFILE_RELEASE_DEBUG=false
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \

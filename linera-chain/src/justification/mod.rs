@@ -36,7 +36,17 @@
 //! confirmation votes, or the two confirmation quorums intersect in validators that contradicted
 //! themselves. See [`extract_equivocations`].
 //!
+//! # Correctness specification
+//!
+//! The accountability guarantees this module provides are stated and proved in [`proof`]:
+//! [`ProofSoundness`](proof::ProofSoundness) (no correct validator is convictable),
+//! [`ConflictCompleteness`](proof::ConflictCompleteness) (a conflict convicts a validity
+//! threshold), and [`AccountableSafety`](proof::AccountableSafety) combining them with the safety
+//! theorem. The `linera-spec` crate gives the reading order.
+//!
 //! [`VoteValue`]: crate::data_types::VoteValue
+
+pub mod proof;
 
 use std::collections::BTreeMap;
 
@@ -57,23 +67,22 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{exponential_bucket_interval, register_histogram_vec};
     use prometheus::HistogramVec;
 
-    /// The number of links in a justification chain a node verified. A chain grows by one link
-    /// per round a block had to fight through, so a rising tail here signals contention on some
-    /// height before it becomes a certificate-size or finalization problem.
-    pub static JUSTIFICATION_CHAIN_LENGTH: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "justification_chain_length",
-            "Number of links in a verified justification chain",
-            &[],
-            exponential_bucket_interval(1.0, 1024.0),
-        )
-    });
+    linera_base::declare_metrics! {
+        /// The number of links in a justification chain a node verified. A chain grows by one link
+        /// per round a block had to fight through, so a rising tail here signals contention on some
+        /// height before it becomes a certificate-size or finalization problem.
+        pub static JUSTIFICATION_CHAIN_LENGTH: HistogramVec =
+            register_histogram_vec(
+                "justification_chain_length",
+                "Number of links in a verified justification chain",
+                &[],
+                exponential_bucket_interval(1.0, 1024.0),
+            );
+    }
 }
 
 /// One link in a justification chain: a quorum of validators that all voted to validate the
@@ -962,5 +971,5 @@ fn signature_of(
 }
 
 #[cfg(test)]
-#[path = "unit_tests/justification_tests.rs"]
+#[path = "../unit_tests/justification_tests.rs"]
 mod justification_tests;

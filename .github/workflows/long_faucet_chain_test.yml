@@ -2,7 +2,7 @@ name: Long Faucet chain test
 
 on:
   push:
-    branches: [ 'devnet_*', 'testnet_*' ]
+    branches: [ main, 'devnet_*', 'testnet_*' ]
   pull_request:
     paths-ignore:
       - 'docs/**'

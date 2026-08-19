@@ -146,6 +146,7 @@ impl ServerContext {
                     (listen_address.clone(), port),
                     shutdown_signal.clone(),
                     monitoring_server::MemoryProfiling::from(enable_memory_profiling),
+                    linera_service::init_metrics,
                 );
             }
 
@@ -195,6 +196,7 @@ impl ServerContext {
                     (listen_address.to_string(), port),
                     shutdown_signal.clone(),
                     monitoring_server::MemoryProfiling::from(enable_memory_profiling),
+                    linera_service::init_metrics,
                 );
             }
 

@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module manages the state of a Linera chain, including cross-chain communication.
+//!
+//! The consensus protocol implemented here is specified and proved correct in the `linera-spec`
+//! crate, whose statements live next to the code they describe in [`manager::proof`],
+//! [`data_types::proof`] and [`justification::proof`].
 
 #![deny(missing_docs)]
 
@@ -16,17 +20,19 @@ pub mod types {
 
 mod block_tracker;
 mod chain;
-/// Data types exchanged while proposing, voting on, and confirming blocks.
 pub mod data_types;
 mod inbox;
 pub mod justification;
 pub mod manager;
 mod outbox;
 mod pending_blobs;
+pub mod proof;
 #[cfg(with_testing)]
 pub mod test;
 
-pub use chain::{BlockExecutionPhase, ChainIdSet, ChainStateView, ChainTipState, StreamCounts};
+pub use chain::{
+    BlockExecution, BlockExecutionPhase, ChainIdSet, ChainStateView, ChainTipState, StreamCounts,
+};
 use data_types::{MessageBundle, PostedMessage};
 use linera_base::{
     bcs,
@@ -54,13 +60,16 @@ pub enum ChainError {
     #[error("The chain being queried is not active {0}")]
     InactiveChain(ChainId),
     #[error(
-        "Cannot vote for block proposal of chain {chain_id} because a message \
-         from chain {origin} at height {height} has not been received yet"
+        "Cannot vote for block proposal of chain {chain_id} because {} cross-chain message \
+         bundle(s) have not been received yet",
+        bundles.len()
     )]
-    MissingCrossChainUpdate {
+    MissingCrossChainUpdates {
         chain_id: ChainId,
-        origin: ChainId,
-        height: BlockHeight,
+        /// The missing incoming message bundles, as `(origin chain, height)` pairs that must
+        /// all be received before this block can be validated. The validator reports every
+        /// missing bundle at once so the client can fetch them in a single round.
+        bundles: Vec<(ChainId, BlockHeight)>,
     },
     #[error(
         "Message in block proposed to {chain_id} does not match the previously received messages from \
@@ -256,7 +265,7 @@ impl ChainError {
             | ChainError::RoundDoesNotTimeOut
             | ChainError::NotTimedOutYet(_)
             | ChainError::CheckpointPreconditionFailed(_)
-            | ChainError::MissingCrossChainUpdate { .. } => false,
+            | ChainError::MissingCrossChainUpdates { .. } => false,
             ChainError::ViewError(_)
             | ChainError::UnexpectedMessage { .. }
             | ChainError::InboxGapDetected { .. }
@@ -308,4 +317,20 @@ where
     fn with_execution_context(self, context: ChainExecutionContext) -> Result<T, ChainError> {
         self.map_err(|error| ChainError::ExecutionError(Box::new(error.into()), context))
     }
+}
+
+/// Registers every metric this crate declares.
+///
+/// Without this, a metric is only exported after the code path that observes it has run, so a
+/// rarely-taken path leaves its panels blank and makes a routine restart look like the metric
+/// was removed.
+#[cfg(with_metrics)]
+pub fn init_metrics() {
+    linera_base::init_metrics();
+    linera_execution::init_metrics();
+    linera_views::init_metrics();
+    chain::metrics::init_metrics();
+    inbox::metrics::init_metrics();
+    justification::metrics::init_metrics();
+    outbox::metrics::init_metrics();
 }

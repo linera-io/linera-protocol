@@ -65,7 +65,12 @@ use linera_base::prometheus_util::MeasureLatency;
 /// Every path that executes a block must name its phase explicitly: there is no `Default`,
 /// so a new caller cannot compile without choosing one, and no execution can land in an
 /// unlabeled or silently-mislabeled bucket.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+///
+/// The label strings are derived from the variant names in `snake_case`; they are part of the
+/// metrics wire format, so `metrics_label_values_are_stable` pins them against an accidental
+/// variant rename.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
 pub enum BlockExecutionPhase {
     /// A block proposer staging (building) its own block (`stage_block_execution`).
     StageProposal,
@@ -76,141 +81,70 @@ pub enum BlockExecutionPhase {
     HandleConfirmed,
 }
 
-impl BlockExecutionPhase {
-    /// The Prometheus `phase` label value for this execution phase.
-    pub fn as_str(self) -> &'static str {
+/// What a call to [`ChainStateView::execute_block`] is doing, carrying exactly the inputs that
+/// are legal for that phase.
+///
+/// Bundling the phase together with the replayed oracle responses and the bundle-execution
+/// policy makes the illegal combinations unrepresentable: only [`StageProposal`] may choose a
+/// policy (and thus `AutoRetry`), and only [`HandleConfirmed`] carries oracle responses to
+/// replay — so "replay oracle responses while auto-retrying" cannot be constructed.
+///
+/// [`StageProposal`]: BlockExecution::StageProposal
+/// [`HandleConfirmed`]: BlockExecution::HandleConfirmed
+pub enum BlockExecution {
+    /// A proposer staging (building) its own block. The bundle-failure policy is caller-chosen
+    /// (and may be `AutoRetry`); oracle responses are computed fresh, never replayed.
+    StageProposal {
+        /// How to handle failing bundles while building the proposal.
+        policy: BundleExecutionPolicy,
+    },
+    /// A validator validating a received block proposal. Bundles must abort on failure (the
+    /// proposal is fixed) and oracle responses are computed fresh.
+    HandleProposal,
+    /// A validator executing a confirmed certificate before committing it. Bundles must abort
+    /// on failure and the certificate's recorded oracle responses are replayed for determinism.
+    HandleConfirmed {
+        /// The oracle responses recorded in the certificate, replayed to reproduce the outcome.
+        oracle_responses: Vec<Vec<OracleResponse>>,
+    },
+}
+
+impl BlockExecution {
+    /// The protocol phase this execution represents, used to label execution metrics and spans.
+    pub fn phase(&self) -> BlockExecutionPhase {
         match self {
-            BlockExecutionPhase::StageProposal => "stage_proposal",
-            BlockExecutionPhase::HandleProposal => "handle_proposal",
-            BlockExecutionPhase::HandleConfirmed => "handle_confirmed",
+            BlockExecution::StageProposal { .. } => BlockExecutionPhase::StageProposal,
+            BlockExecution::HandleProposal => BlockExecutionPhase::HandleProposal,
+            BlockExecution::HandleConfirmed { .. } => BlockExecutionPhase::HandleConfirmed,
+        }
+    }
+
+    /// Splits into the oracle responses to replay (if any) and the bundle-execution policy.
+    fn into_oracle_and_policy(self) -> (Option<Vec<Vec<OracleResponse>>>, BundleExecutionPolicy) {
+        match self {
+            BlockExecution::StageProposal { policy } => (None, policy),
+            BlockExecution::HandleProposal => (None, BundleExecutionPolicy::committed()),
+            BlockExecution::HandleConfirmed { oracle_responses } => {
+                (Some(oracle_responses), BundleExecutionPolicy::committed())
+            }
         }
     }
 }
 
 #[cfg(with_metrics)]
 pub(crate) mod metrics {
-    use std::sync::LazyLock;
-
     use linera_base::prometheus_util::{
         exponential_bucket_interval, register_histogram_vec, register_int_counter_vec,
     };
     use linera_execution::ResourceTracker;
     use prometheus::{HistogramVec, IntCounterVec};
 
-    pub static NUM_BLOCKS_EXECUTED: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "num_blocks_executed",
-            "Number of blocks executed",
-            &["phase"],
-        )
-    });
-
-    pub static BLOCK_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "block_execution_latency",
-            "Block execution latency",
-            &["phase"],
-            exponential_bucket_interval(50.0_f64, 10_000_000.0),
-        )
-    });
-
-    #[cfg(with_metrics)]
-    pub static MESSAGE_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "message_execution_latency",
-            "Message execution latency",
-            &["phase"],
-            exponential_bucket_interval(0.1_f64, 50_000.0),
-        )
-    });
-
-    pub static OPERATION_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "operation_execution_latency",
-            "Operation execution latency",
-            &["phase"],
-            exponential_bucket_interval(0.1_f64, 50_000.0),
-        )
-    });
-
-    pub static WASM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "wasm_fuel_used_per_block",
-            "Wasm fuel used per block",
-            &["phase"],
-            exponential_bucket_interval(10.0, 100_000_000.0),
-        )
-    });
-
-    pub static EVM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "evm_fuel_used_per_block",
-            "EVM fuel used per block",
-            &["phase"],
-            exponential_bucket_interval(10.0, 100_000_000.0),
-        )
-    });
-
-    pub static VM_NUM_READS_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "vm_num_reads_per_block",
-            "VM number of reads per block",
-            &["phase"],
-            exponential_bucket_interval(0.1, 100.0),
-        )
-    });
-
-    pub static VM_BYTES_READ_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "vm_bytes_read_per_block",
-            "VM number of bytes read per block",
-            &["phase"],
-            exponential_bucket_interval(0.1, 10_000_000.0),
-        )
-    });
-
-    pub static VM_BYTES_WRITTEN_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "vm_bytes_written_per_block",
-            "VM number of bytes written per block",
-            &["phase"],
-            exponential_bucket_interval(0.1, 10_000_000.0),
-        )
-    });
-
-    pub static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "state_hash_computation_latency",
-            "Time to recompute the state hash, in microseconds",
-            &["phase"],
-            exponential_bucket_interval(1.0, 2_000_000.0),
-        )
-    });
-
-    pub static NUM_OUTBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "num_outboxes",
-            "Number of outboxes",
-            &[],
-            exponential_bucket_interval(1.0, 1_000_000.0),
-        )
-    });
-
-    pub static OUTBOX_COUNTERS_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "outbox_counters_size",
-            "Number of entries in the outbox_counters map (in-flight message heights)",
-            &[],
-            exponential_bucket_interval(1.0, 1_000_000.0),
-        )
-    });
-
     /// Tracks block execution metrics in Prometheus, labeled by the execution `phase`.
     pub(crate) fn track_block_metrics(
         tracker: &ResourceTracker,
         phase: super::BlockExecutionPhase,
     ) {
-        let phase = &[phase.as_str()];
+        let phase: &[&str] = &[phase.into()];
         NUM_BLOCKS_EXECUTED.with_label_values(phase).inc();
         WASM_FUEL_USED_PER_BLOCK
             .with_label_values(phase)
@@ -227,6 +161,104 @@ pub(crate) mod metrics {
         VM_BYTES_WRITTEN_PER_BLOCK
             .with_label_values(phase)
             .observe(tracker.bytes_written as f64);
+    }
+
+    linera_base::declare_metrics! {
+        pub static NUM_BLOCKS_EXECUTED: IntCounterVec =
+            register_int_counter_vec(
+                "num_blocks_executed",
+                "Number of blocks executed",
+                &["phase"],
+            );
+
+        pub static BLOCK_EXECUTION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "block_execution_latency",
+                "Block execution latency",
+                &["phase"],
+                exponential_bucket_interval(50.0_f64, 10_000_000.0),
+            );
+
+        #[cfg(with_metrics)]
+        pub static MESSAGE_EXECUTION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "message_execution_latency",
+                "Message execution latency",
+                &["phase"],
+                exponential_bucket_interval(0.1_f64, 50_000.0),
+            );
+
+        pub static OPERATION_EXECUTION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "operation_execution_latency",
+                "Operation execution latency",
+                &["phase"],
+                exponential_bucket_interval(0.1_f64, 50_000.0),
+            );
+
+        pub static WASM_FUEL_USED_PER_BLOCK: HistogramVec =
+            register_histogram_vec(
+                "wasm_fuel_used_per_block",
+                "Wasm fuel used per block",
+                &["phase"],
+                exponential_bucket_interval(10.0, 100_000_000.0),
+            );
+
+        pub static EVM_FUEL_USED_PER_BLOCK: HistogramVec =
+            register_histogram_vec(
+                "evm_fuel_used_per_block",
+                "EVM fuel used per block",
+                &["phase"],
+                exponential_bucket_interval(10.0, 100_000_000.0),
+            );
+
+        pub static VM_NUM_READS_PER_BLOCK: HistogramVec =
+            register_histogram_vec(
+                "vm_num_reads_per_block",
+                "VM number of reads per block",
+                &["phase"],
+                exponential_bucket_interval(0.1, 100.0),
+            );
+
+        pub static VM_BYTES_READ_PER_BLOCK: HistogramVec =
+            register_histogram_vec(
+                "vm_bytes_read_per_block",
+                "VM number of bytes read per block",
+                &["phase"],
+                exponential_bucket_interval(0.1, 10_000_000.0),
+            );
+
+        pub static VM_BYTES_WRITTEN_PER_BLOCK: HistogramVec =
+            register_histogram_vec(
+                "vm_bytes_written_per_block",
+                "VM number of bytes written per block",
+                &["phase"],
+                exponential_bucket_interval(0.1, 10_000_000.0),
+            );
+
+        pub static STATE_HASH_COMPUTATION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "state_hash_computation_latency",
+                "Time to recompute the state hash, in microseconds",
+                &["phase"],
+                exponential_bucket_interval(1.0, 2_000_000.0),
+            );
+
+        pub static NUM_OUTBOXES: HistogramVec =
+            register_histogram_vec(
+                "num_outboxes",
+                "Number of outboxes",
+                &[],
+                exponential_bucket_interval(1.0, 1_000_000.0),
+            );
+
+        pub static OUTBOX_COUNTERS_SIZE: HistogramVec =
+            register_histogram_vec(
+                "outbox_counters_size",
+                "Number of entries in the outbox_counters map (in-flight message heights)",
+                &[],
+                exponential_bucket_interval(1.0, 1_000_000.0),
+            );
     }
 }
 
@@ -564,9 +596,8 @@ where
         hash: CryptoHash,
     ) -> Result<(), ChainError> {
         self.block_hashes.insert(&height, hash)?;
-        let next = self.next_height_to_preprocess.get_mut();
-        if *next <= height {
-            *next = height.try_add_one()?;
+        if *self.next_height_to_preprocess.get() <= height {
+            self.next_height_to_preprocess.set(height.try_add_one()?);
         }
         Ok(())
     }
@@ -702,6 +733,10 @@ where
         }
         let origins = bundles_by_origin.keys().copied().collect::<Vec<_>>();
         let inboxes = self.inboxes.try_load_entries_mut(&origins).await?;
+        // When the bundles must already be present (block proposals), collect *every* missing
+        // `(origin, height)` rather than bailing on the first, so the caller can be told the
+        // full set of cross-chain updates to fetch in a single round-trip.
+        let mut missing_bundles = Vec::new();
         for ((origin, bundles), mut inbox) in bundles_by_origin.into_iter().zip(inboxes) {
             tracing::trace!(
                 "Removing [{}] from inbox for {origin}",
@@ -717,15 +752,8 @@ where
                     .remove_bundle(bundle)
                     .await
                     .map_err(|error| (chain_id, origin, error))?;
-                if must_be_present {
-                    ensure!(
-                        was_present,
-                        ChainError::MissingCrossChainUpdate {
-                            chain_id,
-                            origin,
-                            height: bundle.height,
-                        }
-                    );
+                if must_be_present && !was_present {
+                    missing_bundles.push((origin, bundle.height));
                 }
             }
             inbox.observe_size_metric();
@@ -733,6 +761,13 @@ where
                 self.nonempty_inboxes.get_mut().remove(&origin);
             }
         }
+        ensure!(
+            missing_bundles.is_empty(),
+            ChainError::MissingCrossChainUpdates {
+                chain_id,
+                bundles: missing_bundles,
+            }
+        );
         Ok(())
     }
 
@@ -830,18 +865,9 @@ where
         checkpoint_inbox_cursors: Vec<(ChainId, Cursor)>,
         checkpoint_outbox_block_hashes: Vec<CryptoHash>,
     ) -> Result<(BlockExecutionOutcome, ResourceTracker, HashSet<ChainId>), ChainError> {
-        // AutoRetry is incompatible with replaying oracle responses because discarding or
-        // rejecting bundles would change which transactions execute.
-        if !matches!(&exec_policy.on_failure, BundleFailurePolicy::Abort) {
-            assert!(
-                replaying_oracle_responses.is_none(),
-                "Cannot use AutoRetry policy when replaying oracle responses"
-            );
-        }
-
         #[cfg(with_metrics)]
         let block_execution_latency =
-            metrics::BLOCK_EXECUTION_LATENCY.with_label_values(&[phase.as_str()]);
+            metrics::BLOCK_EXECUTION_LATENCY.with_label_values(&[phase.into()]);
         #[cfg(with_metrics)]
         let _execution_latency = block_execution_latency.measure_latency_us();
 
@@ -1185,7 +1211,7 @@ where
         let state_hash = {
             #[cfg(with_metrics)]
             let state_hash_latency =
-                metrics::STATE_HASH_COMPUTATION_LATENCY.with_label_values(&[phase.as_str()]);
+                metrics::STATE_HASH_COMPUTATION_LATENCY.with_label_values(&[phase.into()]);
             #[cfg(with_metrics)]
             let _hash_latency = state_hash_latency.measure_latency_us();
             chain.crypto_hash_mut().await?
@@ -1248,7 +1274,6 @@ where
     /// - After `max_failures` failed bundles, all remaining message bundles are discarded.
     ///
     /// The block may be modified to reflect the actual executed transactions.
-    #[expect(clippy::too_many_arguments)]
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %block.height
@@ -1259,9 +1284,7 @@ where
         local_time: Timestamp,
         round: Option<u32>,
         published_blobs: &[Blob],
-        replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-        policy: BundleExecutionPolicy,
-        phase: BlockExecutionPhase,
+        execution: BlockExecution,
     ) -> Result<
         (
             ProposedBlock,
@@ -1331,6 +1354,8 @@ where
             (Vec::new(), Vec::new(), Vec::new())
         };
 
+        let phase = execution.phase();
+        let (replaying_oracle_responses, policy) = execution.into_oracle_and_policy();
         let (outcome, tracker, never_reject_origins) = Self::execute_block_inner(
             &mut self.execution_state,
             &self.block_hashes,

@@ -1,0 +1,26 @@
+[package]
+name = "linera-spec"
+description = "Correctness specification of the Linera microchain consensus protocol."
+readme = "README.md"
+documentation = "https://docs.rs/linera-spec/latest/linera_spec/"
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+linera-chain.workspace = true
+linera-core.workspace = true
+linera-execution.workspace = true
+
+[package.metadata.cargo-machete]
+# This crate deliberately contains no code: these dependencies exist so that the specification
+# index can resolve intra-doc links into the crates that hold the statements. rustdoc needs them
+# declared; nothing references them from Rust source, so `cargo machete` cannot see the use.
+ignored = ["linera-chain", "linera-core", "linera-execution"]

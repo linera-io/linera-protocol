@@ -28,19 +28,18 @@ use linera_chain::{
     },
 };
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::register_int_counter_vec;
     use prometheus::IntCounterVec;
 
-    pub static VALIDATOR_SUBSCRIPTION_ERRORS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "validator_subscription_errors",
-            "Number of notification subscription stream errors per validator",
-            &["address"],
-        )
-    });
+    linera_base::declare_metrics! {
+        pub static VALIDATOR_SUBSCRIPTION_ERRORS: IntCounterVec =
+            register_int_counter_vec(
+                "validator_subscription_errors",
+                "Number of notification subscription stream errors per validator",
+                &["address"],
+            );
+    }
 }
 
 use linera_core::{

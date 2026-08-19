@@ -34,97 +34,83 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
     use prometheus::HistogramVec;
 
-    /// The latency of hash computation
-    pub static KEY_VALUE_STORE_VIEW_HASH_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "key_value_store_view_hash_latency",
-            "KeyValueStoreView hash latency",
-            &[],
-            exponential_bucket_latencies(5.0),
-        )
-    });
+    linera_base::declare_metrics! {
+        /// The latency of hash computation
+        pub static KEY_VALUE_STORE_VIEW_HASH_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "key_value_store_view_hash_latency",
+                "KeyValueStoreView hash latency",
+                &[],
+                exponential_bucket_latencies(5.0),
+            );
 
-    /// The latency of get operation
-    pub static KEY_VALUE_STORE_VIEW_GET_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "key_value_store_view_get_latency",
-            "KeyValueStoreView get latency",
-            &[],
-            exponential_bucket_latencies(5.0),
-        )
-    });
+        /// The latency of get operation
+        pub static KEY_VALUE_STORE_VIEW_GET_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "key_value_store_view_get_latency",
+                "KeyValueStoreView get latency",
+                &[],
+                exponential_bucket_latencies(5.0),
+            );
 
-    /// The latency of multi get
-    pub static KEY_VALUE_STORE_VIEW_MULTI_GET_LATENCY: LazyLock<HistogramVec> =
-        LazyLock::new(|| {
+        /// The latency of multi get
+        pub static KEY_VALUE_STORE_VIEW_MULTI_GET_LATENCY: HistogramVec =
             register_histogram_vec(
                 "key_value_store_view_multi_get_latency",
                 "KeyValueStoreView multi get latency",
                 &[],
                 exponential_bucket_latencies(5.0),
-            )
-        });
+            );
 
-    /// The latency of contains key
-    pub static KEY_VALUE_STORE_VIEW_CONTAINS_KEY_LATENCY: LazyLock<HistogramVec> =
-        LazyLock::new(|| {
+        /// The latency of contains key
+        pub static KEY_VALUE_STORE_VIEW_CONTAINS_KEY_LATENCY: HistogramVec =
             register_histogram_vec(
                 "key_value_store_view_contains_key_latency",
                 "KeyValueStoreView contains key latency",
                 &[],
                 exponential_bucket_latencies(5.0),
-            )
-        });
+            );
 
-    /// The latency of contains keys
-    pub static KEY_VALUE_STORE_VIEW_CONTAINS_KEYS_LATENCY: LazyLock<HistogramVec> =
-        LazyLock::new(|| {
+        /// The latency of contains keys
+        pub static KEY_VALUE_STORE_VIEW_CONTAINS_KEYS_LATENCY: HistogramVec =
             register_histogram_vec(
                 "key_value_store_view_contains_keys_latency",
                 "KeyValueStoreView contains keys latency",
                 &[],
                 exponential_bucket_latencies(5.0),
-            )
-        });
+            );
 
-    /// The latency of find keys by prefix operation
-    pub static KEY_VALUE_STORE_VIEW_FIND_KEYS_BY_PREFIX_LATENCY: LazyLock<HistogramVec> =
-        LazyLock::new(|| {
+        /// The latency of find keys by prefix operation
+        pub static KEY_VALUE_STORE_VIEW_FIND_KEYS_BY_PREFIX_LATENCY: HistogramVec =
             register_histogram_vec(
                 "key_value_store_view_find_keys_by_prefix_latency",
                 "KeyValueStoreView find keys by prefix latency",
                 &[],
                 exponential_bucket_latencies(5.0),
-            )
-        });
+            );
 
-    /// The latency of find key values by prefix operation
-    pub static KEY_VALUE_STORE_VIEW_FIND_KEY_VALUES_BY_PREFIX_LATENCY: LazyLock<HistogramVec> =
-        LazyLock::new(|| {
+        /// The latency of find key values by prefix operation
+        pub static KEY_VALUE_STORE_VIEW_FIND_KEY_VALUES_BY_PREFIX_LATENCY: HistogramVec =
             register_histogram_vec(
                 "key_value_store_view_find_key_values_by_prefix_latency",
                 "KeyValueStoreView find key values by prefix latency",
                 &[],
                 exponential_bucket_latencies(5.0),
-            )
-        });
+            );
 
-    /// The latency of write batch operation
-    pub static KEY_VALUE_STORE_VIEW_WRITE_BATCH_LATENCY: LazyLock<HistogramVec> =
-        LazyLock::new(|| {
+        /// The latency of write batch operation
+        pub static KEY_VALUE_STORE_VIEW_WRITE_BATCH_LATENCY: HistogramVec =
             register_histogram_vec(
                 "key_value_store_view_write_batch_latency",
                 "KeyValueStoreView write batch latency",
                 &[],
                 exponential_bucket_latencies(5.0),
-            )
-        });
+            );
+    }
 }
 
 #[cfg(with_testing)]

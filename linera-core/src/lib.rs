@@ -3,6 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module defines the core Linera protocol.
+//!
+//! The consensus protocol it drives is specified and proved correct in the `linera-spec` crate,
+//! which indexes both halves of the argument: safety and accountability in `linera_chain`, and
+//! progress and liveness in [`proof`], next to the client code that discharges them.
 
 #![recursion_limit = "256"]
 #![deny(missing_docs)]
@@ -22,6 +26,7 @@ mod local_node;
 pub mod node;
 /// Utilities for notifying subscribers about chain events.
 pub mod notifier;
+pub mod proof;
 mod remote_node;
 /// Helpers for writing tests against the core protocol.
 #[cfg(with_testing)]
@@ -50,3 +55,23 @@ pub use genesis_config::GenesisConfig;
 /// The maximum number of entries in a `received_log` included in a `ChainInfo` response.
 // TODO(#4638): Revisit the number.
 pub const CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES: usize = 20_000;
+
+/// Registers every metric this crate declares.
+///
+/// Without this, a metric is only exported after the code path that observes it has run, so a
+/// rarely-taken path leaves its panels blank and makes a routine restart look like the metric
+/// was removed.
+#[cfg(with_metrics)]
+pub fn init_metrics() {
+    linera_base::init_metrics();
+    linera_cache::init_metrics();
+    linera_chain::init_metrics();
+    linera_execution::init_metrics();
+    linera_storage::init_metrics();
+    linera_views::init_metrics();
+    chain_worker::state::metrics::init_metrics();
+    client::metrics::init_metrics();
+    client::requests_scheduler::init_metrics();
+    updater::metrics::init_metrics();
+    worker::metrics::init_metrics();
+}
