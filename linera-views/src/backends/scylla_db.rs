@@ -40,6 +40,7 @@ use scylla::{
     value::CqlValue,
 };
 use serde::{Deserialize, Serialize};
+use static_assertions as sa;
 use thiserror::Error;
 
 #[cfg(with_metrics)]
@@ -55,7 +56,6 @@ use crate::{
         DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
         WithError,
     },
-    value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
 
 /// Fundamental constant in ScyllaDB: The maximum size of a multi keys query
@@ -66,36 +66,44 @@ const MAX_MULTI_KEYS: usize = 100 - 1;
 /// https://www.scylladb.com/2019/03/27/best-practices-for-scylla-applications/
 /// "There is a hard limit at 16 MiB, and nothing bigger than that can arrive at once
 ///  at the database at any particular time"
-/// So, we set up the maximal size of 16 MiB - 10 KiB for the values and 10 KiB for the keys
-/// We also arbitrarily decrease the size by 4000 bytes because an amount of size is
-/// taken internally by the database.
-const RAW_MAX_VALUE_SIZE: usize = 16 * 1024 * 1024 - 10 * 1024 - 4000;
+const MAX_OPERATION_SIZE: usize = 16 * 1024 * 1024;
+
+/// A batch is issued as one unlogged batch whose statements all share the partition key,
+/// so ScyllaDB merges them into a single mutation weighed against `MAX_OPERATION_SIZE`.
+const BATCH_STATEMENT_OVERHEAD: usize = 256;
+
+/// So, we set up the maximal size of 16 MiB minus 10 KiB for the keys and minus the
+/// per-statement reserve for the values.
+const RAW_MAX_VALUE_SIZE: usize =
+    MAX_OPERATION_SIZE - MAX_KEY_SIZE - MAX_BATCH_SIZE * BATCH_STATEMENT_OVERHEAD;
 const MAX_KEY_SIZE: usize = 10 * 1024;
 const MAX_BATCH_TOTAL_SIZE: usize = RAW_MAX_VALUE_SIZE + MAX_KEY_SIZE;
+
+// A full batch and its per-statement reserve must fit in a single ScyllaDB operation.
+sa::const_assert!(
+    MAX_BATCH_TOTAL_SIZE + MAX_BATCH_SIZE * BATCH_STATEMENT_OVERHEAD <= MAX_OPERATION_SIZE
+);
 
 /// The `RAW_MAX_VALUE_SIZE` is the maximum size on the ScyllaDB storage.
 /// However, the value being written can also be the serialization of a `SimpleUnorderedBatch`
 /// Therefore the actual `MAX_VALUE_SIZE` is lower.
-/// At the maximum the key size is 1024 bytes (see below) and we pack just one entry.
-/// So if the key has 1024 bytes this gets us the inequality
+/// At the maximum the key size is `MAX_KEY_SIZE` bytes and we pack just one entry.
+/// So if the key has 10240 bytes this gets us the inequality
 /// `1 + 1 + 1 + serialized_size(MAX_KEY_SIZE)? + serialized_size(x)? <= RAW_MAX_VALUE_SIZE`.
 /// and so this simplifies to `1 + 1 + 1 + (2 + 10240) + (4 + x) <= RAW_MAX_VALUE_SIZE`
 /// Note on the above formula:
 /// * We write 4 because `get_uleb128_size(RAW_MAX_VALUE_SIZE) = 4)`
 /// * We write `1 + 1 + 1`  because the `UnorderedBatch` has three entries.
 ///
-/// This gets us to a maximal value of 16752727.
-const VISIBLE_MAX_VALUE_SIZE: usize = RAW_MAX_VALUE_SIZE
+/// This gets us to a maximal value of 15476727.
+const MAX_VALUE_SIZE: usize = RAW_MAX_VALUE_SIZE
     - MAX_KEY_SIZE
     - get_uleb128_size(RAW_MAX_VALUE_SIZE)
     - get_uleb128_size(MAX_KEY_SIZE)
     - 3;
 
-/// The constant 14000 is an empirical constant that was found to be necessary
-/// to make the ScyllaDB system work. We have not been able to find this or
-/// a similar constant in the source code or the documentation.
-/// An experimental approach gets us that 14796 is the latest value that is
-/// correct.
+/// The maximal number of statements in a single batch. ScyllaDB rejects batches of more
+/// than 14796 statements; this stays well below that.
 const MAX_BATCH_SIZE: usize = 5000;
 
 /// The keyspace to use for the ScyllaDB database.
@@ -911,7 +919,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
 impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
     const MAX_BATCH_SIZE: usize = MAX_BATCH_SIZE;
     const MAX_BATCH_TOTAL_SIZE: usize = MAX_BATCH_TOTAL_SIZE;
-    const MAX_VALUE_SIZE: usize = VISIBLE_MAX_VALUE_SIZE;
+    const MAX_VALUE_SIZE: usize = MAX_VALUE_SIZE;
 
     // ScyllaDB cannot take a `crate::batch::Batch` directly. Indeed, if a delete is
     // followed by a write, then the delete takes priority. See the sentence "The first
@@ -1304,23 +1312,16 @@ impl TestKeyValueDatabase for JournalingKeyValueDatabase<ScyllaDbDatabaseInterna
 /// The `ScyllaDbDatabase` composed type with metrics
 #[cfg(with_metrics)]
 pub type ScyllaDbDatabase = MeteredDatabase<
-    LruCachingDatabase<
-        MeteredDatabase<
-            ValueSplittingDatabase<
-                MeteredDatabase<JournalingKeyValueDatabase<ScyllaDbDatabaseInternal>>,
-            >,
-        >,
-    >,
+    LruCachingDatabase<MeteredDatabase<JournalingKeyValueDatabase<ScyllaDbDatabaseInternal>>>,
 >;
 
 /// The `ScyllaDbDatabase` composed type
 #[cfg(not(with_metrics))]
-pub type ScyllaDbDatabase = LruCachingDatabase<
-    ValueSplittingDatabase<JournalingKeyValueDatabase<ScyllaDbDatabaseInternal>>,
->;
+pub type ScyllaDbDatabase =
+    LruCachingDatabase<JournalingKeyValueDatabase<ScyllaDbDatabaseInternal>>;
 
 /// The `ScyllaDbStoreConfig` input type
 pub type ScyllaDbStoreConfig = LruCachingConfig<ScyllaDbStoreInternalConfig>;
 
 /// The combined error type for the `ScyllaDbDatabase`.
-pub type ScyllaDbStoreError = ValueSplittingError<JournalingError<ScyllaDbStoreInternalError>>;
+pub type ScyllaDbStoreError = JournalingError<ScyllaDbStoreInternalError>;
