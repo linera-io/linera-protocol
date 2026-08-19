@@ -46,31 +46,29 @@ pub struct ExecutionStateActor<'a, C> {
 }
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
     use prometheus::HistogramVec;
 
-    /// Histogram of the latency to load a contract bytecode.
-    pub static LOAD_CONTRACT_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "load_contract_latency",
-            "Load contract latency",
-            &[],
-            exponential_bucket_latencies(250.0),
-        )
-    });
+    linera_base::declare_metrics! {
+        /// Histogram of the latency to load a contract bytecode.
+        pub static LOAD_CONTRACT_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "load_contract_latency",
+                "Load contract latency",
+                &[],
+                exponential_bucket_latencies(250.0),
+            );
 
-    /// Histogram of the latency to load a service bytecode.
-    pub static LOAD_SERVICE_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "load_service_latency",
-            "Load service latency",
-            &[],
-            exponential_bucket_latencies(250.0),
-        )
-    });
+        /// Histogram of the latency to load a service bytecode.
+        pub static LOAD_SERVICE_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "load_service_latency",
+                "Load service latency",
+                &[],
+                exponential_bucket_latencies(250.0),
+            );
+    }
 }
 
 pub(crate) type ExecutionStateSender = mpsc::UnboundedSender<ExecutionRequest>;

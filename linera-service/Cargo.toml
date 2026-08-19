@@ -55,6 +55,7 @@ metrics = [
     "prometheus",
     "linera-base/metrics",
     "linera-client/metrics",
+    "linera-exporter/metrics",
     "linera-faucet-server/metrics",
     "linera-metrics",
 ]

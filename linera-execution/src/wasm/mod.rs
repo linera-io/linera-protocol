@@ -42,40 +42,37 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{
         exponential_bucket_interval, exponential_bucket_latencies, register_histogram_vec,
     };
     use prometheus::HistogramVec;
 
-    pub static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "wasm_contract_instantiation_latency",
-            "Wasm contract instantiation latency",
-            &[],
-            exponential_bucket_latencies(100.0),
-        )
-    });
+    linera_base::declare_metrics! {
+        pub static CONTRACT_INSTANTIATION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "wasm_contract_instantiation_latency",
+                "Wasm contract instantiation latency",
+                &[],
+                exponential_bucket_latencies(100.0),
+            );
 
-    pub static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "wasm_service_instantiation_latency",
-            "Wasm service instantiation latency",
-            &[],
-            exponential_bucket_latencies(100.0),
-        )
-    });
+        pub static SERVICE_INSTANTIATION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "wasm_service_instantiation_latency",
+                "Wasm service instantiation latency",
+                &[],
+                exponential_bucket_latencies(100.0),
+            );
 
-    pub static WASM_BYTECODE_SIZE_BYTES: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "wasm_bytecode_size_bytes",
-            "Size in bytes of WASM bytecodes being loaded",
-            &["type"],
-            exponential_bucket_interval(10_000.0, 100_000_000.0),
-        )
-    });
+        pub static WASM_BYTECODE_SIZE_BYTES: HistogramVec =
+            register_histogram_vec(
+                "wasm_bytecode_size_bytes",
+                "Size in bytes of WASM bytecodes being loaded",
+                &["type"],
+                exponential_bucket_interval(10_000.0, 100_000_000.0),
+            );
+    }
 }
 
 /// A user contract in a compiled WebAssembly module.

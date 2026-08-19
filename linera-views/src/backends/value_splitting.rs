@@ -7,19 +7,18 @@ use linera_base::ensure;
 use thiserror::Error;
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::register_int_counter;
     use prometheus::IntCounter;
 
-    /// Number of values that were split across multiple keys.
-    pub static VALUE_SPLIT_COUNT: LazyLock<IntCounter> = LazyLock::new(|| {
-        register_int_counter(
-            "value_split_count",
-            "Number of values split across multiple keys due to size limits",
-        )
-    });
+    linera_base::declare_metrics! {
+        /// Number of values that were split across multiple keys.
+        pub static VALUE_SPLIT_COUNT: IntCounter =
+            register_int_counter(
+                "value_split_count",
+                "Number of values split across multiple keys due to size limits",
+            );
+    }
 }
 
 use crate::{

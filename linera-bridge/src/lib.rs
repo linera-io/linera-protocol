@@ -41,3 +41,18 @@ mod gas;
 /// Shared test helpers for EVM contract deployment and interaction.
 #[cfg(all(test, feature = "offchain"))]
 pub(crate) mod test_helpers;
+
+/// Registers every metric this crate declares.
+///
+/// Without this, a metric is only exported after the code path that observes it has run, so a
+/// rarely-taken path leaves its panels blank and makes a routine restart look like the metric
+/// was removed.
+///
+/// Gated on `relay` rather than the `with_metrics` alias the other crates use: this crate has
+/// no such alias, and its metrics live in `relay`, which is itself behind that feature. It
+/// serves no `/metrics` endpoint of its own, so it does not initialize its dependencies'
+/// metrics.
+#[cfg(feature = "relay")]
+pub fn init_metrics() {
+    relay::metrics::init_metrics();
+}

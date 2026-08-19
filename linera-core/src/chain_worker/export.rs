@@ -68,9 +68,7 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{
         exponential_bucket_interval, exponential_bucket_latencies, register_histogram,
         register_histogram_vec, register_int_counter, register_int_counter_vec, register_int_gauge,
@@ -78,151 +76,138 @@ mod metrics {
     };
     use prometheus::{Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec};
 
-    /// Sends refused for a reason about one chain rather than the destination — most often a
-    /// committee the destination has not learned yet. Self-healing, so a rising rate is the
-    /// signal, not the count: one that stays flat and non-zero means a destination is stuck on
-    /// some chain and nothing is repairing it.
-    pub static CHAIN_SCOPED_BACKOFFS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "block_export_chain_scoped_backoffs",
-            "Sends deferred because a destination cannot accept a particular chain yet",
-            &["validator"],
-        )
-    });
+    linera_base::declare_metrics! {
+        /// Sends refused for a reason about one chain rather than the destination — most often a
+        /// committee the destination has not learned yet. Self-healing, so a rising rate is the
+        /// signal, not the count: one that stays flat and non-zero means a destination is stuck on
+        /// some chain and nothing is repairing it.
+        pub static CHAIN_SCOPED_BACKOFFS: IntCounterVec =
+            register_int_counter_vec(
+                "block_export_chain_scoped_backoffs",
+                "Sends deferred because a destination cannot accept a particular chain yet",
+                &["validator"],
+            );
 
-    /// Chains the queue is tracking: those with a destination still behind, plus recently
-    /// converged ones inside the retention window. A destination that is down holds every chain
-    /// that produced a block during the outage here — that is the work-list its catch-up needs,
-    /// and this is how an operator sees it growing.
-    pub static TRACKED_CHAINS: LazyLock<IntGauge> = LazyLock::new(|| {
-        register_int_gauge(
-            "block_export_tracked_chains",
-            "Chains the export queue is tracking for catch-up",
-        )
-    });
+        /// Chains the queue is tracking: those with a destination still behind, plus recently
+        /// converged ones inside the retention window. A destination that is down holds every chain
+        /// that produced a block during the outage here — that is the work-list its catch-up needs,
+        /// and this is how an operator sees it growing.
+        pub static TRACKED_CHAINS: IntGauge =
+            register_int_gauge(
+                "block_export_tracked_chains",
+                "Chains the export queue is tracking for catch-up",
+            );
 
-    /// Blocks waiting in the export queue.
-    pub static QUEUE_SIZE: LazyLock<IntGauge> = LazyLock::new(|| {
-        register_int_gauge(
-            "block_export_queue_size",
-            "Blocks queued for export in this process",
-        )
-    });
+        /// Blocks waiting in the export queue.
+        pub static QUEUE_SIZE: IntGauge =
+            register_int_gauge(
+                "block_export_queue_size",
+                "Blocks queued for export in this process",
+            );
 
-    /// Blob payload bytes held by queued blocks, since a block count alone hides the memory a
-    /// backlog of large blobs pins.
-    pub static QUEUE_BYTES: LazyLock<IntGauge> = LazyLock::new(|| {
-        register_int_gauge(
-            "block_export_queue_bytes",
-            "Blob bytes held by blocks queued for export in this process",
-        )
-    });
+        /// Blob payload bytes held by queued blocks, since a block count alone hides the memory a
+        /// backlog of large blobs pins.
+        pub static QUEUE_BYTES: IntGauge =
+            register_int_gauge(
+                "block_export_queue_bytes",
+                "Blob bytes held by blocks queued for export in this process",
+            );
 
-    /// Blocks dropped because the queue was full. Each is repaired by a later catch-up round, so
-    /// this counting up means latency, not loss.
-    pub static DROPPED_BLOCKS: LazyLock<IntCounter> = LazyLock::new(|| {
-        register_int_counter(
-            "block_export_dropped_blocks",
-            "Blocks dropped from a full export queue, to be re-sent from storage",
-        )
-    });
+        /// Blocks dropped because the queue was full. Each is repaired by a later catch-up round, so
+        /// this counting up means latency, not loss.
+        pub static DROPPED_BLOCKS: IntCounter =
+            register_int_counter(
+                "block_export_dropped_blocks",
+                "Blocks dropped from a full export queue, to be re-sent from storage",
+            );
 
-    /// Time from a block being queued to its sends being scheduled.
-    pub static EXPORT_LATENCY: LazyLock<Histogram> = LazyLock::new(|| {
-        register_histogram(
-            "block_export_latency",
-            "Time (ms) a block waits in the export queue before its sends are scheduled",
-            exponential_bucket_latencies(60_000.0),
-        )
-    });
+        /// Time from a block being queued to its sends being scheduled.
+        pub static EXPORT_LATENCY: Histogram =
+            register_histogram(
+                "block_export_latency",
+                "Time (ms) a block waits in the export queue before its sends are scheduled",
+                exponential_bucket_latencies(60_000.0),
+            );
 
-    /// Time for one push to one destination, including any catch-up it triggered.
-    pub static SEND_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "block_export_send_latency",
-            "Time (ms) to push one block to one destination validator",
-            &["validator"],
-            exponential_bucket_latencies(60_000.0),
-        )
-    });
+        /// Time for one push to one destination, including any catch-up it triggered.
+        pub static SEND_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "block_export_send_latency",
+                "Time (ms) to push one block to one destination validator",
+                &["validator"],
+                exponential_bucket_latencies(60_000.0),
+            );
 
-    /// How many concurrent sends each destination is currently allowed.
-    pub static DESTINATION_WINDOW: LazyLock<IntGaugeVec> = LazyLock::new(|| {
-        register_int_gauge_vec(
-            "block_export_destination_window",
-            "AIMD in-flight window per destination validator",
-            &["validator"],
-        )
-    });
+        /// How many concurrent sends each destination is currently allowed.
+        pub static DESTINATION_WINDOW: IntGaugeVec =
+            register_int_gauge_vec(
+                "block_export_destination_window",
+                "AIMD in-flight window per destination validator",
+                &["validator"],
+            );
 
-    /// Destinations currently resolved. Zero with export enabled means the committee could not
-    /// be loaded or no address resolved — on a dashboard that is otherwise indistinguishable
-    /// from a healthy validator with nothing to send.
-    pub static DESTINATIONS: LazyLock<IntGauge> = LazyLock::new(|| {
-        register_int_gauge(
-            "block_export_destinations",
-            "Committee members this validator is currently exporting to",
-        )
-    });
+        /// Destinations currently resolved. Zero with export enabled means the committee could not
+        /// be loaded or no address resolved — on a dashboard that is otherwise indistinguishable
+        /// from a healthy validator with nothing to send.
+        pub static DESTINATIONS: IntGauge =
+            register_int_gauge(
+                "block_export_destinations",
+                "Committee members this validator is currently exporting to",
+            );
 
-    /// Lagging (chain, destination) *pairs*, which is what the queue's memory tracks — a chain
-    /// behind on ten destinations costs ten times one behind on one.
-    pub static LAGGING_PAIRS: LazyLock<IntGauge> = LazyLock::new(|| {
-        register_int_gauge(
-            "block_export_lagging_pairs",
-            "Chain-destination pairs currently behind, summed over destinations",
-        )
-    });
+        /// Lagging (chain, destination) *pairs*, which is what the queue's memory tracks — a chain
+        /// behind on ten destinations costs ten times one behind on one.
+        pub static LAGGING_PAIRS: IntGauge =
+            register_int_gauge(
+                "block_export_lagging_pairs",
+                "Chain-destination pairs currently behind, summed over destinations",
+            );
 
-    /// Blocks this validator still owes each destination, summed over every chain it is behind
-    /// on. The aggregate backlog, which is what "is that validator caught up" actually asks.
-    pub static BLOCKS_OWED: LazyLock<IntGaugeVec> = LazyLock::new(|| {
-        register_int_gauge_vec(
-            "block_export_blocks_owed",
-            "Blocks still to send to a destination validator, summed over all chains",
-            &["validator"],
-        )
-    });
+        /// Blocks this validator still owes each destination, summed over every chain it is behind
+        /// on. The aggregate backlog, which is what "is that validator caught up" actually asks.
+        pub static BLOCKS_OWED: IntGaugeVec =
+            register_int_gauge_vec(
+                "block_export_blocks_owed",
+                "Blocks still to send to a destination validator, summed over all chains",
+                &["validator"],
+            );
 
-    /// The furthest behind any single chain is for a destination. A quantile over chains would
-    /// need a per-pair observation, measured at 150 ms per sweep at a million pairs against
-    /// 2 ms for this; and the maximum is the tail a quantile would hide anyway.
-    pub static MAX_CHAIN_GAP: LazyLock<IntGaugeVec> = LazyLock::new(|| {
-        register_int_gauge_vec(
-            "block_export_max_chain_gap",
-            "Blocks the furthest-behind chain owes a destination validator",
-            &["validator"],
-        )
-    });
+        /// The furthest behind any single chain is for a destination. A quantile over chains would
+        /// need a per-pair observation, measured at 150 ms per sweep at a million pairs against
+        /// 2 ms for this; and the maximum is the tail a quantile would hide anyway.
+        pub static MAX_CHAIN_GAP: IntGaugeVec =
+            register_int_gauge_vec(
+                "block_export_max_chain_gap",
+                "Blocks the furthest-behind chain owes a destination validator",
+                &["validator"],
+            );
 
-    /// The queue-wide in-flight budget, halved whenever our own storage fails a read.
-    pub static TOTAL_WINDOW: LazyLock<IntGauge> = LazyLock::new(|| {
-        register_int_gauge(
-            "block_export_total_window",
-            "Concurrent sends allowed across all destinations (AIMD on local storage failures)",
-        )
-    });
+        /// The queue-wide in-flight budget, halved whenever our own storage fails a read.
+        pub static TOTAL_WINDOW: IntGauge =
+            register_int_gauge(
+                "block_export_total_window",
+                "Concurrent sends allowed across all destinations (AIMD on local storage failures)",
+            );
 
-    /// Sends the destination actually answered, as opposed to attempts: `SEND_LATENCY` counts
-    /// every completion, failures included, so success rate needs its own counter.
-    pub static SENDS_SUCCEEDED: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "block_export_sends_succeeded",
-            "Export sends acknowledged by the destination validator",
-            &["validator"],
-        )
-    });
+        /// Sends the destination actually answered, as opposed to attempts: `SEND_LATENCY` counts
+        /// every completion, failures included, so success rate needs its own counter.
+        pub static SENDS_SUCCEEDED: IntCounterVec =
+            register_int_counter_vec(
+                "block_export_sends_succeeded",
+                "Export sends acknowledged by the destination validator",
+                &["validator"],
+            );
 
-    /// How many blocks the destination was behind when we pushed to it: zero whenever the block
-    /// was contiguous there, and the size of the gap we had to fill otherwise.
-    pub static DESTINATION_LAG: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "block_export_destination_lag",
-            "Blocks a destination validator was missing when a block was pushed to it",
-            &["validator"],
-            exponential_bucket_interval(1.0, 10_000_000.0),
-        )
-    });
+        /// How many blocks the destination was behind when we pushed to it: zero whenever the block
+        /// was contiguous there, and the size of the gap we had to fill otherwise.
+        pub static DESTINATION_LAG: HistogramVec =
+            register_histogram_vec(
+                "block_export_destination_lag",
+                "Blocks a destination validator was missing when a block was pushed to it",
+                &["validator"],
+                exponential_bucket_interval(1.0, 10_000_000.0),
+            );
+    }
 }
 
 /// Configuration for pushing executed blocks to the other committee validators.
