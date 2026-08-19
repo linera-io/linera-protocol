@@ -2219,15 +2219,13 @@ mod graphql {
                 self.keys().await?
             };
 
-            let mut entries = vec![];
-            for key in keys {
-                entries.push(Entry {
-                    value: self.get(&key).await?,
-                    key,
-                })
-            }
+            let values = self.multi_get(keys.clone()).await?;
 
-            Ok(entries)
+            Ok(keys
+                .into_iter()
+                .zip(values)
+                .map(|(key, value)| Entry { key, value })
+                .collect())
         }
     }
 
