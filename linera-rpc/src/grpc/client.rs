@@ -653,7 +653,7 @@ impl ValidatorNode for GrpcClient {
         Ok(client_delegate!(self, blob_last_used_by_certificate, blob_id)?.try_into()?)
     }
 
-    #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
     async fn event_block_heights(
         &self,
         event_ids: Vec<EventId>,
