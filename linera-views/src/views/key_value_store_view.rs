@@ -894,6 +894,7 @@ impl<C: Context> KeyValueStoreView<C> {
         if !self.deletion_set.delete_storage_first {
             let mut suffix_closed_set =
                 SuffixClosedSetIterator::new(0, self.deletion_set.deleted_prefixes.iter());
+            let has_deleted_prefixes = !self.deletion_set.deleted_prefixes.is_empty();
             let mut key_with_prefix = key_prefix.to_vec();
             for key in self
                 .context
@@ -915,9 +916,14 @@ impl<C: Context> KeyValueStoreView<C> {
                             }
                         }
                         _ => {
-                            key_with_prefix.truncate(key_prefix_len);
-                            key_with_prefix.extend_from_slice(&key);
-                            if !suffix_closed_set.find_key(&key_with_prefix) {
+                            let deleted = if has_deleted_prefixes {
+                                key_with_prefix.truncate(key_prefix_len);
+                                key_with_prefix.extend_from_slice(&key);
+                                suffix_closed_set.find_key(&key_with_prefix)
+                            } else {
+                                false
+                            };
+                            if !deleted {
                                 keys.push(key);
                             }
                             break;
@@ -976,6 +982,7 @@ impl<C: Context> KeyValueStoreView<C> {
         if !self.deletion_set.delete_storage_first {
             let mut suffix_closed_set =
                 SuffixClosedSetIterator::new(0, self.deletion_set.deleted_prefixes.iter());
+            let has_deleted_prefixes = !self.deletion_set.deleted_prefixes.is_empty();
             let mut key_with_prefix = key_prefix.to_vec();
             for entry in self
                 .context
@@ -1000,9 +1007,14 @@ impl<C: Context> KeyValueStoreView<C> {
                             }
                         }
                         _ => {
-                            key_with_prefix.truncate(key_prefix_len);
-                            key_with_prefix.extend_from_slice(&key);
-                            if !suffix_closed_set.find_key(&key_with_prefix) {
+                            let deleted = if has_deleted_prefixes {
+                                key_with_prefix.truncate(key_prefix_len);
+                                key_with_prefix.extend_from_slice(&key);
+                                suffix_closed_set.find_key(&key_with_prefix)
+                            } else {
+                                false
+                            };
+                            if !deleted {
                                 key_values.push((key, value));
                             }
                             break;
