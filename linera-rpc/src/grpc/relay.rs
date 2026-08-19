@@ -24,7 +24,7 @@ use std::{
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlobContent, BlockHeight, NetworkDescription},
-    identifiers::{BlobId, ChainId, StreamId},
+    identifiers::{BlobId, ChainId, EventId, StreamId},
 };
 use linera_chain::{data_types, types};
 use linera_core::node::{
@@ -288,6 +288,13 @@ impl ValidatorNode for RelayClient {
         _stream_ids: Vec<StreamId>,
     ) -> Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, NodeError> {
         Err(unsupported("previous_event_blocks"))
+    }
+
+    async fn event_block_heights(
+        &self,
+        _event_ids: Vec<EventId>,
+    ) -> Result<Vec<Option<BlockHeight>>, NodeError> {
+        Err(unsupported("event_block_heights"))
     }
 }
 

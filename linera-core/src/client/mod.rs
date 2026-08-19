@@ -811,7 +811,7 @@ impl<Env: Environment> Client<Env> {
         event_ids: &[EventId],
     ) -> Result<(), chain_client::Error> {
         let mut validators = self.validator_nodes().await?;
-        let timeout = self.options.certificate_batch_download_timeout;
+        let timeout = self.options.certificate_batch_download_hedge_delay;
         let (max_epoch, committees) = self.admin_committees().await?;
         let committees_ref = &committees;
         let mut remaining_event_ids = event_ids.to_vec();
@@ -916,6 +916,7 @@ impl<Env: Environment> Client<Env> {
                     }
                 },
                 timeout,
+                self.storage_client().clock(),
             )
             .await;
 
@@ -954,7 +955,10 @@ impl<Env: Environment> Client<Env> {
         &self,
         event_ids: &[EventId],
     ) -> Result<(), chain_client::Error> {
-        match self
+        // The index path downloads the publishing blocks for every event it manages to resolve
+        // before giving up, so when it reports which events are still missing, the walk only
+        // needs to cover those rather than re-downloading the ones we already have.
+        let event_ids = match self
             .download_certificates_for_events_from_index(event_ids)
             .await
         {
@@ -965,13 +969,19 @@ impl<Env: Environment> Client<Env> {
                     "event block height index lookup failed; \
                      falling back to walking previous event blocks",
                 );
+                match error {
+                    chain_client::Error::RemoteNodeError(NodeError::EventsNotFound(remaining)) => {
+                        remaining
+                    }
+                    _ => event_ids.to_vec(),
+                }
             }
-        }
+        };
         let validators = self.validator_nodes().await?;
         let timeout = self.options.certificate_batch_download_hedge_delay;
         // Group by chain, keeping only the max required index per stream.
         let mut required_by_chain = BTreeMap::<_, BTreeMap<StreamId, u32>>::new();
-        for event_id in event_ids {
+        for event_id in &event_ids {
             required_by_chain
                 .entry(event_id.chain_id)
                 .or_default()
