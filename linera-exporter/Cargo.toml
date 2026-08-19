@@ -24,12 +24,7 @@ metrics = [
     "dep:linera-metrics",
     "dep:prometheus",
     "linera-base/metrics",
-    "linera-chain/metrics",
-    "linera-core/metrics",
-    "linera-execution/metrics",
     "linera-rpc/metrics",
-    "linera-storage/metrics",
-    "linera-views/metrics",
 ]
 rocksdb = ["linera-views/rocksdb", "linera-storage-runtime/rocksdb"]
 scylladb = ["linera-views/scylladb", "linera-storage-runtime/scylladb"]
