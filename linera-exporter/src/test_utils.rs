@@ -398,6 +398,13 @@ impl ValidatorNode for DummyValidator {
     ) -> Result<Response<linera_rpc::grpc::api::PreviousEventBlocksResponse>, Status> {
         unimplemented!()
     }
+
+    async fn event_block_heights(
+        &self,
+        _request: Request<linera_rpc::grpc::api::EventBlockHeightsRequest>,
+    ) -> Result<Response<linera_rpc::grpc::api::EventBlockHeightsResponse>, Status> {
+        unimplemented!()
+    }
 }
 
 #[async_trait]
