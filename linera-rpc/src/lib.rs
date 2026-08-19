@@ -117,6 +117,7 @@ pub fn init_metrics() {
     linera_core::init_metrics();
     linera_execution::init_metrics();
     linera_storage::init_metrics();
+    #[cfg(with_server)]
     cross_chain_message_queue::metrics::init_metrics();
     grpc::init_metrics();
 }
