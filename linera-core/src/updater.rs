@@ -274,8 +274,10 @@ where
                 Some(deadline) => {
                     let remaining = deadline.saturating_duration_since(clock.instant());
                     if remaining.is_zero() {
-                        // Registering a zero-length sleep would be pointless, and on a
-                        // simulated clock with auto-advance it would still shift the time.
+                        // The grace period is over, so there is nothing left to wait for.
+                        // A response that happened to be ready at this very instant is
+                        // dropped rather than counted, which can only cost an extra
+                        // post-quorum value and never changes the quorum itself.
                         None
                     } else {
                         futures::select! {
