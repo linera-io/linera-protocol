@@ -1808,5 +1808,6 @@ pub fn init_metrics() {
     evm::revm::metrics::init_metrics();
     execution_state_actor::metrics::init_metrics();
     system::metrics::init_metrics();
+    #[cfg(with_wasm_runtime)]
     wasm::metrics::init_metrics();
 }
