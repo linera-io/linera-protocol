@@ -41,7 +41,8 @@ pub struct SystemExecutionState {
     pub balances: BTreeMap<AccountOwner, Amount>,
     /// The latest timestamp recorded for the chain.
     pub timestamp: Timestamp,
-    /// The set of blobs that have been used by the chain.
+    /// The set of blobs that have been used by the chain. Recorded in the view as
+    /// last used in the current checkpoint generation.
     pub used_blobs: BTreeSet<BlobId>,
     /// Whether the chain has been closed.
     #[debug(skip_if = Not::not)]
@@ -179,12 +180,9 @@ impl SystemExecutionState {
                 .insert(&account_owner, balance)
                 .expect("insertion of balances should not fail");
         }
-        for blob_id in used_blobs {
-            view.system
-                .used_blobs
-                .insert(&blob_id)
-                .expect("inserting blob IDs should not fail");
-        }
+        view.system
+            .record_used_blobs(used_blobs)
+            .expect("inserting blob IDs should not fail");
         view.system.closed.set(closed);
         view.system
             .application_permissions
