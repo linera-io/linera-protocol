@@ -669,8 +669,10 @@ pub trait Clock {
 
     /// Returns the current reading of a monotonic clock, for measuring durations.
     ///
-    /// This advances in step with [`Clock::current_time`] and with the waits in
-    /// [`Clock::sleep_until`] and [`Clock::sleep_for`], including when the clock is simulated.
+    /// This advances in step with [`Clock::current_time`] while that moves forward, and with
+    /// the waits in [`Clock::sleep_until`] and [`Clock::sleep_for`], including when the clock
+    /// is simulated. Unlike `current_time` it never decreases: setting the clock backwards
+    /// leaves this where it was.
     fn instant(&self) -> Instant;
 
     /// Waits until the given timestamp is reached.

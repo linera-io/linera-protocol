@@ -273,9 +273,15 @@ where
                 None => responses.next().await,
                 Some(deadline) => {
                     let remaining = deadline.saturating_duration_since(clock.instant());
-                    futures::select! {
-                        response = responses.next() => response,
-                        () = clock.sleep_for(remaining).fuse() => None,
+                    if remaining.is_zero() {
+                        // Registering a zero-length sleep would be pointless, and on a
+                        // simulated clock with auto-advance it would still shift the time.
+                        None
+                    } else {
+                        futures::select! {
+                            response = responses.next() => response,
+                            () = clock.sleep_for(remaining).fuse() => None,
+                        }
                     }
                 }
             }

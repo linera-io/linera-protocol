@@ -720,9 +720,13 @@ impl Clock for TestClock {
         // meaningful; the baseline itself is arbitrary, and shared so that clocks driven
         // alike report alike.
         static BASELINE: LazyLock<Instant> = LazyLock::new(Instant::now);
-        BASELINE
-            .checked_add(self.lock().elapsed)
-            .expect("simulated time is too far in the future to be an `Instant`")
+
+        // `Instant`'s range is platform-dependent and `set` is public, so a test can name a
+        // time no `Instant` could represent. Clamping keeps this total — and still
+        // non-decreasing — where panicking would abort an otherwise reasonable test. A
+        // century of simulated time is representable everywhere we build.
+        const MAX_ELAPSED: Duration = Duration::from_secs(100 * 365 * 24 * 60 * 60);
+        *BASELINE + self.lock().elapsed.min(MAX_ELAPSED)
     }
 
     async fn sleep_until(&self, timestamp: Timestamp) {
@@ -2247,6 +2251,20 @@ mod clock_tests {
             clock.instant().saturating_duration_since(start_instant),
             Duration::from_secs(90),
         );
+    }
+
+    /// `set` is public, so a test may name a time no `Instant` can represent — `u64::MAX`
+    /// microseconds is some 584,000 years, which a `timespec`-based `Instant` holds but a
+    /// nanosecond-counter one does not. Reading the monotonic clock has to clamp rather than
+    /// abort the test, on every platform.
+    #[test]
+    fn test_test_clock_instant_clamps_an_unrepresentable_time() {
+        let clock = TestClock::new();
+        let before = clock.instant();
+
+        clock.set(Timestamp::from(u64::MAX));
+
+        assert!(clock.instant() >= before, "still non-decreasing");
     }
 
     /// A monotonic reading is exactly what a wall-clock timestamp is not: setting the
