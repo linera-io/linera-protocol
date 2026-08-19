@@ -15,6 +15,14 @@ use crate::time::Instant;
 
 const LINERA_NAMESPACE: &str = "linera";
 
+/// The message reported when registering a metric fails.
+///
+/// In practice the only cause is a name already taken, and this panic is the sole report of
+/// it, so it has to say which metric rather than only that one could not be created.
+fn registration_failure(name: &str, error: impl std::fmt::Display) -> String {
+    format!("cannot register metric {name}: {error}")
+}
+
 /// Instantiates the sole child of a metric vector that has no labels.
 ///
 /// A `MetricVec` exports one series per child, so registering it is not enough to make it
@@ -64,7 +72,8 @@ pub fn register_int_counter_vec(
 ) -> IntCounterVec {
     let counter_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
     materialize_unlabeled(
-        register_int_counter_vec!(counter_opts, label_names).expect("IntCounter can be created"),
+        register_int_counter_vec!(counter_opts, label_names)
+            .unwrap_or_else(|error| panic!("{}", registration_failure(name, error))),
         label_names,
     )
 }
@@ -81,7 +90,8 @@ pub fn register_int_counter_vec_with_subsystem(
         .namespace(LINERA_NAMESPACE)
         .subsystem(subsystem);
     materialize_unlabeled(
-        register_int_counter_vec!(counter_opts, label_names).expect("IntCounter can be created"),
+        register_int_counter_vec!(counter_opts, label_names)
+            .unwrap_or_else(|error| panic!("{}", registration_failure(name, error))),
         label_names,
     )
 }
@@ -89,7 +99,8 @@ pub fn register_int_counter_vec_with_subsystem(
 /// Wrapper around Prometheus `register_int_counter!` macro which also sets the `linera` namespace
 pub fn register_int_counter(name: &str, description: &str) -> IntCounter {
     let counter_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
-    register_int_counter!(counter_opts).expect("IntCounter can be created")
+    register_int_counter!(counter_opts)
+        .unwrap_or_else(|error| panic!("{}", registration_failure(name, error)))
 }
 
 /// Wrapper around Prometheus `register_int_counter!` macro with `linera` namespace and a subsystem.
@@ -102,7 +113,8 @@ pub fn register_int_counter_with_subsystem(
     let counter_opts = Opts::new(name, description)
         .namespace(LINERA_NAMESPACE)
         .subsystem(subsystem);
-    register_int_counter!(counter_opts).expect("IntCounter can be created")
+    register_int_counter!(counter_opts)
+        .unwrap_or_else(|error| panic!("{}", registration_failure(name, error)))
 }
 
 /// Wrapper around Prometheus `register_histogram_vec!` macro which also sets the `linera` namespace
@@ -119,7 +131,8 @@ pub fn register_histogram_vec(
     };
 
     materialize_unlabeled(
-        register_histogram_vec!(histogram_opts, label_names).expect("Histogram can be created"),
+        register_histogram_vec!(histogram_opts, label_names)
+            .unwrap_or_else(|error| panic!("{}", registration_failure(name, error))),
         label_names,
     )
 }
@@ -144,7 +157,8 @@ pub fn register_histogram_vec_with_subsystem(
     };
 
     materialize_unlabeled(
-        register_histogram_vec!(histogram_opts, label_names).expect("Histogram can be created"),
+        register_histogram_vec!(histogram_opts, label_names)
+            .unwrap_or_else(|error| panic!("{}", registration_failure(name, error))),
         label_names,
     )
 }
@@ -157,7 +171,8 @@ pub fn register_histogram(name: &str, description: &str, buckets: Option<Vec<f64
         histogram_opts!(name, description).namespace(LINERA_NAMESPACE)
     };
 
-    register_histogram!(histogram_opts).expect("Histogram can be created")
+    register_histogram!(histogram_opts)
+        .unwrap_or_else(|error| panic!("{}", registration_failure(name, error)))
 }
 
 /// Wrapper around Prometheus `register_histogram!` macro with `linera` namespace and a subsystem.
@@ -178,13 +193,15 @@ pub fn register_histogram_with_subsystem(
             .subsystem(subsystem)
     };
 
-    register_histogram!(histogram_opts).expect("Histogram can be created")
+    register_histogram!(histogram_opts)
+        .unwrap_or_else(|error| panic!("{}", registration_failure(name, error)))
 }
 
 /// Wrapper around Prometheus `register_int_gauge!` macro which also sets the `linera` namespace
 pub fn register_int_gauge(name: &str, description: &str) -> IntGauge {
     let gauge_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
-    register_int_gauge!(gauge_opts).expect("IntGauge can be created")
+    register_int_gauge!(gauge_opts)
+        .unwrap_or_else(|error| panic!("{}", registration_failure(name, error)))
 }
 
 /// Wrapper around Prometheus `register_int_gauge!` macro with `linera` namespace and a subsystem.
@@ -197,14 +214,16 @@ pub fn register_int_gauge_with_subsystem(
     let gauge_opts = Opts::new(name, description)
         .namespace(LINERA_NAMESPACE)
         .subsystem(subsystem);
-    register_int_gauge!(gauge_opts).expect("IntGauge can be created")
+    register_int_gauge!(gauge_opts)
+        .unwrap_or_else(|error| panic!("{}", registration_failure(name, error)))
 }
 
 /// Wrapper around Prometheus `register_int_gauge_vec!` macro which also sets the `linera` namespace
 pub fn register_int_gauge_vec(name: &str, description: &str, label_names: &[&str]) -> IntGaugeVec {
     let gauge_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
     materialize_unlabeled(
-        register_int_gauge_vec!(gauge_opts, label_names).expect("IntGauge can be created"),
+        register_int_gauge_vec!(gauge_opts, label_names)
+            .unwrap_or_else(|error| panic!("{}", registration_failure(name, error))),
         label_names,
     )
 }
@@ -213,7 +232,8 @@ pub fn register_int_gauge_vec(name: &str, description: &str, label_names: &[&str
 /// `linera` namespace.
 pub fn register_gauge(name: &str, description: &str) -> Gauge {
     let gauge_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
-    register_gauge!(gauge_opts).expect("Gauge can be created")
+    register_gauge!(gauge_opts)
+        .unwrap_or_else(|error| panic!("{}", registration_failure(name, error)))
 }
 
 /// Wrapper around Prometheus `register_gauge!` macro with `linera` namespace and a subsystem.
@@ -222,7 +242,8 @@ pub fn register_gauge_with_subsystem(subsystem: &str, name: &str, description: &
     let gauge_opts = Opts::new(name, description)
         .namespace(LINERA_NAMESPACE)
         .subsystem(subsystem);
-    register_gauge!(gauge_opts).expect("Gauge can be created")
+    register_gauge!(gauge_opts)
+        .unwrap_or_else(|error| panic!("{}", registration_failure(name, error)))
 }
 
 /// Wrapper around Prometheus `register_gauge_vec!` macro (floating-point gauge) which also sets
@@ -230,7 +251,8 @@ pub fn register_gauge_with_subsystem(subsystem: &str, name: &str, description: &
 pub fn register_gauge_vec(name: &str, description: &str, label_names: &[&str]) -> GaugeVec {
     let gauge_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
     materialize_unlabeled(
-        register_gauge_vec!(gauge_opts, label_names).expect("Gauge can be created"),
+        register_gauge_vec!(gauge_opts, label_names)
+            .unwrap_or_else(|error| panic!("{}", registration_failure(name, error))),
         label_names,
     )
 }
@@ -247,7 +269,8 @@ pub fn register_int_gauge_vec_with_subsystem(
         .namespace(LINERA_NAMESPACE)
         .subsystem(subsystem);
     materialize_unlabeled(
-        register_int_gauge_vec!(gauge_opts, label_names).expect("IntGauge can be created"),
+        register_int_gauge_vec!(gauge_opts, label_names)
+            .unwrap_or_else(|error| panic!("{}", registration_failure(name, error))),
         label_names,
     )
 }
@@ -407,6 +430,15 @@ impl MeasureLatency for Histogram {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The panic is the only report of a duplicate registration, so it has to name the
+    /// metric. Asserted on the message directly: panicking here would run the global hook
+    /// whose invocations `panic_hook`'s own test counts.
+    #[test]
+    fn a_failed_registration_names_the_metric() {
+        let message = registration_failure("some_metric", "Duplicate metrics collector");
+        assert!(message.contains("some_metric"), "got: {message}");
+    }
 
     /// Pins the naming contract the `_with_subsystem` helpers document, so callers can drop a
     /// hand-written prefix from every metric name and rely on the subsystem instead.
