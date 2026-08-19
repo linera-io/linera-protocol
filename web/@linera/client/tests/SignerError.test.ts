@@ -84,5 +84,9 @@ test("reports thrown values that are not errors at all", async () => {
   expect((await refusing(42)).message).toContain("42");
   expect((await refusing({ code: 3 })).message).toContain('{"code":3}');
   // Neither a string nor JSON-representable: `Promise.reject()` with no argument.
-  expect((await refusing(undefined)).message).toContain("undefined");
+  // `toContain` alone would pass against the old `JsValue(undefined)` rendering, so
+  // rule the Rust-internal debug form out explicitly.
+  const undef = (await refusing(undefined)).message;
+  expect(undef).toContain("undefined");
+  expect(undef).not.toContain("JsValue");
 }, 150000);

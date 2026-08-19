@@ -15,10 +15,11 @@ extern "C" {
 
 #[wasm_bindgen]
 extern "C" {
-    /// JavaScript's `String` function, which stringifies any value — `undefined`, symbols
-    /// and bigints included — without throwing.
-    #[wasm_bindgen(js_name = "String")]
-    fn js_string(value: &JsValue) -> String;
+    /// JavaScript's `String` function, which stringifies `undefined`, symbols and bigints
+    /// where `JSON.stringify` cannot. It does throw for an object whose `toString` throws
+    /// or is absent, so the result is caught rather than left to unwind through wasm.
+    #[wasm_bindgen(catch, js_name = "String")]
+    fn js_string(value: &JsValue) -> Result<String, JsValue>;
 }
 
 pub enum Error {
@@ -146,6 +147,9 @@ impl std::error::Error for Thrown {
 /// Describes a thrown value that is not error-like, preferring JSON so that its contents
 /// survive, and falling back to `String(value)` for what JSON cannot represent:
 /// `undefined`, symbols, bigints, and anything cyclic.
+///
+/// Never fails: a value that defeats every rung — an object that throws from both
+/// `toJSON` and `toString`, say — is still described, just not by its contents.
 fn describe(value: &JsValue) -> String {
     value
         .as_string()
@@ -154,5 +158,6 @@ fn describe(value: &JsValue) -> String {
                 .ok()
                 .and_then(|json| json.as_string())
         })
-        .unwrap_or_else(|| js_string(value))
+        .or_else(|| js_string(value).ok())
+        .unwrap_or_else(|| "(unrepresentable value)".to_owned())
 }

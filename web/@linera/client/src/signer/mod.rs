@@ -23,7 +23,10 @@ pub enum Error {
     Thrown(#[from] Thrown),
 
     /// The signer returned a value that is not a signature of the scheme this owner uses.
-    #[error("the signer returned a value that is not a valid signature for owner {0}")]
+    #[error(
+        "the signer returned a value that is not a valid {} signature for owner {0}",
+        signature_scheme(.0)
+    )]
     SignatureFormat(AccountOwner),
 
     /// `getPublicKey` returned a value that is not an Ed25519 public key.
@@ -121,6 +124,15 @@ impl linera_base::crypto::Signer for Signer {
             }
             AccountOwner::Reserved(_) => Err(Error::ReservedOwner(*owner)),
         }
+    }
+}
+
+/// The signature scheme an owner's address encodes.
+fn signature_scheme(owner: &AccountOwner) -> &'static str {
+    match owner {
+        AccountOwner::Address20(_) => "secp256k1",
+        AccountOwner::Address32(_) => "Ed25519",
+        AccountOwner::Reserved(_) => "unsupported",
     }
 }
 
