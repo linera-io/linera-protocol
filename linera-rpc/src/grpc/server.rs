@@ -497,10 +497,10 @@ where
                     .into_inner(),
             );
             server
-                // The proxy pools one HTTP/2 connection per shard, so hyper's default
-                // cap of 200 streams is its entire concurrency budget against us; match
-                // the limit the proxy already sets on its own public server.
-                .max_concurrent_streams(Some(u32::MAX - 1))
+                // Every dialer is part of this validator (proxies, peer cross-chain
+                // forwarders), so this cap times a known connection count bounds
+                // in-flight work -- unlike hyper's 200 default, fixed at any shard size.
+                .max_concurrent_streams(Some(10_000))
                 .add_service(health_service)
                 .add_service(reflection_service)
                 .add_service(worker_node)
