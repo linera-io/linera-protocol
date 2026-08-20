@@ -108,7 +108,7 @@ pub trait ClientContext {
                 .get(chain_id)
                 .make_sync()
                 .await
-                .map_err(error::Inner::wallet)?
+                .map_err(error::Error::wallet)?
                 .unwrap_or_default();
             Ok(self.client().create_chain_client(
                 chain_id,
@@ -142,7 +142,7 @@ pub trait ClientContextExt: ClientContext {
         use futures::stream::TryStreamExt as _;
         self.wallet()
             .chain_ids()
-            .map_err(|e| error::Inner::wallet(e).into())
+            .map_err(error::Error::wallet)
             .and_then(|chain_id| self.make_chain_client(chain_id))
             .try_collect()
             .await
@@ -331,7 +331,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 .collect::<Result<BTreeMap<_, _>, _>>()
                 .map_err(
                     |e: <<C::Environment as Environment>::Wallet as Wallet>::Error| {
-                        crate::error::Inner::Wallet(Box::new(e) as _)
+                        crate::error::Error::Wallet(Box::new(e) as _)
                     },
                 )?;
             // If the admin chain is not in the wallet, add it as follow-only since we
@@ -750,7 +750,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                         .wallet()
                         .modify(chain_id, |chain| chain.owner = Some(owner))
                         .await
-                        .map_err(error::Inner::wallet)?;
+                        .map_err(error::Error::wallet)?;
                     // If the chain didn't exist, insert a new entry.
                     if modified.is_none() {
                         let chain_description = context_guard
@@ -771,7 +771,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                                 },
                             )
                             .await
-                            .map_err(error::Inner::wallet)?;
+                            .map_err(error::Error::wallet)?;
                     }
 
                     chains.insert(chain_id, ListeningMode::FullChain);
