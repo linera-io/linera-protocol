@@ -116,11 +116,12 @@ pub trait CheckpointSummarizesUserStreams: EventFloorTracksCheckpoints {}
 /// `linera_core::proof::availability::BundleConsumedAtMostOnce` applies unchanged. ∎
 ///
 /// **The acknowledgement is what lets a sender forget.** A checkpoint emits
-/// `SystemMessage::CheckpointAck` to each origin in `PreparedCheckpoint::origin_cursors` so that
-/// origin can trim its outbox dump of messages the recipient has now folded into its state. That
-/// list is the delta since the previous checkpoint, filtered by `pending_checkpoint_ack_targets` —
-/// the chains that sent something other than a `Checkpoint`. Excluding pure-checkpoint senders is
-/// what stops two chains acknowledging each other's checkpoints forever.
+/// `SystemMessage::CheckpointAck` to each origin in `PreparedCheckpoint::origin_cursors`, carrying
+/// the position past the last bundle from that origin this chain has consumed. The recipients are
+/// `pending_checkpoint_ack_targets`: the chains that have sent this one a message which was not
+/// itself a `CheckpointAck`, so an acknowledgement never obliges an acknowledgement in return.
+/// What the origin then does with it, and why dropping those bundles is safe, is
+/// [`AcknowledgedMessagesMayBeForgotten`].
 ///
 /// **What the outboxes still reference is certified, not merely named.**
 /// `PreparedCheckpoint::outbox_block_hashes` lists every block this chain's outboxes still refer
@@ -196,3 +197,56 @@ pub trait CheckpointPreservesBlobAvailability: SerializedChainState {}
 ///
 /// [`SafetyStateRecovery`]: crate::manager::proof::locking::SafetyStateRecovery
 pub trait CheckpointRestoresExecutionState: SerializedChainState {}
+
+/// **Lemma (A sender may forget messages its recipient has checkpointed).** A chain's checkpoint
+/// dump names only those of its blocks that still carry outgoing bundles no recipient has
+/// acknowledged consuming. Acknowledged bundles are dropped, and no future incarnation of any
+/// recipient can ask for them again.
+///
+/// Without this a chain could never forget anything it had ever sent: `outbox_block_hashes` would
+/// name every block with an outgoing message for the life of the chain, and each checkpoint would
+/// be larger than the last. The acknowledgement is what makes checkpointing a chain with busy
+/// outboxes sustainable rather than merely possible.
+///
+/// *Proof.* Four steps, alternating between the two chains.
+///
+/// *The sender tracks what is outstanding.* `unfinalized_message_blocks` maps each recipient to the
+/// cursors of outgoing bundles not yet acknowledged. It lives in the *system execution state*
+/// rather than in the local off-chain outbox, which is what makes it identical across validators
+/// and therefore fit to feed a certified oracle response: `PreparedCheckpoint::outbox_block_hashes`
+/// is the set of unique heights across those cursors. Cursors rather than heights, so that an
+/// acknowledgement landing mid-block can still evict an entry entirely — which is what a
+/// high-fanout chain needs, whose recipients each interact with it once.
+///
+/// *The recipient acknowledges on its own checkpoint.* `collect_inbox_cursors` snapshots
+/// `(origin, next_cursor_to_remove)` for each chain in `pending_checkpoint_ack_targets`, and
+/// `apply_checkpoint` emits a `SystemMessage::CheckpointAck` carrying that cursor to each.
+///
+/// *The sender trims.* Handling `CheckpointAck { latest_received_cursor }`, the system state calls
+/// `split_off` on that recipient's cursor set, retaining those at or above the cursor and dropping
+/// the strict prefix below it. A recipient that has consumed everything ever sent to it leaves an
+/// empty set, and the entry is removed altogether.
+///
+/// *Forgetting is safe.* The acknowledged cursor is the recipient's `next_cursor_to_remove`, so it
+/// has consumed everything below it; and the same checkpoint records that position in
+/// `inbox_cursors`, so a node bootstrapping the recipient starts with `restored_cursor` at least
+/// that high. By [`CheckpointPreservesConsumptionBoundary`] anything below `restored_cursor` is
+/// dropped on arrival and is a no-op on consumption. There is therefore no incarnation of the
+/// recipient, present or future, that can ask for a bundle the sender has dropped. ∎
+///
+/// **Why the exchange terminates.** An acknowledgement is itself a message, so the protocol has to
+/// avoid two chains acknowledging each other forever. Two exclusions do it, at different points. A
+/// received `CheckpointAck` does not put its origin into `pending_checkpoint_ack_targets`, so it
+/// creates no debt to answer; and a bundle whose only messages to a recipient were `CheckpointAck`
+/// is kept out of `unfinalized_message_blocks`, so it never becomes something to acknowledge in the
+/// first place. `apply_checkpoint` then clears `pending_checkpoint_ack_targets`, so only a fresh
+/// real message re-enters a chain into the next round.
+///
+/// **A sender can forget only as fast as its recipients checkpoint.** Nothing obliges a recipient
+/// to checkpoint, and until it does it sends no acknowledgement, so the sender keeps naming those
+/// blocks. A chain whose recipients never checkpoint therefore has an ever-growing dump however
+/// often it checkpoints itself — its own frequency does not help. This is the outbox-side face of
+/// [issue #6693](https://github.com/linera-io/linera-protocol/issues/6693): with nothing scheduling
+/// checkpoints anywhere, the bound this lemma provides is conditional on behaviour no rule
+/// currently requires.
+pub trait AcknowledgedMessagesMayBeForgotten: CheckpointPreservesConsumptionBoundary {}
