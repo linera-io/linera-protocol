@@ -40,8 +40,8 @@ use linera_chain::{
     },
     manager::LockingBlock,
     types::{
-        Block, ConfirmedBlock, ConfirmedBlockCertificate, Timeout, TimeoutCertificate,
-        ValidatedBlock,
+        Block, CertificateKind, ConfirmedBlock, ConfirmedBlockCertificate, Timeout,
+        TimeoutCertificate, ValidatedBlock,
     },
     ChainError, ChainExecutionContext,
 };
@@ -329,13 +329,27 @@ pub enum Error {
     BcsError(#[from] bcs::Error),
 
     #[error(
-        "Unexpected quorum: validators voted for block hash {hash} in {round}, \
-         expected block hash {expected_hash} in {expected_round}"
+        "Chain {chain_id} height {height}: a quorum of validators voted for a different \
+         execution of our proposal in {round}. Their {kind:?} value hashes to {hash}, ours \
+         to {expected_hash}."
     )]
-    UnexpectedQuorum {
-        hash: CryptoHash,
+    DivergentExecution {
+        chain_id: ChainId,
+        height: BlockHeight,
         round: Round,
+        kind: CertificateKind,
+        hash: CryptoHash,
         expected_hash: CryptoHash,
+    },
+
+    #[error(
+        "Chain {chain_id} height {height}: a quorum of validators voted in {round}, but we \
+         proposed in {expected_round}."
+    )]
+    StaleQuorumRound {
+        chain_id: ChainId,
+        height: BlockHeight,
+        round: Round,
         expected_round: Round,
     },
 
