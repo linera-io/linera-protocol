@@ -67,6 +67,10 @@ pub struct NodeOptions {
     pub max_retries: u32,
     /// The maximum backoff delay between retries.
     pub max_backoff: Duration,
+    /// An artificial delay to add before every gRPC request, simulating extra network
+    /// latency (e.g. a WAN link) on top of what the client and validator actually measure
+    /// between them. Zero by default -- no behavior change.
+    pub simulated_latency: Duration,
 }
 
 impl Default for NodeOptions {
@@ -77,6 +81,7 @@ impl Default for NodeOptions {
             retry_delay: Duration::ZERO,
             max_retries: 0,
             max_backoff: DEFAULT_MAX_BACKOFF,
+            simulated_latency: Duration::ZERO,
         }
     }
 }

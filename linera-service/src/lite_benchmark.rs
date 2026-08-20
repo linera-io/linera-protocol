@@ -245,6 +245,14 @@ struct Args {
     /// running many clients per machine.
     #[arg(long)]
     tokio_threads: Option<usize>,
+
+    /// Adds this many milliseconds of artificial delay before every gRPC request to a
+    /// validator, simulating a higher-latency (e.g. WAN) link than whatever the client and
+    /// validator actually measure between them. 0 (default) adds no delay. Useful for testing
+    /// whether a difference in round trips per block (e.g. --client-mode or
+    /// --light-certificates) matters more once each round trip is expensive.
+    #[arg(long, default_value_t = 0)]
+    simulated_latency_ms: u64,
 }
 
 fn main() -> Result<()> {
@@ -280,6 +288,7 @@ async fn run(args: Args) -> Result<()> {
         retry_delay: Duration::from_millis(200),
         max_retries: 10,
         max_backoff: DEFAULT_MAX_BACKOFF,
+        simulated_latency: Duration::from_millis(args.simulated_latency_ms),
     });
     let nodes: Vec<(ValidatorPublicKey, Client)> = node_provider
         .make_nodes(&committee)
