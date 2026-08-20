@@ -497,14 +497,9 @@ where
                     .into_inner(),
             );
             server
-                // The proxy holds ONE HTTP/2 connection per shard and multiplexes every
-                // request over it, so this cap is the proxy's concurrency limit against
-                // this shard. hyper defaults it to 200 (proto/h2/server.rs), which a
-                // benchmark reaches easily: past 200 in flight the proxy blocks in
-                // `poll_pending_open` waiting for a slot, and that wait lands in the
-                // proxy's request latency while this shard -- which never sees the
-                // queued request -- keeps reporting a flat sub-51ms service time.
-                // Matches what the proxy already sets on its own public server.
+                // The proxy pools one HTTP/2 connection per shard, so hyper's default
+                // cap of 200 streams is its entire concurrency budget against us; match
+                // the limit the proxy already sets on its own public server.
                 .max_concurrent_streams(Some(u32::MAX - 1))
                 .add_service(health_service)
                 .add_service(reflection_service)
