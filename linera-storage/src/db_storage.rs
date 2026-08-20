@@ -14,7 +14,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight, NetworkDescription, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use linera_cache::{Arc as CacheArc, ValueCache};
 use linera_chain::{
@@ -606,6 +606,10 @@ impl Clock for WallClock {
         Timestamp::now()
     }
 
+    fn instant(&self) -> Instant {
+        Instant::now()
+    }
+
     async fn sleep_until(&self, timestamp: Timestamp) {
         let delta = timestamp.delta_since(Timestamp::now());
         if delta > TimeDelta::ZERO {
@@ -622,6 +626,12 @@ impl Clock for WallClock {
 #[derive(Default)]
 struct TestClockInner {
     time: Timestamp,
+    /// How much simulated time has passed, counting forward motion only.
+    ///
+    /// Tracked separately from `time` so that a monotonic reading survives a test setting
+    /// the clock backwards, the way a real monotonic clock survives the system clock being
+    /// stepped back.
+    elapsed: Duration,
     sleeps: BTreeMap<Reverse<Timestamp>, Vec<oneshot::Sender<()>>>,
     /// Optional callback that decides whether to auto-advance for a given target timestamp.
     /// Returns `true` if the clock should auto-advance to that time.
@@ -631,6 +641,8 @@ struct TestClockInner {
 #[cfg(with_testing)]
 impl TestClockInner {
     fn set(&mut self, time: Timestamp) {
+        // `duration_since` saturates to zero, so moving the clock back adds nothing.
+        self.elapsed = self.elapsed.saturating_add(time.duration_since(self.time));
         self.time = time;
         let senders = self.sleeps.split_off(&Reverse(time));
         for sender in senders.into_values().flatten() {
@@ -672,6 +684,23 @@ pub struct TestClock(Arc<std::sync::Mutex<TestClockInner>>);
 impl Clock for TestClock {
     fn current_time(&self) -> Timestamp {
         self.lock().time
+    }
+
+    fn instant(&self) -> Instant {
+        use std::sync::LazyLock;
+
+        // `Instant` cannot be built from a number, so offset a fixed reading by the
+        // simulated time that has passed. Only the difference between two readings is
+        // meaningful; the baseline itself is arbitrary, and shared so that clocks driven
+        // alike report alike.
+        static BASELINE: LazyLock<Instant> = LazyLock::new(Instant::now);
+
+        // `Instant`'s range is platform-dependent and `set` is public, so a test can name a
+        // time no `Instant` could represent. Clamping keeps this total — and still
+        // non-decreasing — where panicking would abort an otherwise reasonable test. A
+        // century of simulated time is representable everywhere we build.
+        const MAX_ELAPSED: Duration = Duration::from_secs(100 * 365 * 24 * 60 * 60);
+        *BASELINE + self.lock().elapsed.min(MAX_ELAPSED)
     }
 
     async fn sleep_until(&self, timestamp: Timestamp) {
@@ -2165,6 +2194,75 @@ mod tests {
         assert_eq!(
             cert_by_hash.value().block().header,
             cert_by_height.value().block().header
+        );
+    }
+}
+
+#[cfg(test)]
+mod clock_tests {
+    use linera_base::{
+        data_types::{TimeDelta, Timestamp},
+        time::Duration,
+    };
+
+    use super::*;
+
+    /// The two readings must never disagree: code that measures a duration with `instant`
+    /// and code that waits on `sleep_for` have to see the same simulated time pass.
+    #[test]
+    fn test_test_clock_readings_advance_together() {
+        let clock = TestClock::new();
+        let start_instant = clock.instant();
+        let start_time = clock.current_time();
+
+        clock.add(TimeDelta::from_secs(90));
+
+        assert_eq!(
+            clock.current_time().duration_since(start_time),
+            Duration::from_secs(90),
+        );
+        assert_eq!(
+            clock.instant().saturating_duration_since(start_instant),
+            Duration::from_secs(90),
+        );
+    }
+
+    /// `set` is public, so a test may name a time no `Instant` can represent — `u64::MAX`
+    /// microseconds is some 584,000 years, which a `timespec`-based `Instant` holds but a
+    /// nanosecond-counter one does not. Reading the monotonic clock has to clamp rather than
+    /// abort the test, on every platform.
+    #[test]
+    fn test_test_clock_instant_clamps_an_unrepresentable_time() {
+        let clock = TestClock::new();
+        let before = clock.instant();
+
+        clock.set(Timestamp::from(u64::MAX));
+
+        assert!(clock.instant() >= before, "still non-decreasing");
+    }
+
+    /// A monotonic reading is exactly what a wall-clock timestamp is not: setting the
+    /// simulated clock backwards must not take it along.
+    #[test]
+    fn test_test_clock_instant_survives_a_rewound_wall_clock() {
+        let clock = TestClock::new();
+        clock.add(TimeDelta::from_secs(60));
+        let before = clock.instant();
+
+        clock.set(Timestamp::from(0));
+
+        assert_eq!(
+            clock.current_time(),
+            Timestamp::from(0),
+            "the wall clock moved back",
+        );
+        assert!(clock.instant() >= before, "the monotonic reading did not");
+
+        // It also keeps counting from where it was, not from the rewound time.
+        clock.add(TimeDelta::from_secs(10));
+        assert_eq!(
+            clock.instant().saturating_duration_since(before),
+            Duration::from_secs(10),
         );
     }
 }

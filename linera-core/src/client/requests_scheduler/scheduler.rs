@@ -517,14 +517,20 @@ impl<Env: Environment> RequestsScheduler<Env> {
     where
         Fut: Future<Output = Result<T, NodeError>> + 'static,
     {
-        let start_time = clock.current_time();
+        let start_time = clock.instant();
         let public_key = peer.public_key;
 
         // Execute the operation
         let result = operation.await;
 
         // Update metrics and release slot
-        let response_time_ms = clock.current_time().delta_since(start_time).as_micros() / 1000;
+        let response_time_ms = u64::try_from(
+            clock
+                .instant()
+                .saturating_duration_since(start_time)
+                .as_millis(),
+        )
+        .unwrap_or(u64::MAX);
         let is_success = result.is_ok();
         {
             let mut nodes_guard = nodes.write().await;
@@ -599,7 +605,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         // Check if there's an in-flight request (exact or subsuming)
         if let Some(in_flight_match) = self
             .in_flight_tracker
-            .try_subscribe(&key, self.clock.current_time())
+            .try_subscribe(&key, self.clock.instant())
         {
             match in_flight_match {
                 InFlightMatch::Exact(Subscribed(mut receiver)) => {
@@ -706,7 +712,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         // up and execute the request themselves instead of waiting forever.
         let in_flight_guard = self
             .in_flight_tracker
-            .insert_new(key.clone(), self.clock.current_time());
+            .insert_new(key.clone(), self.clock.instant());
 
         // Remove the peer we're about to use from alternatives (it shouldn't retry with itself)
         self.in_flight_tracker
@@ -728,11 +734,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
 
         if let Ok(success) = shared_result.as_ref() {
             self.cache
-                .store(
-                    key.clone(),
-                    Arc::new(success.clone()),
-                    self.clock.current_time(),
-                )
+                .store(key.clone(), Arc::new(success.clone()), self.clock.instant())
                 .await;
         }
         result
@@ -1220,7 +1222,7 @@ mod tests {
             CryptoHash::test_hash("test_blob"),
             BlobType::Data,
         ));
-        let now = manager.clock.current_time();
+        let now = manager.clock.instant();
 
         // A request is in flight, and two other peers register as alternative sources for it.
         let guard = manager.in_flight_tracker.insert_new(key.clone(), now);
@@ -1261,7 +1263,7 @@ mod tests {
             CryptoHash::test_hash("test_blob"),
             BlobType::Data,
         ));
-        let now = manager.clock.current_time();
+        let now = manager.clock.instant();
 
         // An owner registers an in-flight request; a second caller subscribes to it.
         let guard = manager.in_flight_tracker.insert_new(key.clone(), now);
@@ -1295,7 +1297,7 @@ mod tests {
             CryptoHash::test_hash("test_blob"),
             BlobType::Data,
         ));
-        let now = manager.clock.current_time();
+        let now = manager.clock.instant();
 
         let first_owner = manager.in_flight_tracker.insert_new(key.clone(), now);
         let Some(InFlightMatch::Exact(Subscribed(mut receiver))) =
@@ -1394,7 +1396,7 @@ mod tests {
         // held for the rest of the test so the entry is not dropped before the request runs.
         let _guard = manager
             .in_flight_tracker
-            .insert_new(key.clone(), manager.clock.current_time());
+            .insert_new(key.clone(), manager.clock.instant());
         // Register nodes 3, 2, 1 as alternatives (will be popped in reverse: 1, 2, 3)
         for node in nodes.iter().skip(1).rev() {
             manager
