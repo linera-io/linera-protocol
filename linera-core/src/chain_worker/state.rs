@@ -83,6 +83,13 @@ pub(crate) mod metrics {
                 exponential_bucket_interval(1.0, 10_000.0),
             );
 
+        pub static RECEIVED_LOG_QUERY_ENTRIES: Histogram =
+            register_histogram(
+                "received_log_query_entries",
+                "Number of received-log entries returned per chain info query that asks for them",
+                exponential_bucket_interval(1.0, 100_000.0),
+            );
+
         pub static BLOCK_PROPOSALS_RECEIVED_TOTAL: IntCounter =
             register_int_counter(
                 "block_proposals_received_total",
@@ -2542,6 +2549,8 @@ where
                 .saturating_add(max_received_log_entries)
                 .min(self.chain.received_log.count());
             info.requested_received_log = self.chain.received_log.read(start..end).await?;
+            #[cfg(with_metrics)]
+            metrics::RECEIVED_LOG_QUERY_ENTRIES.observe(info.requested_received_log.len() as f64);
         }
         if query.request_manager_values {
             info.manager.add_values(&self.chain.manager);
