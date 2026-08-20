@@ -71,7 +71,7 @@ pub trait EventFloorTracksCheckpoints: SerializedChainState {}
 /// Only user streams can appear. A chain that has *published* to a system stream cannot checkpoint
 /// at all — `ExecutionStateView::prepare_checkpoint` scans [`previous_event_blocks`] and refuses,
 /// because system streams have no application to summarize them — and a chain that has *consumed*
-/// system events is refused separately by `ChainStateView`'s `check_checkpoint_preconditions`,
+/// system events is refused separately by [`ChainStateView`]'s `check_checkpoint_preconditions`,
 /// which scans the reader-side trackers and fails with
 /// [`ChainError::CheckpointPreconditionFailed`]. The admin chain's epoch streams are the case both
 /// guards exist for. ∎
@@ -84,6 +84,7 @@ pub trait EventFloorTracksCheckpoints: SerializedChainState {}
 ///
 /// [`previous_event_blocks`]: crate::block::BlockBody::previous_event_blocks
 /// [`ChainError::CheckpointPreconditionFailed`]: crate::ChainError::CheckpointPreconditionFailed
+/// [`ChainStateView`]: crate::ChainStateView
 pub trait CheckpointSummarizesUserStreams: EventFloorTracksCheckpoints {}
 
 /// **Lemma (A checkpoint moves the consumption boundary and nothing else about messages).**
@@ -116,17 +117,19 @@ pub trait CheckpointSummarizesUserStreams: EventFloorTracksCheckpoints {}
 /// `linera_core::proof::availability::BundleConsumedAtMostOnce` applies unchanged. ∎
 ///
 /// **The acknowledgement is what lets a sender forget.** A checkpoint emits
-/// `SystemMessage::CheckpointAck` to each origin in `PreparedCheckpoint::origin_cursors` so that
-/// origin can trim its outbox dump of messages the recipient has now folded into its state. That
-/// list is the delta since the previous checkpoint, filtered by `pending_checkpoint_ack_targets` —
-/// the chains that sent something other than a `Checkpoint`. Excluding pure-checkpoint senders is
-/// what stops two chains acknowledging each other's checkpoints forever.
+/// `SystemMessage::CheckpointAck` to each origin in `PreparedCheckpoint::origin_cursors`, carrying
+/// the position past the last bundle from that origin this chain has consumed. The recipients are
+/// `pending_checkpoint_ack_targets`: the chains that have sent this one a message which was not
+/// itself a `CheckpointAck`, so an acknowledgement never obliges an acknowledgement in return.
+/// What the origin then does with it, and why dropping those bundles is safe, is
+/// [`AcknowledgedMessagesMayBeForgotten`].
 ///
 /// **What the outboxes still reference is certified, not merely named.**
 /// `PreparedCheckpoint::outbox_block_hashes` lists every block this chain's outboxes still refer
 /// to, captured before the checkpoint block runs, and travels in the checkpoint's oracle response.
-/// The checkpoint block's certificate therefore transitively certifies those older blocks, so a
-/// bootstrapping node can rely on them without replaying the chain.
+/// The checkpoint block's certificate therefore *re-certifies* those older blocks, which is what
+/// keeps them acceptable after the committee that signed them has been removed —
+/// [`CheckpointRecertifiesReferencedBlocks`].
 pub trait CheckpointPreservesConsumptionBoundary: SerializedChainState {}
 
 /// **Lemma (A checkpoint leaves blob availability unchanged).** Checkpointing neither strands a
@@ -161,7 +164,7 @@ pub trait CheckpointPreservesBlobAvailability: SerializedChainState {}
 ///
 /// *Proof.* Four parts.
 ///
-/// *The dump is total.* `ExecutionStateView` has exactly one field: an inner view holding the
+/// *The dump is total.* [`ExecutionStateView`] has exactly one field: an inner view holding the
 /// system state, the user applications' key-value stores, and the two previous-block maps.
 /// Everything the outer view exposes is reached by dereferencing into it, and `dump_content`
 /// serializes that inner view's persisted content whole. No part of the execution state can be
@@ -188,11 +191,186 @@ pub trait CheckpointPreservesBlobAvailability: SerializedChainState {}
 /// computes the `state_hash` that block certifies, so a restore that went wrong does not go
 /// unnoticed. ∎
 ///
+/// **This is the execution state, not the chain.** The two totality arguments point opposite ways
+/// and it is worth being exact about which applies. [`ExecutionStateView`] has one field, so the
+/// dump covers all of it. [`ChainStateView`] has sixteen, of which the blob covers exactly one —
+/// `execution_state`. Inboxes, outboxes, the tip, the chain manager, the block-hash index and the
+/// event trackers are all outside it.
+///
+/// Two of those are restored by named mechanisms rather than by the blob, and a checkpoint would be
+/// unusable without them:
+///
+/// * *Inboxes.* Each inbox's `restored_cursor` is seeded from `PreparedCheckpoint::inbox_cursors`,
+///   carried in the certified oracle response rather than the dump
+///   ([`CheckpointPreservesConsumptionBoundary`]).
+/// * *Outboxes.* `outboxes`, `outbox_counters` and `nonempty_outboxes` are rebuilt by
+///   [`ChainStateView`]'s `restore_outboxes_from_unfinalized`, run once after
+///   `restore_from_content`, from the on-chain `unfinalized_message_blocks`
+///   ([`AcknowledgedMessagesMayBeForgotten`]). Off-chain outbox state is not certified, so without
+///   this a bootstrapped node would go quiet on cross-chain delivery while looking healthy.
+///
+/// So a checkpoint is not a snapshot of a chain. It is a certified snapshot of the chain's
+/// *execution state*, plus enough certified bookkeeping to reconstruct the message-passing state
+/// around it. What the remaining chain-state fields hold after a bootstrap is outside this lemma.
+///
 /// **Residual obligation.** `restore_from_content` leaves the in-memory view stale: its
 /// documentation requires the caller to reload afterwards, and nothing in the type enforces it. A
 /// caller that skipped the reload would continue against a view that no longer describes storage.
 /// This is the same shape as [`SafetyStateRecovery`] — a correctness condition discharged by
 /// convention at the call site rather than by construction.
 ///
+/// [`ChainStateView`]: crate::ChainStateView
 /// [`SafetyStateRecovery`]: crate::manager::proof::locking::SafetyStateRecovery
+/// [`ExecutionStateView`]: linera_execution::ExecutionStateView
 pub trait CheckpointRestoresExecutionState: SerializedChainState {}
+
+/// **Lemma (A sender may forget messages its recipient has checkpointed).** A chain's checkpoint
+/// dump names only those of its blocks that still carry outgoing bundles no recipient has
+/// acknowledged consuming. Acknowledged bundles are dropped, and no future incarnation of any
+/// recipient can ask for them again.
+///
+/// Without this a chain could never forget anything it had ever sent: `outbox_block_hashes` would
+/// name every block with an outgoing message for the life of the chain, and each checkpoint would
+/// be larger than the last.
+///
+/// *Code correspondence.* Three transitions, alternating between the two chains.
+///
+/// **The sender records an outstanding bundle.**
+///
+/// | | |
+/// |---|---|
+/// | transition | the per-recipient loop in `ChainStateView::execute_block_inner` |
+/// | reads | `BlockTracker::non_checkpoint_ack_tx_indices`, and the current entry for that recipient |
+/// | writes | `system.unfinalized_message_blocks[recipient]`, adding `Cursor { height, index }` for each kept transaction index |
+/// | precondition | the recipient has at least one message in this block that is not a `CheckpointAck`; otherwise the entry is not touched |
+///
+/// **The recipient acknowledges, at its own checkpoint.**
+///
+/// | | |
+/// |---|---|
+/// | transition | `ExecutionStateView::apply_checkpoint`, over `PreparedCheckpoint::origin_cursors` built before the block by `ChainStateView::collect_inbox_cursors` |
+/// | reads | `system.pending_checkpoint_ack_targets`, and `next_cursor_to_remove` of each named inbox |
+/// | writes | one `SystemMessage::CheckpointAck { latest_received_cursor }` per target through `TransactionTracker::add_outgoing_message`, then clears `pending_checkpoint_ack_targets` |
+/// | precondition | `prepare_checkpoint` and `check_checkpoint_preconditions` both passed ([`CheckpointSummarizesUserStreams`]) |
+///
+/// **The sender trims.**
+///
+/// | | |
+/// |---|---|
+/// | transition | the `CheckpointAck` arm of `SystemExecutionStateView::execute_message` |
+/// | reads | `system.unfinalized_message_blocks[context.origin]` |
+/// | writes | the same entry, replaced by `cursors.split_off(&latest_received_cursor)`, or removed when that is empty |
+/// | precondition | none — an acknowledgement naming an origin with no entry is a no-op |
+///
+/// *Proof.* Four steps.
+///
+/// *What gets recorded.* `non_checkpoint_ack_tx_indices` walks the block's outgoing messages and
+/// keeps, per destination, the indices of transactions holding at least one message for which
+/// `Message::is_checkpoint_ack` is false. `execute_block_inner` inserts a [`Cursor`] for each. So a
+/// block whose only traffic to a recipient is an acknowledgement adds nothing to track — which is
+/// the first of the two exclusions below.
+///
+/// *What the dump names.* `unfinalized_message_blocks` is held in the *system execution state*, not
+/// in the off-chain outbox, so it is identical across validators and may feed a certified oracle
+/// response: `PreparedCheckpoint::outbox_block_hashes` is the unique heights across all its
+/// cursors, resolved to hashes through `block_hashes` by the pre-block hook — the cursors are
+/// written mid-execution, when the block's own hash is not yet known. Cursors rather than bare
+/// heights is what lets an acknowledgement landing part-way through a block evict a recipient
+/// outright, which matters for a high-fanout chain whose recipients each interact with it once.
+///
+/// *What clears an entry.* On `CheckpointAck { latest_received_cursor }`, `split_off` retains the
+/// cursors at or above it and discards the strict prefix below; an emptied set removes the
+/// recipient entirely. Since the dump is derived from what remains, those blocks stop being named.
+///
+/// *Why that is safe.* `latest_received_cursor` is the recipient's `next_cursor_to_remove` at its
+/// checkpoint, so it has consumed everything below it. The same checkpoint records that position in
+/// `PreparedCheckpoint::inbox_cursors`, so any node bootstrapping the recipient seeds
+/// `restored_cursor` at least that high; and by [`CheckpointPreservesConsumptionBoundary`] a bundle
+/// below `restored_cursor` is dropped by `Inbox::add_bundle` on arrival and reported as already
+/// known by `Inbox::remove_bundle` on consumption. No incarnation of the recipient, present or
+/// future, can therefore ask for a bundle the sender has dropped. ∎
+///
+/// **What is kept is exactly what a bootstrapped node needs.** The same map has a second reader:
+/// `ChainStateView::restore_outboxes_from_unfinalized`, called once after
+/// `restore_from_content` when a node bootstraps from a checkpoint. Off-chain outbox state —
+/// `outboxes`, `outbox_counters`, `nonempty_outboxes` — is not part of the certified blob, so
+/// without this rebuild a bootstrapped node would silently stop pushing pending messages onward.
+/// Retention and resumption are therefore the same set: a sender keeps a block precisely while some
+/// recipient might still need it delivered.
+///
+/// **Why the exchange terminates.** An acknowledgement is itself a message, so two exclusions stop
+/// two chains acknowledging each other forever, and they act at different points. A bundle whose
+/// only messages to a recipient were `CheckpointAck` never enters `unfinalized_message_blocks`
+/// (`non_checkpoint_ack_tx_indices`), so it never becomes something to acknowledge; and a received
+/// `CheckpointAck` never enters its origin into `pending_checkpoint_ack_targets` (the
+/// `!posted_message.message.is_checkpoint_ack()` guard in `BlockTracker`), so it creates no debt to
+/// answer. `apply_checkpoint` then clears that set, so only a fresh non-acknowledgement message
+/// re-enters a chain for the next round.
+///
+/// **A sender can forget only as fast as its recipients checkpoint.** Nothing obliges a recipient
+/// to checkpoint, and until it does it sends no acknowledgement, so the sender keeps naming those
+/// blocks. A chain whose recipients never checkpoint therefore has an ever-growing dump however
+/// often it checkpoints itself — its own frequency does not help. This is the outbox-side face of
+/// [issue #6693](https://github.com/linera-io/linera-protocol/issues/6693): with nothing scheduling
+/// checkpoints anywhere, the bound this lemma provides rests on behaviour no rule requires.
+///
+/// [`Cursor`]: linera_base::data_types::Cursor
+pub trait AcknowledgedMessagesMayBeForgotten: CheckpointPreservesConsumptionBoundary {}
+
+/// **Lemma (A checkpoint re-certifies the blocks its outboxes still reference).** The older blocks
+/// a chain still owes delivery from remain acceptable to a node that has never seen them, even
+/// after the committee that signed them has been removed.
+///
+/// *Why this needs saying.* Removing a committee revokes the standing of everything it signed:
+/// [`AdminOperation::RemoveCommittee`] states that such blocks "will only be accepted once they
+/// have been followed (hence re-certified) by a block certified by a recent committee". A chain's
+/// unacknowledged outgoing blocks are exactly the ones most likely to be old, so without a route
+/// back to a current committee they would become undeliverable precisely when a node most needs
+/// them — on bootstrap.
+///
+/// *Code correspondence.*
+///
+/// | | |
+/// |---|---|
+/// | transition | `ChainWorkerState::process_confirmed_block`, checkpoint-restore path |
+/// | reads | `outbox_block_hashes` from the checkpoint's `OracleResponse::Checkpoint`; `Storage::contains_certificate` for each |
+/// | writes | `pre_checkpoint_block_trust`, one entry per hash not yet in storage; the entry is removed when that block later arrives |
+/// | precondition | the checkpoint certificate itself verifies against the committee for *its* epoch |
+///
+/// *Proof.* The checkpoint block's certificate is signed by a current committee, and
+/// `outbox_block_hashes` travels inside its oracle response, so the list is covered by the block
+/// hash and inherits that certificate's standing ([`AcknowledgedMessagesMayBeForgotten`] fixes what
+/// the list contains). Naming a block by hash is therefore a current committee vouching for it.
+///
+/// The worker turns that into an admission rule. Before touching any chain state it checks each
+/// named hash against storage; every one missing is recorded in `pre_checkpoint_block_trust` and
+/// the push fails with `WorkerError::BlocksNotFound`, so a half-restored chain whose outboxes
+/// reference unknown blocks is never exposed. The client then uploads each missing certificate, and
+/// the `in_trust_set` test at the top of `process_confirmed_block` both removes the mark and lets
+/// the block past the already-processed guard — the condition is `!in_trust_set &&
+/// tip.next_block_height > height`. When the set is empty the restoration runs end to end. ∎
+///
+/// **What is relaxed and what is not.** The vouching substitutes for the block's *epoch* being
+/// current, not for its certificate being valid: `certificate.check` still runs against the
+/// committee for the block's declared epoch. So a re-certified block is one whose own quorum signed
+/// it and whose continued relevance a later quorum attests — never one accepted on a hash alone.
+/// [`TipAdvancesOnlyOnValidCertificate`] says the same from the other side: what trust-marking
+/// bypasses is the re-execution of ancestors, not their certification.
+///
+/// **This is one instance of a general mechanism.** Re-certification also runs along prev-hash
+/// chains, without any checkpoint: `ChainWorkerState::select_message_bundles` accepts a
+/// revoked-epoch bundle when a later bundle in the same batch is in a still-trusted epoch, since
+/// that bundle's certificate transitively covers the earlier ones. The
+/// [`previous_message_blocks`](linera_execution::ExecutionStateView) and `previous_event_blocks`
+/// maps exist to keep such chains intact for recipients and streams that are addressed only
+/// occasionally. The general form belongs with committee reconfiguration rather than here; what is
+/// specific to checkpoints is that pruning *severs* those chains — a checkpoint clears
+/// `previous_event_blocks` ([`CheckpointSummarizesUserStreams`]) — which is why the blocks the
+/// outboxes still need must be named explicitly instead.
+///
+/// [`AdminOperation::RemoveCommittee`]: linera_execution::system::AdminOperation::RemoveCommittee
+/// [`TipAdvancesOnlyOnValidCertificate`]: crate::manager::proof::commit::TipAdvancesOnlyOnValidCertificate
+pub trait CheckpointRecertifiesReferencedBlocks:
+    AcknowledgedMessagesMayBeForgotten + CheckpointSummarizesUserStreams
+{
+}
