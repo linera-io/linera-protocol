@@ -71,7 +71,7 @@ pub trait EventFloorTracksCheckpoints: SerializedChainState {}
 /// Only user streams can appear. A chain that has *published* to a system stream cannot checkpoint
 /// at all — `ExecutionStateView::prepare_checkpoint` scans [`previous_event_blocks`] and refuses,
 /// because system streams have no application to summarize them — and a chain that has *consumed*
-/// system events is refused separately by `ChainStateView`'s `check_checkpoint_preconditions`,
+/// system events is refused separately by [`ChainStateView`]'s `check_checkpoint_preconditions`,
 /// which scans the reader-side trackers and fails with
 /// [`ChainError::CheckpointPreconditionFailed`]. The admin chain's epoch streams are the case both
 /// guards exist for. ∎
@@ -84,6 +84,7 @@ pub trait EventFloorTracksCheckpoints: SerializedChainState {}
 ///
 /// [`previous_event_blocks`]: crate::block::BlockBody::previous_event_blocks
 /// [`ChainError::CheckpointPreconditionFailed`]: crate::ChainError::CheckpointPreconditionFailed
+/// [`ChainStateView`]: crate::ChainStateView
 pub trait CheckpointSummarizesUserStreams: EventFloorTracksCheckpoints {}
 
 /// **Lemma (A checkpoint moves the consumption boundary and nothing else about messages).**
@@ -162,7 +163,7 @@ pub trait CheckpointPreservesBlobAvailability: SerializedChainState {}
 ///
 /// *Proof.* Four parts.
 ///
-/// *The dump is total.* `ExecutionStateView` has exactly one field: an inner view holding the
+/// *The dump is total.* [`ExecutionStateView`] has exactly one field: an inner view holding the
 /// system state, the user applications' key-value stores, and the two previous-block maps.
 /// Everything the outer view exposes is reached by dereferencing into it, and `dump_content`
 /// serializes that inner view's persisted content whole. No part of the execution state can be
@@ -196,6 +197,7 @@ pub trait CheckpointPreservesBlobAvailability: SerializedChainState {}
 /// convention at the call site rather than by construction.
 ///
 /// [`SafetyStateRecovery`]: crate::manager::proof::locking::SafetyStateRecovery
+/// [`ExecutionStateView`]: linera_execution::ExecutionStateView
 pub trait CheckpointRestoresExecutionState: SerializedChainState {}
 
 /// **Lemma (A sender may forget messages its recipient has checkpointed).** A chain's checkpoint
@@ -240,7 +242,7 @@ pub trait CheckpointRestoresExecutionState: SerializedChainState {}
 ///
 /// *What gets recorded.* `non_checkpoint_ack_tx_indices` walks the block's outgoing messages and
 /// keeps, per destination, the indices of transactions holding at least one message for which
-/// `Message::is_checkpoint_ack` is false. `execute_block_inner` inserts a `Cursor` for each. So a
+/// `Message::is_checkpoint_ack` is false. `execute_block_inner` inserts a [`Cursor`] for each. So a
 /// block whose only traffic to a recipient is an acknowledgement adds nothing to track — which is
 /// the first of the two exclusions below.
 ///
@@ -287,4 +289,6 @@ pub trait CheckpointRestoresExecutionState: SerializedChainState {}
 /// often it checkpoints itself — its own frequency does not help. This is the outbox-side face of
 /// [issue #6693](https://github.com/linera-io/linera-protocol/issues/6693): with nothing scheduling
 /// checkpoints anywhere, the bound this lemma provides rests on behaviour no rule requires.
+///
+/// [`Cursor`]: linera_base::data_types::Cursor
 pub trait AcknowledgedMessagesMayBeForgotten: CheckpointPreservesConsumptionBoundary {}
