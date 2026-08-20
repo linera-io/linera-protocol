@@ -484,19 +484,23 @@ where
                 .await;
 
             #[cfg(feature = "opentelemetry")]
-            let mut server = tonic::transport::Server::builder().layer(
+            let server = tonic::transport::Server::builder().layer(
                 ServiceBuilder::new()
                     .layer(crate::propagation::OtelContextLayer)
                     .layer(GrpcPrometheusMetricsMiddlewareLayer)
                     .into_inner(),
             );
             #[cfg(not(feature = "opentelemetry"))]
-            let mut server = tonic::transport::Server::builder().layer(
+            let server = tonic::transport::Server::builder().layer(
                 ServiceBuilder::new()
                     .layer(GrpcPrometheusMetricsMiddlewareLayer)
                     .into_inner(),
             );
             server
+                // Every dialer is part of this validator (proxies, peer cross-chain
+                // forwarders), so this cap times a known connection count bounds
+                // in-flight work -- unlike hyper's 200 default, fixed at any shard size.
+                .max_concurrent_streams(Some(10_000))
                 .add_service(health_service)
                 .add_service(reflection_service)
                 .add_service(worker_node)
