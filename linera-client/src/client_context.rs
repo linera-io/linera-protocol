@@ -25,7 +25,6 @@ use linera_core::{
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_storage::Storage as _;
 use linera_version::VersionInfo;
-use thiserror_context::Context;
 use tracing::{debug, info, warn};
 #[cfg(not(web))]
 use {
@@ -319,7 +318,7 @@ where
             })
             .try_collect()
             .await
-            .map_err(error::Inner::wallet)?;
+            .map_err(error::Error::wallet)?;
         let name = match chain_modes.len() {
             0 => "Client node".to_string(),
             1 => format!("Client node for {:.8}", chain_modes[0].0),
@@ -447,7 +446,7 @@ impl<Env: Environment> ClientContext<Env> {
             .wallet()
             .get(chain_id)
             .await
-            .map_err(error::Inner::wallet)?
+            .map_err(error::Error::wallet)?
             .and_then(|chain| chain.owner);
 
         // Only persist proposals that were made in the fast round: they need to be
@@ -465,7 +464,7 @@ impl<Env: Environment> ClientContext<Env> {
         self.wallet()
             .insert(chain_id, new_chain)
             .await
-            .map_err(error::Inner::wallet)?;
+            .map_err(error::Error::wallet)?;
 
         Ok(())
     }
@@ -484,7 +483,7 @@ impl<Env: Environment> ClientContext<Env> {
                 linera_core::wallet::Chain::new(owner, epoch, timestamp),
             )
             .await
-            .map_err(error::Inner::wallet)?;
+            .map_err(error::Error::wallet)?;
         Ok(())
     }
 
@@ -510,7 +509,7 @@ impl<Env: Environment> ClientContext<Env> {
                 ),
             )
             .await
-            .map_err(error::Inner::wallet)?;
+            .map_err(error::Error::wallet)?;
         self.client
             .extend_chain_mode(chain_id, ListeningMode::FullChain);
         Ok(())
@@ -564,7 +563,7 @@ impl<Env: Environment> ClientContext<Env> {
         let client = self.make_chain_client(chain_id).await?;
         let info = client.prepare_for_owner(owner).await.map_err(|error| {
             tracing::error!(%chain_id, %owner, %error, "Chain is not owned");
-            error::Inner::ChainOwnership
+            error::Error::ChainOwnership
         })?;
 
         // Try to modify existing chain entry, setting the owner.
@@ -572,7 +571,7 @@ impl<Env: Environment> ClientContext<Env> {
             .wallet()
             .modify(chain_id, |chain| chain.owner = Some(owner))
             .await
-            .map_err(error::Inner::wallet)?;
+            .map_err(error::Error::wallet)?;
         // If the chain didn't exist, insert a new entry.
         if modified.is_none() {
             self.wallet()
@@ -586,8 +585,7 @@ impl<Env: Environment> ClientContext<Env> {
                     },
                 )
                 .await
-                .map_err(error::Inner::wallet)
-                .context("assigning new chain")?;
+                .map_err(|error| Error::AssignChain(Box::new(error)))?;
         }
         Ok(())
     }
@@ -664,7 +662,7 @@ impl<Env: Environment> ClientContext<Env> {
 
         if ownership.super_owners.is_empty() && ownership.owners.is_empty() {
             tracing::error!("At least one owner or super owner of the chain has to be set.");
-            return Err(error::Inner::ChainOwnership.into());
+            return Err(error::Error::ChainOwnership);
         }
 
         let certificate = self
@@ -675,8 +673,7 @@ impl<Env: Environment> ClientContext<Env> {
                     chain_client
                         .change_ownership(ownership)
                         .await
-                        .map_err(Error::from)
-                        .context("Failed to change ownership")
+                        .map_err(|error| Error::ChangeOwnership(Box::new(error)))
                 }
             })
             .await?;
@@ -718,16 +715,14 @@ impl<Env: Environment> ClientContext<Env> {
                 );
                 Ok(version_info)
             }
-            Ok(version_info) => Err(error::Inner::UnexpectedVersionInfo {
+            Ok(version_info) => Err(error::Error::UnexpectedVersionInfo {
                 remote: Box::new(version_info),
                 local: Box::new(linera_version::VERSION_INFO.clone()),
-            }
-            .into()),
-            Err(error) => Err(error::Inner::UnavailableVersionInfo {
+            }),
+            Err(error) => Err(error::Error::UnavailableVersionInfo {
                 address: address.to_string(),
                 error: Box::new(error),
-            }
-            .into()),
+            }),
         }
     }
 
@@ -743,18 +738,16 @@ impl<Env: Environment> ClientContext<Env> {
                 if description == network_description {
                     Ok(description.genesis_config_hash)
                 } else {
-                    Err(error::Inner::UnexpectedNetworkDescription {
+                    Err(error::Error::UnexpectedNetworkDescription {
                         remote: Box::new(description),
                         local: Box::new(network_description),
-                    }
-                    .into())
+                    })
                 }
             }
-            Err(error) => Err(error::Inner::UnavailableNetworkDescription {
+            Err(error) => Err(error::Error::UnavailableNetworkDescription {
                 address: address.to_string(),
                 error: Box::new(error),
-            }
-            .into()),
+            }),
         }
     }
 
@@ -777,22 +770,20 @@ impl<Env: Environment> ClientContext<Env> {
                     if response.check(*public_key).is_ok() {
                         debug!("Signature for public key {public_key} is OK.");
                     } else {
-                        return Err(error::Inner::InvalidSignature {
+                        return Err(error::Error::InvalidSignature {
                             public_key: *public_key,
-                        }
-                        .into());
+                        });
                     }
                 } else {
                     warn!("Not checking signature as public key was not given");
                 }
                 Ok(*response.info)
             }
-            Err(error) => Err(error::Inner::UnavailableChainInfo {
+            Err(error) => Err(error::Error::UnavailableChainInfo {
                 address: address.to_string(),
                 chain_id,
                 error: Box::new(error),
-            }
-            .into()),
+            }),
         }
     }
 
@@ -893,7 +884,7 @@ impl<Env: Environment> ClientContext<Env> {
                     chain_client
                         .publish_module_blobs(blobs, module_id)
                         .await
-                        .context("Failed to publish module")
+                        .map_err(|error| Error::PublishModule(Box::new(error)))
                 }
             })
             .await?;
@@ -927,7 +918,7 @@ impl<Env: Environment> ClientContext<Env> {
                 chain_client
                     .publish_data_blob(blob_bytes)
                     .await
-                    .context("Failed to publish data blob")
+                    .map_err(|error| Error::PublishDataBlob(Box::new(error)))
             }
         })
         .await?;
@@ -950,7 +941,7 @@ impl<Env: Environment> ClientContext<Env> {
                 chain_client
                     .read_data_blob(hash)
                     .await
-                    .context("Failed to verify data blob")
+                    .map_err(|error| Error::VerifyDataBlob(Box::new(error)))
             }
         })
         .await?;
@@ -1113,7 +1104,7 @@ impl<Env: Environment> ClientContext<Env> {
                         },
                     )
                     .await
-                    .map_err(error::Inner::wallet)?;
+                    .map_err(error::Error::wallet)?;
             }
         }
 
@@ -1126,7 +1117,7 @@ impl<Env: Environment> ClientContext<Env> {
         let chain_clients: Vec<_> = self
             .wallet()
             .owned_chain_ids()
-            .map_err(|e| error::Inner::wallet(e).into())
+            .map_err(error::Error::wallet)
             .and_then(|id| self.make_chain_client(id))
             .try_collect()
             .await
@@ -1185,7 +1176,7 @@ impl<Env: Environment> ClientContext<Env> {
         if !close_chains || wallet_only {
             let mut owned_chain_ids = std::pin::pin!(self.wallet().owned_chain_ids());
             while let Some(chain_id) = owned_chain_ids.next().await {
-                let chain_id = chain_id.map_err(error::Inner::wallet)?;
+                let chain_id = chain_id.map_err(error::Error::wallet)?;
                 if chains_found_in_wallet == num_chains {
                     break;
                 }
@@ -1213,13 +1204,9 @@ impl<Env: Environment> ClientContext<Env> {
 
         if num_chains_to_create > 0 {
             if wallet_only {
-                return Err(
-                    error::Inner::Benchmark(BenchmarkError::NotEnoughChainsInWallet(
-                        num_chains,
-                        chains_found_in_wallet,
-                    ))
-                    .into(),
-                );
+                return Err(error::Error::Benchmark(
+                    BenchmarkError::NotEnoughChainsInWallet(num_chains, chains_found_in_wallet),
+                ));
             }
             let mut pub_keys_iter = pub_keys.into_iter().take(num_chains_to_create);
             let operations_per_block = 900; // Over this we seem to hit the block size limits.
@@ -1283,7 +1270,7 @@ impl<Env: Environment> ClientContext<Env> {
         default_chain_client
             .retry_pending_outgoing_messages()
             .await
-            .context("outgoing messages to create the new chains should be delivered")?;
+            .map_err(|error| Error::DeliverNewChainMessages(Box::new(error)))?;
         info!("Processing default chain inbox");
         default_chain_client.process_inbox().await?;
 
