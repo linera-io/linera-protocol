@@ -819,7 +819,7 @@ where
             } => {
                 let view = self.state.users.try_load_entry(&application).await?;
                 let result = match view {
-                    Some(view) => view.count().await? == 0,
+                    Some(view) => view.iterative_count().await? == 0,
                     None => true,
                 };
                 callback.respond(result);
