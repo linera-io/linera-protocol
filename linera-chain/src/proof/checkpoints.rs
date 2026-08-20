@@ -190,12 +190,35 @@ pub trait CheckpointPreservesBlobAvailability: SerializedChainState {}
 /// computes the `state_hash` that block certifies, so a restore that went wrong does not go
 /// unnoticed. ∎
 ///
+/// **This is the execution state, not the chain.** The two totality arguments point opposite ways
+/// and it is worth being exact about which applies. [`ExecutionStateView`] has one field, so the
+/// dump covers all of it. [`ChainStateView`] has sixteen, of which the blob covers exactly one —
+/// `execution_state`. Inboxes, outboxes, the tip, the chain manager, the block-hash index and the
+/// event trackers are all outside it.
+///
+/// Two of those are restored by named mechanisms rather than by the blob, and a checkpoint would be
+/// unusable without them:
+///
+/// * *Inboxes.* Each inbox's `restored_cursor` is seeded from `PreparedCheckpoint::inbox_cursors`,
+///   carried in the certified oracle response rather than the dump
+///   ([`CheckpointPreservesConsumptionBoundary`]).
+/// * *Outboxes.* `outboxes`, `outbox_counters` and `nonempty_outboxes` are rebuilt by
+///   [`ChainStateView`]'s `restore_outboxes_from_unfinalized`, run once after
+///   `restore_from_content`, from the on-chain `unfinalized_message_blocks`
+///   ([`AcknowledgedMessagesMayBeForgotten`]). Off-chain outbox state is not certified, so without
+///   this a bootstrapped node would go quiet on cross-chain delivery while looking healthy.
+///
+/// So a checkpoint is not a snapshot of a chain. It is a certified snapshot of the chain's
+/// *execution state*, plus enough certified bookkeeping to reconstruct the message-passing state
+/// around it. What the remaining chain-state fields hold after a bootstrap is outside this lemma.
+///
 /// **Residual obligation.** `restore_from_content` leaves the in-memory view stale: its
 /// documentation requires the caller to reload afterwards, and nothing in the type enforces it. A
 /// caller that skipped the reload would continue against a view that no longer describes storage.
 /// This is the same shape as [`SafetyStateRecovery`] — a correctness condition discharged by
 /// convention at the call site rather than by construction.
 ///
+/// [`ChainStateView`]: crate::ChainStateView
 /// [`SafetyStateRecovery`]: crate::manager::proof::locking::SafetyStateRecovery
 /// [`ExecutionStateView`]: linera_execution::ExecutionStateView
 pub trait CheckpointRestoresExecutionState: SerializedChainState {}
