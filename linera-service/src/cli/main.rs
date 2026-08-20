@@ -1306,7 +1306,7 @@ impl Runnable for Job {
                 operators,
                 controller_application_id,
                 task_retry_delay_secs,
-                task_timeout_secs,
+                slow_task_group_secs,
                 read_only,
                 query_cache_size,
                 allowed_subscriptions,
@@ -1338,7 +1338,7 @@ impl Runnable for Job {
                 // Start the task processor if operator applications are specified.
                 let task_config = TaskProcessorConfig {
                     retry_delay: TimeDelta::from_secs(task_retry_delay_secs),
-                    task_timeout: TimeDelta::from_secs(task_timeout_secs),
+                    slow_group_threshold: TimeDelta::from_secs(slow_task_group_secs),
                 };
 
                 if !operator_application_ids.is_empty() {

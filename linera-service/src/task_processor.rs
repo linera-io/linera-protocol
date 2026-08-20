@@ -26,9 +26,28 @@ use linera_core::{
 use serde_json::json;
 use tokio::{io::AsyncWriteExt, process::Command, select, sync::mpsc};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::controller::Update;
+
+#[cfg(with_metrics)]
+mod metrics {
+    use linera_base::prometheus_util::register_int_counter;
+    use prometheus::IntCounter;
+
+    linera_base::declare_metrics! {
+        /// Task groups that have outlived [`TaskProcessorConfig::slow_group_threshold`].
+        ///
+        /// The group is still running when this is incremented and may well succeed: a batch
+        /// catching up on a backlog takes far longer than a steady-state one. What makes it worth
+        /// alerting on is that nothing else reports it — the process stays healthy and its chain
+        /// simply stops advancing, so a group that never returns is otherwise silent.
+        pub static SLOW_TASK_GROUPS: IntCounter = register_int_counter(
+            "slow_task_groups_total",
+            "Number of task groups that outlived the slow-group threshold"
+        );
+    }
+}
 
 /// A map from operator names to their binary paths.
 pub type OperatorMap = Arc<BTreeMap<String, PathBuf>>;
@@ -50,12 +69,14 @@ type Deadline = Reverse<(Timestamp, Option<ApplicationId>)>;
 pub struct TaskProcessorConfig {
     /// How long to wait before retrying a task group that failed.
     pub retry_delay: TimeDelta,
-    /// Maximum wall-clock time for a single operator invocation.
+    /// How long a task group may run before it is reported as slow.
     ///
-    /// An operator that is merely slow cannot be told apart from one that will never return, and
-    /// nothing else bounds it: its group holds a slot for as long as it runs. Past this the
-    /// process is killed and the task is retried like any other failure.
-    pub task_timeout: TimeDelta,
+    /// Reported only: the group is never interrupted. An operator that is merely slow cannot be
+    /// told apart from one that will never return, and killing it would abort work that was about
+    /// to succeed — a batch catching up on a backlog legitimately runs far longer than a
+    /// steady-state one. Since a task that is cut short is retried, a limit set below what the
+    /// work needs never completes it, it only repeats it.
+    pub slow_group_threshold: TimeDelta,
 }
 
 /// Message sent from a background task group to the main loop on completion.
@@ -271,10 +292,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                         operators,
                         config,
                     ));
-                    let retry_at = handle.await.unwrap_or_else(|error| {
-                        error!(%application_id, ?group, %error, "Task group panicked");
-                        Some(Timestamp::now().saturating_add(config.retry_delay))
-                    });
+                    let retry_at = await_group(application_id, &group, handle, config).await;
                     if result_sender
                         .send(GroupResult {
                             application_id,
@@ -314,7 +332,6 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 application_id,
                 task,
                 operators.clone(),
-                config.task_timeout,
             )));
         }
         for handle in handles {
@@ -435,12 +452,11 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
     }
 }
 
-/// Runs one task's operator binary to completion, bounded by `task_timeout`.
+/// Runs one task's operator binary to completion.
 async fn execute_task(
     application_id: ApplicationId,
     task: Task,
     operators: OperatorMap,
-    task_timeout: TimeDelta,
 ) -> Result<TaskOutcome, anyhow::Error> {
     let Task {
         id,
@@ -454,20 +470,13 @@ async fn execute_task(
     let mut child = Command::new(binary_path)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
-        // Timing out below drops this `Child`. Without this the operator would go on running,
-        // detached, still holding whatever the timeout was meant to release.
-        .kill_on_drop(true)
         .spawn()?;
 
     let mut stdin = child.stdin.take().expect("stdin should be configured");
     stdin.write_all(input.as_bytes()).await?;
     drop(stdin);
 
-    let timeout = task_timeout.as_duration();
-    let Ok(output) = tokio::time::timeout(timeout, child.wait_with_output()).await else {
-        anyhow::bail!("operator {operator} timed out after {timeout:?}");
-    };
-    let output = output?;
+    let output = child.wait_with_output().await?;
     anyhow::ensure!(
         output.status.success(),
         "operator {} exited with status: {}",
@@ -481,6 +490,36 @@ async fn execute_task(
     };
     debug!("Done executing task for {application_id}");
     Ok(outcome)
+}
+
+/// Awaits a task group, reporting it once if it outlives `slow_group_threshold`.
+///
+/// Reporting only — the group keeps running afterwards. Cutting it short would abort work that may
+/// be about to succeed, and since the task would then be retried, a threshold below what the work
+/// needs would repeat it forever instead of ever completing it.
+async fn await_group(
+    application_id: ApplicationId,
+    group: &Option<String>,
+    mut handle: tokio::task::JoinHandle<Option<Timestamp>>,
+    config: TaskProcessorConfig,
+) -> Option<Timestamp> {
+    let on_panic = |error| {
+        error!(%application_id, ?group, %error, "Task group panicked");
+        Some(Timestamp::now().saturating_add(config.retry_delay))
+    };
+    let threshold = config.slow_group_threshold.as_duration();
+    match tokio::time::timeout(threshold, &mut handle).await {
+        Ok(result) => result.unwrap_or_else(on_panic),
+        Err(_) => {
+            warn!(
+                %application_id, ?group,
+                "Task group still running after {threshold:?}; leaving it to finish"
+            );
+            #[cfg(with_metrics)]
+            metrics::SLOW_TASK_GROUPS.inc();
+            handle.await.unwrap_or_else(on_panic)
+        }
+    }
 }
 
 /// Groups the tasks of a batch by id, keeping their relative order.
@@ -607,30 +646,28 @@ mod tests {
     async fn execute_task_returns_the_operator_output() {
         let dir = tempfile::tempdir().unwrap();
         let operators = operator_running("echo done", &dir);
-        let outcome = execute_task(app_id(), timed_task(), operators, TimeDelta::from_secs(60))
+        let outcome = execute_task(app_id(), timed_task(), operators)
             .await
             .unwrap();
         assert_eq!(outcome.output.trim(), "done");
     }
 
     #[tokio::test]
-    async fn execute_task_gives_up_on_an_operator_that_outruns_its_timeout() {
-        let dir = tempfile::tempdir().unwrap();
-        // Sleeps far past the timeout: without a bound this call would never return, and the
-        // group would stay in flight for as long as the process lived.
-        let operators = operator_running("sleep 300", &dir);
-        let error = execute_task(
-            app_id(),
-            timed_task(),
-            operators,
-            TimeDelta::from_millis(200),
-        )
-        .await
-        .unwrap_err();
-        assert!(
-            error.to_string().contains("timed out"),
-            "unexpected error: {error}"
-        );
+    async fn a_group_that_outlives_the_threshold_is_reported_but_still_awaited() {
+        let expected = Some(Timestamp::from(4_242));
+        let handle = tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            expected
+        });
+        let config = TaskProcessorConfig {
+            retry_delay: TimeDelta::from_secs(5),
+            // Far below what the group takes, so the slow path is the one exercised.
+            slow_group_threshold: TimeDelta::from_millis(10),
+        };
+        // The point of the assertion: crossing the threshold reports the group, it does not cut
+        // it short, so the result it was about to produce still comes back.
+        let retry_at = await_group(app_id(), &Some("group".to_string()), handle, config).await;
+        assert_eq!(retry_at, expected);
     }
 
     #[test]
