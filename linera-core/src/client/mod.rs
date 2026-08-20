@@ -123,7 +123,7 @@ pub(crate) mod metrics {
                 "find_received_certificates_latency",
                 "find_received_certificates latency",
                 &[],
-                exponential_bucket_latencies(600_000.0),
+                exponential_bucket_latencies(3_600_000.0),
             );
 
         pub static FIND_RECEIVED_CERTIFICATES_LOG_ENTRIES: HistogramVec =
