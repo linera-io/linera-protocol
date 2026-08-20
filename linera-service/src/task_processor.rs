@@ -31,7 +31,7 @@ use tracing::{debug, error, info, warn};
 use crate::controller::Update;
 
 #[cfg(with_metrics)]
-mod metrics {
+pub(crate) mod metrics {
     use linera_base::prometheus_util::register_int_counter;
     use prometheus::IntCounter;
 
