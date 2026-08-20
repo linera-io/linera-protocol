@@ -127,8 +127,9 @@ pub trait CheckpointSummarizesUserStreams: EventFloorTracksCheckpoints {}
 /// **What the outboxes still reference is certified, not merely named.**
 /// `PreparedCheckpoint::outbox_block_hashes` lists every block this chain's outboxes still refer
 /// to, captured before the checkpoint block runs, and travels in the checkpoint's oracle response.
-/// The checkpoint block's certificate therefore transitively certifies those older blocks, so a
-/// bootstrapping node can rely on them without replaying the chain.
+/// The checkpoint block's certificate therefore *re-certifies* those older blocks, which is what
+/// keeps them acceptable after the committee that signed them has been removed —
+/// [`CheckpointRecertifiesReferencedBlocks`].
 pub trait CheckpointPreservesConsumptionBoundary: SerializedChainState {}
 
 /// **Lemma (A checkpoint leaves blob availability unchanged).** Checkpointing neither strands a
@@ -315,3 +316,61 @@ pub trait CheckpointRestoresExecutionState: SerializedChainState {}
 ///
 /// [`Cursor`]: linera_base::data_types::Cursor
 pub trait AcknowledgedMessagesMayBeForgotten: CheckpointPreservesConsumptionBoundary {}
+
+/// **Lemma (A checkpoint re-certifies the blocks its outboxes still reference).** The older blocks
+/// a chain still owes delivery from remain acceptable to a node that has never seen them, even
+/// after the committee that signed them has been removed.
+///
+/// *Why this needs saying.* Removing a committee revokes the standing of everything it signed:
+/// [`AdminOperation::RemoveCommittee`] states that such blocks "will only be accepted once they
+/// have been followed (hence re-certified) by a block certified by a recent committee". A chain's
+/// unacknowledged outgoing blocks are exactly the ones most likely to be old, so without a route
+/// back to a current committee they would become undeliverable precisely when a node most needs
+/// them — on bootstrap.
+///
+/// *Code correspondence.*
+///
+/// | | |
+/// |---|---|
+/// | transition | `ChainWorkerState::process_confirmed_block`, checkpoint-restore path |
+/// | reads | `outbox_block_hashes` from the checkpoint's `OracleResponse::Checkpoint`; `Storage::contains_certificate` for each |
+/// | writes | `pre_checkpoint_block_trust`, one entry per hash not yet in storage; the entry is removed when that block later arrives |
+/// | precondition | the checkpoint certificate itself verifies against the committee for *its* epoch |
+///
+/// *Proof.* The checkpoint block's certificate is signed by a current committee, and
+/// `outbox_block_hashes` travels inside its oracle response, so the list is covered by the block
+/// hash and inherits that certificate's standing ([`AcknowledgedMessagesMayBeForgotten`] fixes what
+/// the list contains). Naming a block by hash is therefore a current committee vouching for it.
+///
+/// The worker turns that into an admission rule. Before touching any chain state it checks each
+/// named hash against storage; every one missing is recorded in `pre_checkpoint_block_trust` and
+/// the push fails with `WorkerError::BlocksNotFound`, so a half-restored chain whose outboxes
+/// reference unknown blocks is never exposed. The client then uploads each missing certificate, and
+/// the `in_trust_set` test at the top of `process_confirmed_block` both removes the mark and lets
+/// the block past the already-processed guard — the condition is `!in_trust_set &&
+/// tip.next_block_height > height`. When the set is empty the restoration runs end to end. ∎
+///
+/// **What is relaxed and what is not.** The vouching substitutes for the block's *epoch* being
+/// current, not for its certificate being valid: `certificate.check` still runs against the
+/// committee for the block's declared epoch. So a re-certified block is one whose own quorum signed
+/// it and whose continued relevance a later quorum attests — never one accepted on a hash alone.
+/// [`TipAdvancesOnlyOnValidCertificate`] says the same from the other side: what trust-marking
+/// bypasses is the re-execution of ancestors, not their certification.
+///
+/// **This is one instance of a general mechanism.** Re-certification also runs along prev-hash
+/// chains, without any checkpoint: `ChainWorkerState::select_message_bundles` accepts a
+/// revoked-epoch bundle when a later bundle in the same batch is in a still-trusted epoch, since
+/// that bundle's certificate transitively covers the earlier ones. The
+/// [`previous_message_blocks`](linera_execution::ExecutionStateView) and `previous_event_blocks`
+/// maps exist to keep such chains intact for recipients and streams that are addressed only
+/// occasionally. The general form belongs with committee reconfiguration rather than here; what is
+/// specific to checkpoints is that pruning *severs* those chains — a checkpoint clears
+/// `previous_event_blocks` ([`CheckpointSummarizesUserStreams`]) — which is why the blocks the
+/// outboxes still need must be named explicitly instead.
+///
+/// [`AdminOperation::RemoveCommittee`]: linera_execution::system::AdminOperation::RemoveCommittee
+/// [`TipAdvancesOnlyOnValidCertificate`]: crate::manager::proof::commit::TipAdvancesOnlyOnValidCertificate
+pub trait CheckpointRecertifiesReferencedBlocks:
+    AcknowledgedMessagesMayBeForgotten + CheckpointSummarizesUserStreams
+{
+}
