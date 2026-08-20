@@ -809,6 +809,13 @@ pub enum ClientCommand {
         #[arg(long, default_value = "5")]
         task_retry_delay_secs: u64,
 
+        /// Maximum number of seconds a single operator invocation may run before it is killed
+        /// and its task retried. Bounds how long one slow operator can hold up its task group.
+        /// Only relevant when operators are configured via `--operator-application-ids`
+        /// or `--controller-id`.
+        #[arg(long, default_value = "60")]
+        task_timeout_secs: u64,
+
         /// Run in read-only mode: disallow mutations and prevent queries from scheduling
         /// operations. Use this when exposing the service to untrusted clients.
         #[arg(long)]

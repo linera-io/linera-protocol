@@ -45,6 +45,19 @@ pub fn parse_operator(s: &str) -> Result<(String, PathBuf), String> {
 
 type Deadline = Reverse<(Timestamp, Option<ApplicationId>)>;
 
+/// Timing limits applied to operator tasks.
+#[derive(Clone, Copy, Debug)]
+pub struct TaskProcessorConfig {
+    /// How long to wait before retrying a task group that failed.
+    pub retry_delay: TimeDelta,
+    /// Maximum wall-clock time for a single operator invocation.
+    ///
+    /// An operator that is merely slow cannot be told apart from one that will never return, and
+    /// nothing else bounds it: its group holds a slot for as long as it runs. Past this the
+    /// process is killed and the task is retried like any other failure.
+    pub task_timeout: TimeDelta,
+}
+
 /// Message sent from a background batch task to the main loop on completion.
 struct BatchResult {
     application_id: ApplicationId,
@@ -65,7 +78,7 @@ pub struct TaskProcessor<Env: linera_core::Environment> {
     update_receiver: mpsc::UnboundedReceiver<Update>,
     deadlines: BinaryHeap<Deadline>,
     operators: OperatorMap,
-    retry_delay: TimeDelta,
+    config: TaskProcessorConfig,
     in_flight_apps: BTreeSet<ApplicationId>,
 }
 
@@ -77,7 +90,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         chain_client: ChainClient<Env>,
         cancellation_token: CancellationToken,
         operators: OperatorMap,
-        retry_delay: TimeDelta,
+        config: TaskProcessorConfig,
         update_receiver: Option<mpsc::UnboundedReceiver<Update>>,
     ) -> Self {
         let notifications = chain_client.subscribe().expect("client subscription");
@@ -95,7 +108,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             update_receiver,
             deadlines: BinaryHeap::new(),
             operators,
-            retry_delay,
+            config,
             in_flight_apps: BTreeSet::new(),
         }
     }
@@ -234,7 +247,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 self.in_flight_apps.insert(application_id);
                 let chain_client = self.chain_client.clone();
                 let batch_sender = self.batch_sender.clone();
-                let retry_delay = self.retry_delay;
+                let config = self.config;
                 let operators = self.operators.clone();
                 tokio::spawn(async move {
                     // Run each group concurrently, so that a slow or failing group never
@@ -249,7 +262,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                                 tasks,
                                 chain_client.clone(),
                                 operators.clone(),
-                                retry_delay,
+                                config,
                             )),
                         ));
                     }
@@ -260,7 +273,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                     for (group, handle) in handles {
                         retry_at = retry_at.max(handle.await.unwrap_or_else(|error| {
                             error!(%application_id, ?group, %error, "Task group panicked");
-                            Some(Timestamp::now().saturating_add(retry_delay))
+                            Some(Timestamp::now().saturating_add(config.retry_delay))
                         }));
                     }
                     if batch_sender
@@ -293,7 +306,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         tasks: Vec<Task>,
         chain_client: ChainClient<Env>,
         operators: OperatorMap,
-        retry_delay: TimeDelta,
+        config: TaskProcessorConfig,
     ) -> Option<Timestamp> {
         let mut handles = Vec::with_capacity(tasks.len());
         for task in tasks {
@@ -301,6 +314,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 application_id,
                 task,
                 operators.clone(),
+                config.task_timeout,
             )));
         }
         for handle in handles {
@@ -308,15 +322,15 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 Ok(Ok(outcome)) => outcome,
                 Ok(Err(error)) => {
                     error!(%application_id, ?group, %error, "Error executing task");
-                    return Some(Timestamp::now().saturating_add(retry_delay));
+                    return Some(Timestamp::now().saturating_add(config.retry_delay));
                 }
                 Err(error) => {
                     error!(%application_id, ?group, %error, "Task panicked");
-                    return Some(Timestamp::now().saturating_add(retry_delay));
+                    return Some(Timestamp::now().saturating_add(config.retry_delay));
                 }
             };
             if let Err(timestamp) =
-                Self::submit_task_outcome(&chain_client, application_id, &outcome, retry_delay)
+                Self::submit_task_outcome(&chain_client, application_id, &outcome, config.retry_delay)
                     .await
             {
                 return Some(timestamp);
@@ -329,6 +343,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         application_id: ApplicationId,
         task: Task,
         operators: OperatorMap,
+        task_timeout: TimeDelta,
     ) -> Result<TaskOutcome, anyhow::Error> {
         let Task {
             id,
@@ -342,13 +357,20 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         let mut child = Command::new(binary_path)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
+            // Timing out below drops this `Child`. Without this the operator would go on running,
+            // detached, still holding whatever the timeout was meant to release.
+            .kill_on_drop(true)
             .spawn()?;
 
         let mut stdin = child.stdin.take().expect("stdin should be configured");
         stdin.write_all(input.as_bytes()).await?;
         drop(stdin);
 
-        let output = child.wait_with_output().await?;
+        let timeout = task_timeout.as_duration();
+        let Ok(output) = tokio::time::timeout(timeout, child.wait_with_output()).await else {
+            anyhow::bail!("operator {operator} timed out after {timeout:?}");
+        };
+        let output = output?;
         anyhow::ensure!(
             output.status.success(),
             "operator {} exited with status: {}",
