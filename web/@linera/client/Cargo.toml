@@ -10,6 +10,10 @@ license.workspace = true
 repository.workspace = true
 version.workspace = true
 
+[package.metadata.cargo-machete]
+# Used through `#[serde(with = "serde_bytes")]`, which `cargo-machete` cannot see.
+ignored = ["serde_bytes"]
+
 [lints.clippy]
 pedantic = "warn"
 
@@ -24,6 +28,7 @@ js-sys.workspace = true
 num-traits.workspace = true
 serde.workspace = true
 serde-wasm-bindgen.workspace = true
+serde_bytes.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
@@ -37,6 +42,10 @@ features = ["ansi", "fmt", "std"]
 workspace = true
 
 [dependencies.linera-base]
+features = ["web"]
+workspace = true
+
+[dependencies.linera-chain]
 features = ["web"]
 workspace = true
 
@@ -58,6 +67,9 @@ workspace = true
 
 [dependencies.linera-rpc]
 features = ["web"]
+workspace = true
+
+[dependencies.linera-sdk]
 workspace = true
 
 [dependencies.linera-storage]
