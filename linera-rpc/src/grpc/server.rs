@@ -52,10 +52,10 @@ type NotificationSender = tokio::sync::broadcast::Sender<Notification>;
 #[cfg(with_metrics)]
 pub(crate) mod metrics {
     use linera_base::prometheus_util::{
-        exponential_bucket_interval, linear_bucket_interval, register_histogram_vec,
-        register_int_counter_vec,
+        exponential_bucket_interval, linear_bucket_interval, register_histogram,
+        register_histogram_vec, register_int_counter, register_int_counter_vec,
     };
-    use prometheus::{HistogramVec, IntCounterVec};
+    use prometheus::{Histogram, HistogramVec, IntCounter, IntCounterVec};
 
     use super::super::{ERROR_TYPE_LABEL, METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL};
 
@@ -96,32 +96,28 @@ pub(crate) mod metrics {
                 &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
             );
 
-        pub static CROSS_CHAIN_MESSAGE_CHANNEL_FULL: IntCounterVec =
-            register_int_counter_vec(
+        pub static CROSS_CHAIN_MESSAGE_CHANNEL_FULL: IntCounter =
+            register_int_counter(
                 "cross_chain_message_channel_full",
                 "Cross-chain message channel full",
-                &[],
             );
 
-        pub static NOTIFICATIONS_SKIPPED_RECEIVER_LAG: IntCounterVec =
-            register_int_counter_vec(
+        pub static NOTIFICATIONS_SKIPPED_RECEIVER_LAG: IntCounter =
+            register_int_counter(
                 "notifications_skipped_receiver_lag",
                 "Number of notifications skipped because receiver lagged behind sender",
-                &[],
             );
 
-        pub static NOTIFICATIONS_DROPPED_NO_RECEIVER: IntCounterVec =
-            register_int_counter_vec(
+        pub static NOTIFICATIONS_DROPPED_NO_RECEIVER: IntCounter =
+            register_int_counter(
                 "notifications_dropped_no_receiver",
                 "Number of notifications dropped because no receiver was available",
-                &[],
             );
 
-        pub static NOTIFICATION_BATCH_SIZE: HistogramVec =
-            register_histogram_vec(
+        pub static NOTIFICATION_BATCH_SIZE: Histogram =
+            register_histogram(
                 "notification_batch_size",
                 "Number of notifications per batch sent to proxy",
-                &[],
                 exponential_bucket_interval(1.0, 250.0),
             );
 
@@ -153,9 +149,7 @@ impl BatchForwarder {
             let batch: Vec<Notification> = self.pending_notifications.drain(..chunk_size).collect();
 
             #[cfg(with_metrics)]
-            metrics::NOTIFICATION_BATCH_SIZE
-                .with_label_values(&[])
-                .observe(batch.len() as f64);
+            metrics::NOTIFICATION_BATCH_SIZE.observe(batch.len() as f64);
 
             let client = self.client.clone();
             let exporter_clients = self.exporter_clients.clone();
@@ -574,7 +568,6 @@ where
                             );
                             #[cfg(with_metrics)]
                             metrics::NOTIFICATIONS_SKIPPED_RECEIVER_LAG
-                                .with_label_values(&[])
                                 .inc_by(skipped_count);
                         }
                         Err(RecvError::Closed) => {
@@ -618,9 +611,7 @@ where
                 error!(%error, "dropping cross-chain request");
                 #[cfg(with_metrics)]
                 if error.is_full() {
-                    metrics::CROSS_CHAIN_MESSAGE_CHANNEL_FULL
-                        .with_label_values(&[])
-                        .inc();
+                    metrics::CROSS_CHAIN_MESSAGE_CHANNEL_FULL.inc();
                 }
             }
         }
@@ -630,9 +621,7 @@ where
             if let Err(error) = notification_sender.send(notification) {
                 error!(%error, "dropping notification");
                 #[cfg(with_metrics)]
-                metrics::NOTIFICATIONS_DROPPED_NO_RECEIVER
-                    .with_label_values(&[])
-                    .inc();
+                metrics::NOTIFICATIONS_DROPPED_NO_RECEIVER.inc();
             }
         }
     }
