@@ -446,6 +446,11 @@ type ChainStateExtendedView {
 	that tracks all chains and never filters.
 	"""
 	outboxIndexTrackedHash: CryptoHash
+	"""
+	The highest block of this chain pushed to each other committee validator. A validator with
+	no entry is queried before its first push; ones that leave the committee are pruned.
+	"""
+	exportedHeights: JSONObject!
 }
 
 """

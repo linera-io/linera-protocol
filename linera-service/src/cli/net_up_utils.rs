@@ -152,6 +152,8 @@ pub async fn handle_net_up_service(
     );
     let initial_amount = Amount::from_tokens(initial_amount);
     let config = LocalNetConfig {
+        block_export_transport: crate::config::BlockExportTransport::Relay,
+        export_blocks_to_committee: false,
         network,
         database,
         testing_prng_seed,
