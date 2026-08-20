@@ -334,10 +334,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         delete_storage_first: bool,
         short_key: &[u8],
     ) -> Result<Arc<RwLock<W>>, ViewError> {
-        let key = context
-            .base_key()
-            .base_tag_index(KeyTag::Subview as u8, short_key);
-        let context = context.clone_with_base_key(key);
+        let context = Self::subview_context(context, short_key);
         // Obtain a view and set its pending state to the default (e.g. empty) state
         let view = if delete_storage_first {
             W::new(context)?
