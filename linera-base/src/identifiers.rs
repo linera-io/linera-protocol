@@ -704,7 +704,7 @@ impl std::str::FromStr for StreamId {
                 stream_name,
             })
         } else {
-            Err(anyhow!("Invalid blob ID: {s}"))
+            Err(anyhow!("Invalid stream ID: {s}"))
         }
     }
 }
