@@ -4040,7 +4040,6 @@ dependencies = [
  "serde_yaml 0.8.26",
  "serde_yaml 0.9.33",
  "thiserror 1.0.69",
- "thiserror-context",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -4137,7 +4136,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
- "thiserror-context",
 ]
 
 [[package]]
@@ -4158,7 +4156,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
- "thiserror-context",
  "tracing",
  "trait-variant",
 ]
@@ -7362,12 +7359,6 @@ checksum = "4288b5bcbc7920c07a1149a35cf9590a2aa808e0bc1eafaade0b80947865fbc4"
 dependencies = [
  "thiserror-impl 2.0.18",
 ]
-
-[[package]]
-name = "thiserror-context"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d4cf778b0694c0adf030668380054b3a382f1e5e6a2e9a0b54bc5e677045bca"
 
 [[package]]
 name = "thiserror-impl"

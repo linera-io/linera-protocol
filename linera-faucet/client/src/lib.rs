@@ -17,12 +17,11 @@ use linera_base::{
 use linera_client::config::GenesisConfig;
 use linera_execution::{committee::ValidatorState, Committee, ResourceControlPolicy};
 use linera_version::VersionInfo;
-use thiserror_context::Context;
 
 /// The kinds of error that the faucet client can return.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
-pub enum ErrorInner {
+pub enum Error {
     /// A response from the faucet could not be parsed as JSON.
     #[error("JSON parsing error: {0:?}")]
     Json(#[from] serde_json::Error),
@@ -32,21 +31,15 @@ pub enum ErrorInner {
     /// An HTTP request to the faucet failed.
     #[error("HTTP error: {0:?}")]
     Http(#[from] reqwest::Error),
-}
-
-pub use error::Error;
-
-mod error {
-    // `impl_context!` generates a public `Error` newtype (with accessors) that cannot carry
-    // doc comments, so this wrapper module is exempted from the crate's `missing_docs` policy.
-    // `expect` (rather than `allow`) flags this if the macro ever stops generating such items.
-    #![expect(missing_docs)]
-
-    use thiserror_context::Context;
-
-    use super::ErrorInner;
-
-    thiserror_context::impl_context!(Error(ErrorInner));
+    /// A GraphQL query could not be sent to the faucet.
+    #[error("failed to execute query {query:?}: {source}")]
+    Query {
+        /// The query that could not be sent.
+        query: String,
+        /// The underlying HTTP failure.
+        #[source]
+        source: reqwest::Error,
+    },
 }
 
 /// The result of a successful claim mutation.
@@ -114,13 +107,16 @@ impl Faucet {
             }))
             .send()
             .await
-            .with_context(|| format!("executing query {query:?}"))?
+            .map_err(|source| Error::Query {
+                query: query.to_string(),
+                source,
+            })?
             .error_for_status()?
             .json()
             .await?;
 
         if let Some(errors) = response.errors {
-            Err(ErrorInner::GraphQl(errors).into())
+            Err(Error::GraphQl(errors))
         } else {
             Ok(response
                 .data
