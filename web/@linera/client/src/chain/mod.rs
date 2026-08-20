@@ -14,7 +14,7 @@ use serde::ser::Serialize as _;
 use wasm_bindgen::prelude::*;
 use web_sys::{js_sys, wasm_bindgen};
 
-use crate::{Environment, JsResult};
+use crate::{Environment, Error, Result};
 
 pub mod application;
 pub use application::Application;
@@ -69,7 +69,7 @@ impl Chain {
     /// # Panics
     /// If the handler function fails.
     #[wasm_bindgen(js_name = onNotification)]
-    pub fn on_notification(&self, handler: js_sys::Function) -> JsResult<()> {
+    pub fn on_notification(&self, handler: js_sys::Function) -> Result<()> {
         let mut notifications = self.chain_client.subscribe()?;
         wasm_bindgen_futures::spawn_local(async move {
             while let Some(notification) = notifications.next().await {
@@ -95,7 +95,7 @@ impl Chain {
     /// - if the options object is of the wrong form
     /// - if the transfer fails
     #[wasm_bindgen]
-    pub async fn transfer(&self, params: TransferParams) -> JsResult<()> {
+    pub async fn transfer(&self, params: TransferParams) -> Result<()> {
         let _hash = self
             .client
             .context
@@ -117,7 +117,7 @@ impl Chain {
     ///
     /// # Errors
     /// If the chain couldn't be established.
-    pub async fn balance(&self) -> JsResult<String> {
+    pub async fn balance(&self) -> Result<String> {
         Ok(self.chain_client.query_balance().await?.to_string())
     }
 
@@ -132,7 +132,7 @@ impl Chain {
     /// # Errors
     /// If the chain couldn't be established.
     #[wasm_bindgen(js_name = ownerBalance)]
-    pub async fn owner_balance(&self, owner: AccountOwner) -> JsResult<String> {
+    pub async fn owner_balance(&self, owner: AccountOwner) -> Result<String> {
         Ok(self
             .chain_client
             .query_owner_balance(owner)
@@ -144,7 +144,7 @@ impl Chain {
     ///
     /// # Errors
     /// If the chain couldn't be established.
-    pub async fn identity(&self) -> JsResult<AccountOwner> {
+    pub async fn identity(&self) -> Result<AccountOwner> {
         Ok(self.chain_client.identity().await?)
     }
 
@@ -158,7 +158,7 @@ impl Chain {
         &self,
         owner: AccountOwner,
         options: Option<AddOwnerOptions>,
-    ) -> JsResult<()> {
+    ) -> Result<()> {
         let AddOwnerOptions { weight } = options.unwrap_or_default();
         self.client
             .context
@@ -182,7 +182,7 @@ impl Chain {
     /// # Errors
     /// If synchronization fails, e.g. because validators are unreachable.
     #[wasm_bindgen]
-    pub async fn synchronize(&self) -> JsResult<()> {
+    pub async fn synchronize(&self) -> Result<()> {
         self.chain_client.synchronize_from_validators().await?;
         self.client
             .context
@@ -202,7 +202,7 @@ impl Chain {
     /// # Errors
     /// If the chain ownership cannot be retrieved.
     #[wasm_bindgen(js_name = isOwner)]
-    pub async fn is_owner(&self, owner: AccountOwner) -> JsResult<bool> {
+    pub async fn is_owner(&self, owner: AccountOwner) -> Result<bool> {
         let ownership = self.chain_client.query_chain_ownership().await?;
         Ok(ownership.is_owner(&owner))
     }
@@ -217,7 +217,7 @@ impl Chain {
     /// # Errors
     /// If the chain ownership cannot be retrieved.
     #[wasm_bindgen(js_name = ownerWeight)]
-    pub async fn owner_weight(&self, owner: AccountOwner) -> JsResult<Option<f64>> {
+    pub async fn owner_weight(&self, owner: AccountOwner) -> Result<Option<f64>> {
         let ownership = self.chain_client.query_chain_ownership().await?;
         let weight = ownership.owners.get(&owner).copied();
         #[expect(
@@ -242,10 +242,10 @@ impl Chain {
     /// If the chain is currently in the fast round, or the wallet fails to persist the
     /// cleared state.
     #[wasm_bindgen(js_name = clearPendingProposal)]
-    pub async fn clear_pending_proposal(&self) -> JsResult<()> {
+    pub async fn clear_pending_proposal(&self) -> Result<()> {
         let info = self.chain_client.chain_info().await?;
         if info.manager.current_round == Round::Fast {
-            return Err(JsError::new(
+            return Err(Error::new(
                 "cannot clear a pending proposal in the fast round",
             ));
         }
@@ -274,7 +274,7 @@ impl Chain {
     /// # Errors
     /// If the chain information cannot be retrieved.
     #[wasm_bindgen(js_name = nextRoundInfo)]
-    pub async fn next_round_info(&self) -> JsResult<RoundInfo> {
+    pub async fn next_round_info(&self) -> Result<RoundInfo> {
         let info = self.chain_client.chain_info().await?;
         let manager = &info.manager;
         let identity = self.chain_client.identity().await?;
@@ -304,7 +304,7 @@ impl Chain {
     /// # Errors
     /// If the chain is inactive, or the ownership change fails to commit.
     #[wasm_bindgen(js_name = setMultiLeaderRounds)]
-    pub async fn set_multi_leader_rounds(&self, rounds: u32) -> JsResult<()> {
+    pub async fn set_multi_leader_rounds(&self, rounds: u32) -> Result<()> {
         self.client
             .context
             .lock()
@@ -323,7 +323,7 @@ impl Chain {
     /// # Errors
     /// If a validator is unreachable.
     #[wasm_bindgen(js_name = validatorVersionInfo)]
-    pub async fn validator_version_info(&self) -> JsResult<JsValue> {
+    pub async fn validator_version_info(&self) -> Result<JsValue> {
         self.chain_client.synchronize_from_validators().await?;
         let result = self.chain_client.local_committee().await;
         let mut client = self.client.context.lock().await;
@@ -367,7 +367,7 @@ impl Chain {
     /// # Errors
     /// If the application ID is invalid.
     #[wasm_bindgen]
-    pub async fn application(&self, id: &str) -> JsResult<Application> {
+    pub async fn application(&self, id: &str) -> Result<Application> {
         web_sys::console::debug_1(&format!("connecting to Linera application {id}").into());
         Ok(Application {
             client: self.client.clone(),
