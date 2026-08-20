@@ -252,6 +252,9 @@ Client implementation and command-line tool for the Linera blockchain
 * `--listener-delay-after-ms <DELAY_AFTER_MS>` — Wait after processing any notification (useful for rate limiting)
 
   Default value: `0`
+* `--listener-background-sync-interval-ms <BACKGROUND_SYNC_INTERVAL_MS>` — The time between two background received-certificate syncs of the same chain, in milliseconds. Repeating the sync keeps the received-certificate trackers fresh, so a process restart only has to walk the short backlog accumulated since the last refresh instead of everything since the previous restart. Set to 0 to sync only once, when the chain listener starts
+
+  Default value: `900000`
 * `--wallet <WALLET_STATE_PATH>` — Sets the file storing the private state of user chains (an empty one will be created if missing)
 * `--keystore <KEYSTORE_PATH>` — Sets the file storing the keystore state
 * `-w`, `--with-wallet <WITH_WALLET>` — Given an ASCII alphanumeric parameter `X`, read the wallet state and the wallet storage config from the environment variables `LINERA_WALLET_{X}` and `LINERA_STORAGE_{X}` instead of `LINERA_WALLET` and `LINERA_STORAGE`
@@ -822,6 +825,9 @@ Run a GraphQL service to explore and extend the chains of the wallet
 * `--listener-delay-after-ms <DELAY_AFTER_MS>` — Wait after processing any notification (useful for rate limiting)
 
   Default value: `0`
+* `--listener-background-sync-interval-ms <BACKGROUND_SYNC_INTERVAL_MS>` — The time between two background received-certificate syncs of the same chain, in milliseconds. Repeating the sync keeps the received-certificate trackers fresh, so a process restart only has to walk the short backlog accumulated since the last refresh instead of everything since the previous restart. Set to 0 to sync only once, when the chain listener starts
+
+  Default value: `900000`
 * `--port <PORT>` — The port on which to run the server
 * `--operator-application-ids <OPERATOR_APPLICATION_IDS>` — Application IDs of operator applications to watch. When specified, a task processor is started alongside the node service
 * `--controller-id <CONTROLLER_APPLICATION_ID>` — A controller to execute a dynamic set of applications running on a dynamic set of chains
@@ -881,6 +887,9 @@ Run a GraphQL service that exposes a faucet where users can claim tokens. This g
 * `--listener-delay-after-ms <DELAY_AFTER_MS>` — Wait after processing any notification (useful for rate limiting)
 
   Default value: `0`
+* `--listener-background-sync-interval-ms <BACKGROUND_SYNC_INTERVAL_MS>` — The time between two background received-certificate syncs of the same chain, in milliseconds. Repeating the sync keeps the received-certificate trackers fresh, so a process restart only has to walk the short backlog accumulated since the last refresh instead of everything since the previous restart. Set to 0 to sync only once, when the chain listener starts
+
+  Default value: `900000`
 * `--storage-path <STORAGE_PATH>` — Path to the persistent storage file for faucet mappings
 * `--max-batch-size <MAX_BATCH_SIZE>` — Maximum number of operations to include in a single block (default: 100)
 
