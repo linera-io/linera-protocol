@@ -55,14 +55,22 @@ pub struct NativeFungibleTransferGenerator {
     destination_index: usize,
     rng: SmallRng,
     single_destination_per_block: bool,
+    avoid_self: bool,
 }
 
 impl NativeFungibleTransferGenerator {
     /// Creates a generator that sends native token transfers from the source chain.
+    ///
+    /// If `avoid_self` is true, `self.source_chain_id` is skipped whenever the destination
+    /// list has more than one entry (the historical behavior: a caller that wants a mix of
+    /// self- and cross-chain traffic should build a destination list that already includes
+    /// `source_chain_id` explicitly and pass `avoid_self = false`, otherwise it would never
+    /// actually be selected).
     pub fn new(
         source_chain_id: ChainId,
         mut destination_chains: Vec<ChainId>,
         single_destination_per_block: bool,
+        avoid_self: bool,
     ) -> Result<Self, BenchmarkError> {
         // With a single chain, send to self.
         if destination_chains.is_empty() {
@@ -76,6 +84,7 @@ impl NativeFungibleTransferGenerator {
             destination_index: 0,
             rng,
             single_destination_per_block,
+            avoid_self,
         })
     }
 
@@ -87,7 +96,10 @@ impl NativeFungibleTransferGenerator {
         let destination_chain_id = self.destination_chains[self.destination_index];
         self.destination_index += 1;
         // Skip self when there are other destinations available.
-        if destination_chain_id == self.source_chain_id && self.destination_chains.len() > 1 {
+        if destination_chain_id == self.source_chain_id
+            && self.destination_chains.len() > 1
+            && self.avoid_self
+        {
             self.next_destination()
         } else {
             destination_chain_id

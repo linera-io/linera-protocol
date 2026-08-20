@@ -921,6 +921,7 @@ impl Runnable for Job {
                                         source,
                                         destinations,
                                         single_destination_per_block,
+                                        true,
                                     )?))
                                 }
                             })
