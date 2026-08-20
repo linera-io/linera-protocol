@@ -8,9 +8,9 @@
 //! application's types. An application publishes that knowledge as a BCS-encoded
 //! [`linera_sdk::formats::Formats`] blob, and [`Formats`] turns it into a decoder.
 //!
-//! Fetching the blob is the caller's job — where it lives is a deployment choice, and on
-//! this network it is served by a formats-registry application, which
-//! [`Application::query`](crate::chain::Application::query) can already read.
+//! A module publishes that blob alongside its contract and service bytecode, so
+//! [`Chain::applications`](crate::Chain::applications) hands back its ID directly:
+//! read it with [`Chain::read_blob`](crate::Chain::read_blob) and pass the bytes here.
 
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;

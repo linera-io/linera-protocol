@@ -72,6 +72,7 @@ export type BlockHeight = number;
 export type ModuleId = string;
 export type Timestamp = number;
 export type StreamId = string;
+export type BlobId = string;
 ";
 
 /// How many blocks [`Chain::blocks`] returns when the caller doesn't say.
@@ -121,6 +122,11 @@ pub struct ApplicationOverview {
     pub parameters: String,
     /// The applications this one depends on.
     pub required_application_ids: Vec<ApplicationId>,
+    /// The ID of the blob holding this application's published `Formats`, in the form
+    /// [`Chain::read_blob`] takes, or `undefined` if the module published none. Read it
+    /// and pass the bytes to `Formats` to decode this application's payloads.
+    #[tsify(optional, type = "BlobId")]
+    pub formats_blob_id: Option<String>,
 }
 
 /// Header-level information about one confirmed block: enough to list a chain's blocks
@@ -141,7 +147,7 @@ pub struct BlockSummary {
     pub previous_block_hash: Option<CryptoHash>,
     /// The owner who signed for the block's operations, or `undefined` if the chain
     /// account signed.
-    pub authenticated_signer: Option<AccountOwner>,
+    pub authenticated_owner: Option<AccountOwner>,
     /// The hash of the execution state after this block.
     pub state_hash: CryptoHash,
     /// How many operations the block executes.
@@ -617,6 +623,10 @@ impl Chain {
                     application_index: description.application_index,
                     parameters: hex::encode(&description.parameters),
                     required_application_ids: description.required_application_ids,
+                    formats_blob_id: description
+                        .module_id
+                        .formats_blob_id()
+                        .map(|blob_id| blob_id.to_string()),
                 })
                 .collect(),
         ))
@@ -656,7 +666,7 @@ impl Chain {
                 epoch: block.header.epoch.0,
                 timestamp: block.header.timestamp,
                 previous_block_hash: block.header.previous_block_hash,
-                authenticated_signer: block.header.authenticated_signer,
+                authenticated_owner: block.header.authenticated_owner,
                 state_hash: block.header.state_hash,
                 operation_count: block.body.operations().count(),
                 incoming_bundle_count: block.body.incoming_bundles().count(),
