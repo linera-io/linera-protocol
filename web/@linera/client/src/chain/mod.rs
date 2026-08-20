@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use futures::stream::StreamExt;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, BlockHeight, Epoch, Round, Timestamp},
+    data_types::{Amount, BlockHeight, Round, Timestamp},
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, ModuleId, StreamId},
 };
 use linera_client::chain_listener::ClientContext as _;
@@ -69,7 +69,6 @@ pub struct RoundInfo {
 const _: &str = r"
 export type Amount = string;
 export type BlockHeight = number;
-export type Epoch = number;
 export type ModuleId = string;
 export type Timestamp = number;
 export type StreamId = string;
@@ -90,7 +89,7 @@ pub struct ChainSummary {
     /// The chain this describes.
     pub chain_id: ChainId,
     /// The epoch, i.e. the committee configuration, the chain is currently on.
-    pub epoch: Epoch,
+    pub epoch: u32,
     /// The balance of the chain account.
     pub balance: Amount,
     /// The hash of the chain's last block, or `undefined` if it has none yet.
@@ -135,7 +134,7 @@ pub struct BlockSummary {
     /// The block's height in its chain.
     pub height: BlockHeight,
     /// The epoch the block belongs to.
-    pub epoch: Epoch,
+    pub epoch: u32,
     /// When the block was created.
     pub timestamp: Timestamp,
     /// The hash of the preceding block, or `undefined` for the first block.
@@ -197,7 +196,8 @@ pub struct EventEntries(pub Vec<EventEntry>);
 pub struct EventsQuery {
     /// The stream to read, in the form blocks print it: `"System:<name>"` or
     /// `"User:<application>:<name>"`, with names hex-encoded.
-    pub stream_id: StreamId,
+    #[tsify(type = "StreamId")]
+    pub stream_id: String,
     /// The index to start at. Defaults to the start of the stream.
     #[serde(default)]
     pub start_index: Option<u32>,
@@ -209,7 +209,8 @@ pub struct EventsQuery {
 #[serde(default, rename_all = "camelCase")]
 pub struct BlocksQuery {
     /// The hash of the block to start from. Defaults to the chain's last block.
-    pub from: Option<CryptoHash>,
+    #[tsify(optional, type = "CryptoHash")]
+    pub from: Option<String>,
     /// How many blocks to return at most. Defaults to 10.
     pub limit: Option<u32>,
 }
@@ -219,6 +220,18 @@ pub struct BlocksQuery {
 struct HashedBlock<'a> {
     hash: CryptoHash,
     block: &'a linera_chain::block::Block,
+}
+
+/// Parses a block hash as JavaScript passes it: a string.
+///
+/// Identifiers are parsed here, in the body of the method that takes them, rather than
+/// by `tsify` while it converts arguments: a failure there escapes an `async` method as
+/// an unhandled exception, which no caller can catch, instead of rejecting its promise.
+///
+/// # Errors
+/// If the string is not a valid hash.
+fn block_hash_from_string(hash: &str) -> JsResult<CryptoHash> {
+    Ok(hash.parse()?)
 }
 
 /// Converts a block height as JavaScript passes it — a number — into a [`BlockHeight`].
@@ -570,7 +583,7 @@ impl Chain {
         let info = self.chain_client.chain_info().await?;
         Ok(ChainSummary {
             chain_id: info.chain_id,
-            epoch: info.epoch,
+            epoch: info.epoch.0,
             balance: info.chain_balance,
             block_hash: info.block_hash,
             next_block_height: info.next_block_height,
@@ -625,7 +638,7 @@ impl Chain {
         let limit = limit.unwrap_or(DEFAULT_BLOCKS_LIMIT);
 
         let mut next = match from {
-            Some(hash) => Some(hash),
+            Some(hash) => Some(block_hash_from_string(&hash)?),
             None => self.chain_client.chain_info().await?.block_hash,
         };
 
@@ -640,7 +653,7 @@ impl Chain {
             summaries.push(BlockSummary {
                 hash,
                 height: block.header.height,
-                epoch: block.header.epoch,
+                epoch: block.header.epoch.0,
                 timestamp: block.header.timestamp,
                 previous_block_hash: block.header.previous_block_hash,
                 authenticated_signer: block.header.authenticated_signer,
@@ -669,9 +682,9 @@ impl Chain {
     /// # Errors
     /// If the block cannot be read from the local node or cannot be serialized.
     #[wasm_bindgen]
-    pub async fn block(&self, hash: Option<CryptoHash>) -> JsResult<JsValue> {
+    pub async fn block(&self, hash: Option<String>) -> JsResult<JsValue> {
         let hash = match hash {
-            Some(hash) => Some(hash),
+            Some(hash) => Some(block_hash_from_string(&hash)?),
             None => self.chain_client.chain_info().await?.block_hash,
         };
         let Some(hash) = hash else {
@@ -716,6 +729,9 @@ impl Chain {
             stream_id,
             start_index,
         } = query;
+        let stream_id: StreamId = stream_id
+            .parse()
+            .map_err(|error| JsError::new(&format!("invalid stream ID: {error}")))?;
         let events = self
             .chain_client
             .events_from_index(stream_id, start_index.unwrap_or(0))

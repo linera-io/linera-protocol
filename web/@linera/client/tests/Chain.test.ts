@@ -175,6 +175,11 @@ test("block returns the full block behind a summary", async () => {
 
   // With no argument it resolves to whatever the chain's last block is by then.
   expect((await chain.block()).block.header.chain_id).toBe(chainId);
+
+  // A hash that isn't one rejects the promise. It must not throw somewhere the caller
+  // can't catch it: an explorer hands these straight to a search box.
+  await expect(chain.block("not-a-hash")).rejects.toThrow();
+  await expect(chain.blocks({ from: "not-a-hash" })).rejects.toThrow();
 }, 150000);
 
 test("blockHashAtHeight indexes the same blocks blocks() walks", async () => {
