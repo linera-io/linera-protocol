@@ -84,7 +84,13 @@ where
     expected_read_data_blob_requests: VecDeque<(DataBlobHash, Vec<u8>)>,
     expected_assert_data_blob_exists_requests: VecDeque<(DataBlobHash, Option<()>)>,
     expected_has_empty_storage_requests: VecDeque<(ApplicationId, bool)>,
-    expected_open_chain_calls: VecDeque<(ChainOwnership, ApplicationPermissions, Amount, ChainId)>,
+    expected_open_chain_calls: VecDeque<(
+        ChainOwnership,
+        ApplicationPermissions,
+        AccountOwner,
+        Amount,
+        ChainId,
+    )>,
     expected_publish_module_calls: VecDeque<ExpectedPublishModuleCall>,
     expected_create_application_calls: VecDeque<ExpectedCreateApplicationCall>,
     expected_create_data_blob_calls: VecDeque<ExpectedCreateDataBlobCall>,
@@ -867,31 +873,42 @@ where
         &mut self,
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
+        account: AccountOwner,
         balance: Amount,
         chain_id: ChainId,
     ) {
         self.expected_open_chain_calls.push_back((
             ownership,
             application_permissions,
+            account,
             balance,
             chain_id,
         ));
     }
 
-    /// Opens a new chain, configuring it with the provided `chain_ownership`,
-    /// `application_permissions` and initial `balance` (debited from the current chain).
+    /// Opens a new chain, configuring it with the provided `chain_ownership` and
+    /// `application_permissions`, and crediting `balance` (debited from the current chain) to
+    /// `account` on the new chain.
     pub fn open_chain(
         &mut self,
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
+        account: AccountOwner,
         balance: Amount,
     ) -> ChainId {
-        let (expected_ownership, expected_permissions, expected_balance, chain_id) = self
+        let (
+            expected_ownership,
+            expected_permissions,
+            expected_account,
+            expected_balance,
+            chain_id,
+        ) = self
             .expected_open_chain_calls
             .pop_front()
             .expect("Unexpected open_chain call");
         assert_eq!(&ownership, &expected_ownership);
         assert_eq!(&application_permissions, &expected_permissions);
+        assert_eq!(account, expected_account);
         assert_eq!(balance, expected_balance);
         chain_id
     }

@@ -145,6 +145,7 @@ where
 
         let origin = ChainOrigin::Root(0);
         let config = InitialChainConfig {
+            account: AccountOwner::CHAIN,
             balance: amount,
             ownership: ChainOwnership::single(account_secret.public().into()),
             epoch: Epoch::ZERO,
@@ -273,6 +274,7 @@ where
         let config = InitialChainConfig {
             epoch: self.admin_description.config().epoch,
             ownership,
+            account: AccountOwner::CHAIN,
             balance,
             application_permissions: Default::default(),
         };
@@ -306,6 +308,7 @@ where
         let config = InitialChainConfig {
             epoch: self.admin_description.config().epoch,
             ownership: ChainOwnership::single(owner),
+            account: AccountOwner::CHAIN,
             balance,
             application_permissions: Default::default(),
         };
@@ -2860,6 +2863,7 @@ where
     let proposal0 = make_first_block(admin_chain_id)
         .with_operation(SystemOperation::OpenChain(OpenChainConfig {
             ownership: ChainOwnership::single(env.admin_public_key().into()),
+            account: AccountOwner::CHAIN,
             balance: Amount::ZERO,
             application_permissions: Default::default(),
         }))

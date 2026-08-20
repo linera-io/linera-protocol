@@ -365,17 +365,21 @@ where
         serde_json::from_slice(&response).expect("Failed to deserialize service response")
     }
 
-    /// Opens a new chain, configuring it with the provided `chain_ownership`,
-    /// `application_permissions` and initial `balance` (debited from the current chain).
+    /// Opens a new chain, configuring it with the provided `chain_ownership` and
+    /// `application_permissions`, and crediting `balance` (debited from the current chain) to
+    /// `account` on the new chain. Use [`AccountOwner::CHAIN`] to fund the new chain's own
+    /// account, which is the only balance that pays fees for blocks it does not authenticate.
     pub fn open_chain(
         &mut self,
         chain_ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
+        account: AccountOwner,
         balance: Amount,
     ) -> ChainId {
         let chain_id = contract_wit::open_chain(
             &chain_ownership.into(),
             &application_permissions.into(),
+            account.into(),
             balance.into(),
         );
         chain_id.into()

@@ -358,6 +358,9 @@ Open (i.e. activate) a new chain deriving the UID from an existing one
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
 
   Default value: `0`
+* `--balance-account <ACCOUNT>` — The account on the new chain credited with the initial balance. Defaults to the chain account, which is the only balance that pays fees for blocks the account itself does not authenticate
+
+  Default value: `0x00`
 * `--super-owner` — Whether to create a super owner for the new chain
 
 
@@ -390,6 +393,9 @@ If the wallet holds the key pair for exactly one of the new chain's owners, that
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
 
   Default value: `0`
+* `--balance-account <ACCOUNT>` — The account on the new chain credited with the initial balance. Defaults to the chain account, which is the only balance that pays fees for blocks the account itself does not authenticate
+
+  Default value: `0x00`
 
 
 
@@ -1137,6 +1143,7 @@ Request a new chain from a faucet and add it to the wallet
 
 * `--faucet <FAUCET>` — The address of a faucet
 * `--set-default` — Whether this chain should become the default chain
+* `--fund-owner-account` — Whether to credit the claimed tokens to the new owner's account rather than to the chain account. Only blocks authenticated by that owner can then pay fees
 
 
 

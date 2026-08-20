@@ -2608,12 +2608,13 @@ impl<Env: Environment> ChainClient<Env> {
         .await
     }
 
-    /// Opens a new chain with a derived UID.
+    /// Opens a new chain with a derived UID, crediting `balance` to `account` on it.
     #[instrument(level = "trace", skip(self))]
     pub async fn open_chain(
         &self,
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
+        account: AccountOwner,
         balance: Amount,
     ) -> Result<ClientOutcome<(ChainDescription, ConfirmedBlockCertificate)>, Error> {
         // Check if we have a key for any owner before consuming ownership.
@@ -2626,6 +2627,7 @@ impl<Env: Environment> ChainClient<Env> {
         }
         let config = OpenChainConfig {
             ownership,
+            account,
             balance,
             application_permissions,
         };

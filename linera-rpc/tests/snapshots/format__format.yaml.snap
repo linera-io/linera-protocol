@@ -590,6 +590,8 @@ InitialChainConfig:
         TYPENAME: ChainOwnership
     - epoch:
         TYPENAME: Epoch
+    - account:
+        TYPENAME: AccountOwner
     - balance:
         TYPENAME: Amount
     - application_permissions:
@@ -881,6 +883,8 @@ OpenChainConfig:
   STRUCT:
     - ownership:
         TYPENAME: ChainOwnership
+    - account:
+        TYPENAME: AccountOwner
     - balance:
         TYPENAME: Amount
     - application_permissions:

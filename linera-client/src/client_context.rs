@@ -1293,6 +1293,7 @@ impl<Env: Environment> ClientContext<Env> {
             .map(|owner| {
                 let config = OpenChainConfig {
                     ownership: ChainOwnership::single_super(*owner),
+                    account: AccountOwner::CHAIN,
                     balance,
                     application_permissions: Default::default(),
                 };

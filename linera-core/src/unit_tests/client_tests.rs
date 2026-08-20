@@ -560,6 +560,7 @@ where
         .open_chain(
             ChainOwnership::single(new_public_key.into()),
             ApplicationPermissions::default(),
+            AccountOwner::CHAIN,
             Amount::ZERO,
         )
         .await
@@ -602,6 +603,7 @@ where
     let new_chain_config = InitialChainConfig {
         ownership: ChainOwnership::single(new_public_key.into()),
         epoch: Epoch::ZERO,
+        account: AccountOwner::CHAIN,
         balance: Amount::ZERO,
         application_permissions: Default::default(),
     };
@@ -633,6 +635,7 @@ where
         .open_chain(
             ChainOwnership::single(new_public_key.into()),
             ApplicationPermissions::default(),
+            AccountOwner::CHAIN,
             Amount::ZERO,
         )
         .await
@@ -711,7 +714,12 @@ where
     let ownership = ChainOwnership::single(new_public_key.into())
         .with_regular_owner(new_public_key.into(), 100);
     let (new_description, _creation_certificate) = sender
-        .open_chain(ownership, ApplicationPermissions::default(), Amount::ZERO)
+        .open_chain(
+            ownership,
+            ApplicationPermissions::default(),
+            AccountOwner::CHAIN,
+            Amount::ZERO,
+        )
         .await
         .unwrap_ok_committed();
     let new_id = new_description.id();
@@ -1698,6 +1706,61 @@ where
     Ok(())
 }
 
+/// A chain whose initial balance went to an owner's account has no chain balance: only blocks
+/// that owner authenticates can pay for fees there.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[test_log::test(tokio::test)]
+async fn test_open_chain_funding_an_owner_account<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut policy = ResourceControlPolicy::only_fuel();
+    policy.operation = Amount::from_micros(1); // Make blocks cost something.
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
+        .await?
+        .with_policy(policy);
+    // New chains use the admin chain to verify their creation certificate.
+    let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+
+    let new_public_key = builder.signer.generate_new();
+    let new_owner = AccountOwner::from(new_public_key);
+    let (new_description, _certificate) = sender
+        .open_chain(
+            ChainOwnership::single(new_owner),
+            ApplicationPermissions::default(),
+            new_owner,
+            Amount::from_tokens(1),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    let mut client = builder
+        .make_client(new_description.id(), None, BlockHeight::ZERO)
+        .await?;
+    client.set_preferred_owner(new_owner);
+    client.synchronize_from_validators().await?;
+
+    // The funds are in the owner's account, not in the chain's own account.
+    assert_eq!(client.local_balance().await?, Amount::ZERO);
+    assert_eq!(
+        client.local_owner_balance(new_owner).await?,
+        Amount::from_tokens(1)
+    );
+
+    // The owner can still produce blocks: fees come out of their own account.
+    client
+        .burn(new_owner, Amount::from_millis(500))
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(client.local_balance().await?, Amount::ZERO);
+    assert!(client.local_owner_balance(new_owner).await? < Amount::from_millis(500));
+
+    Ok(())
+}
+
 /// The sender chain should be stored sparsely in the receiver's node: only blocks
 /// that sent messages to us should be downloaded, not the intermediate ones. When
 /// the sender is a non-root chain (so its `ChainDescription` blob isn't in the
@@ -1730,6 +1793,7 @@ where
     let (sender_description, _creation_certificate) = Box::pin(owner.open_chain(
         sender_ownership,
         ApplicationPermissions::default(),
+        AccountOwner::CHAIN,
         Amount::from_tokens(4),
     ))
     .await
@@ -3788,6 +3852,7 @@ where
         .open_chain(
             ChainOwnership::single(new_public_key.into()),
             ApplicationPermissions::default(),
+            AccountOwner::CHAIN,
             Amount::from_tokens(10),
         )
         .await
@@ -4207,6 +4272,7 @@ where
         .open_chain(
             ChainOwnership::single(new_public_key.into()),
             ApplicationPermissions::default(),
+            AccountOwner::CHAIN,
             Amount::from_tokens(1),
         )
         .await

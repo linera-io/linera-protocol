@@ -381,6 +381,12 @@ pub enum ClientCommand {
         #[arg(long = "initial-balance", default_value = "0")]
         balance: Amount,
 
+        /// The account on the new chain credited with the initial balance. Defaults to the
+        /// chain account, which is the only balance that pays fees for blocks the account
+        /// itself does not authenticate.
+        #[arg(long = "balance-account", default_value = "0x00")]
+        account: AccountOwner,
+
         /// Whether to create a super owner for the new chain.
         #[arg(long)]
         super_owner: bool,
@@ -408,6 +414,12 @@ pub enum ClientCommand {
         /// balance.
         #[arg(long = "initial-balance", default_value = "0")]
         balance: Amount,
+
+        /// The account on the new chain credited with the initial balance. Defaults to the
+        /// chain account, which is the only balance that pays fees for blocks the account
+        /// itself does not authenticate.
+        #[arg(long = "balance-account", default_value = "0x00")]
+        account: AccountOwner,
     },
 
     /// Display who owns the chain, and how the owners work together proposing blocks.
@@ -1350,6 +1362,11 @@ pub enum WalletCommand {
         /// Whether this chain should become the default chain.
         #[arg(long)]
         set_default: bool,
+
+        /// Whether to credit the claimed tokens to the new owner's account rather than to the
+        /// chain account. Only blocks authenticated by that owner can then pay fees.
+        #[arg(long)]
+        fund_owner_account: bool,
     },
 
     /// Export the genesis configuration to a JSON file.

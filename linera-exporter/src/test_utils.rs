@@ -20,7 +20,7 @@ use linera_base::{
         Amount, Blob, BlockHeight, ChainDescription, ChainOrigin, Epoch, InitialChainConfig,
         OracleResponse, Round, Timestamp,
     },
-    identifiers::{BlobId, ChainId},
+    identifiers::{AccountOwner, BlobId, ChainId},
 };
 use linera_chain::{
     data_types::BlockExecutionOutcome,
@@ -500,6 +500,7 @@ pub(crate) async fn make_simple_state_with_blobs<S: Storage>(
         InitialChainConfig {
             ownership: Default::default(),
             epoch: Default::default(),
+            account: AccountOwner::CHAIN,
             balance: Default::default(),
             application_permissions: Default::default(),
         },

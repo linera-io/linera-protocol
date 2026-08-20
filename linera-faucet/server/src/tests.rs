@@ -9,7 +9,7 @@ use futures::lock::Mutex;
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, InMemorySigner, TestString},
     data_types::{Amount, Epoch, Timestamp},
-    identifiers::{AccountOwner, ChainId},
+    identifiers::{Account, AccountOwner, ChainId},
 };
 use linera_client::chain_listener;
 use linera_core::{
@@ -17,8 +17,8 @@ use linera_core::{
     environment,
     test_utils::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
 };
-use linera_execution::ResourceControlPolicy;
-use linera_storage::TestClock;
+use linera_execution::{Operation, ResourceControlPolicy, SystemOperation};
+use linera_storage::{Storage as _, TestClock};
 use tempfile::TempDir;
 use tokio::sync::{oneshot, Notify};
 use tokio_util::sync::CancellationToken;
@@ -259,7 +259,7 @@ async fn test_faucet_rate_limiting() -> anyhow::Result<()> {
     env.clock.set(Timestamp::from(999));
     let result1 = env
         .root
-        .do_claim(AccountPublicKey::test_key(0).into())
+        .do_claim(AccountPublicKey::test_key(0).into(), AccountOwner::CHAIN)
         .await;
     assert!(
         result1.is_err(),
@@ -270,14 +270,14 @@ async fn test_faucet_rate_limiting() -> anyhow::Result<()> {
     env.clock.set(Timestamp::from(1000));
     let result2 = env
         .root
-        .do_claim(AccountPublicKey::test_key(1).into())
+        .do_claim(AccountPublicKey::test_key(1).into(), AccountOwner::CHAIN)
         .await;
     assert!(result2.is_ok(), "First claim should succeed at time 1000");
 
     // Test: immediate second claim should fail (rate limit)
     let result3 = env
         .root
-        .do_claim(AccountPublicKey::test_key(2).into())
+        .do_claim(AccountPublicKey::test_key(2).into(), AccountOwner::CHAIN)
         .await;
     assert!(
         result3.is_err(),
@@ -288,20 +288,20 @@ async fn test_faucet_rate_limiting() -> anyhow::Result<()> {
     env.clock.set(Timestamp::from(3000));
     let result4 = env
         .root
-        .do_claim(AccountPublicKey::test_key(3).into())
+        .do_claim(AccountPublicKey::test_key(3).into(), AccountOwner::CHAIN)
         .await;
     assert!(result4.is_ok(), "Third claim should succeed at time 3000");
 
     let result5 = env
         .root
-        .do_claim(AccountPublicKey::test_key(4).into())
+        .do_claim(AccountPublicKey::test_key(4).into(), AccountOwner::CHAIN)
         .await;
     assert!(result5.is_ok(), "Fourth claim should succeed at time 3000");
 
     // Test: too many claims should eventually fail
     let result6 = env
         .root
-        .do_claim(AccountPublicKey::test_key(5).into())
+        .do_claim(AccountPublicKey::test_key(5).into(), AccountOwner::CHAIN)
         .await;
     assert!(
         result6.is_err(),
@@ -391,6 +391,7 @@ async fn test_batch_size_reduction_on_limit_errors() -> anyhow::Result<()> {
             pending_requests_guard.push_back(PendingRequest {
                 owner,
                 target_chain_id: None,
+                destination: AccountOwner::CHAIN,
                 amount: Amount::from_tokens(1),
                 daily_period: 0,
                 responder: tx,
@@ -428,21 +429,21 @@ async fn test_faucet_persistence() -> anyhow::Result<()> {
     // Claim chains for two different owners
     let chain_1 = env
         .root
-        .do_claim(test_owner_1)
+        .do_claim(test_owner_1, AccountOwner::CHAIN)
         .await
         .expect("First claim should succeed");
 
     env.clock.set(Timestamp::from(2000));
     let chain_2 = env
         .root
-        .do_claim(test_owner_2)
+        .do_claim(test_owner_2, AccountOwner::CHAIN)
         .await
         .expect("Second claim should succeed");
 
     // Verify that immediate re-claims return the same chains
     let chain_1_again = env
         .root
-        .do_claim(test_owner_1)
+        .do_claim(test_owner_1, AccountOwner::CHAIN)
         .await
         .expect("Re-claim should return existing chain");
     assert_eq!(
@@ -453,7 +454,7 @@ async fn test_faucet_persistence() -> anyhow::Result<()> {
 
     let chain_2_again = env
         .root
-        .do_claim(test_owner_2)
+        .do_claim(test_owner_2, AccountOwner::CHAIN)
         .await
         .expect("Re-claim should return existing chain");
     assert_eq!(
@@ -504,7 +505,7 @@ async fn test_faucet_persistence() -> anyhow::Result<()> {
 
     // Verify that the new instance returns the same chain IDs for the same owners
     let chain_1_after_restart = root_2
-        .do_claim(test_owner_1)
+        .do_claim(test_owner_1, AccountOwner::CHAIN)
         .await
         .expect("Should return existing chain after restart");
     assert_eq!(
@@ -514,7 +515,7 @@ async fn test_faucet_persistence() -> anyhow::Result<()> {
     );
 
     let chain_2_after_restart = root_2
-        .do_claim(test_owner_2)
+        .do_claim(test_owner_2, AccountOwner::CHAIN)
         .await
         .expect("Should return existing chain after restart");
     assert_eq!(
@@ -527,7 +528,7 @@ async fn test_faucet_persistence() -> anyhow::Result<()> {
     env.clock.set(Timestamp::from(3000));
     let test_owner_3 = AccountPublicKey::test_key(44).into();
     let chain_3 = root_2
-        .do_claim(test_owner_3)
+        .do_claim(test_owner_3, AccountOwner::CHAIN)
         .await
         .expect("New owner should be able to claim after restart");
 
@@ -566,14 +567,14 @@ async fn test_blockchain_sync_after_database_deletion() -> anyhow::Result<()> {
     // Claim chains for two different owners
     let chain_1 = env
         .root
-        .do_claim(test_owner_1)
+        .do_claim(test_owner_1, AccountOwner::CHAIN)
         .await
         .expect("First claim should succeed");
 
     env.clock.set(Timestamp::from(2000));
     let chain_2 = env
         .root
-        .do_claim(test_owner_2)
+        .do_claim(test_owner_2, AccountOwner::CHAIN)
         .await
         .expect("Second claim should succeed");
 
@@ -584,7 +585,7 @@ async fn test_blockchain_sync_after_database_deletion() -> anyhow::Result<()> {
     // Verify initial state works correctly
     let chain_1_again = env
         .root
-        .do_claim(test_owner_1)
+        .do_claim(test_owner_1, AccountOwner::CHAIN)
         .await
         .expect("Re-claim should return existing chain");
     assert_eq!(
@@ -612,7 +613,7 @@ async fn test_blockchain_sync_after_database_deletion() -> anyhow::Result<()> {
 
     // Test that the blockchain sync correctly restored the chain mappings
     let chain_1_after_sync = root_2
-        .do_claim(test_owner_1)
+        .do_claim(test_owner_1, AccountOwner::CHAIN)
         .await
         .expect("Should return existing chain after blockchain sync");
     assert_eq!(
@@ -622,7 +623,7 @@ async fn test_blockchain_sync_after_database_deletion() -> anyhow::Result<()> {
     );
 
     let chain_2_after_sync = root_2
-        .do_claim(test_owner_2)
+        .do_claim(test_owner_2, AccountOwner::CHAIN)
         .await
         .expect("Should return existing chain after blockchain sync");
     assert_eq!(
@@ -637,7 +638,7 @@ async fn test_blockchain_sync_after_database_deletion() -> anyhow::Result<()> {
     env.clock.set(Timestamp::from(3000));
     let test_owner_3 = AccountPublicKey::test_key(102).into();
     let chain_3 = root_2
-        .do_claim(test_owner_3)
+        .do_claim(test_owner_3, AccountOwner::CHAIN)
         .await
         .expect("New owner should be able to claim after sync");
 
@@ -655,7 +656,7 @@ async fn test_blockchain_sync_after_database_deletion() -> anyhow::Result<()> {
 
     // Verify that the new chain mapping is also persisted
     let chain_3_again = root_2
-        .do_claim(test_owner_3)
+        .do_claim(test_owner_3, AccountOwner::CHAIN)
         .await
         .expect("Re-claim should return the new chain");
     assert_eq!(
@@ -682,7 +683,10 @@ async fn test_daily_claim_flow() -> anyhow::Result<()> {
     let test_owner = AccountPublicKey::test_key(200).into();
 
     // Step 1: Daily claim should fail before initial claim.
-    let daily_before_initial = env.root.do_daily_claim(test_owner).await;
+    let daily_before_initial = env
+        .root
+        .do_daily_claim(test_owner, AccountOwner::CHAIN)
+        .await;
     assert!(
         daily_before_initial.is_err(),
         "Daily claim should fail without an initial chain claim"
@@ -691,13 +695,16 @@ async fn test_daily_claim_flow() -> anyhow::Result<()> {
     // Step 2: Do the initial claim to create a chain.
     let description = env
         .root
-        .do_claim(test_owner)
+        .do_claim(test_owner, AccountOwner::CHAIN)
         .await
         .expect("Initial claim should succeed");
     let chain_id = description.id();
 
     // Step 3: Daily claim should fail in period 0 (same period as initial claim).
-    let daily_same_period = env.root.do_daily_claim(test_owner).await;
+    let daily_same_period = env
+        .root
+        .do_daily_claim(test_owner, AccountOwner::CHAIN)
+        .await;
     assert!(
         daily_same_period.is_err(),
         "Daily claim should fail in the same period as initial claim"
@@ -710,14 +717,25 @@ async fn test_daily_claim_flow() -> anyhow::Result<()> {
     // Step 5: Daily claim should now succeed.
     let outcome = env
         .root
-        .do_daily_claim(test_owner)
+        .do_daily_claim(test_owner, AccountOwner::CHAIN)
         .await
         .expect("Daily claim should succeed after 25 hours");
     assert_eq!(outcome.chain_id, chain_id);
     assert_eq!(outcome.amount, daily_amount);
+    assert_eq!(
+        transfer_recipient(&env, outcome.certificate_hash).await?,
+        Account {
+            chain_id,
+            owner: AccountOwner::CHAIN,
+        },
+        "By default the daily claim credits the chain account"
+    );
 
     // Step 6: Second daily claim in the same period should fail.
-    let daily_duplicate = env.root.do_daily_claim(test_owner).await;
+    let daily_duplicate = env
+        .root
+        .do_daily_claim(test_owner, AccountOwner::CHAIN)
+        .await;
     assert!(
         daily_duplicate.is_err(),
         "Second daily claim in same period should fail"
@@ -729,11 +747,75 @@ async fn test_daily_claim_flow() -> anyhow::Result<()> {
 
     let outcome_2 = env
         .root
-        .do_daily_claim(test_owner)
+        .do_daily_claim(test_owner, AccountOwner::CHAIN)
         .await
         .expect("Daily claim should succeed in period 2");
     assert_eq!(outcome_2.chain_id, chain_id);
     assert_eq!(outcome_2.amount, daily_amount);
+
+    handle.stop().await
+}
+
+/// Returns the recipient of the single transfer operation in the block with the given hash.
+async fn transfer_recipient(
+    env: &FaucetTestEnv,
+    certificate_hash: CryptoHash,
+) -> anyhow::Result<Account> {
+    let certificate = env
+        .client
+        .storage_client()
+        .read_certificate(certificate_hash)
+        .await?
+        .expect("Certificate of the claim should be in storage");
+    let operations = certificate.block().body.operations().collect::<Vec<_>>();
+    let [Operation::System(operation)] = &*operations else {
+        panic!("Unexpected operations in the claim block: {operations:?}");
+    };
+    let SystemOperation::Transfer { recipient, .. } = **operation else {
+        panic!("Unexpected operation in the claim block: {operation:?}");
+    };
+    Ok(recipient)
+}
+
+#[test_log::test(tokio::test)]
+async fn test_claims_honor_the_destination() -> anyhow::Result<()> {
+    // Both claim paths must credit the account the caller asked for.
+
+    let daily_amount = Amount::from_millis(500);
+    let mut config = FaucetTestConfig::new(100);
+    config.batch_config.max_batch_size = 10;
+    config.daily_claim_amount = daily_amount;
+    let batch_config = config.batch_config.clone();
+    let env = FaucetTestEnv::new(config).await?;
+    let handle = env.spawn_processor(batch_config);
+
+    let test_owner: AccountOwner = AccountPublicKey::test_key(201).into();
+    let destination: AccountOwner = AccountPublicKey::test_key(202).into();
+
+    // The initial claim funds the requested account on the new chain.
+    let description = env
+        .root
+        .do_claim(test_owner, destination)
+        .await
+        .expect("Initial claim should succeed");
+    assert_eq!(description.config().account, destination);
+    assert_eq!(description.config().balance, env.root.initial_claim_amount);
+
+    // The daily claim transfers to the same account on that chain.
+    let twenty_five_hours = 25 * 60 * 60 * 1_000_000u64;
+    env.clock.set(Timestamp::from(twenty_five_hours));
+    let outcome = env
+        .root
+        .do_daily_claim(test_owner, destination)
+        .await
+        .expect("Daily claim should succeed after 25 hours");
+    assert_eq!(
+        transfer_recipient(&env, outcome.certificate_hash).await?,
+        Account {
+            chain_id: description.id(),
+            owner: destination,
+        }
+    );
 
     handle.stop().await
 }

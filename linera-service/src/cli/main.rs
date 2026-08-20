@@ -204,6 +204,7 @@ impl Runnable for Job {
                 chain_id,
                 owner,
                 balance,
+                account,
                 super_owner,
             } => {
                 let new_owner = match owner {
@@ -228,7 +229,12 @@ impl Runnable for Job {
                         let chain_client = chain_client.clone();
                         async move {
                             chain_client
-                                .open_chain(ownership, ApplicationPermissions::default(), balance)
+                                .open_chain(
+                                    ownership,
+                                    ApplicationPermissions::default(),
+                                    account,
+                                    balance,
+                                )
                                 .await
                         }
                     })
@@ -254,6 +260,7 @@ impl Runnable for Job {
             OpenMultiOwnerChain {
                 chain_id,
                 balance,
+                account,
                 ownership_config,
                 application_permissions_config,
             } => {
@@ -277,7 +284,7 @@ impl Runnable for Job {
                         let chain_client = chain_client.clone();
                         async move {
                             chain_client
-                                .open_chain(ownership, application_permissions, balance)
+                                .open_chain(ownership, application_permissions, account, balance)
                                 .await
                         }
                     })
@@ -1803,6 +1810,7 @@ impl Runnable for Job {
             Wallet(WalletCommand::RequestChain {
                 faucet: faucet_url,
                 set_default,
+                fund_owner_account,
             }) => {
                 let start_time = Instant::now();
                 let owner: AccountOwner = keystore.generate_key().await?.into();
@@ -1812,7 +1820,14 @@ impl Runnable for Job {
                      {faucet_url}",
                 );
 
-                let description = cli_wrappers::Faucet::new(faucet_url).claim(&owner).await?;
+                let destination = if fund_owner_account {
+                    owner
+                } else {
+                    AccountOwner::CHAIN
+                };
+                let description = cli_wrappers::Faucet::new(faucet_url)
+                    .claim_to(&owner, &destination)
+                    .await?;
 
                 ensure!(
                     description.config().ownership.is_owner(&owner),
