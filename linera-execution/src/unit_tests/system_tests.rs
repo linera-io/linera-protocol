@@ -290,7 +290,8 @@ async fn checkpoint_notifies_origins_and_receive_records_finalization() -> anyho
     };
 
     // Producer side: apply a checkpoint with non-empty origin_cursors and check that
-    // it queues one `SystemMessage::CheckpointAck` per origin.
+    // it queues one `SystemMessage::CheckpointAck` per origin, and that it prunes the
+    // `previous_message_blocks` anchors of recipients that acknowledged everything.
     use linera_views::{batch::Batch, store::WritableKeyValueStore as _, views::View as _};
     let mut view = SystemExecutionState {
         description: Some(dummy_chain_description(0)),
@@ -298,6 +299,24 @@ async fn checkpoint_notifies_origins_and_receive_records_finalization() -> anyho
     }
     .into_view()
     .await;
+    // `recipient_acked` has no `unfinalized_message_blocks` entry, so the checkpoint stops
+    // guaranteeing the availability of its anchor block and must drop the anchor.
+    // `recipient_pending` still owes us an acknowledgement at its anchor height, so its
+    // anchor is covered by `outbox_block_hashes` and must survive.
+    let recipient_acked = dummy_chain_description(4).id();
+    let recipient_pending = dummy_chain_description(5).id();
+    let pending_anchor = BlockHeight::from(6);
+    view.previous_message_blocks
+        .insert(&recipient_acked, BlockHeight::from(4))?;
+    view.previous_message_blocks
+        .insert(&recipient_pending, pending_anchor)?;
+    view.system.unfinalized_message_blocks.insert(
+        &recipient_pending,
+        std::collections::BTreeSet::from([Cursor {
+            height: pending_anchor,
+            index: 0,
+        }]),
+    )?;
     let mut batch = Batch::new();
     view.pre_save(&mut batch)?;
     view.context().store().write_batch(batch).await?;
@@ -328,6 +347,16 @@ async fn checkpoint_notifies_origins_and_receive_records_finalization() -> anyho
             })
         );
     }
+    assert!(
+        !view
+            .previous_message_blocks
+            .contains_key(&recipient_acked)
+            .await?
+    );
+    assert_eq!(
+        view.previous_message_blocks.get(&recipient_pending).await?,
+        Some(pending_anchor)
+    );
 
     // Receiver side: pre-populate `unfinalized_message_blocks` with three heights
     // from origin_a (the block-end hook would normally do this), then deliver the
