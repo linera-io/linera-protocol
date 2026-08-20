@@ -205,48 +205,86 @@ pub trait CheckpointRestoresExecutionState: SerializedChainState {}
 ///
 /// Without this a chain could never forget anything it had ever sent: `outbox_block_hashes` would
 /// name every block with an outgoing message for the life of the chain, and each checkpoint would
-/// be larger than the last. The acknowledgement is what makes checkpointing a chain with busy
-/// outboxes sustainable rather than merely possible.
+/// be larger than the last.
 ///
-/// *Proof.* Four steps, alternating between the two chains.
+/// *Code correspondence.* Three transitions, alternating between the two chains.
 ///
-/// *The sender tracks what is outstanding.* `unfinalized_message_blocks` maps each recipient to the
-/// cursors of outgoing bundles not yet acknowledged. It lives in the *system execution state*
-/// rather than in the local off-chain outbox, which is what makes it identical across validators
-/// and therefore fit to feed a certified oracle response: `PreparedCheckpoint::outbox_block_hashes`
-/// is the set of unique heights across those cursors. Cursors rather than heights, so that an
-/// acknowledgement landing mid-block can still evict an entry entirely — which is what a
-/// high-fanout chain needs, whose recipients each interact with it once.
+/// **The sender records an outstanding bundle.**
 ///
-/// *The recipient acknowledges on its own checkpoint.* `collect_inbox_cursors` snapshots
-/// `(origin, next_cursor_to_remove)` for each chain in `pending_checkpoint_ack_targets`, and
-/// `apply_checkpoint` emits a `SystemMessage::CheckpointAck` carrying that cursor to each.
+/// | | |
+/// |---|---|
+/// | transition | the per-recipient loop in `ChainStateView::execute_block_inner` |
+/// | reads | `BlockTracker::non_checkpoint_ack_tx_indices`, and the current entry for that recipient |
+/// | writes | `system.unfinalized_message_blocks[recipient]`, adding `Cursor { height, index }` for each kept transaction index |
+/// | precondition | the recipient has at least one message in this block that is not a `CheckpointAck`; otherwise the entry is not touched |
 ///
-/// *The sender trims.* Handling `CheckpointAck { latest_received_cursor }`, the system state calls
-/// `split_off` on that recipient's cursor set, retaining those at or above the cursor and dropping
-/// the strict prefix below it. A recipient that has consumed everything ever sent to it leaves an
-/// empty set, and the entry is removed altogether.
+/// **The recipient acknowledges, at its own checkpoint.**
 ///
-/// *Forgetting is safe.* The acknowledged cursor is the recipient's `next_cursor_to_remove`, so it
-/// has consumed everything below it; and the same checkpoint records that position in
-/// `inbox_cursors`, so a node bootstrapping the recipient starts with `restored_cursor` at least
-/// that high. By [`CheckpointPreservesConsumptionBoundary`] anything below `restored_cursor` is
-/// dropped on arrival and is a no-op on consumption. There is therefore no incarnation of the
-/// recipient, present or future, that can ask for a bundle the sender has dropped. ∎
+/// | | |
+/// |---|---|
+/// | transition | `ExecutionStateView::apply_checkpoint`, over `PreparedCheckpoint::origin_cursors` built before the block by `ChainStateView::collect_inbox_cursors` |
+/// | reads | `system.pending_checkpoint_ack_targets`, and `next_cursor_to_remove` of each named inbox |
+/// | writes | one `SystemMessage::CheckpointAck { latest_received_cursor }` per target through `TransactionTracker::add_outgoing_message`, then clears `pending_checkpoint_ack_targets` |
+/// | precondition | `prepare_checkpoint` and `check_checkpoint_preconditions` both passed ([`CheckpointSummarizesUserStreams`]) |
 ///
-/// **Why the exchange terminates.** An acknowledgement is itself a message, so the protocol has to
-/// avoid two chains acknowledging each other forever. Two exclusions do it, at different points. A
-/// received `CheckpointAck` does not put its origin into `pending_checkpoint_ack_targets`, so it
-/// creates no debt to answer; and a bundle whose only messages to a recipient were `CheckpointAck`
-/// is kept out of `unfinalized_message_blocks`, so it never becomes something to acknowledge in the
-/// first place. `apply_checkpoint` then clears `pending_checkpoint_ack_targets`, so only a fresh
-/// real message re-enters a chain into the next round.
+/// **The sender trims.**
+///
+/// | | |
+/// |---|---|
+/// | transition | the `CheckpointAck` arm of `SystemExecutionStateView::execute_message` |
+/// | reads | `system.unfinalized_message_blocks[context.origin]` |
+/// | writes | the same entry, replaced by `cursors.split_off(&latest_received_cursor)`, or removed when that is empty |
+/// | precondition | none — an acknowledgement naming an origin with no entry is a no-op |
+///
+/// *Proof.* Four steps.
+///
+/// *What gets recorded.* `non_checkpoint_ack_tx_indices` walks the block's outgoing messages and
+/// keeps, per destination, the indices of transactions holding at least one message for which
+/// `Message::is_checkpoint_ack` is false. `execute_block_inner` inserts a `Cursor` for each. So a
+/// block whose only traffic to a recipient is an acknowledgement adds nothing to track — which is
+/// the first of the two exclusions below.
+///
+/// *What the dump names.* `unfinalized_message_blocks` is held in the *system execution state*, not
+/// in the off-chain outbox, so it is identical across validators and may feed a certified oracle
+/// response: `PreparedCheckpoint::outbox_block_hashes` is the unique heights across all its
+/// cursors, resolved to hashes through `block_hashes` by the pre-block hook — the cursors are
+/// written mid-execution, when the block's own hash is not yet known. Cursors rather than bare
+/// heights is what lets an acknowledgement landing part-way through a block evict a recipient
+/// outright, which matters for a high-fanout chain whose recipients each interact with it once.
+///
+/// *What clears an entry.* On `CheckpointAck { latest_received_cursor }`, `split_off` retains the
+/// cursors at or above it and discards the strict prefix below; an emptied set removes the
+/// recipient entirely. Since the dump is derived from what remains, those blocks stop being named.
+///
+/// *Why that is safe.* `latest_received_cursor` is the recipient's `next_cursor_to_remove` at its
+/// checkpoint, so it has consumed everything below it. The same checkpoint records that position in
+/// `PreparedCheckpoint::inbox_cursors`, so any node bootstrapping the recipient seeds
+/// `restored_cursor` at least that high; and by [`CheckpointPreservesConsumptionBoundary`] a bundle
+/// below `restored_cursor` is dropped by `Inbox::add_bundle` on arrival and reported as already
+/// known by `Inbox::remove_bundle` on consumption. No incarnation of the recipient, present or
+/// future, can therefore ask for a bundle the sender has dropped. ∎
+///
+/// **What is kept is exactly what a bootstrapped node needs.** The same map has a second reader:
+/// `ChainStateView::restore_outboxes_from_unfinalized`, called once after
+/// `restore_from_content` when a node bootstraps from a checkpoint. Off-chain outbox state —
+/// `outboxes`, `outbox_counters`, `nonempty_outboxes` — is not part of the certified blob, so
+/// without this rebuild a bootstrapped node would silently stop pushing pending messages onward.
+/// Retention and resumption are therefore the same set: a sender keeps a block precisely while some
+/// recipient might still need it delivered.
+///
+/// **Why the exchange terminates.** An acknowledgement is itself a message, so two exclusions stop
+/// two chains acknowledging each other forever, and they act at different points. A bundle whose
+/// only messages to a recipient were `CheckpointAck` never enters `unfinalized_message_blocks`
+/// (`non_checkpoint_ack_tx_indices`), so it never becomes something to acknowledge; and a received
+/// `CheckpointAck` never enters its origin into `pending_checkpoint_ack_targets` (the
+/// `!posted_message.message.is_checkpoint_ack()` guard in `BlockTracker`), so it creates no debt to
+/// answer. `apply_checkpoint` then clears that set, so only a fresh non-acknowledgement message
+/// re-enters a chain for the next round.
 ///
 /// **A sender can forget only as fast as its recipients checkpoint.** Nothing obliges a recipient
 /// to checkpoint, and until it does it sends no acknowledgement, so the sender keeps naming those
 /// blocks. A chain whose recipients never checkpoint therefore has an ever-growing dump however
 /// often it checkpoints itself — its own frequency does not help. This is the outbox-side face of
 /// [issue #6693](https://github.com/linera-io/linera-protocol/issues/6693): with nothing scheduling
-/// checkpoints anywhere, the bound this lemma provides is conditional on behaviour no rule
-/// currently requires.
+/// checkpoints anywhere, the bound this lemma provides rests on behaviour no rule requires.
 pub trait AcknowledgedMessagesMayBeForgotten: CheckpointPreservesConsumptionBoundary {}
