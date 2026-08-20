@@ -35,6 +35,15 @@ pub struct Client {
     pub(crate) storage: Storage,
 }
 
+/// The chain IDs returned by [`Client::chains`].
+///
+/// `wasm-bindgen` can't return a bare `Vec` of a serialized type, so the list travels as
+/// a newtype that TypeScript sees as a plain array.
+#[derive(serde::Serialize, tsify::Tsify)]
+#[tsify(into_wasm_abi)]
+#[serde(transparent)]
+pub struct ChainIds(pub Vec<ChainId>);
+
 #[derive(Default, serde::Deserialize, tsify::Tsify)]
 #[tsify(from_wasm_abi)]
 #[serde(default)]
@@ -119,6 +128,16 @@ impl Client {
         }
 
         Ok(())
+    }
+
+    /// Returns the IDs of the chains in this client's wallet.
+    ///
+    /// These are the chains the client tracks and keeps synchronized. Any other chain
+    /// can still be opened with [`chain`](Self::chain), which downloads it from the
+    /// validators on demand.
+    #[wasm_bindgen]
+    pub async fn chains(&self) -> ChainIds {
+        ChainIds(self.context.lock().await.wallet().chain_ids())
     }
 
     /// Connect to a chain on the Linera network.

@@ -23,6 +23,7 @@ hex.workspace = true
 js-sys.workspace = true
 num-traits.workspace = true
 serde.workspace = true
+serde_bytes.workspace = true
 serde-wasm-bindgen.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
@@ -37,6 +38,10 @@ features = ["ansi", "fmt", "std"]
 workspace = true
 
 [dependencies.linera-base]
+features = ["web"]
+workspace = true
+
+[dependencies.linera-chain]
 features = ["web"]
 workspace = true
 
@@ -58,6 +63,9 @@ workspace = true
 
 [dependencies.linera-rpc]
 features = ["web"]
+workspace = true
+
+[dependencies.linera-sdk]
 workspace = true
 
 [dependencies.linera-storage]
