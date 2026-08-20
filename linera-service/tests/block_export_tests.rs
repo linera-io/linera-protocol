@@ -165,6 +165,7 @@ async fn test_block_export_through_the_proxy(database: Database, network: Networ
 /// is replayed. Catch-up is bounded per round, so this asserts convergence, not one-shot.
 #[ignore]
 #[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_export_catches_up_a_newly_added_validator(
     database: Database,
@@ -279,6 +280,7 @@ async fn test_export_catches_up_a_newly_added_validator(
 /// proxy strands every destination assigned to it — silently, since the chain still looks healthy.
 #[ignore]
 #[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_export_survives_a_dead_proxy(database: Database, network: Network) -> Result<()> {
     let _guard: tokio::sync::MutexGuard<'_, ()> = INTEGRATION_TEST_GUARD.lock().await;
@@ -362,6 +364,7 @@ async fn test_export_survives_a_dead_proxy(database: Database, network: Network)
 /// the refusal directly rather than inferring it from export working.
 #[ignore]
 #[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_relay_refuses_a_non_committee_destination(
     database: Database,
@@ -418,6 +421,7 @@ async fn test_relay_refuses_a_non_committee_destination(
 /// trade-off: shards hold the validator secret key, so direct means giving them outbound access.
 #[ignore]
 #[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_block_export_direct_bypasses_the_proxy(
     database: Database,
