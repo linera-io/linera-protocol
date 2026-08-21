@@ -19,12 +19,18 @@ pub use scoring::ScoringWeights;
 pub const MAX_IN_FLIGHT_REQUESTS: usize = 100;
 /// Default maximum expected latency in milliseconds, used for score normalization.
 pub const MAX_ACCEPTED_LATENCY_MS: f64 = 5000.0;
-/// Default time-to-live for cached responses, in milliseconds.
-pub const CACHE_TTL_MS: u64 = 2000;
+/// Default time-to-live for cached responses, in milliseconds. Long enough that the
+/// bursts of repeated downloads a catch-up sync issues (seconds apart) hit the cache.
+pub const CACHE_TTL_MS: u64 = 30_000;
 /// Default maximum number of entries in the cache.
 pub const CACHE_MAX_SIZE: usize = 1000;
 /// Default maximum latency for an in-flight request before we stop deduplicating it, in milliseconds.
-pub const MAX_REQUEST_TTL_MS: u64 = 200;
+/// Must exceed request latency under load, or dedup turns itself off exactly when it
+/// is needed most: during the 2026-08-12 testnet storm the mean request took 649 ms
+/// against the previous 200 ms default, so every concurrent duplicate went to the
+/// network. 5 s covers degraded-validator latencies while still keeping new callers
+/// from piling onto a request that has been stuck longer than that.
+pub const MAX_REQUEST_TTL_MS: u64 = 5_000;
 /// Default smoothing factor for the Exponential Moving Averages of latency.
 pub const ALPHA_SMOOTHING_FACTOR: f64 = 0.1;
 /// Default delay in milliseconds between starting requests to different peers.
