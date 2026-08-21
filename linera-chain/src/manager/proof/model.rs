@@ -114,13 +114,36 @@ pub trait CorrectValidator {}
 /// [`ChainTipState::verify_block_chaining`]: crate::ChainTipState::verify_block_chaining
 pub trait ConflictingBlocks {}
 
-/// **Assumption (Maximum Byzantine weight).** In the committee governing a chain's epoch, the
-/// total [`Committee::weight`] of faulty validators is strictly less than
-/// [`Committee::validity_threshold`], i.e. at most `f⁺ − 1` where `f⁺ = ⌈N/3⌉`.
+/// **Assumption (Maximum Byzantine weight, per epoch).** For **every** epoch whose committee has
+/// not been revoked, the total [`Committee::weight`] of faulty validators *in that committee* is
+/// strictly less than its [`Committee::validity_threshold`] — at most `f⁺ − 1` where
+/// `f⁺ = ⌈N/3⌉`, equivalently strictly below one third of that committee's total weight.
 ///
-/// Equivalently, faulty weight is strictly below one third of the total. This is the only fault
-/// bound assumed anywhere in the specification.
+/// This is the only fault bound assumed anywhere in the specification, and it is assumed once per
+/// live committee rather than once globally. The quantifier carries most of the content.
 ///
+/// *Committees are bounded independently.* Membership and weights differ between epochs, so this
+/// is a separate hypothesis for each: a validator may hold weight in several committees, or in
+/// none, and being faulty is a property of a validator *within* a committee. Every quorum argument
+/// here reasons inside a single committee — two quorums drawn from different committees need not
+/// intersect at all — and [`EpochAgreement`] is what confines each argument to one.
+///
+/// *A revoked committee is assumed nothing.* Revocation is exactly the withdrawal of this
+/// hypothesis. Once the admin chain has written a removal event for an epoch — which is what
+/// `Storage::is_epoch_revoked` tests — that committee may be arbitrarily corrupt and its
+/// signatures establish nothing on their own. This is why material from a revoked epoch is
+/// admitted only when a still-trusted committee vouches for it, as
+/// `ChainWorkerState::select_message_bundles` does for bundles whose epoch has lapsed.
+///
+/// *Not revoking is not free.* Revocations are ordered
+/// ([`AdminOperation::RemoveCommittee`] requires them to be sequential), so the revoked epochs
+/// form a prefix and the assumed-correct ones a suffix. That suffix gains a committee whenever one
+/// is created and loses one only on revocation. A deployment that never revokes is therefore
+/// assuming, permanently, that *every committee it has ever created* still satisfies the bound —
+/// including validator sets long since rotated out. The assumption does not weaken with time; it
+/// accumulates.
+///
+/// [`AdminOperation::RemoveCommittee`]: linera_execution::system::AdminOperation::RemoveCommittee
 /// [`Committee::weight`]: linera_execution::committee::Committee::weight
 /// [`Committee::validity_threshold`]: linera_execution::committee::Committee::validity_threshold
 pub trait MaxByzantineWeight {}

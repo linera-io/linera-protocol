@@ -266,7 +266,7 @@ pub trait FastConfirmationNeedsEmptyLock:
 /// **Lemma (A non-fast confirmation requires a validated certificate in the same round).** If a
 /// correct validator casts a confirmation vote for block `A` in a round `r` other than
 /// [`Round::Fast`](linera_base::data_types::Round::Fast), then a [`ValidatedBlockCertificate`]
-/// for `A` in round `r`, valid for the committee, existed at that moment.
+/// for `A` in round `r`, valid for the committee of its epoch, existed at that moment.
 ///
 /// *Code correspondence.*
 ///
