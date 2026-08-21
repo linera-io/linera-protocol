@@ -8,38 +8,66 @@ fn main() {
 
 #[cfg(feature = "codegen")]
 mod codegen {
-    use std::{collections::BTreeMap, path::PathBuf, process::Command};
+    use std::{collections::BTreeMap, fs, path::PathBuf, process::Command};
 
     use serde_generate::{solidity, CodeGeneratorConfig, SourceInstaller};
     use serde_reflection::Registry;
 
     pub fn generate() {
+        let generated = [
+            PathBuf::from("src/solidity/BridgeTypes.sol"),
+            PathBuf::from("src/solidity/WrappedFungibleTypesV1.sol"),
+        ];
+        // The generators overwrite the checked-in sources, and only `forge fmt` turns their
+        // output into the committed form, so without it every build leaves the tree dirty
+        // with equivalent-but-unformatted code that is easy to commit by accident.
+        let committed: Vec<Option<String>> = generated
+            .iter()
+            .map(|path| fs::read_to_string(path).ok())
+            .collect();
+
         generate_bridge_types();
         generate_fungible_types();
-        forge_fmt(&PathBuf::from("src/solidity/BridgeTypes.sol"));
-        forge_fmt(&PathBuf::from("src/solidity/WrappedFungibleTypesV1.sol"));
+
+        for (path, committed) in generated.iter().zip(committed) {
+            if forge_fmt(path) {
+                continue;
+            }
+            if let Some(committed) = committed {
+                if let Err(e) = fs::write(path, committed) {
+                    println!("cargo:warning=could not restore {}: {e}", path.display());
+                }
+            }
+        }
     }
 
-    /// Reformats a freshly generated Solidity file with `forge fmt` so the
-    /// generator's output matches the rest of the codebase. Falls back to
-    /// a warning (non-fatal) if `forge` is not on PATH — codegen is a
-    /// best-effort developer convenience and shouldn't break a build that
-    /// otherwise wouldn't have run forge.
-    fn forge_fmt(path: &PathBuf) {
+    /// Reformats a freshly generated Solidity file with `forge fmt` so the generator's
+    /// output matches the rest of the codebase, reporting whether it succeeded. Failure is
+    /// non-fatal (codegen is a developer convenience and should not break a build that
+    /// would not otherwise have run forge), but the caller restores the committed file,
+    /// because unformatted output differs from it and would dirty the tree.
+    fn forge_fmt(path: &PathBuf) -> bool {
         if !path.exists() {
-            return;
+            return false;
         }
         let status = Command::new("forge").arg("fmt").arg(path).status();
         match status {
-            Ok(s) if s.success() => {}
+            Ok(s) if s.success() => true,
             Ok(s) => {
-                println!("cargo:warning=forge fmt {} exited with {s}", path.display());
+                println!(
+                    "cargo:warning=forge fmt {} exited with {s}; leaving the committed file \
+                     in place",
+                    path.display()
+                );
+                false
             }
             Err(e) => {
                 println!(
-                    "cargo:warning=forge fmt {} could not be invoked: {e}",
+                    "cargo:warning=forge fmt {} could not be invoked: {e}; leaving the \
+                     committed file in place",
                     path.display()
                 );
+                false
             }
         }
     }
