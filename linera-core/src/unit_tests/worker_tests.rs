@@ -179,6 +179,11 @@ where
         self
     }
 
+    fn with_sparse_sender_catchup(mut self) -> Self {
+        self.worker.set_allow_sparse_sender_catchup(true);
+        self
+    }
+
     fn admin_public_key(&self) -> AccountPublicKey {
         self.admin_keypair.public()
     }
@@ -5357,5 +5362,62 @@ where
     );
     assert!(!chain.nonempty_outboxes.get().contains(&chain_2));
     assert!(chain.outbox_counters.get().is_empty());
+    Ok(())
+}
+
+/// Sparse sender catch-up must not admit a *genuine* gap (case B): a recipient that has
+/// neither received nor consumed the sender's earlier bundles still refuses an update whose
+/// declared predecessor it has never seen, flag or no flag. This is the property that keeps
+/// ordering guarantees for unskippable bundles intact.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_sparse_catchup_still_rejects_genuine_gap<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let sender_key_pair = AccountSecretKey::generate();
+    let mut env = TestEnvironment::new(storage_builder.build().await?, false, false)
+        .await
+        .with_sparse_sender_catchup();
+    let chain_2_desc = env
+        .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ONE)
+        .await;
+    let chain_2 = chain_2_desc.id();
+    let chain_1_desc = dummy_chain_description(1);
+    let certificate = env
+        .make_simple_transfer_certificate(
+            chain_1_desc,
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(10),
+            Vec::new(),
+            Amount::ZERO,
+            vec![],
+        )
+        .await;
+    // Claim a predecessor the recipient has never received and never consumed.
+    let CrossChainRequest::UpdateRecipient {
+        sender,
+        recipient,
+        bundles,
+        ..
+    } = update_recipient_direct(chain_2, &certificate)
+    else {
+        panic!("expected an UpdateRecipient request");
+    };
+    let request = CrossChainRequest::UpdateRecipient {
+        sender,
+        recipient,
+        bundles,
+        previous_height: Some(BlockHeight::from(7)),
+    };
+    assert_matches!(
+        env.worker().handle_cross_chain_request(request).await,
+        Err(WorkerError::ChainError(error))
+            if matches!(*error, ChainError::InboxGapDetected { .. }),
+        "a genuine gap must still be refused under sparse catch-up"
+    );
     Ok(())
 }
