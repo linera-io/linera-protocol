@@ -864,7 +864,11 @@ where
             let block =
                 maybe_block.ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             self.chain
-                .preprocess_block(&block, tracked.as_deref().map(|h| h.inner()))
+                .preprocess_block(
+                    &block,
+                    tracked.as_deref().map(|h| h.inner()),
+                    self.config.allow_sparse_sender_catchup,
+                )
                 .await?;
         }
         Ok(())
@@ -995,7 +999,11 @@ where
         let tracked = self.reconcile_tracked_outboxes().await?;
         let updated_event_streams = self
             .chain
-            .preprocess_block(certificate.value(), tracked.as_deref().map(|h| h.inner()))
+            .preprocess_block(
+                certificate.value(),
+                tracked.as_deref().map(|h| h.inner()),
+                self.config.allow_sparse_sender_catchup,
+            )
             .await?;
         self.save().await?;
         let mut actions = self.create_network_actions(None).await?;
@@ -1284,8 +1292,20 @@ where
 
         // Proactive gap detection: if the sender declares a predecessor height that
         // we haven't received yet, the inbox has a gap.
+        //
+        // Under sparse catch-up there is one exception. `next_height_to_receive` is derived from
+        // `next_cursor_to_add`, which only advances on delivery — so a chain that consumed the
+        // sender's earlier bundles *by anticipation* (the ordinary case for a validator that is
+        // current on this chain but behind on the sender) still reports 0 here while its real
+        // progress sits in `removed_bundles`. When the anticipation queue already reaches the
+        // declared predecessor, the "missing" bundles are ones this chain has consumed and will
+        // never consume again, so this is not a gap.
+        let already_consumed_past_predecessor = |prev: BlockHeight| {
+            self.config.allow_sparse_sender_catchup
+                && last_anticipated_block_height.is_some_and(|last| last >= prev)
+        };
         if let Some(prev) = previous_height {
-            if prev >= next_height_to_receive {
+            if prev >= next_height_to_receive && !already_consumed_past_predecessor(prev) {
                 let chain_id = self.chain_id();
                 if self.config.allow_revert_confirm && self.config.recovery_allowed_for(&chain_id) {
                     warn!(
@@ -1338,6 +1358,7 @@ where
                     bundle,
                     local_time,
                     add_to_received_log,
+                    self.config.allow_sparse_sender_catchup,
                 )
                 .await?;
         }
