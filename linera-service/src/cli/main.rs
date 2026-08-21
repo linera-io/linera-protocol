@@ -79,7 +79,7 @@ use linera_service::{
     node_service::NodeService,
     project::{self, Project},
     storage::{Runnable, RunnableWithStore, StorageCacheConfig},
-    task_processor::TaskProcessor,
+    task_processor::{TaskProcessor, TaskProcessorConfig},
     util,
 };
 use linera_storage::{DbStorage, Storage};
@@ -1313,6 +1313,7 @@ impl Runnable for Job {
                 operators,
                 controller_application_id,
                 task_retry_delay_secs,
+                slow_task_group_secs,
                 read_only,
                 query_cache_size,
                 allowed_subscriptions,
@@ -1342,7 +1343,10 @@ impl Runnable for Job {
                 let operators = Arc::new(operators);
 
                 // Start the task processor if operator applications are specified.
-                let retry_delay = TimeDelta::from_secs(task_retry_delay_secs);
+                let task_config = TaskProcessorConfig {
+                    retry_delay: TimeDelta::from_secs(task_retry_delay_secs),
+                    slow_group_threshold: TimeDelta::from_secs(slow_task_group_secs),
+                };
 
                 if !operator_application_ids.is_empty() {
                     let chain_client = context.make_chain_client(chain_id).await?;
@@ -1352,7 +1356,7 @@ impl Runnable for Job {
                         chain_client,
                         cancellation_token.clone(),
                         operators.clone(),
-                        retry_delay,
+                        task_config,
                         None,
                     );
                     tokio::spawn(processor.run());
@@ -1373,7 +1377,7 @@ impl Runnable for Job {
                         chain_client,
                         cancellation_token.clone(),
                         operators,
-                        retry_delay,
+                        task_config,
                         command_sender,
                     );
 

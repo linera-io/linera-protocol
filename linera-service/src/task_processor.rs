@@ -26,9 +26,28 @@ use linera_core::{
 use serde_json::json;
 use tokio::{io::AsyncWriteExt, process::Command, select, sync::mpsc};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::controller::Update;
+
+#[cfg(with_metrics)]
+pub(crate) mod metrics {
+    use linera_base::prometheus_util::register_int_counter;
+    use prometheus::IntCounter;
+
+    linera_base::declare_metrics! {
+        /// Task groups that have outlived [`TaskProcessorConfig::slow_group_threshold`].
+        ///
+        /// The group is still running when this is incremented and may well succeed: a batch
+        /// catching up on a backlog takes far longer than a steady-state one. What makes it worth
+        /// alerting on is that nothing else reports it — the process stays healthy and its chain
+        /// simply stops advancing, so a group that never returns is otherwise silent.
+        pub static SLOW_TASK_GROUPS: IntCounter = register_int_counter(
+            "slow_task_groups_total",
+            "Number of task groups that outlived the slow-group threshold"
+        );
+    }
+}
 
 /// A map from operator names to their binary paths.
 pub type OperatorMap = Arc<BTreeMap<String, PathBuf>>;
@@ -45,10 +64,27 @@ pub fn parse_operator(s: &str) -> Result<(String, PathBuf), String> {
 
 type Deadline = Reverse<(Timestamp, Option<ApplicationId>)>;
 
-/// Message sent from a background batch task to the main loop on completion.
-struct BatchResult {
+/// Timing limits applied to operator tasks.
+#[derive(Clone, Copy, Debug)]
+pub struct TaskProcessorConfig {
+    /// How long to wait before retrying a task group that failed.
+    pub retry_delay: TimeDelta,
+    /// How long a task group may run before it is reported as slow.
+    ///
+    /// Reported only: the group is never interrupted. An operator that is merely slow cannot be
+    /// told apart from one that will never return, and killing it would abort work that was about
+    /// to succeed — a batch catching up on a backlog legitimately runs far longer than a
+    /// steady-state one. Since a task that is cut short is retried, a limit set below what the
+    /// work needs never completes it, it only repeats it.
+    pub slow_group_threshold: TimeDelta,
+}
+
+/// Message sent from a background task group to the main loop on completion.
+struct GroupResult {
     application_id: ApplicationId,
-    /// If set, the batch failed and should be retried at this timestamp.
+    /// The group's id, as returned by [`group_tasks`].
+    group: Option<String>,
+    /// If set, the group failed and should be retried at this timestamp.
     retry_at: Option<Timestamp>,
 }
 
@@ -60,13 +96,16 @@ pub struct TaskProcessor<Env: linera_core::Environment> {
     chain_client: ChainClient<Env>,
     cancellation_token: CancellationToken,
     notifications: NotificationStream,
-    batch_sender: mpsc::UnboundedSender<BatchResult>,
-    batch_receiver: mpsc::UnboundedReceiver<BatchResult>,
+    result_sender: mpsc::UnboundedSender<GroupResult>,
+    result_receiver: mpsc::UnboundedReceiver<GroupResult>,
     update_receiver: mpsc::UnboundedReceiver<Update>,
     deadlines: BinaryHeap<Deadline>,
     operators: OperatorMap,
-    retry_delay: TimeDelta,
-    in_flight_apps: BTreeSet<ApplicationId>,
+    config: TaskProcessorConfig,
+    /// The groups currently running, so that a second copy is never started while one is in
+    /// flight. Keyed by group rather than by application: a group that is slow or stuck must not
+    /// keep its siblings from being polled.
+    in_flight_groups: BTreeSet<(ApplicationId, Option<String>)>,
 }
 
 impl<Env: linera_core::Environment> TaskProcessor<Env> {
@@ -77,11 +116,11 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         chain_client: ChainClient<Env>,
         cancellation_token: CancellationToken,
         operators: OperatorMap,
-        retry_delay: TimeDelta,
+        config: TaskProcessorConfig,
         update_receiver: Option<mpsc::UnboundedReceiver<Update>>,
     ) -> Self {
         let notifications = chain_client.subscribe().expect("client subscription");
-        let (batch_sender, batch_receiver) = mpsc::unbounded_channel();
+        let (result_sender, result_receiver) = mpsc::unbounded_channel();
         let update_receiver = update_receiver.unwrap_or_else(|| mpsc::unbounded_channel().1);
         Self {
             chain_id,
@@ -90,13 +129,13 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             chain_client,
             cancellation_token,
             notifications,
-            batch_sender,
-            batch_receiver,
+            result_sender,
+            result_receiver,
             update_receiver,
             deadlines: BinaryHeap::new(),
             operators,
-            retry_delay,
-            in_flight_apps: BTreeSet::new(),
+            config,
+            in_flight_groups: BTreeSet::new(),
         }
     }
 
@@ -117,8 +156,8 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                     let application_ids = self.process_events();
                     self.process_actions(application_ids).await;
                 }
-                Some(result) = self.batch_receiver.recv() => {
-                    self.in_flight_apps.remove(&result.application_id);
+                Some(result) = self.result_receiver.recv() => {
+                    self.in_flight_groups.remove(&(result.application_id, result.group));
                     // The application could have been unassigned from this processor
                     // in the meantime - do not retry if that is the case.
                     if self.application_ids.contains(&result.application_id) {
@@ -163,8 +202,8 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
 
         self.cursors
             .retain(|app_id, _| new_app_set.contains(app_id));
-        self.in_flight_apps
-            .retain(|app_id| new_app_set.contains(app_id));
+        self.in_flight_groups
+            .retain(|(app_id, _)| new_app_set.contains(app_id));
 
         // Update the application_ids
         self.application_ids = update.application_ids;
@@ -204,10 +243,6 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 debug!("Skipping {application_id}: it's no longer assigned to this processor");
                 continue;
             }
-            if self.in_flight_apps.contains(&application_id) {
-                debug!("Skipping {application_id}: tasks already in flight");
-                continue;
-            }
             debug!("Processing actions for {application_id}");
             let now = Timestamp::now();
             let app_cursor = self.cursors.get(&application_id).cloned();
@@ -230,47 +265,43 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             if let Some(cursor) = actions.set_cursor {
                 self.cursors.insert(application_id, cursor);
             }
-            if !actions.execute_tasks.is_empty() {
-                self.in_flight_apps.insert(application_id);
+            // Start each group that is not already running. Groups are independent: their
+            // outcomes commute, so one that is slow, stuck or failing must neither delay the
+            // others nor keep this application from being polled again for their sake.
+            for (group, tasks) in group_tasks(actions.execute_tasks) {
+                if !self
+                    .in_flight_groups
+                    .insert((application_id, group.clone()))
+                {
+                    debug!(%application_id, ?group, "Skipping group: tasks already in flight");
+                    continue;
+                }
                 let chain_client = self.chain_client.clone();
-                let batch_sender = self.batch_sender.clone();
-                let retry_delay = self.retry_delay;
+                let result_sender = self.result_sender.clone();
+                let config = self.config;
                 let operators = self.operators.clone();
                 tokio::spawn(async move {
-                    // Run each group concurrently, so that a slow or failing group never
-                    // delays the outcomes of the others.
-                    let mut handles = Vec::new();
-                    for (group, tasks) in group_tasks(actions.execute_tasks) {
-                        handles.push((
-                            group.clone(),
-                            tokio::spawn(Self::process_group(
-                                application_id,
-                                group,
-                                tasks,
-                                chain_client.clone(),
-                                operators.clone(),
-                                retry_delay,
-                            )),
-                        ));
-                    }
-                    // `None` sorts before any timestamp, so the maximum is the latest retry
-                    // any group asked for: a task failing on every attempt cannot shorten the
-                    // delay protecting the operator.
-                    let mut retry_at = None;
-                    for (group, handle) in handles {
-                        retry_at = retry_at.max(handle.await.unwrap_or_else(|error| {
-                            error!(%application_id, ?group, %error, "Task group panicked");
-                            Some(Timestamp::now().saturating_add(retry_delay))
-                        }));
-                    }
-                    if batch_sender
-                        .send(BatchResult {
+                    // Run the group on its own task so that a panic inside it is reported and
+                    // turned into a retry, rather than losing the result message and leaving the
+                    // group marked in flight forever.
+                    let handle = tokio::spawn(Self::process_group(
+                        application_id,
+                        group.clone(),
+                        tasks,
+                        chain_client,
+                        operators,
+                        config,
+                    ));
+                    let retry_at = await_group(application_id, &group, handle, config).await;
+                    if result_sender
+                        .send(GroupResult {
                             application_id,
+                            group,
                             retry_at,
                         })
                         .is_err()
                     {
-                        error!(%application_id, "Batch receiver dropped");
+                        error!(%application_id, "Result receiver dropped");
                     }
                 });
             }
@@ -293,11 +324,11 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         tasks: Vec<Task>,
         chain_client: ChainClient<Env>,
         operators: OperatorMap,
-        retry_delay: TimeDelta,
+        config: TaskProcessorConfig,
     ) -> Option<Timestamp> {
         let mut handles = Vec::with_capacity(tasks.len());
         for task in tasks {
-            handles.push(tokio::spawn(Self::execute_task(
+            handles.push(tokio::spawn(execute_task(
                 application_id,
                 task,
                 operators.clone(),
@@ -308,60 +339,25 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 Ok(Ok(outcome)) => outcome,
                 Ok(Err(error)) => {
                     error!(%application_id, ?group, %error, "Error executing task");
-                    return Some(Timestamp::now().saturating_add(retry_delay));
+                    return Some(Timestamp::now().saturating_add(config.retry_delay));
                 }
                 Err(error) => {
                     error!(%application_id, ?group, %error, "Task panicked");
-                    return Some(Timestamp::now().saturating_add(retry_delay));
+                    return Some(Timestamp::now().saturating_add(config.retry_delay));
                 }
             };
-            if let Err(timestamp) =
-                Self::submit_task_outcome(&chain_client, application_id, &outcome, retry_delay)
-                    .await
+            if let Err(timestamp) = Self::submit_task_outcome(
+                &chain_client,
+                application_id,
+                &outcome,
+                config.retry_delay,
+            )
+            .await
             {
                 return Some(timestamp);
             }
         }
         None
-    }
-
-    async fn execute_task(
-        application_id: ApplicationId,
-        task: Task,
-        operators: OperatorMap,
-    ) -> Result<TaskOutcome, anyhow::Error> {
-        let Task {
-            id,
-            operator,
-            input,
-        } = task;
-        let binary_path = operators
-            .get(&operator)
-            .ok_or_else(|| anyhow::anyhow!("unsupported operator: {operator}"))?;
-        debug!("Executing task {operator} ({binary_path:?}) for {application_id}");
-        let mut child = Command::new(binary_path)
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .spawn()?;
-
-        let mut stdin = child.stdin.take().expect("stdin should be configured");
-        stdin.write_all(input.as_bytes()).await?;
-        drop(stdin);
-
-        let output = child.wait_with_output().await?;
-        anyhow::ensure!(
-            output.status.success(),
-            "operator {} exited with status: {}",
-            operator,
-            output.status
-        );
-        let outcome = TaskOutcome {
-            id,
-            operator,
-            output: String::from_utf8_lossy(&output.stdout).into(),
-        };
-        debug!("Done executing task for {application_id}");
-        Ok(outcome)
     }
 
     // Keeping `&mut self` avoids borrowing `TaskProcessor` through `&self` across `.await`,
@@ -453,6 +449,76 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             }
         }
         Ok(())
+    }
+}
+
+/// Runs one task's operator binary to completion.
+async fn execute_task(
+    application_id: ApplicationId,
+    task: Task,
+    operators: OperatorMap,
+) -> Result<TaskOutcome, anyhow::Error> {
+    let Task {
+        id,
+        operator,
+        input,
+    } = task;
+    let binary_path = operators
+        .get(&operator)
+        .ok_or_else(|| anyhow::anyhow!("unsupported operator: {operator}"))?;
+    debug!("Executing task {operator} ({binary_path:?}) for {application_id}");
+    let mut child = Command::new(binary_path)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()?;
+
+    let mut stdin = child.stdin.take().expect("stdin should be configured");
+    stdin.write_all(input.as_bytes()).await?;
+    drop(stdin);
+
+    let output = child.wait_with_output().await?;
+    anyhow::ensure!(
+        output.status.success(),
+        "operator {} exited with status: {}",
+        operator,
+        output.status
+    );
+    let outcome = TaskOutcome {
+        id,
+        operator,
+        output: String::from_utf8_lossy(&output.stdout).into(),
+    };
+    debug!("Done executing task for {application_id}");
+    Ok(outcome)
+}
+
+/// Awaits a task group, reporting it once if it outlives `slow_group_threshold`.
+///
+/// Reporting only — the group keeps running afterwards. Cutting it short would abort work that may
+/// be about to succeed, and since the task would then be retried, a threshold below what the work
+/// needs would repeat it forever instead of ever completing it.
+async fn await_group(
+    application_id: ApplicationId,
+    group: &Option<String>,
+    mut handle: tokio::task::JoinHandle<Option<Timestamp>>,
+    config: TaskProcessorConfig,
+) -> Option<Timestamp> {
+    let on_panic = |error| {
+        error!(%application_id, ?group, %error, "Task group panicked");
+        Some(Timestamp::now().saturating_add(config.retry_delay))
+    };
+    let threshold = config.slow_group_threshold.as_duration();
+    match tokio::time::timeout(threshold, &mut handle).await {
+        Ok(result) => result.unwrap_or_else(on_panic),
+        Err(_) => {
+            warn!(
+                %application_id, ?group,
+                "Task group still running after {threshold:?}; leaving it to finish"
+            );
+            #[cfg(with_metrics)]
+            metrics::SLOW_TASK_GROUPS.inc();
+            handle.await.unwrap_or_else(on_panic)
+        }
     }
 }
 
@@ -550,6 +616,58 @@ mod tests {
                 group(Some("other"), &["second"])
             ]
         );
+    }
+
+    /// Writes an executable shell script and returns an operator map pointing at it.
+    fn operator_running(script: &str, dir: &tempfile::TempDir) -> OperatorMap {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let path = dir.path().join("operator");
+        std::fs::write(&path, format!("#!/bin/sh\n{script}\n")).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        Arc::new(BTreeMap::from([("op".to_string(), path)]))
+    }
+
+    /// A syntactically valid application id. `CryptoHash`'s `FromStr` is hex over 32 bytes and,
+    /// unlike `test_hash`, is not gated behind `with_testing`.
+    fn app_id() -> ApplicationId {
+        ApplicationId::new("00".repeat(32).parse().unwrap())
+    }
+
+    fn timed_task() -> Task {
+        Task {
+            id: None,
+            operator: "op".to_string(),
+            input: String::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn execute_task_returns_the_operator_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let operators = operator_running("echo done", &dir);
+        let outcome = execute_task(app_id(), timed_task(), operators)
+            .await
+            .unwrap();
+        assert_eq!(outcome.output.trim(), "done");
+    }
+
+    #[tokio::test]
+    async fn a_group_that_outlives_the_threshold_is_reported_but_still_awaited() {
+        let expected = Some(Timestamp::from(4_242));
+        let handle = tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            expected
+        });
+        let config = TaskProcessorConfig {
+            retry_delay: TimeDelta::from_secs(5),
+            // Far below what the group takes, so the slow path is the one exercised.
+            slow_group_threshold: TimeDelta::from_millis(10),
+        };
+        // The point of the assertion: crossing the threshold reports the group, it does not cut
+        // it short, so the result it was about to produce still comes back.
+        let retry_at = await_group(app_id(), &Some("group".to_string()), handle, config).await;
+        assert_eq!(retry_at, expected);
     }
 
     #[test]

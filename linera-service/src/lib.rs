@@ -44,4 +44,5 @@ pub fn init_metrics() {
     linera_storage::init_metrics();
     linera_views::init_metrics();
     node_service::query_cache_metrics::init_metrics();
+    task_processor::metrics::init_metrics();
 }

@@ -821,6 +821,14 @@ pub enum ClientCommand {
         #[arg(long, default_value = "5")]
         task_retry_delay_secs: u64,
 
+        /// Number of seconds after which a still-running operator task group is logged and
+        /// counted as slow. The group is not interrupted: it is reported so that one which never
+        /// returns does not stall its chain silently.
+        /// Only relevant when operators are configured via `--operator-application-ids`
+        /// or `--controller-id`.
+        #[arg(long, default_value = "300")]
+        slow_task_group_secs: u64,
+
         /// Run in read-only mode: disallow mutations and prevent queries from scheduling
         /// operations. Use this when exposing the service to untrusted clients.
         #[arg(long)]
