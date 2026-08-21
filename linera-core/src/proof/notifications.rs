@@ -7,12 +7,14 @@
 //! — what it reports really happened — and from any validator it is best effort, since it may never
 //! arrive and carries nothing that could be checked if it did.
 //!
-//! That combination would be alarming if clients merely used notifications to go faster. They do
-//! not: a `ChainListener` acts on them, processing inboxes and following new chains, so an
-//! application's own liveness can rest on one arriving. What makes best-effort delivery tolerable
-//! is not that nobody depends on it, but that the dependence is *self-repairing* — handlers bring a
-//! chain up to date rather than applying the change they were told about, so any later notification
-//! does the work of every lost one. The exception is the last.
+//! The channel is **lossy by model**, not merely unreliable in practice, so nothing here may assume
+//! a notification arrives. That would be alarming if clients used notifications merely to go
+//! faster. They do not: a `ChainListener` acts on them, processing inboxes and following new
+//! chains, so an application's own liveness can rest on one arriving.
+//!
+//! What makes a lossy channel tolerable is that the dependence is *self-repairing* — handlers bring
+//! a chain up to date rather than applying the change they were told about, so any later
+//! notification does the work of every lost one. The exception is the last.
 //!
 //! [`Notification`]: crate::worker::Notification
 
@@ -73,18 +75,35 @@ use super::availability::{BlockOutputsArePersisted, InboxHoldsOnlySentBundles};
 /// [`CommitAgreement`]: linera_chain::manager::proof::safety::CommitAgreement
 pub trait NotificationImpliesPersistedChange: CorrectValidator + StorageAtomicity {}
 
-/// **Caveat (Notifications are best effort).** A change can be persisted and its notification
-/// never reach any client. Three ways, none of them an error:
+/// **Definition (The notification channel is lossy).** In this specification's model, the channel
+/// carrying [`Notification`]s from a validator to a client may drop any message, without notice to
+/// either side. Delivery is never retried, never acknowledged, and never durable.
 ///
-/// * *Nobody is listening.* `Notifier::notify_chain` looks the chain up in its sender map and
-///   returns immediately when there is no entry.
-/// * *The receiver went away.* A failed `sender.send` is ignored and the dead sender reaped; for
-///   the delivery notifiers, `notifier.send(())` failing is logged at debug and dropped.
-/// * *The process crashed in between.* [`NotificationImpliesPersistedChange`] orders the save
-///   before the dispatch, which leaves exactly this window: saved, not yet notified, gone.
+/// This is a modelling decision, so no result may assume otherwise — a proof that needed a
+/// notification to arrive would simply not be a proof in this model. The reason to state it as a
+/// definition rather than to prove something about it is that the alternative statement, "no result
+/// depends on notification delivery", is about the specification rather than about the system: in a
+/// model where the channel is lossy, it cannot fail to hold.
 ///
-/// Delivery is therefore neither retried nor acknowledged, and no notification is durable. What
-/// bounds the damage is [`LostNotificationsCoalesce`], not any property of delivery itself.
+/// *Faithfulness to the code.* Three ways a notification is dropped, none of them an error:
+/// `Notifier::notify_chain` returns immediately when the chain has no entry in its sender map;
+/// a failed `sender.send` is ignored and the dead sender reaped; and
+/// [`NotificationImpliesPersistedChange`] orders the save before the dispatch, which leaves a window
+/// where a change is persisted and the process dies before anything is sent.
+///
+/// **Verified once: nothing on the progress path waits on this channel.** The only place a client
+/// blocks on cross-chain delivery is `CrossChainMessageDelivery::Blocking`, at the
+/// `MissingCrossChainUpdate` arm of `send_block_proposal`. That is a flag on an ordinary
+/// `send_chain_information` request: the *validator* holds its response until the messages are
+/// delivered, so the client is waiting on an RPC bounded by its own timeout, not on a subscription.
+/// The `oneshot` behind it — `DeliveryNotifier`, whose `notifier.send(())` failure is logged at
+/// debug — is an internal signal between a worker and a request handler in the same process, and is
+/// not this channel. The two are easy to conflate and an earlier version of this statement did,
+/// citing that debug log as evidence of lossiness here.
+///
+/// What bounds the damage from a genuine loss is [`LostNotificationsCoalesce`].
+///
+/// [`Notification`]: crate::worker::Notification
 pub trait NotificationsAreBestEffort {}
 
 /// **Lemma (A lost notification is repaired by the next one).** If a client misses a notification
@@ -118,32 +137,6 @@ pub trait NotificationsAreBestEffort {}
 ///
 /// [`Notify`]: https://docs.rs/tokio/latest/tokio/sync/struct.Notify.html
 pub trait LostNotificationsCoalesce: NotificationsAreBestEffort {}
-
-/// **Lemma (Chain progress does not depend on notifications).** A chain's block height grows without
-/// bound under the liveness assumptions whether or not any notification is delivered.
-///
-/// This is the boundary worth drawing, because it is *not* true of everything a client does. What
-/// is independent of notifications is the protocol: a validator never waits for one — it has none to
-/// wait for, since notifications travel only outward to clients — and the progress argument reaches
-/// its conclusions from [`ActiveCorrectDriver`], a client that polls and retries, together with the
-/// `linera_core::updater` loops, which learn what a validator is missing from the *error it returns*
-/// rather than from any notification ([`MissingDependenciesAreRecoverable`]).
-///
-/// *Proof.* By inspection of the closure of `UnboundedProgress`: no statement in it names a
-/// notification, and none of the transitions it depends on reads one. `Notifier::notify_chain` has
-/// no caller inside the consensus path; its only effect is to write to client subscriptions. ∎
-///
-/// **What does depend on them is application liveness.** A `ChainListener` processes an inbox
-/// because it was told to, so a chain whose owner is a `ChainListener` advances only when
-/// notifications arrive — the client is the driver [`ActiveCorrectDriver`] assumes, and
-/// notifications are what wakes it. So the split is: consensus cannot be stalled by losing
-/// notifications, an application can. [`LostNotificationsCoalesce`] bounds that to the case where no
-/// further notification arrives.
-///
-/// [`ActiveCorrectDriver`]: super::assumptions::ActiveCorrectDriver
-/// [`MissingDependenciesAreRecoverable`]: super::availability::MissingDependenciesAreRecoverable
-/// [`UnboundedProgress`]: super::liveness::UnboundedProgress
-pub trait ChainProgressIsIndependentOfNotifications: LostNotificationsCoalesce {}
 
 /// **Lemma (A notification is backed by a certificate the validator can serve — except for a new
 /// round).** For every notification a correct validator emits other than `Reason::NewRound`, that
