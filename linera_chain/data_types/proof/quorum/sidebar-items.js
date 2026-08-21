@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"trait":["CertificateCarriesCorrectVote","CertificateEmbedsQuorum","CertificateSignaturesVerify","CorrectSignerCastItsVote","CorrectValidatorInIntersection","CorrectValidatorsFormQuorum","Intersection","Quorum","QuorumAssembly","ThresholdArithmetic"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CreateGistBuilder","GistsHandler","ListCommitsBuilder","ListUserGistsBuilder","UpdateGistBuilder","UpdateGistFile","UpdateGistFileBuilder"],"type":["ListAllGistsBuilder","ListPublicGistsBuilder"]};

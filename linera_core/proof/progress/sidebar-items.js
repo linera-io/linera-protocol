@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"trait":["EventuallyCorrectLeader","FinalizationQuorumForms","LockRecovery","ProposalAccepted","RoundAdvancement","TimeoutCertificateForms","ValidationQuorumForms"]};

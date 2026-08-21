@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["byte_serialize","parse"],"struct":["ByteSerialize","Parse","ParseIntoOwned","Serializer"],"trait":["Target"],"type":["EncodingOverride"]};

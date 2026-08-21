@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["select","subsequence"],"struct":["Index","IndexStrategy","IndexValueTree","Select","SelectValueTree","Selector","SelectorStrategy","SelectorValueTree","Subsequence","SubsequenceValueTree"]};

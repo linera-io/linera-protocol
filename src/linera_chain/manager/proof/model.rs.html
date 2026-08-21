@@ -1,0 +1,356 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `linera-chain/src/manager/proof/model.rs`."><title>model.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="linera_chain" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../../static.files/src-script-813739b1.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">linera_chain/manager/proof/</div>model.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) Zefchain Labs, Inc.
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="doccomment">//! System model and the assumptions the safety argument rests on.
+<a href=#5 id=5 data-nosnippet>5</a>//!
+<a href=#6 id=6 data-nosnippet>6</a>//! The definitions here fix what a consensus instance is and what it means for two blocks to
+<a href=#7 id=7 data-nosnippet>7</a>//! conflict; the assumptions are the things the implementation does *not* prove and that a
+<a href=#8 id=8 data-nosnippet>8</a>//! deployment must supply. Everything in this module is a leaf of the dependency graph.
+<a href=#9 id=9 data-nosnippet>9</a>//!
+<a href=#10 id=10 data-nosnippet>10</a>//! The assumptions needed only for progress — synchrony, availability, leader fairness, an
+<a href=#11 id=11 data-nosnippet>11</a>//! active driver — are stated separately in `linera_core::proof::assumptions`, because their
+<a href=#12 id=12 data-nosnippet>12</a>//! evidence lives in that crate. Safety depends on none of them.
+<a href=#13 id=13 data-nosnippet>13</a>
+<a href=#14 id=14 data-nosnippet>14</a>/// **Definition (Consensus instance).** The protocol decides one block at a time, per chain.
+<a href=#15 id=15 data-nosnippet>15</a>/// A *consensus instance* is a pair `(chain, height)`, and its state is one [`ChainManager`],
+<a href=#16 id=16 data-nosnippet>16</a>/// reachable as [`ChainStateView::manager`], whose height is
+<a href=#17 id=17 data-nosnippet>17</a>/// [`ChainTipState::next_block_height`].
+<a href=#18 id=18 data-nosnippet>18</a>///
+<a href=#19 id=19 data-nosnippet>19</a>/// [`ChainManager::reset`] destroys an instance and creates the next one: it calls `clear()` on
+<a href=#20 id=20 data-nosnippet>20</a>/// every view, re-derives the leader distributions from the new ownership, and sets
+<a href=#21 id=21 data-nosnippet>21</a>/// [`ChainManager::current_round`] to [`ChainOwnership::first_round`]. It is called from exactly
+<a href=#22 id=22 data-nosnippet>22</a>/// two places in `linera_chain::chain`: `initialize_if_needed`, when the chain becomes active at
+<a href=#23 id=23 data-nosnippet>23</a>/// height `0`, and `reset_chain_manager`, immediately after a confirmed block at height `h` has
+<a href=#24 id=24 data-nosnippet>24</a>/// been executed, for height `h + 1`.
+<a href=#25 id=25 data-nosnippet>25</a>///
+<a href=#26 id=26 data-nosnippet>26</a>/// Consequently **every invariant in [`crate::manager::proof::locking`] is scoped to a single
+<a href=#27 id=27 data-nosnippet>27</a>/// instance**: it holds from the moment the instance is created until it is reset, and says
+<a href=#28 id=28 data-nosnippet>28</a>/// nothing across a reset. That is sound because a reset happens only once the height's block is
+<a href=#29 id=29 data-nosnippet>29</a>/// committed, so a later instance decides a different height. Restoring state *across* a reset
+<a href=#30 id=30 data-nosnippet>30</a>/// is the one exception, handled by [`SafetyStateRecovery`].
+<a href=#31 id=31 data-nosnippet>31</a>///
+<a href=#32 id=32 data-nosnippet>32</a>/// [`ChainManager`]: crate::manager::ChainManager
+<a href=#33 id=33 data-nosnippet>33</a>/// [`ChainManager::reset`]: crate::manager::ChainManager::reset
+<a href=#34 id=34 data-nosnippet>34</a>/// [`ChainManager::current_round`]: crate::manager::ChainManager::current_round
+<a href=#35 id=35 data-nosnippet>35</a>/// [`ChainStateView::manager`]: crate::ChainStateView::manager
+<a href=#36 id=36 data-nosnippet>36</a>/// [`ChainTipState::next_block_height`]: crate::ChainTipState::next_block_height
+<a href=#37 id=37 data-nosnippet>37</a>/// [`ChainOwnership::first_round`]: linera_base::ownership::ChainOwnership::first_round
+<a href=#38 id=38 data-nosnippet>38</a>/// [`SafetyStateRecovery`]: crate::manager::proof::locking::SafetyStateRecovery
+<a href=#39 id=39 data-nosnippet>39</a></span><span class="kw">pub trait </span>ConsensusInstance {}
+<a href=#40 id=40 data-nosnippet>40</a>
+<a href=#41 id=41 data-nosnippet>41</a><span class="doccomment">/// **Definition (Round order).** Rounds are [`Round`] values, totally ordered by the derived
+<a href=#42 id=42 data-nosnippet>42</a>/// [`Ord`] on the enum, which orders first by variant and then by the contained `u32`:
+<a href=#43 id=43 data-nosnippet>43</a>///
+<a href=#44 id=44 data-nosnippet>44</a>/// ```text
+<a href=#45 id=45 data-nosnippet>45</a>/// Round::Fast  &lt;  Round::MultiLeader(0) &lt; Round::MultiLeader(1) &lt; …
+<a href=#46 id=46 data-nosnippet>46</a>///              &lt;  Round::SingleLeader(0) &lt; Round::SingleLeader(1) &lt; …
+<a href=#47 id=47 data-nosnippet>47</a>///              &lt;  Round::Validator(0)  &lt; Round::Validator(1)  &lt; …
+<a href=#48 id=48 data-nosnippet>48</a>/// ```
+<a href=#49 id=49 data-nosnippet>49</a>///
+<a href=#50 id=50 data-nosnippet>50</a>/// In particular [`Round::Fast`] is the global minimum, which several arguments use directly:
+<a href=#51 id=51 data-nosnippet>51</a>/// a guard of the form `x.round() &lt; Round::Fast` is unsatisfiable.
+<a href=#52 id=52 data-nosnippet>52</a>///
+<a href=#53 id=53 data-nosnippet>53</a>/// The successor function is [`ChainOwnership::next_round`], which is *not* the successor of
+<a href=#54 id=54 data-nosnippet>54</a>/// this order — it skips the multi-leader rounds a chain is not configured for and saturates
+<a href=#55 id=55 data-nosnippet>55</a>/// into [`Round::Validator`]. It is monotone, which is all the round-advancement results need.
+<a href=#56 id=56 data-nosnippet>56</a>///
+<a href=#57 id=57 data-nosnippet>57</a>/// [`Round`]: linera_base::data_types::Round
+<a href=#58 id=58 data-nosnippet>58</a>/// [`Round::Fast`]: linera_base::data_types::Round::Fast
+<a href=#59 id=59 data-nosnippet>59</a>/// [`Round::Validator`]: linera_base::data_types::Round::Validator
+<a href=#60 id=60 data-nosnippet>60</a>/// [`ChainOwnership::next_round`]: linera_base::ownership::ChainOwnership::next_round
+<a href=#61 id=61 data-nosnippet>61</a></span><span class="kw">pub trait </span>RoundOrder {}
+<a href=#62 id=62 data-nosnippet>62</a>
+<a href=#63 id=63 data-nosnippet>63</a><span class="doccomment">/// **Definition (Correct validator).** A validator is *correct* in an execution if every
+<a href=#64 id=64 data-nosnippet>64</a>/// signature it produces was produced by an unmodified build of this code, driven through the
+<a href=#65 id=65 data-nosnippet>65</a>/// public entry points of `linera_core::worker::WorkerState`, with a private key no other party
+<a href=#66 id=66 data-nosnippet>66</a>/// holds. A validator that is not correct is *faulty*, and may sign anything at any time,
+<a href=#67 id=67 data-nosnippet>67</a>/// including contradictory statements.
+<a href=#68 id=68 data-nosnippet>68</a>///
+<a href=#69 id=69 data-nosnippet>69</a>/// This is what licenses the arguments in [`crate::manager::proof::voting`]: for a correct
+<a href=#70 id=70 data-nosnippet>70</a>/// validator, "it signed a validation vote for `B` in round `r`" implies its
+<a href=#71 id=71 data-nosnippet>71</a>/// [`ChainManager`](crate::manager::ChainManager) state satisfied the guards on the path that
+<a href=#72 id=72 data-nosnippet>72</a>/// produces such a vote, because that path is the only one that can produce it
+<a href=#73 id=73 data-nosnippet>73</a>/// ([`VoteConstructionSites`]).
+<a href=#74 id=74 data-nosnippet>74</a>///
+<a href=#75 id=75 data-nosnippet>75</a>/// Note this is a statement about *signing*, not about availability. A correct validator may be
+<a href=#76 id=76 data-nosnippet>76</a>/// slow or unreachable without becoming faulty, and in particular **it may crash at any time and
+<a href=#77 id=77 data-nosnippet>77</a>/// restart**, losing whatever it had not yet persisted. Crash-recovery, not fail-stop, is the
+<a href=#78 id=78 data-nosnippet>78</a>/// model: before GST crashes may be arbitrarily frequent and restarts arbitrarily slow; after
+<a href=#79 id=79 data-nosnippet>79</a>/// GST, recovery is bounded by `linera_core::proof::assumptions::BoundedRecovery`.
+<a href=#80 id=80 data-nosnippet>80</a>///
+<a href=#81 id=81 data-nosnippet>81</a>/// That is what makes [`DurablePersistence`] load-bearing rather than hygienic. A validator that
+<a href=#82 id=82 data-nosnippet>82</a>/// signed a vote and crashed before saving it would, on restart, have no record of having voted —
+<a href=#83 id=83 data-nosnippet>83</a>/// and could vote again in the same round, breaking
+<a href=#84 id=84 data-nosnippet>84</a>/// [`OneValidationVotePerRound`](crate::manager::proof::locking::OneValidationVotePerRound). That
+<a href=#85 id=85 data-nosnippet>85</a>/// is a *safety* failure, not a lost message, and it is why the persistence obligation is stated
+<a href=#86 id=86 data-nosnippet>86</a>/// as a condition of correctness rather than as an implementation detail.
+<a href=#87 id=87 data-nosnippet>87</a>///
+<a href=#88 id=88 data-nosnippet>88</a>/// [`DurablePersistence`]: self::DurablePersistence
+<a href=#89 id=89 data-nosnippet>89</a>///
+<a href=#90 id=90 data-nosnippet>90</a>/// [`VoteConstructionSites`]: crate::manager::proof::voting::VoteConstructionSites
+<a href=#91 id=91 data-nosnippet>91</a></span><span class="kw">pub trait </span>CorrectValidator {}
+<a href=#92 id=92 data-nosnippet>92</a>
+<a href=#93 id=93 data-nosnippet>93</a><span class="doccomment">/// **Definition (Conflicting blocks).** Two [`Block`]s *conflict* when they have the same
+<a href=#94 id=94 data-nosnippet>94</a>/// [`chain_id`] and [`height`] but different hashes. Certificates certify [`ConfirmedBlock`] and
+<a href=#95 id=95 data-nosnippet>95</a>/// [`ValidatedBlock`] values, each of which wraps a [`Block`] and hashes to that block's hash,
+<a href=#96 id=96 data-nosnippet>96</a>/// so "certificates for conflicting blocks" is well defined.
+<a href=#97 id=97 data-nosnippet>97</a>///
+<a href=#98 id=98 data-nosnippet>98</a>/// Note that a [`Block`] is a [`ProposedBlock`] *together with* its
+<a href=#99 id=99 data-nosnippet>99</a>/// [`BlockExecutionOutcome`]. Two blocks with the same proposal but different outcomes therefore
+<a href=#100 id=100 data-nosnippet>100</a>/// conflict. This is deliberate: they lead to different chain states, so agreement must exclude
+<a href=#101 id=101 data-nosnippet>101</a>/// them, and the exclusion is discharged by [`DeterministicExecution`].
+<a href=#102 id=102 data-nosnippet>102</a>///
+<a href=#103 id=103 data-nosnippet>103</a>/// Ancestry needs no separate definition here: [`ChainTipState::verify_block_chaining`] requires
+<a href=#104 id=104 data-nosnippet>104</a>/// a proposal's height to equal the tip's next height and its `previous_block_hash` to equal the
+<a href=#105 id=105 data-nosnippet>105</a>/// tip's block hash, so the committed blocks of a chain form a hash-linked list, one per height.
+<a href=#106 id=106 data-nosnippet>106</a>///
+<a href=#107 id=107 data-nosnippet>107</a>/// [`Block`]: crate::block::Block
+<a href=#108 id=108 data-nosnippet>108</a>/// [`chain_id`]: crate::block::BlockHeader::chain_id
+<a href=#109 id=109 data-nosnippet>109</a>/// [`height`]: crate::block::BlockHeader::height
+<a href=#110 id=110 data-nosnippet>110</a>/// [`ConfirmedBlock`]: crate::block::ConfirmedBlock
+<a href=#111 id=111 data-nosnippet>111</a>/// [`ValidatedBlock`]: crate::block::ValidatedBlock
+<a href=#112 id=112 data-nosnippet>112</a>/// [`ProposedBlock`]: crate::data_types::ProposedBlock
+<a href=#113 id=113 data-nosnippet>113</a>/// [`BlockExecutionOutcome`]: crate::data_types::BlockExecutionOutcome
+<a href=#114 id=114 data-nosnippet>114</a>/// [`ChainTipState::verify_block_chaining`]: crate::ChainTipState::verify_block_chaining
+<a href=#115 id=115 data-nosnippet>115</a></span><span class="kw">pub trait </span>ConflictingBlocks {}
+<a href=#116 id=116 data-nosnippet>116</a>
+<a href=#117 id=117 data-nosnippet>117</a><span class="doccomment">/// **Assumption (Maximum Byzantine weight, per epoch).** For **every** epoch whose committee has
+<a href=#118 id=118 data-nosnippet>118</a>/// not been revoked, the total [`Committee::weight`] of faulty validators *in that committee* is
+<a href=#119 id=119 data-nosnippet>119</a>/// strictly less than its [`Committee::validity_threshold`] — at most `f⁺ − 1` where
+<a href=#120 id=120 data-nosnippet>120</a>/// `f⁺ = ⌈N/3⌉`, equivalently strictly below one third of that committee's total weight.
+<a href=#121 id=121 data-nosnippet>121</a>///
+<a href=#122 id=122 data-nosnippet>122</a>/// This is the only fault bound assumed anywhere in the specification, and it is assumed once per
+<a href=#123 id=123 data-nosnippet>123</a>/// live committee rather than once globally. The quantifier carries most of the content.
+<a href=#124 id=124 data-nosnippet>124</a>///
+<a href=#125 id=125 data-nosnippet>125</a>/// *Committees are bounded independently.* Membership and weights differ between epochs, so this
+<a href=#126 id=126 data-nosnippet>126</a>/// is a separate hypothesis for each: a validator may hold weight in several committees, or in
+<a href=#127 id=127 data-nosnippet>127</a>/// none, and being faulty is a property of a validator *within* a committee. Every quorum argument
+<a href=#128 id=128 data-nosnippet>128</a>/// here reasons inside a single committee — two quorums drawn from different committees need not
+<a href=#129 id=129 data-nosnippet>129</a>/// intersect at all — and [`EpochAgreement`] is what confines each argument to one.
+<a href=#130 id=130 data-nosnippet>130</a>///
+<a href=#131 id=131 data-nosnippet>131</a>/// *A revoked committee is assumed nothing.* Revocation is exactly the withdrawal of this
+<a href=#132 id=132 data-nosnippet>132</a>/// hypothesis. Once the admin chain has written a removal event for an epoch — which is what
+<a href=#133 id=133 data-nosnippet>133</a>/// `Storage::is_epoch_revoked` tests — that committee may be arbitrarily corrupt and its
+<a href=#134 id=134 data-nosnippet>134</a>/// signatures establish nothing on their own. This is why material from a revoked epoch is
+<a href=#135 id=135 data-nosnippet>135</a>/// admitted only when a still-trusted committee vouches for it, as
+<a href=#136 id=136 data-nosnippet>136</a>/// `ChainWorkerState::select_message_bundles` does for bundles whose epoch has lapsed.
+<a href=#137 id=137 data-nosnippet>137</a>///
+<a href=#138 id=138 data-nosnippet>138</a>/// *Not revoking is not free.* Revocations are ordered
+<a href=#139 id=139 data-nosnippet>139</a>/// ([`AdminOperation::RemoveCommittee`] requires them to be sequential), so the revoked epochs
+<a href=#140 id=140 data-nosnippet>140</a>/// form a prefix and the assumed-correct ones a suffix. That suffix gains a committee whenever one
+<a href=#141 id=141 data-nosnippet>141</a>/// is created and loses one only on revocation. A deployment that never revokes is therefore
+<a href=#142 id=142 data-nosnippet>142</a>/// assuming, permanently, that *every committee it has ever created* still satisfies the bound —
+<a href=#143 id=143 data-nosnippet>143</a>/// including validator sets long since rotated out. The assumption does not weaken with time; it
+<a href=#144 id=144 data-nosnippet>144</a>/// accumulates.
+<a href=#145 id=145 data-nosnippet>145</a>///
+<a href=#146 id=146 data-nosnippet>146</a>/// [`AdminOperation::RemoveCommittee`]: linera_execution::system::AdminOperation::RemoveCommittee
+<a href=#147 id=147 data-nosnippet>147</a>/// [`Committee::weight`]: linera_execution::committee::Committee::weight
+<a href=#148 id=148 data-nosnippet>148</a>/// [`Committee::validity_threshold`]: linera_execution::committee::Committee::validity_threshold
+<a href=#149 id=149 data-nosnippet>149</a></span><span class="kw">pub trait </span>MaxByzantineWeight {}
+<a href=#150 id=150 data-nosnippet>150</a>
+<a href=#151 id=151 data-nosnippet>151</a><span class="doccomment">/// **Assumption (Epoch agreement).** All correct validators evaluate a given consensus instance
+<a href=#152 id=152 data-nosnippet>152</a>/// against the same [`Committee`].
+<a href=#153 id=153 data-nosnippet>153</a>///
+<a href=#154 id=154 data-nosnippet>154</a>/// This is what makes [`Intersection`] applicable to two certificates for the same height: two
+<a href=#155 id=155 data-nosnippet>155</a>/// quorums of *different* committees need not intersect at all. It is close to enforced rather
+<a href=#156 id=156 data-nosnippet>156</a>/// than assumed, by two different mechanisms.
+<a href=#157 id=157 data-nosnippet>157</a>///
+<a href=#158 id=158 data-nosnippet>158</a>/// *Which committee judges a certificate* is a function of the block's own declared epoch, not of
+<a href=#159 id=159 data-nosnippet>159</a>/// the judging node's state: `ChainWorkerState::process_confirmed_block` fetches
+<a href=#160 id=160 data-nosnippet>160</a>/// `committee_for_epoch(block.header.epoch)` and verifies the certificate against that committee.
+<a href=#161 id=161 data-nosnippet>161</a>/// Since [`ProposedBlock::epoch`] is covered by the block hash, two correct validators never
+<a href=#162 id=162 data-nosnippet>162</a>/// disagree about which committee a given certificate is judged by. This is what the assumption
+<a href=#163 id=163 data-nosnippet>163</a>/// needs, and it is unconditional.
+<a href=#164 id=164 data-nosnippet>164</a>///
+<a href=#165 id=165 data-nosnippet>165</a>/// *That the epoch is also the chain's current one* is enforced separately, by `check_block_epoch`,
+<a href=#166 id=166 data-nosnippet>166</a>/// at three sites: `try_handle_block_proposal` before voting, `process_validated_block` before
+<a href=#167 id=167 data-nosnippet>167</a>/// verifying the certificate, and `execute_contiguous_block` before applying a confirmed block.
+<a href=#168 id=168 data-nosnippet>168</a>/// Note it is **not** applied in `process_confirmed_block` itself — deliberately, since a node
+<a href=#169 id=169 data-nosnippet>169</a>/// catching up must accept certificates from earlier epochs — so a merely *preprocessed* block is
+<a href=#170 id=170 data-nosnippet>170</a>/// never epoch-checked in this sense, which is consistent with preprocessing not advancing the tip
+<a href=#171 id=171 data-nosnippet>171</a>/// ([`TipAdvancesOnlyOnValidCertificate`]).
+<a href=#172 id=172 data-nosnippet>172</a>///
+<a href=#173 id=173 data-nosnippet>173</a>/// The chain's current epoch at height `h` is a function of the committed blocks below `h`, which
+<a href=#174 id=174 data-nosnippet>174</a>/// [`UniqueChain`] shows is unique — so the assumption is discharged for height `h` by the
+<a href=#175 id=175 data-nosnippet>175</a>/// agreement result at heights below `h`, and the induction in [`UniqueChain`] is what makes
+<a href=#176 id=176 data-nosnippet>176</a>/// that non-circular.
+<a href=#177 id=177 data-nosnippet>177</a>///
+<a href=#178 id=178 data-nosnippet>178</a>/// What remains genuinely assumed is that the committee for an epoch is itself agreed, which
+<a href=#179 id=179 data-nosnippet>179</a>/// holds because it is published by a committed block on the admin chain.
+<a href=#180 id=180 data-nosnippet>180</a>///
+<a href=#181 id=181 data-nosnippet>181</a>/// [`Committee`]: linera_execution::committee::Committee
+<a href=#182 id=182 data-nosnippet>182</a>/// [`ProposedBlock::epoch`]: crate::data_types::ProposedBlock::epoch
+<a href=#183 id=183 data-nosnippet>183</a>/// [`Intersection`]: crate::data_types::proof::quorum::Intersection
+<a href=#184 id=184 data-nosnippet>184</a>/// [`UniqueChain`]: crate::manager::proof::safety::UniqueChain
+<a href=#185 id=185 data-nosnippet>185</a>/// [`TipAdvancesOnlyOnValidCertificate`]: crate::manager::proof::commit::TipAdvancesOnlyOnValidCertificate
+<a href=#186 id=186 data-nosnippet>186</a></span><span class="kw">pub trait </span>EpochAgreement {}
+<a href=#187 id=187 data-nosnippet>187</a>
+<a href=#188 id=188 data-nosnippet>188</a><span class="doccomment">/// **Assumption (Cryptographic soundness).** [`ValidatorSignature`] is existentially unforgeable:
+<a href=#189 id=189 data-nosnippet>189</a>/// no party without a validator's secret key produces a signature that
+<a href=#190 id=190 data-nosnippet>190</a>/// [`ValidatorSignature::check`] accepts for that validator's public key. [`CryptoHash`] is
+<a href=#191 id=191 data-nosnippet>191</a>/// collision resistant, so distinct values — in particular distinct [`Block`]s and distinct
+<a href=#192 id=192 data-nosnippet>192</a>/// [`VoteValue`]s — have distinct hashes.
+<a href=#193 id=193 data-nosnippet>193</a>///
+<a href=#194 id=194 data-nosnippet>194</a>/// Collision resistance is what lets the specification move between "the certificate's
+<a href=#195 id=195 data-nosnippet>195</a>/// `value_hash`" and "the block", and between block equality and hash equality.
+<a href=#196 id=196 data-nosnippet>196</a>///
+<a href=#197 id=197 data-nosnippet>197</a>/// [`ValidatorSignature`]: linera_base::crypto::ValidatorSignature
+<a href=#198 id=198 data-nosnippet>198</a>/// [`ValidatorSignature::check`]: linera_base::crypto::ValidatorSignature::check
+<a href=#199 id=199 data-nosnippet>199</a>/// [`CryptoHash`]: linera_base::crypto::CryptoHash
+<a href=#200 id=200 data-nosnippet>200</a>/// [`Block`]: crate::block::Block
+<a href=#201 id=201 data-nosnippet>201</a>/// [`VoteValue`]: crate::data_types::VoteValue
+<a href=#202 id=202 data-nosnippet>202</a></span><span class="kw">pub trait </span>UnforgeableSignatures {}
+<a href=#203 id=203 data-nosnippet>203</a>
+<a href=#204 id=204 data-nosnippet>204</a><span class="doccomment">/// **Assumption (Durable persistence).** A correct validator persists its
+<a href=#205 id=205 data-nosnippet>205</a>/// [`ChainManager`](crate::manager::ChainManager) state before releasing a vote to the network,
+<a href=#206 id=206 data-nosnippet>206</a>/// and that state survives a crash.
+<a href=#207 id=207 data-nosnippet>207</a>///
+<a href=#208 id=208 data-nosnippet>208</a>/// The implementation is structured to make this hold: every path in
+<a href=#209 id=209 data-nosnippet>209</a>/// `linera_core::chain_worker::state` that mutates the manager calls `self.save()` before
+<a href=#210 id=210 data-nosnippet>210</a>/// returning the chain info response that carries the vote — `try_handle_block_proposal` after
+<a href=#211 id=211 data-nosnippet>211</a>/// `create_vote`, `process_validated_block` after `create_final_vote`,
+<a href=#212 id=212 data-nosnippet>212</a>/// `vote_for_leader_timeout` after `create_timeout_vote`, and `vote_for_fallback` after
+<a href=#213 id=213 data-nosnippet>213</a>/// `vote_fallback`. The response projection is [`ChainManagerInfo`].
+<a href=#214 id=214 data-nosnippet>214</a>///
+<a href=#215 id=215 data-nosnippet>215</a>/// Without this, a crash could lose the record of a vote and let the validator vote again,
+<a href=#216 id=216 data-nosnippet>216</a>/// breaking [`OneValidationVotePerRound`] and [`OneConfirmationVotePerRound`], which are the
+<a href=#217 id=217 data-nosnippet>217</a>/// only places where the assumption is consumed. It is one half of a discipline whose other half
+<a href=#218 id=218 data-nosnippet>218</a>/// — that an effect already persisted is never *lost* — is `linera_core::proof::availability`. A
+<a href=#219 id=219 data-nosnippet>219</a>/// validator that violates it is faulty in the sense of [`CorrectValidator`], and is counted
+<a href=#220 id=220 data-nosnippet>220</a>/// against [`MaxByzantineWeight`].
+<a href=#221 id=221 data-nosnippet>221</a>///
+<a href=#222 id=222 data-nosnippet>222</a>/// [`OneValidationVotePerRound`]: crate::manager::proof::locking::OneValidationVotePerRound
+<a href=#223 id=223 data-nosnippet>223</a>/// [`OneConfirmationVotePerRound`]: crate::manager::proof::locking::OneConfirmationVotePerRound
+<a href=#224 id=224 data-nosnippet>224</a>/// [`ChainManagerInfo`]: crate::manager::ChainManagerInfo
+<a href=#225 id=225 data-nosnippet>225</a></span><span class="kw">pub trait </span>DurablePersistence {}
+<a href=#226 id=226 data-nosnippet>226</a>
+<a href=#227 id=227 data-nosnippet>227</a><span class="doccomment">/// **Assumption (Sequential instance state).** The transitions of one consensus instance are
+<a href=#228 id=228 data-nosnippet>228</a>/// mutually exclusive and each runs to completion: no two of them interleave their reads and
+<a href=#229 id=229 data-nosnippet>229</a>/// writes of the same [`ChainManager`](crate::manager::ChainManager).
+<a href=#230 id=230 data-nosnippet>230</a>///
+<a href=#231 id=231 data-nosnippet>231</a>/// Exclusivity has two halves, and only the second is in this repository's control.
+<a href=#232 id=232 data-nosnippet>232</a>///
+<a href=#233 id=233 data-nosnippet>233</a>/// *Within a worker process*, `linera_core::worker::WorkerState` reaches a chain only through a
+<a href=#234 id=234 data-nosnippet>234</a>/// per-chain `tokio::sync::RwLock&lt;ChainWorkerState&gt;` — `chain_write` for transitions, `chain_read`
+<a href=#235 id=235 data-nosnippet>235</a>/// for queries. A transition holds the write side for its whole duration, and the manager is
+<a href=#236 id=236 data-nosnippet>236</a>/// `!Sync`-by-construction behind the guard.
+<a href=#237 id=237 data-nosnippet>237</a>///
+<a href=#238 id=238 data-nosnippet>238</a>/// *Across the processes of one validator*, each chain belongs to exactly one worker, because
+<a href=#239 id=239 data-nosnippet>239</a>/// shard assignment is static: `ValidatorInternalNetworkPreConfig::get_shard_id` in `linera-rpc`
+<a href=#240 id=240 data-nosnippet>240</a>/// is a pure function of the validator's public key, the chain id and `shards.len()`, with no
+<a href=#241 id=241 data-nosnippet>241</a>/// leases and no handoff. Senders route by that function, so a worker is only ever asked for the
+<a href=#242 id=242 data-nosnippet>242</a>/// chains of its own shard.
+<a href=#243 id=243 data-nosnippet>243</a>///
+<a href=#244 id=244 data-nosnippet>244</a>/// That partition excludes *reads* as much as writes. All shards share one backing store, so
+<a href=#245 id=245 data-nosnippet>245</a>/// nothing physically prevents a worker from reading another shard's keys; what makes it never
+<a href=#246 id=246 data-nosnippet>246</a>/// happen is that a worker is never asked to. A chain's mutable state is therefore touched in
+<a href=#247 id=247 data-nosnippet>247</a>/// neither direction by any process but its owner.
+<a href=#248 id=248 data-nosnippet>248</a>///
+<a href=#249 id=249 data-nosnippet>249</a>/// Chains do still share storage, but only *published* artifacts: blobs, which are content
+<a href=#250 id=250 data-nosnippet>250</a>/// addressed, and events, which a reader reaches through `OracleResponse::Event`. Both are
+<a href=#251 id=251 data-nosnippet>251</a>/// immutable once written and belong to no chain's view. So the boundary is not "no shared
+<a href=#252 id=252 data-nosnippet>252</a>/// storage" but "no reading another chain's state": a cross-chain dependency is either delivered
+<a href=#253 id=253 data-nosnippet>253</a>/// as a message or read from one of those two stores, never observed in the producing chain's
+<a href=#254 id=254 data-nosnippet>254</a>/// [`ChainManager`](crate::manager::ChainManager) or inboxes.
+<a href=#255 id=255 data-nosnippet>255</a>/// [`IncomingBundlesAreSelfDerived`] is the form that takes for the message case.
+<a href=#256 id=256 data-nosnippet>256</a>///
+<a href=#257 id=257 data-nosnippet>257</a>/// The specification relies on the composition whenever it reasons about "the state immediately
+<a href=#258 id=258 data-nosnippet>258</a>/// before" a vote — for instance in [`UnlockingJustification`], where the guard evaluated by
+<a href=#259 id=259 data-nosnippet>259</a>/// [`ChainManager::check_proposed_block`] must still describe the state when
+<a href=#260 id=260 data-nosnippet>260</a>/// [`ChainManager::create_vote`] runs a few statements later.
+<a href=#261 id=261 data-nosnippet>261</a>///
+<a href=#262 id=262 data-nosnippet>262</a>/// **Residual obligation.** The second half holds only while `shards.len()` is stable and worker
+<a href=#263 id=263 data-nosnippet>263</a>/// processes do not overlap. Changing the shard count re-partitions every chain, and a rolling
+<a href=#264 id=264 data-nosnippet>264</a>/// restart that runs a replacement alongside its predecessor puts two processes on the same
+<a href=#265 id=265 data-nosnippet>265</a>/// chain; in both cases they compute the same owner and write the same shared keys. Nothing in
+<a href=#266 id=266 data-nosnippet>266</a>/// the code detects either, so this is a deployment obligation, not an enforced invariant.
+<a href=#267 id=267 data-nosnippet>267</a>///
+<a href=#268 id=268 data-nosnippet>268</a>/// [`IncomingBundlesAreSelfDerived`]: crate::manager::proof::commit::IncomingBundlesAreSelfDerived
+<a href=#269 id=269 data-nosnippet>269</a>/// [`UnlockingJustification`]: crate::manager::proof::safety::UnlockingJustification
+<a href=#270 id=270 data-nosnippet>270</a>/// [`ChainManager::check_proposed_block`]: crate::manager::ChainManager::check_proposed_block
+<a href=#271 id=271 data-nosnippet>271</a>/// [`ChainManager::create_vote`]: crate::manager::ChainManager::create_vote
+<a href=#272 id=272 data-nosnippet>272</a></span><span class="kw">pub trait </span>SequentialChainState {}
+<a href=#273 id=273 data-nosnippet>273</a>
+<a href=#274 id=274 data-nosnippet>274</a><span class="doccomment">/// **Assumption (Atomic persistence).** A single `WritableKeyValueStore::write_batch` — one batch
+<a href=#275 id=275 data-nosnippet>275</a>/// against one root key — is applied atomically, within whatever key-count and size limits the
+<a href=#276 id=276 data-nosnippet>276</a>/// backend imposes.
+<a href=#277 id=277 data-nosnippet>277</a>///
+<a href=#278 id=278 data-nosnippet>278</a>/// [`DurablePersistence`] is about *when* state is written; this is about the write being
+<a href=#279 id=279 data-nosnippet>279</a>/// indivisible. Every invariant in [`crate::manager::proof::locking`] is stated over a state
+<a href=#280 id=280 data-nosnippet>280</a>/// reached by whole transitions, so a torn write would put the manager in a state no transition
+<a href=#281 id=281 data-nosnippet>281</a>/// produces — for instance a [`confirmed_vote`](field@crate::manager::ChainManager::confirmed_vote)
+<a href=#282 id=282 data-nosnippet>282</a>/// stored without the [`locking_block`](crate::manager::ChainManager::locking_block) that
+<a href=#283 id=283 data-nosnippet>283</a>/// [`ConfirmationOnlyInCurrentRound`] installs before it.
+<a href=#284 id=284 data-nosnippet>284</a>///
+<a href=#285 id=285 data-nosnippet>285</a>/// **Batches larger than the backend allows.** Atomicity comes from `write_batch` alone.
+<a href=#286 id=286 data-nosnippet>286</a>/// Journaling adds none: it *preserves* all-or-nothing at sizes a remote store such as ScyllaDB
+<a href=#287 id=287 data-nosnippet>287</a>/// will not accept in one `write_batch`, which a chain save can exceed.
+<a href=#288 id=288 data-nosnippet>288</a>/// `linera_views::backends::journaling` writes the oversized batch into journal blocks and commits
+<a href=#289 id=289 data-nosnippet>289</a>/// it by atomically updating a journal header; before any later read or write, a journal found
+<a href=#290 id=290 data-nosnippet>290</a>/// present is replayed block by block, each block's write and its header update going in a single
+<a href=#291 id=291 data-nosnippet>291</a>/// `write_batch`. A crash part-way therefore leaves a resumable journal rather than a torn
+<a href=#292 id=292 data-nosnippet>292</a>/// state. That slow path requires exclusive access to the keys under the chain's root — it fails
+<a href=#293 id=293 data-nosnippet>293</a>/// with `JournalingError::JournalRequiresExclusiveAccess` otherwise — which is exactly what
+<a href=#294 id=294 data-nosnippet>294</a>/// [`SequentialChainState`] supplies.
+<a href=#295 id=295 data-nosnippet>295</a>///
+<a href=#296 id=296 data-nosnippet>296</a>/// **Two things are called `write_batch`, and only one is atomic.** The store-level one above is.
+<a href=#297 id=297 data-nosnippet>297</a>/// `DbStorage::write_batch` is not: it takes a `MultiPartitionBatch` keyed by root key, opens a
+<a href=#298 id=298 data-nosnippet>298</a>/// store per key, and issues one independent `write_entry` per partition with `try_join_all`. So a
+<a href=#299 id=299 data-nosnippet>299</a>/// storage call that spans partitions — `write_blobs_and_certificate`, which batches a block's
+<a href=#300 id=300 data-nosnippet>300</a>/// blobs together with its certificate — is atomic within each partition and not across them, and
+<a href=#301 id=301 data-nosnippet>301</a>/// a crash can leave one partition written and another not. Nothing in this specification relies
+<a href=#302 id=302 data-nosnippet>302</a>/// on cross-partition atomicity; `linera_core::proof::availability::BlockOutputsArePersisted`
+<a href=#303 id=303 data-nosnippet>303</a>/// carries that weight with replay instead.
+<a href=#304 id=304 data-nosnippet>304</a>///
+<a href=#305 id=305 data-nosnippet>305</a>/// **What a failed save costs.** Three outcomes are distinguished, and only the last is expensive:
+<a href=#306 id=306 data-nosnippet>306</a>///
+<a href=#307 id=307 data-nosnippet>307</a>/// * *Cancelled* — the request future is dropped part-way. `RollbackGuard` in
+<a href=#308 id=308 data-nosnippet>308</a>///   `linera_core::chain_worker::handle` rolls the view back on drop, so no partial staging
+<a href=#309 id=309 data-nosnippet>309</a>///   survives into the next request.
+<a href=#310 id=310 data-nosnippet>310</a>/// * *Failed outright* — the write did not take effect. The in-memory view still agrees with
+<a href=#311 id=311 data-nosnippet>311</a>///   storage, the error propagates, and the worker keeps serving.
+<a href=#312 id=312 data-nosnippet>312</a>/// * *Ambiguous* — journal resolution failed, so storage may be partly advanced and the view can
+<a href=#313 id=313 data-nosnippet>313</a>///   no longer be trusted. `ViewError::must_reload_view` reports it, `ChainWorkerState::save` sets
+<a href=#314 id=314 data-nosnippet>314</a>///   `poisoned`, `check_not_poisoned` refuses every later use of that worker, and
+<a href=#315 id=315 data-nosnippet>315</a>///   `evict_poisoned_worker` drops it from the cache so the next request reloads the chain from
+<a href=#316 id=316 data-nosnippet>316</a>///   storage.
+<a href=#317 id=317 data-nosnippet>317</a>///
+<a href=#318 id=318 data-nosnippet>318</a>/// The guarantee the proofs rest on is therefore not that storage is never partially written, but
+<a href=#319 id=319 data-nosnippet>319</a>/// that a partially written chain is never *read back as state*: it is either completed by journal
+<a href=#320 id=320 data-nosnippet>320</a>/// replay or discarded along with the worker that could not complete it.
+<a href=#321 id=321 data-nosnippet>321</a>///
+<a href=#322 id=322 data-nosnippet>322</a>/// It also underpins the mirror property in `linera_core::proof::availability`: re-deriving a
+<a href=#323 id=323 data-nosnippet>323</a>/// worker's undelivered effects after a restart is only meaningful if the state they are derived
+<a href=#324 id=324 data-nosnippet>324</a>/// from is itself consistent.
+<a href=#325 id=325 data-nosnippet>325</a>///
+<a href=#326 id=326 data-nosnippet>326</a>/// [`ConfirmationOnlyInCurrentRound`]: crate::manager::proof::voting::ConfirmationOnlyInCurrentRound
+<a href=#327 id=327 data-nosnippet>327</a></span><span class="kw">pub trait </span>StorageAtomicity {}
+<a href=#328 id=328 data-nosnippet>328</a>
+<a href=#329 id=329 data-nosnippet>329</a><span class="doccomment">/// **Assumption (Deterministic execution).** For a fixed chain state at a height, a fixed
+<a href=#330 id=330 data-nosnippet>330</a>/// [`ProposedBlock`], a fixed set of published blobs and a fixed multi-leader round argument,
+<a href=#331 id=331 data-nosnippet>331</a>/// block execution returns a unique [`BlockExecutionOutcome`].
+<a href=#332 id=332 data-nosnippet>332</a>///
+<a href=#333 id=333 data-nosnippet>333</a>/// This is what makes [`ConflictingBlocks`] a property of the *proposal* in the cases where the
+<a href=#334 id=334 data-nosnippet>334</a>/// protocol re-executes rather than re-uses a certified outcome. Two correct validators handed
+<a href=#335 id=335 data-nosnippet>335</a>/// the same proposal at the same height therefore compute the same [`Block`].
+<a href=#336 id=336 data-nosnippet>336</a>///
+<a href=#337 id=337 data-nosnippet>337</a>/// **Residual obligation.** The round argument is
+<a href=#338 id=338 data-nosnippet>338</a>/// [`Round::multi_leader`](linera_base::data_types::Round::multi_leader), so an outcome may in
+<a href=#339 id=339 data-nosnippet>339</a>/// principle depend on the round — the round is readable as an oracle
+<a href=#340 id=340 data-nosnippet>340</a>/// ([`OracleResponse::Round`]). This matters in exactly one place,
+<a href=#341 id=341 data-nosnippet>341</a>/// [`FastRetryPreservesBlock`], where a block confirmed in [`Round::Fast`] is re-executed in a
+<a href=#342 id=342 data-nosnippet>342</a>/// later round. The gap is closed there by the fast round's own restriction
+<a href=#343 id=343 data-nosnippet>343</a>/// (`WorkerError::FastBlockUsingOracles` rejects a fast block that recorded any oracle
+<a href=#344 id=344 data-nosnippet>344</a>/// response), plus determinism: an execution that never queried the round oracle cannot diverge
+<a href=#345 id=345 data-nosnippet>345</a>/// on the round's value. Note that the restriction is checked only when the *proposal's* round
+<a href=#346 id=346 data-nosnippet>346</a>/// is fast, so the retry itself is not re-checked; the argument leans on determinism of the
+<a href=#347 id=347 data-nosnippet>347</a>/// execution engine rather than on a runtime check at the retry.
+<a href=#348 id=348 data-nosnippet>348</a>///
+<a href=#349 id=349 data-nosnippet>349</a>/// [`ProposedBlock`]: crate::data_types::ProposedBlock
+<a href=#350 id=350 data-nosnippet>350</a>/// [`BlockExecutionOutcome`]: crate::data_types::BlockExecutionOutcome
+<a href=#351 id=351 data-nosnippet>351</a>/// [`Block`]: crate::block::Block
+<a href=#352 id=352 data-nosnippet>352</a>/// [`OracleResponse::Round`]: linera_base::data_types::OracleResponse::Round
+<a href=#353 id=353 data-nosnippet>353</a>/// [`FastRetryPreservesBlock`]: crate::manager::proof::safety::FastRetryPreservesBlock
+<a href=#354 id=354 data-nosnippet>354</a>/// [`Round::Fast`]: linera_base::data_types::Round::Fast
+<a href=#355 id=355 data-nosnippet>355</a></span><span class="kw">pub trait </span>DeterministicExecution {}
+</code></pre></div></section></main></body></html>

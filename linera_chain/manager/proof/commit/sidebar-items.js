@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"trait":["CertifiedBlockWasExecuted","CommitRestsOnValidation","CommittedBlock","IncomingBundlesAreSelfDerived","TipAdvancesOnlyOnValidCertificate"]};

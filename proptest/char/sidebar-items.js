@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_PREFERRED_RANGES","DEFAULT_SPECIAL_CHARS"],"fn":["any","range","ranges","select_char"],"struct":["CharStrategy","CharValueTree"]};

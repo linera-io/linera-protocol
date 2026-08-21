@@ -1,0 +1,47 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Assumption (Atomic persistence). A single `WritableKeyValueStore::write_batch` — one batch against one root key — is applied atomically, within whatever key-count and size limits the backend imposes."><title>StorageAtomicity in linera_chain::manager::proof::model - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="linera_chain" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">StorageAtomicity</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../linera_chain/index.html">linera_<wbr>chain</a><span class="version">0.16.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Storage<wbr>Atomicity</a></h2><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In linera_<wbr>chain::<wbr>manager::<wbr>proof::<wbr>model</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../../index.html">linera_chain</a>::<wbr><a href="../../index.html">manager</a>::<wbr><a href="../index.html">proof</a>::<wbr><a href="index.html">model</a></div><h1>Trait <span class="trait">Storage<wbr>Atomicity</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../../src/linera_chain/manager/proof/model.rs.html#327">Source</a> </span></div><pre class="rust item-decl"><code>pub trait StorageAtomicity { }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><strong>Assumption (Atomic persistence).</strong> A single <code>WritableKeyValueStore::write_batch</code> — one batch
+against one root key — is applied atomically, within whatever key-count and size limits the
+backend imposes.</p>
+<p><a href="trait.DurablePersistence.html" title="trait linera_chain::manager::proof::model::DurablePersistence"><code>DurablePersistence</code></a> is about <em>when</em> state is written; this is about the write being
+indivisible. Every invariant in <a href="../locking/index.html" title="mod linera_chain::manager::proof::locking"><code>crate::manager::proof::locking</code></a> is stated over a state
+reached by whole transitions, so a torn write would put the manager in a state no transition
+produces — for instance a <a href="../../struct.ChainManager.html#structfield.confirmed_vote" title="field linera_chain::manager::ChainManager::confirmed_vote"><code>confirmed_vote</code></a>
+stored without the <a href="../../struct.ChainManager.html#structfield.locking_block" title="field linera_chain::manager::ChainManager::locking_block"><code>locking_block</code></a> that
+<a href="../voting/trait.ConfirmationOnlyInCurrentRound.html" title="trait linera_chain::manager::proof::voting::ConfirmationOnlyInCurrentRound"><code>ConfirmationOnlyInCurrentRound</code></a> installs before it.</p>
+<p><strong>Batches larger than the backend allows.</strong> Atomicity comes from <code>write_batch</code> alone.
+Journaling adds none: it <em>preserves</em> all-or-nothing at sizes a remote store such as ScyllaDB
+will not accept in one <code>write_batch</code>, which a chain save can exceed.
+<code>linera_views::backends::journaling</code> writes the oversized batch into journal blocks and commits
+it by atomically updating a journal header; before any later read or write, a journal found
+present is replayed block by block, each block’s write and its header update going in a single
+<code>write_batch</code>. A crash part-way therefore leaves a resumable journal rather than a torn
+state. That slow path requires exclusive access to the keys under the chain’s root — it fails
+with <code>JournalingError::JournalRequiresExclusiveAccess</code> otherwise — which is exactly what
+<a href="trait.SequentialChainState.html" title="trait linera_chain::manager::proof::model::SequentialChainState"><code>SequentialChainState</code></a> supplies.</p>
+<p><strong>Two things are called <code>write_batch</code>, and only one is atomic.</strong> The store-level one above is.
+<code>DbStorage::write_batch</code> is not: it takes a <code>MultiPartitionBatch</code> keyed by root key, opens a
+store per key, and issues one independent <code>write_entry</code> per partition with <code>try_join_all</code>. So a
+storage call that spans partitions — <code>write_blobs_and_certificate</code>, which batches a block’s
+blobs together with its certificate — is atomic within each partition and not across them, and
+a crash can leave one partition written and another not. Nothing in this specification relies
+on cross-partition atomicity; <code>linera_core::proof::availability::BlockOutputsArePersisted</code>
+carries that weight with replay instead.</p>
+<p><strong>What a failed save costs.</strong> Three outcomes are distinguished, and only the last is expensive:</p>
+<ul>
+<li><em>Cancelled</em> — the request future is dropped part-way. <code>RollbackGuard</code> in
+<code>linera_core::chain_worker::handle</code> rolls the view back on drop, so no partial staging
+survives into the next request.</li>
+<li><em>Failed outright</em> — the write did not take effect. The in-memory view still agrees with
+storage, the error propagates, and the worker keeps serving.</li>
+<li><em>Ambiguous</em> — journal resolution failed, so storage may be partly advanced and the view can
+no longer be trusted. <code>ViewError::must_reload_view</code> reports it, <code>ChainWorkerState::save</code> sets
+<code>poisoned</code>, <code>check_not_poisoned</code> refuses every later use of that worker, and
+<code>evict_poisoned_worker</code> drops it from the cache so the next request reloads the chain from
+storage.</li>
+</ul>
+<p>The guarantee the proofs rest on is therefore not that storage is never partially written, but
+that a partially written chain is never <em>read back as state</em>: it is either completed by journal
+replay or discarded along with the worker that could not complete it.</p>
+<p>It also underpins the mirror property in <code>linera_core::proof::availability</code>: re-deriving a
+worker’s undelivered effects after a restart is only meaningful if the state they are derived
+from is itself consistent.</p>
+</div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../../../trait.impl/linera_chain/manager/proof/model/trait.StorageAtomicity.js" async></script></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Resolution","SecretsScanningAlertLocation","State","Validity"],"struct":["SecretScanningAlert","UpdateSecretScanningAlert"]};

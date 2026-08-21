@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["js_value_vector_from_abi","js_value_vector_into_abi"],"struct":["WasmRet","WasmSlice"],"trait":["FromWasmAbi","IntoWasmAbi","LongRefFromWasmAbi","OptionFromWasmAbi","OptionIntoWasmAbi","RefFromWasmAbi","RefMutFromWasmAbi","ReturnWasmAbi","TryFromJsValue","VectorFromWasmAbi","VectorIntoWasmAbi","WasmAbi","WasmPrimitive"]};

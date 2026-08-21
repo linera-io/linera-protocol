@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"derive":["ExtractAttributes","ParseAttributes","ParseMetaItem"]};

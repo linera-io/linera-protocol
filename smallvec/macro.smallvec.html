@@ -1,0 +1,31 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Creates a `SmallVec` containing the arguments."><title>smallvec in smallvec - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="smallvec" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">smallvec</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../smallvec/index.html">smallvec</a><span class="version">1.15.1</span></h2></div><div class="sidebar-elems"><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">smallvec</a></div><h1>Macro <span class="macro">smallvec</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/smallvec/lib.rs.html#184-203">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! smallvec {
+    (@one $x:expr) =&gt; { ... };
+    () =&gt; { ... };
+    ($elem:expr; $n:expr) =&gt; { ... };
+    ($($x:expr),+$(,)?) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Creates a <a href="struct.SmallVec.html" title="struct smallvec::SmallVec"><code>SmallVec</code></a> containing the arguments.</p>
+<p><code>smallvec!</code> allows <code>SmallVec</code>s to be defined with the same syntax as array expressions.
+There are two forms of this macro:</p>
+<ul>
+<li>Create a <a href="struct.SmallVec.html" title="struct smallvec::SmallVec"><code>SmallVec</code></a> containing a given list of elements:</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>v: SmallVec&lt;[<span class="kw">_</span>; <span class="number">128</span>]&gt; = <span class="macro">smallvec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];
+<span class="macro">assert_eq!</span>(v[<span class="number">0</span>], <span class="number">1</span>);
+<span class="macro">assert_eq!</span>(v[<span class="number">1</span>], <span class="number">2</span>);
+<span class="macro">assert_eq!</span>(v[<span class="number">2</span>], <span class="number">3</span>);</code></pre></div>
+<ul>
+<li>Create a <a href="struct.SmallVec.html" title="struct smallvec::SmallVec"><code>SmallVec</code></a> from a given element and size:</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>v: SmallVec&lt;[<span class="kw">_</span>; <span class="number">0x8000</span>]&gt; = <span class="macro">smallvec!</span>[<span class="number">1</span>; <span class="number">3</span>];
+<span class="macro">assert_eq!</span>(v, SmallVec::from_buf([<span class="number">1</span>, <span class="number">1</span>, <span class="number">1</span>]));</code></pre></div>
+<p>Note that unlike array expressions this syntax supports all elements
+which implement <a href="https://doc.rust-lang.org/1.95.0/core/clone/trait.Clone.html" title="trait core::clone::Clone"><code>Clone</code></a> and the number of elements doesn’t have to be
+a constant.</p>
+<p>This will use <code>clone</code> to duplicate an expression, so one should be careful
+using this with types having a nonstandard <code>Clone</code> implementation. For
+example, <code>smallvec![Rc::new(1); 5]</code> will create a vector of five references
+to the same boxed integer value, not five references pointing to independently
+boxed integers.</p>
+</div></details></section></div></main></body></html>

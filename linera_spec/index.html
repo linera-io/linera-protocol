@@ -1,0 +1,162 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The Linera protocol: correctness specification"><title>linera_spec - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="linera_spec" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Crate linera_spec</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../linera_spec/index.html">linera_<wbr>spec</a><span class="version">0.16.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#the-linera-protocol-correctness-specification" title="The Linera protocol: correctness specification">The Linera protocol: correctness specification</a></li><li><a href="#headline-results" title="Headline results">Headline results</a></li><li><a href="#reading-order" title="Reading order">Reading order</a></li><li><a href="#how-to-read-a-statement" title="How to read a statement">How to read a statement</a></li><li><a href="#the-safetyliveness-split" title="The safety/liveness split">The safety/liveness split</a></li><li><a href="#known-gaps" title="Known gaps">Known gaps</a></li><li><a href="#coverage" title="Coverage">Coverage</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1>Crate <span>linera_<wbr>spec</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/linera_spec/lib.rs.html#4-221">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="the-linera-protocol-correctness-specification"><a class="doc-anchor" href="#the-linera-protocol-correctness-specification">§</a>The Linera protocol: correctness specification</h2>
+<p>Linera is a multi-chain protocol: state is partitioned into <em>microchains</em>, each running its own
+consensus instance per block height. No chain can read another’s state; they communicate by
+explicit message passing and through shared immutable stores — today, published blobs and events.
+This crate is the entry point to a correctness specification of that protocol — its system
+model, its assumptions, and proofs of the properties it is meant to have.</p>
+<p>The specification is written subsystem by subsystem; <a href="#coverage">Coverage</a> says what is
+established today and what is not yet constrained by any statement here.</p>
+<p><strong>This crate contains no code.</strong> The statements live next to the implementation they describe —
+today across <a href="../linera_chain/index.html" title="mod linera_chain"><code>linera_chain</code></a> and <a href="../linera_core/index.html" title="mod linera_core"><code>linera_core</code></a> — and this crate exists only so that a single
+index can link to all of them. Neither of those crates can do that on its own —
+<code>linera-core</code> depends on <code>linera-chain</code>, so the chain crate cannot name the progress and
+liveness results, and an index living there would have to describe half the specification in
+prose. Sitting above both, this crate can cite every statement by path, so every cross
+reference below is checked by the documentation build.</p>
+<div class="example-wrap"><pre class="language-bash"><code>cargo doc -p linera-spec --open</code></pre></div><h2 id="headline-results"><a class="doc-anchor" href="#headline-results">§</a>Headline results</h2>
+<p>Three results anchor the consensus core, each concerning one microchain’s sequence of blocks.</p>
+<ul>
+<li><strong>Safety</strong> — <a href="../linera_chain/manager/proof/safety/trait.CommitAgreement.html" title="trait linera_chain::manager::proof::safety::CommitAgreement"><code>CommitAgreement</code></a>: for any chain and height, all valid confirmed block
+certificates certify the same block. No synchrony, availability or fairness assumption is
+used; only <a href="../linera_chain/manager/proof/model/trait.MaxByzantineWeight.html" title="trait linera_chain::manager::proof::model::MaxByzantineWeight"><code>MaxByzantineWeight</code></a> and the cryptographic and persistence assumptions.</li>
+<li><strong>Accountability</strong> — <a href="../linera_chain/justification/proof/trait.AccountableSafety.html" title="trait linera_chain::justification::proof::AccountableSafety"><code>AccountableSafety</code></a>: if agreement <em>does</em> fail, the two conflicting
+certificates alone convict validators of weight at least <a href="../linera_execution/committee/struct.Committee.html#method.validity_threshold" title="method linera_execution::committee::Committee::validity_threshold"><code>validity_threshold</code></a> — more than
+<a href="../linera_chain/manager/proof/model/trait.MaxByzantineWeight.html" title="trait linera_chain::manager::proof::model::MaxByzantineWeight"><code>MaxByzantineWeight</code></a> permits — and no correct validator is ever convictable. It assumes
+strictly less than safety does, since it must hold precisely where safety does not.</li>
+<li><strong>Liveness</strong> — <a href="../linera_core/proof/liveness/trait.UnboundedProgress.html" title="trait linera_core::proof::liveness::UnboundedProgress"><code>UnboundedProgress</code></a>: with an active correct client and after GST, every
+correct reachable validator’s <a href="../linera_chain/chain/struct.ChainTipState.html#method.next_block_height" title="method linera_chain::chain::ChainTipState::next_block_height"><code>ChainTipState::next_block_height</code></a> grows without bound.</li>
+</ul>
+<h2 id="reading-order"><a class="doc-anchor" href="#reading-order">§</a>Reading order</h2>
+<p>The proofs live next to the code they are about, but they are written to be read in this
+order, and each statement cites only statements above it.</p>
+<div><table><thead><tr><th>section</th><th>where</th></tr></thead><tbody>
+<tr><td>System model</td><td><a href="../linera_chain/manager/proof/model/index.html" title="mod linera_chain::manager::proof::model"><code>linera_chain::manager::proof::model</code></a></td></tr>
+<tr><td>Fault and network assumptions</td><td><a href="../linera_chain/manager/proof/model/index.html" title="mod linera_chain::manager::proof::model"><code>linera_chain::manager::proof::model</code></a>, then <a href="../linera_core/proof/assumptions/index.html" title="mod linera_core::proof::assumptions"><code>linera_core::proof::assumptions</code></a></td></tr>
+<tr><td>Protocol objects and definitions</td><td><a href="../linera_chain/data_types/proof/objects/index.html" title="mod linera_chain::data_types::proof::objects"><code>linera_chain::data_types::proof::objects</code></a></td></tr>
+<tr><td>Quorum properties</td><td><a href="../linera_chain/data_types/proof/quorum/index.html" title="mod linera_chain::data_types::proof::quorum"><code>linera_chain::data_types::proof::quorum</code></a></td></tr>
+<tr><td>Voting rules</td><td><a href="../linera_chain/manager/proof/voting/index.html" title="mod linera_chain::manager::proof::voting"><code>linera_chain::manager::proof::voting</code></a></td></tr>
+<tr><td>Locking and certificate invariants</td><td><a href="../linera_chain/manager/proof/rounds/index.html" title="mod linera_chain::manager::proof::rounds"><code>linera_chain::manager::proof::rounds</code></a>, then <a href="../linera_chain/manager/proof/locking/index.html" title="mod linera_chain::manager::proof::locking"><code>linera_chain::manager::proof::locking</code></a></td></tr>
+<tr><td>Commit rule</td><td><a href="../linera_chain/manager/proof/commit/index.html" title="mod linera_chain::manager::proof::commit"><code>linera_chain::manager::proof::commit</code></a></td></tr>
+<tr><td>Safety proof</td><td><a href="../linera_chain/manager/proof/safety/index.html" title="mod linera_chain::manager::proof::safety"><code>linera_chain::manager::proof::safety</code></a></td></tr>
+<tr><td>Accountability</td><td><a href="../linera_chain/justification/proof/index.html" title="mod linera_chain::justification::proof"><code>linera_chain::justification::proof</code></a></td></tr>
+<tr><td>Leaders, timeouts and round advancement</td><td><a href="../linera_chain/manager/proof/timeouts/index.html" title="mod linera_chain::manager::proof::timeouts"><code>linera_chain::manager::proof::timeouts</code></a></td></tr>
+<tr><td>Progress lemmas</td><td><a href="../linera_core/proof/progress/index.html" title="mod linera_core::proof::progress"><code>linera_core::proof::progress</code></a></td></tr>
+<tr><td>Liveness proof</td><td><a href="../linera_core/proof/liveness/index.html" title="mod linera_core::proof::liveness"><code>linera_core::proof::liveness</code></a></td></tr>
+<tr><td>Availability, crash recovery and catch-up</td><td><a href="../linera_core/proof/availability/index.html" title="mod linera_core::proof::availability"><code>linera_core::proof::availability</code></a></td></tr>
+<tr><td>Client notifications</td><td><a href="../linera_core/proof/notifications/index.html" title="mod linera_core::proof::notifications"><code>linera_core::proof::notifications</code></a></td></tr>
+<tr><td>What a checkpoint preserves</td><td><a href="../linera_chain/proof/checkpoints/index.html" title="mod linera_chain::proof::checkpoints"><code>linera_chain::proof::checkpoints</code></a></td></tr>
+</tbody></table>
+</div><h2 id="how-to-read-a-statement"><a class="doc-anchor" href="#how-to-read-a-statement">§</a>How to read a statement</h2>
+<p>Every claim is a public marker trait with no members, no implementors and no runtime
+footprint. Its <strong>name is its identity</strong>; its doc comment carries the statement and, unless it
+is a definition or an assumption, a proof. <strong>Supertraits are proof dependencies</strong>: a statement
+lists as supertraits exactly the earlier statements whose truth its proof consumes.</p>
+<div class="example-wrap"><pre class="language-text"><code>pub trait RoundProgress:
+    EventuallyCorrectLeader + LockRecovery + ProposalAccepted + …
+//  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+//  the statements this proof consumes</code></pre></div>
+<p>That shape buys five checks with no bespoke tooling: unique identifiers (Rust name
+resolution), existence of every cited statement and every cited Rust item
+(<code>rustdoc::broken_intra_doc_links</code>, denied in CI), acyclicity of the dependency graph
+(<code>rustc</code>, <code>E0391</code>), and a rendered, clickable dependency list on each statement’s page. There
+is deliberately no numbering: names are stable under insertion, and a stale citation is a
+build failure rather than a silently wrong cross reference. The same goes for the sections
+above — they are ordered, not numbered, so adding or splitting one renames nothing and
+invalidates no reference.</p>
+<p>Each statement opens with one of six labels, all of which mean something on their own:</p>
+<div><table><thead><tr><th>label</th><th>carries a proof</th><th>meaning</th></tr></thead><tbody>
+<tr><td><strong>Definition</strong></td><td>no</td><td>fixes a term, and pins it to the Rust it denotes</td></tr>
+<tr><td><strong>Assumption</strong></td><td>no</td><td>something the implementation does not establish and a deployment must supply</td></tr>
+<tr><td><strong>Invariant</strong></td><td>yes</td><td>holds in every reachable state, proved by induction over transitions</td></tr>
+<tr><td><strong>Lemma</strong></td><td>yes</td><td>a proved statement</td></tr>
+<tr><td><strong>Theorem</strong></td><td>yes</td><td>one of the results the specification exists to establish</td></tr>
+<tr><td><strong>Remark</strong> / <strong>Caveat</strong></td><td>no</td><td>an observation or a limitation, asserting nothing new</td></tr>
+</tbody></table>
+</div>
+<p>None of them is <em>relational</em>: nothing is labelled by what it follows from. These pages are
+reached from anywhere by link, so there is no preceding result for a label to refer back to —
+and the supertrait list already names what a statement follows from, exactly and checkably.</p>
+<h2 id="the-safetyliveness-split"><a class="doc-anchor" href="#the-safetyliveness-split">§</a>The safety/liveness split</h2>
+<p>The two arguments are deliberately disjoint in their assumptions, and the module layout
+reflects that:</p>
+<div class="example-wrap"><pre class="language-text"><code> MaxByzantineWeight, UnforgeableSignatures,           EventualSynchrony, ClockAccuracy,
+ DurablePersistence, SequentialChainState,            CorrectValidatorAvailability,
+ EpochAgreement, DeterministicExecution               ActiveCorrectDriver, LeaderFairness,
+        |                                             RoundTimeoutGrowth, FullReachability
+        v                                                     |
+  quorum properties                                           |
+        |                                                     |
+        v                                                     v
+  voting rules  --&gt;  rounds  --&gt;  locking  --&gt;  commit  --&gt;  progress
+                                      |                        |
+                                      v                        v
+                                   SAFETY                   LIVENESS
+                             CommitAgreement            UnboundedProgress
+                                      |
+                                      v
+                                ACCOUNTABILITY
+                               AccountableSafety</code></pre></div>
+<p>Everything in the right-hand column can fail — the network can partition forever, every client
+can go away, clocks can drift — without endangering <a href="../linera_chain/manager/proof/safety/trait.CommitAgreement.html" title="trait linera_chain::manager::proof::safety::CommitAgreement"><code>CommitAgreement</code></a>. Nothing in the
+left-hand column can fail without endangering it. Accountability hangs below safety rather
+than above it: it consumes <em>fewer</em> assumptions than <a href="../linera_chain/manager/proof/safety/trait.CommitAgreement.html" title="trait linera_chain::manager::proof::safety::CommitAgreement"><code>CommitAgreement</code></a> does, because its job
+is to hold in the one regime where safety does not.</p>
+<h2 id="known-gaps"><a class="doc-anchor" href="#known-gaps">§</a>Known gaps</h2>
+<p>The specification records, rather than papers over, the places where the implementation does
+not quite discharge what a proof wants. In rough order of significance:</p>
+<ul>
+<li><a href="../linera_core/proof/assumptions/trait.FullReachability.html" title="trait linera_core::proof::assumptions::FullReachability"><code>FullReachability</code></a> — the lock-recovery step wants the proposer to reach <em>every</em> correct
+validator, while <code>synchronize_chain_state</code> guarantees only a quorum plus a grace period.
+Affects liveness only.</li>
+<li><a href="../linera_core/proof/availability/trait.MissingDependenciesAreRecoverable.html" title="trait linera_core::proof::availability::MissingDependenciesAreRecoverable"><code>MissingDependenciesAreRecoverable</code></a> — a block that consumes a message or reads an event
+depends on data originating on a <em>third</em> chain. Blobs, ancestors and chain state are
+self-suppliable, so a lagging validator is simply handed them; these two classes are not. If
+the proposer does not follow the sending or publishing chain either, the validator waits on
+its own catch-up of that chain, which no assumption bounds — so
+<a href="../linera_core/proof/progress/trait.ValidationQuorumForms.html" title="trait linera_core::proof::progress::ValidationQuorumForms"><code>ValidationQuorumForms</code></a>’s <code>2Δ</code> step does not apply to such blocks. Affects liveness only.</li>
+<li><a href="../linera_chain/justification/proof/trait.AccountabilityScope.html" title="trait linera_chain::justification::proof::AccountabilityScope"><code>AccountabilityScope</code></a> — incorrect block execution is not attributable, and its effects are
+not confined to one chain: a wrong <code>messages</code> or <code>events</code> field is consumed by other chains
+whose resulting blocks are themselves properly certified. The protections are
+<a href="../linera_chain/manager/proof/commit/trait.CertifiedBlockWasExecuted.html" title="trait linera_chain::manager::proof::commit::CertifiedBlockWasExecuted"><code>CertifiedBlockWasExecuted</code></a> and <a href="../linera_chain/manager/proof/commit/trait.IncomingBundlesAreSelfDerived.html" title="trait linera_chain::manager::proof::commit::IncomingBundlesAreSelfDerived"><code>IncomingBundlesAreSelfDerived</code></a>, and unlike the
+accountability results both need <a href="../linera_chain/manager/proof/model/trait.MaxByzantineWeight.html" title="trait linera_chain::manager::proof::model::MaxByzantineWeight"><code>MaxByzantineWeight</code></a>. Tracked in
+<a href="https://github.com/linera-io/linera-protocol/issues/6675">issue #6675</a>.</li>
+<li><a href="../linera_chain/manager/proof/safety/trait.FastRetryPreservesBlock.html" title="trait linera_chain::manager::proof::safety::FastRetryPreservesBlock"><code>FastRetryPreservesBlock</code></a> — closing the gap between “same proposal” and “same block” for a
+fast-round retry relies on <a href="../linera_chain/manager/proof/model/trait.DeterministicExecution.html" title="trait linera_chain::manager::proof::model::DeterministicExecution"><code>DeterministicExecution</code></a> rather than on a runtime check at the
+retry. Affects safety, and is the one step that reaches outside consensus into execution.</li>
+<li><a href="../linera_chain/manager/proof/voting/trait.ProposalGate.html" title="trait linera_chain::manager::proof::voting::ProposalGate"><code>ProposalGate</code></a> — several safety-critical guards live at the call site in
+<code>chain_worker::state</code> rather than inside the <a href="../linera_chain/manager/struct.ChainManager.html" title="struct linera_chain::manager::ChainManager"><code>ChainManager</code></a> methods they protect; in
+particular <a href="../linera_chain/manager/struct.ChainManager.html#method.create_final_vote" title="method linera_chain::manager::ChainManager::create_final_vote"><code>create_final_vote</code></a> would sign twice in a round if invoked directly.</li>
+<li><a href="../linera_chain/manager/proof/locking/trait.SafetyStateRecovery.html" title="trait linera_chain::manager::proof::locking::SafetyStateRecovery"><code>SafetyStateRecovery</code></a> — the correspondence between a <a href="../linera_chain/manager/struct.ManagerSafetySnapshot.html" title="struct linera_chain::manager::ManagerSafetySnapshot"><code>ManagerSafetySnapshot</code></a> and the
+instance it is restored into rests on a height check at the single call site, not on
+anything the type enforces.</li>
+<li><a href="../linera_chain/manager/proof/voting/trait.VoteConstructionSites.html" title="trait linera_chain::manager::proof::voting::VoteConstructionSites"><code>VoteConstructionSites</code></a> — an exhaustive-search argument over the five signing sites, which
+a sixth would invalidate.</li>
+</ul>
+<h2 id="coverage"><a class="doc-anchor" href="#coverage">§</a>Coverage</h2>
+<p>Established today: agreement on the <em>sequence of blocks</em> of a single microchain, and what a
+certified block guarantees to nodes that were absent when it was certified.</p>
+<p>Not yet covered, in the sense that no statement here constrains them. Where consensus does say
+something adjacent, it is named.</p>
+<ul>
+<li><strong>State-transition correctness</strong> — that executing the agreed blocks yields the right state.
+<a href="../linera_chain/manager/proof/model/trait.DeterministicExecution.html" title="trait linera_chain::manager::proof::model::DeterministicExecution"><code>DeterministicExecution</code></a> is assumed rather than proved, and <em>termination</em> of execution is
+not stated at all. What is guaranteed is that a certified block was executed by some correct
+validator (<a href="../linera_chain/manager/proof/commit/trait.CertifiedBlockWasExecuted.html" title="trait linera_chain::manager::proof::commit::CertifiedBlockWasExecuted"><code>CertifiedBlockWasExecuted</code></a>), that a voter matched every consumed bundle against
+its own inbox (<a href="../linera_chain/manager/proof/commit/trait.IncomingBundlesAreSelfDerived.html" title="trait linera_chain::manager::proof::commit::IncomingBundlesAreSelfDerived"><code>IncomingBundlesAreSelfDerived</code></a>), and that the inputs execution needs can be
+supplied to a validator lacking them (<a href="../linera_core/proof/availability/trait.MissingDependenciesAreRecoverable.html" title="trait linera_core::proof::availability::MissingDependenciesAreRecoverable"><code>MissingDependenciesAreRecoverable</code></a>), and that its
+outputs — published blobs, events and the certificate — reach storage before the block counts
+as processed (<a href="../linera_core/proof/availability/trait.BlockOutputsArePersisted.html" title="trait linera_core::proof::availability::BlockOutputsArePersisted"><code>BlockOutputsArePersisted</code></a>).</li>
+<li><strong>Cross-chain messaging</strong> as a subsystem — delivery in particular: nothing states that an
+outbox is ever drained, so no bundle is guaranteed to arrive. What <em>is</em> stated is that an
+inbox holds only bundles its origin really sent (<a href="../linera_core/proof/availability/trait.InboxHoldsOnlySentBundles.html" title="trait linera_core::proof::availability::InboxHoldsOnlySentBundles"><code>InboxHoldsOnlySentBundles</code></a>), that no two
+blocks consume the same bundle (<a href="../linera_core/proof/availability/trait.BundleConsumedAtMostOnce.html" title="trait linera_core::proof::availability::BundleConsumedAtMostOnce"><code>BundleConsumedAtMostOnce</code></a>), and that each chain’s own
+block sequence is unique (<a href="../linera_chain/manager/proof/safety/trait.UniqueChain.html" title="trait linera_chain::manager::proof::safety::UniqueChain"><code>UniqueChain</code></a>).</li>
+<li><strong>Committee reconfiguration</strong> — epoch changes are agreed <em>by</em> this protocol on the admin
+chain; <a href="../linera_chain/manager/proof/model/trait.EpochAgreement.html" title="trait linera_chain::manager::proof::model::EpochAgreement"><code>EpochAgreement</code></a> records what is assumed about them.</li>
+<li><strong>Chain ownership and lifecycle</strong> — who may propose at a height, and how that changes;
+<a href="../linera_chain/manager/proof/model/trait.ConsensusInstance.html" title="trait linera_chain::manager::proof::model::ConsensusInstance"><code>ConsensusInstance</code></a> records what is assumed about it.</li>
+<li><strong>Resource control and fees</strong> — metering, declared block limits, and fee conservation.</li>
+<li><strong>Event streams</strong> as a subsystem — append-only-ness and the publisher-side guarantees behind
+a cross-chain <code>OracleResponse::Event</code> read.</li>
+</ul>
+</div></details></section></div></main></body></html>

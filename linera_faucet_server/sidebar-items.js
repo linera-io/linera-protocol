@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["init_metrics"],"struct":["ClaimOutcome","FaucetConfig","FaucetService","InitialClaim","MutationRoot","QueryRoot","Validator"]};

@@ -1,0 +1,172 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `linera-core/src/proof/liveness.rs`."><title>liveness.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="linera_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">linera_core/proof/</div>liveness.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) Zefchain Labs, Inc.
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="doccomment">//! The liveness theorems, and a precise account of what they exclude.
+<a href=#5 id=5 data-nosnippet>5</a>//!
+<a href=#6 id=6 data-nosnippet>6</a>//! Everything here is conditional on the assumptions in [`super::assumptions`], all of which can
+<a href=#7 id=7 data-nosnippet>7</a>//! fail without endangering [`CommitAgreement`]. Read [`LivenessScope`] alongside
+<a href=#8 id=8 data-nosnippet>8</a>//! [`UnboundedProgress`]: several natural readings of "the protocol makes progress" are *not*
+<a href=#9 id=9 data-nosnippet>9</a>//! implied, and the differences are design choices rather than oversights.
+<a href=#10 id=10 data-nosnippet>10</a>//!
+<a href=#11 id=11 data-nosnippet>11</a>//! [`CommitAgreement`]: linera_chain::manager::proof::safety::CommitAgreement
+<a href=#12 id=12 data-nosnippet>12</a>
+<a href=#13 id=13 data-nosnippet>13</a></span><span class="kw">use </span>linera_chain::manager::proof::{
+<a href=#14 id=14 data-nosnippet>14</a>    commit::{CommittedBlock, TipAdvancesOnlyOnValidCertificate},
+<a href=#15 id=15 data-nosnippet>15</a>    safety::{CommitAgreement, UniqueChain},
+<a href=#16 id=16 data-nosnippet>16</a>    timeouts::RoundsWithoutTimeout,
+<a href=#17 id=17 data-nosnippet>17</a>};
+<a href=#18 id=18 data-nosnippet>18</a>
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>super::{
+<a href=#20 id=20 data-nosnippet>20</a>    assumptions::ActiveCorrectDriver,
+<a href=#21 id=21 data-nosnippet>21</a>    progress::{
+<a href=#22 id=22 data-nosnippet>22</a>        EventuallyCorrectLeader, FinalizationQuorumForms, LockRecovery, ProposalAccepted,
+<a href=#23 id=23 data-nosnippet>23</a>        TimeoutCertificateForms, ValidationQuorumForms,
+<a href=#24 id=24 data-nosnippet>24</a>    },
+<a href=#25 id=25 data-nosnippet>25</a>};
+<a href=#26 id=26 data-nosnippet>26</a>
+<a href=#27 id=27 data-nosnippet>27</a><span class="doccomment">/// **Theorem (Round progress).** Consider a chain with at least one regular owner, at a height
+<a href=#28 id=28 data-nosnippet>28</a>/// whose consensus instance has not yet committed. Under [`ActiveCorrectDriver`] and the other
+<a href=#29 id=29 data-nosnippet>29</a>/// assumptions of [`super::assumptions`], there is a round `r` beginning after GST such that the
+<a href=#30 id=30 data-nosnippet>30</a>/// height commits during `r`.
+<a href=#31 id=31 data-nosnippet>31</a>///
+<a href=#32 id=32 data-nosnippet>32</a>/// *Proof.* By [`RoundAdvancement`] the correct validators' common round grows without bound
+<a href=#33 id=33 data-nosnippet>33</a>/// after GST, and by [`RoundTimeoutGrowth`] the timeout of round number `n` is
+<a href=#34 id=34 data-nosnippet>34</a>/// `base_timeout + timeout_increment · n`, unbounded in `n`. Let `T` be the wall-clock time a
+<a href=#35 id=35 data-nosnippet>35</a>/// correct leader needs to complete one round after GST: by
+<a href=#36 id=36 data-nosnippet>36</a>/// [`ProposalAccepted`], [`ValidationQuorumForms`] and [`FinalizationQuorumForms`] this is
+<a href=#37 id=37 data-nosnippet>37</a>/// `O(Δ)` plus bounded local processing, hence finite. Choose `n` with
+<a href=#38 id=38 data-nosnippet>38</a>/// `base_timeout + timeout_increment · n &gt; T`.
+<a href=#39 id=39 data-nosnippet>39</a>///
+<a href=#40 id=40 data-nosnippet>40</a>/// By [`EventuallyCorrectLeader`] there is a [`SingleLeader`] round `r` with number at least `n`,
+<a href=#41 id=41 data-nosnippet>41</a>/// beginning after GST, whose leader is the correct driver's owner. By [`RoundAdvancement`] every
+<a href=#42 id=42 data-nosnippet>42</a>/// correct validator is in `r` when it begins, and by [`LockRecovery`] the driver enters `r`
+<a href=#43 id=43 data-nosnippet>43</a>/// holding a lock at least as high as every correct validator's confirmation. Then:
+<a href=#44 id=44 data-nosnippet>44</a>///
+<a href=#45 id=45 data-nosnippet>45</a>/// 1. by [`ProposalAccepted`], every correct validator accepts the driver's proposal in `r`;
+<a href=#46 id=46 data-nosnippet>46</a>/// 2. by [`ValidationQuorumForms`], a [`ValidatedBlockCertificate`] for the proposed block forms
+<a href=#47 id=47 data-nosnippet>47</a>///    in round `r`;
+<a href=#48 id=48 data-nosnippet>48</a>/// 3. by [`FinalizationQuorumForms`], a [`ConfirmedBlockCertificate`] for it forms in round `r`.
+<a href=#49 id=49 data-nosnippet>49</a>///
+<a href=#50 id=50 data-nosnippet>50</a>/// All three complete within `T &lt; ` the round's timeout, so no correct validator signs a timeout
+<a href=#51 id=51 data-nosnippet>51</a>/// vote for `r` in the meantime ([`TimeoutVoteConditions`]) and the round is not cut short. The
+<a href=#52 id=52 data-nosnippet>52</a>/// block is therefore a [`CommittedBlock`]. ∎
+<a href=#53 id=53 data-nosnippet>53</a>///
+<a href=#54 id=54 data-nosnippet>54</a>/// Step 3's precondition that no correct validator has left `r` is what the timeout comparison
+<a href=#55 id=55 data-nosnippet>55</a>/// buys: without [`RoundTimeoutGrowth`] the round could expire mid-flight, every attempt could
+<a href=#56 id=56 data-nosnippet>56</a>/// fail the same way, and rounds would advance forever without committing.
+<a href=#57 id=57 data-nosnippet>57</a>///
+<a href=#58 id=58 data-nosnippet>58</a>/// [`SingleLeader`]: linera_base::data_types::Round::SingleLeader
+<a href=#59 id=59 data-nosnippet>59</a>/// [`ValidatedBlockCertificate`]: linera_chain::types::ValidatedBlockCertificate
+<a href=#60 id=60 data-nosnippet>60</a>/// [`ConfirmedBlockCertificate`]: linera_chain::types::ConfirmedBlockCertificate
+<a href=#61 id=61 data-nosnippet>61</a>/// [`RoundTimeoutGrowth`]: super::assumptions::RoundTimeoutGrowth
+<a href=#62 id=62 data-nosnippet>62</a>/// [`TimeoutVoteConditions`]: linera_chain::manager::proof::timeouts::TimeoutVoteConditions
+<a href=#63 id=63 data-nosnippet>63</a>/// [`RoundAdvancement`]: super::progress::RoundAdvancement
+<a href=#64 id=64 data-nosnippet>64</a></span><span class="kw">pub trait </span>RoundProgress:
+<a href=#65 id=65 data-nosnippet>65</a>    EventuallyCorrectLeader
+<a href=#66 id=66 data-nosnippet>66</a>    + LockRecovery
+<a href=#67 id=67 data-nosnippet>67</a>    + ProposalAccepted
+<a href=#68 id=68 data-nosnippet>68</a>    + ValidationQuorumForms
+<a href=#69 id=69 data-nosnippet>69</a>    + FinalizationQuorumForms
+<a href=#70 id=70 data-nosnippet>70</a>    + TimeoutCertificateForms
+<a href=#71 id=71 data-nosnippet>71</a>    + CommittedBlock
+<a href=#72 id=72 data-nosnippet>72</a>{
+<a href=#73 id=73 data-nosnippet>73</a>}
+<a href=#74 id=74 data-nosnippet>74</a>
+<a href=#75 id=75 data-nosnippet>75</a><span class="doccomment">/// **Theorem (Height progress).** Under the same assumptions, once the driver has a block to
+<a href=#76 id=76 data-nosnippet>76</a>/// propose at height `h`, a block at height `h` is committed within finite time after GST, and
+<a href=#77 id=77 data-nosnippet>77</a>/// every correct validator's [`ChainTipState::next_block_height`] reaches `h + 1` — provided it
+<a href=#78 id=78 data-nosnippet>78</a>/// is reachable and receives the certificate.
+<a href=#79 id=79 data-nosnippet>79</a>///
+<a href=#80 id=80 data-nosnippet>80</a>/// *Proof.* Commitment at `h` is [`RoundProgress`]. For the observable half: the driver's
+<a href=#81 id=81 data-nosnippet>81</a>/// `ChainClient::process_pending_block` ends by calling `Client::update_validators` with the new
+<a href=#82 id=82 data-nosnippet>82</a>/// [`ConfirmedBlockCertificate`], which delivers it to every validator; a correct recipient runs
+<a href=#83 id=83 data-nosnippet>83</a>/// `ChainWorkerState::process_confirmed_block`, which verifies it and — since the block is
+<a href=#84 id=84 data-nosnippet>84</a>/// contiguous with the recipient's tip, `h` being the pending height — executes it and advances
+<a href=#85 id=85 data-nosnippet>85</a>/// [`ChainTipState::next_block_height`] to `h + 1` ([`TipAdvancesOnlyOnValidCertificate`]). By
+<a href=#86 id=86 data-nosnippet>86</a>/// [`CommitAgreement`] the block it records is the same at all of them. ∎
+<a href=#87 id=87 data-nosnippet>87</a>///
+<a href=#88 id=88 data-nosnippet>88</a>/// The proviso is not removable and is not a defect: a validator that is partitioned away, or
+<a href=#89 id=89 data-nosnippet>89</a>/// that has been down since before GST, simply has not received the certificate yet. It catches
+<a href=#90 id=90 data-nosnippet>90</a>/// up through the ordinary certificate-download path, since the certificate is by then durable at
+<a href=#91 id=91 data-nosnippet>91</a>/// a quorum.
+<a href=#92 id=92 data-nosnippet>92</a>///
+<a href=#93 id=93 data-nosnippet>93</a>/// [`ChainTipState::next_block_height`]: linera_chain::ChainTipState::next_block_height
+<a href=#94 id=94 data-nosnippet>94</a>/// [`ConfirmedBlockCertificate`]: linera_chain::types::ConfirmedBlockCertificate
+<a href=#95 id=95 data-nosnippet>95</a></span><span class="kw">pub trait </span>HeightProgress:
+<a href=#96 id=96 data-nosnippet>96</a>    RoundProgress + TipAdvancesOnlyOnValidCertificate + CommitAgreement
+<a href=#97 id=97 data-nosnippet>97</a>{
+<a href=#98 id=98 data-nosnippet>98</a>}
+<a href=#99 id=99 data-nosnippet>99</a>
+<a href=#100 id=100 data-nosnippet>100</a><span class="doccomment">/// **Theorem (Unbounded progress).** If a correct driver ([`ActiveCorrectDriver`]) keeps
+<a href=#101 id=101 data-nosnippet>101</a>/// supplying blocks to propose — never exhausting its stream of operations — then under the
+<a href=#102 id=102 data-nosnippet>102</a>/// assumptions of [`super::assumptions`] every correct, reachable validator's
+<a href=#103 id=103 data-nosnippet>103</a>/// [`ChainTipState::next_block_height`] grows without bound, and by [`UniqueChain`] the
+<a href=#104 id=104 data-nosnippet>104</a>/// validators' committed prefixes remain identical throughout.
+<a href=#105 id=105 data-nosnippet>105</a>///
+<a href=#106 id=106 data-nosnippet>106</a>/// *Proof.* Induction on the height. Given that height `h` has committed and every correct
+<a href=#107 id=107 data-nosnippet>107</a>/// reachable validator has advanced to `h + 1` ([`HeightProgress`]), each such validator's
+<a href=#108 id=108 data-nosnippet>108</a>/// `ChainStateView::reset_chain_manager` has created the consensus instance for `h + 1`
+<a href=#109 id=109 data-nosnippet>109</a>/// ([`ConsensusInstance`]) with its round reset to
+<a href=#110 id=110 data-nosnippet>110</a>/// [`ChainOwnership::first_round`]. The hypotheses of [`RoundProgress`] then hold again at
+<a href=#111 id=111 data-nosnippet>111</a>/// `h + 1`: GST has passed, the driver has a block, and [`EventuallyCorrectLeader`] applies to
+<a href=#112 id=112 data-nosnippet>112</a>/// the fresh instance since the leader seed is the new height. So `h + 1` commits, and the
+<a href=#113 id=113 data-nosnippet>113</a>/// induction continues. Uniqueness of what is committed at each height is [`UniqueChain`]. ∎
+<a href=#114 id=114 data-nosnippet>114</a>///
+<a href=#115 id=115 data-nosnippet>115</a>/// Note that the round numbering restarts at each height, so the round-timeout argument of
+<a href=#116 id=116 data-nosnippet>116</a>/// [`RoundProgress`] restarts too: each height may again spend a bounded number of rounds before
+<a href=#117 id=117 data-nosnippet>117</a>/// its timeout exceeds `T`. This costs latency, not liveness.
+<a href=#118 id=118 data-nosnippet>118</a>///
+<a href=#119 id=119 data-nosnippet>119</a>/// [`ChainTipState::next_block_height`]: linera_chain::ChainTipState::next_block_height
+<a href=#120 id=120 data-nosnippet>120</a>/// [`ConsensusInstance`]: linera_chain::manager::proof::model::ConsensusInstance
+<a href=#121 id=121 data-nosnippet>121</a>/// [`ChainOwnership::first_round`]: linera_base::ownership::ChainOwnership::first_round
+<a href=#122 id=122 data-nosnippet>122</a></span><span class="kw">pub trait </span>UnboundedProgress: HeightProgress + UniqueChain {}
+<a href=#123 id=123 data-nosnippet>123</a>
+<a href=#124 id=124 data-nosnippet>124</a><span class="doccomment">/// **Remark (What liveness does not claim).** Five exclusions, each of which a reader may
+<a href=#125 id=125 data-nosnippet>125</a>/// reasonably expect [`UnboundedProgress`] to cover.
+<a href=#126 id=126 data-nosnippet>126</a>///
+<a href=#127 id=127 data-nosnippet>127</a>/// * **No progress without a client.** [`ActiveCorrectDriver`] is indispensable: a validator
+<a href=#128 id=128 data-nosnippet>128</a>///   never proposes and never advances a round unprompted. A microchain whose owners have all
+<a href=#129 id=129 data-nosnippet>129</a>///   gone away makes no progress and is not thereby faulty. This is the deepest structural
+<a href=#130 id=130 data-nosnippet>130</a>///   difference from a validator-driven BFT protocol, and it is what makes a Linera validator's
+<a href=#131 id=131 data-nosnippet>131</a>///   per-chain cost proportional to use.
+<a href=#132 id=132 data-nosnippet>132</a>///
+<a href=#133 id=133 data-nosnippet>133</a>/// * **The fast round can wedge a height permanently.** By [`RoundsWithoutTimeout`], with the
+<a href=#134 id=134 data-nosnippet>134</a>///   default [`TimeoutConfig`] the fast round has no timeout at all, and while the current round
+<a href=#135 id=135 data-nosnippet>135</a>///   is fast only a super owner may open a later one. A super owner that issues two conflicting
+<a href=#136 id=136 data-nosnippet>136</a>///   fast proposals splits the correct validators — each locks onto the first it sees, by
+<a href=#137 id=137 data-nosnippet>137</a>///   [`FastConfirmationNeedsEmptyLock`] — so neither reaches a quorum, and the height stops until
+<a href=#138 id=138 data-nosnippet>138</a>///   that same super owner proposes again in a higher round. [`CommitAgreement`] is untouched;
+<a href=#139 id=139 data-nosnippet>139</a>///   this is exactly the trade the fast path makes, and the reason
+<a href=#140 id=140 data-nosnippet>140</a>///   `ChainClient::process_pending_block_inner` refuses to replace a pending fast proposal whose
+<a href=#141 id=141 data-nosnippet>141</a>///   signing key it no longer holds.
+<a href=#142 id=142 data-nosnippet>142</a>///
+<a href=#143 id=143 data-nosnippet>143</a>/// * **Multi-leader rounds are not covered by [`RoundProgress`].** The theorem is stated for
+<a href=#144 id=144 data-nosnippet>144</a>///   [`SingleLeader`] and [`Validator`] rounds, where a unique leader is guaranteed by
+<a href=#145 id=145 data-nosnippet>145</a>///   [`LeaderEligibility`]. In a multi-leader round several owners may propose simultaneously;
+<a href=#146 id=146 data-nosnippet>146</a>///   correct validators then vote for whichever proposal they see first, quorums may not form,
+<a href=#147 id=147 data-nosnippet>147</a>///   and by [`RoundsWithoutTimeout`] a non-final multi-leader round has no timeout — it is left
+<a href=#148 id=148 data-nosnippet>148</a>///   only by a proposal in a higher round. This is by design (multi-leader rounds are the
+<a href=#149 id=149 data-nosnippet>149</a>///   uncontended fast path) and costs nothing, because the round sequence passes through them
+<a href=#150 id=150 data-nosnippet>150</a>///   into single-leader rounds where the theorem applies.
+<a href=#151 id=151 data-nosnippet>151</a>///
+<a href=#152 id=152 data-nosnippet>152</a>/// * **No bound on the number of rounds, and no bound before GST.** [`RoundProgress`] asserts the
+<a href=#153 id=153 data-nosnippet>153</a>///   existence of a successful round, not a bound on how many precede it. Faulty leaders and
+<a href=#154 id=154 data-nosnippet>154</a>///   pre-GST delays each cost rounds.
+<a href=#155 id=155 data-nosnippet>155</a>///
+<a href=#156 id=156 data-nosnippet>156</a>/// * **Nothing is claimed about the *content* of the committed blocks.** A driver competing with
+<a href=#157 id=157 data-nosnippet>157</a>///   other owners may find its own block superseded: [`LockRecovery`] obliges it to re-propose
+<a href=#158 id=158 data-nosnippet>158</a>///   whatever is locked rather than its own pending block. `process_pending_block` then returns
+<a href=#159 id=159 data-nosnippet>159</a>///   the committed certificate for the other block and keeps the driver's proposal pending for a
+<a href=#160 id=160 data-nosnippet>160</a>///   later height. Liveness of the *chain* does not imply liveness of any particular
+<a href=#161 id=161 data-nosnippet>161</a>///   transaction.
+<a href=#162 id=162 data-nosnippet>162</a>///
+<a href=#163 id=163 data-nosnippet>163</a>/// [`SingleLeader`]: linera_base::data_types::Round::SingleLeader
+<a href=#164 id=164 data-nosnippet>164</a>/// [`Validator`]: linera_base::data_types::Round::Validator
+<a href=#165 id=165 data-nosnippet>165</a>/// [`TimeoutConfig`]: linera_base::ownership::TimeoutConfig
+<a href=#166 id=166 data-nosnippet>166</a>/// [`FastConfirmationNeedsEmptyLock`]: linera_chain::manager::proof::voting::FastConfirmationNeedsEmptyLock
+<a href=#167 id=167 data-nosnippet>167</a>/// [`LeaderEligibility`]: linera_chain::manager::proof::timeouts::LeaderEligibility
+<a href=#168 id=168 data-nosnippet>168</a></span><span class="kw">pub trait </span>LivenessScope:
+<a href=#169 id=169 data-nosnippet>169</a>    UnboundedProgress + RoundsWithoutTimeout + ActiveCorrectDriver + LockRecovery
+<a href=#170 id=170 data-nosnippet>170</a>{
+<a href=#171 id=171 data-nosnippet>171</a>}
+</code></pre></div></section></main></body></html>

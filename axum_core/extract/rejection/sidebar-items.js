@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BytesRejection","FailedToBufferBody","StringRejection"],"struct":["InvalidUtf8","LengthLimitError","UnknownBodyError"]};

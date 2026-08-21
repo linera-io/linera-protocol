@@ -1,0 +1,49 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Invalidate any `proc_macro2::Span` that exist on the current thread."><title>invalidate_current_thread_spans in proc_macro2::extra - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="proc_macro2" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">invalidate_current_thread_spans</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../proc_macro2/index.html">proc_<wbr>macro2</a><span class="version">1.0.106</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">invalidate_<wbr>current_<wbr>thread_<wbr>spans</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#example" title="Example">Example</a></li><li><a href="#panics" title="Panics">Panics</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In proc_<wbr>macro2::<wbr>extra</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">proc_macro2</a>::<wbr><a href="index.html">extra</a></div><h1>Function <span class="fn">invalidate_<wbr>current_<wbr>thread_<wbr>spans</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/proc_macro2/extra.rs.html#73-75">Source</a> </span></div><pre class="rust item-decl"><code>pub fn invalidate_current_thread_spans()</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Invalidate any <code>proc_macro2::Span</code> that exist on the current thread.</p>
+<p>The implementation of <code>Span</code> uses thread-local data structures and this
+function clears them. Calling any method on a <code>Span</code> on the current thread
+created prior to the invalidation will return incorrect values or crash.</p>
+<p>This function is useful for programs that process more than 2<sup>32</sup>
+bytes of Rust source code on the same thread. Just like rustc, proc-macro2
+uses 32-bit source locations, and these wrap around when the total source
+code processed by the same thread exceeds 2<sup>32</sup> bytes (4
+gigabytes). After a wraparound, <code>Span</code> methods such as <code>source_text()</code> can
+return wrong data.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>As of late 2023, there is 200 GB of Rust code published on crates.io.
+Looking at just the newest version of every crate, it is 16 GB of code. So a
+workload that involves parsing it all would overflow a 32-bit source
+location unless spans are being invalidated.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>flate2::read::GzDecoder;
+<span class="kw">use </span>std::ffi::OsStr;
+<span class="kw">use </span>std::io::{BufReader, Read};
+<span class="kw">use </span>std::str::FromStr;
+<span class="kw">use </span>tar::Archive;
+
+rayon::scope(|s| {
+    <span class="kw">for </span>krate <span class="kw">in </span>every_version_of_every_crate() {
+        s.spawn(<span class="kw">move </span>|<span class="kw">_</span>| {
+            proc_macro2::extra::invalidate_current_thread_spans();
+
+            <span class="kw">let </span>reader = BufReader::new(krate);
+            <span class="kw">let </span>tar = GzDecoder::new(reader);
+            <span class="kw">let </span><span class="kw-2">mut </span>archive = Archive::new(tar);
+            <span class="kw">for </span>entry <span class="kw">in </span>archive.entries().unwrap() {
+                <span class="kw">let </span><span class="kw-2">mut </span>entry = entry.unwrap();
+                <span class="kw">let </span>path = entry.path().unwrap();
+                <span class="kw">if </span>path.extension() != <span class="prelude-val">Some</span>(OsStr::new(<span class="string">"rs"</span>)) {
+                    <span class="kw">continue</span>;
+                }
+                <span class="kw">let </span><span class="kw-2">mut </span>content = String::new();
+                entry.read_to_string(<span class="kw-2">&amp;mut </span>content).unwrap();
+                <span class="kw">match </span>proc_macro2::TokenStream::from_str(<span class="kw-2">&amp;</span>content) {
+                    <span class="prelude-val">Ok</span>(tokens) =&gt; {<span class="comment">/* ... */</span>},
+                    <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">continue</span>,
+                }
+            }
+        });
+    }
+});</code></pre></div><h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>This function is not applicable to and will panic if called from a
+procedural macro.</p>
+</div></details></section></div></main></body></html>

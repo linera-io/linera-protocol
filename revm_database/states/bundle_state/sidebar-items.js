@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BundleRetention","OriginalValuesKnown"],"struct":["BundleBuilder","BundleState"]};

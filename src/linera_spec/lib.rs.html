@@ -1,0 +1,222 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `linera-spec/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="linera_spec" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">linera_spec/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) Zefchain Labs, Inc.
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="doccomment">//! # The Linera protocol: correctness specification
+<a href=#5 id=5 data-nosnippet>5</a>//!
+<a href=#6 id=6 data-nosnippet>6</a>//! Linera is a multi-chain protocol: state is partitioned into *microchains*, each running its own
+<a href=#7 id=7 data-nosnippet>7</a>//! consensus instance per block height. No chain can read another's state; they communicate by
+<a href=#8 id=8 data-nosnippet>8</a>//! explicit message passing and through shared immutable stores — today, published blobs and events.
+<a href=#9 id=9 data-nosnippet>9</a>//! This crate is the entry point to a correctness specification of that protocol — its system
+<a href=#10 id=10 data-nosnippet>10</a>//! model, its assumptions, and proofs of the properties it is meant to have.
+<a href=#11 id=11 data-nosnippet>11</a>//!
+<a href=#12 id=12 data-nosnippet>12</a>//! The specification is written subsystem by subsystem; [Coverage](#coverage) says what is
+<a href=#13 id=13 data-nosnippet>13</a>//! established today and what is not yet constrained by any statement here.
+<a href=#14 id=14 data-nosnippet>14</a>//!
+<a href=#15 id=15 data-nosnippet>15</a>//! **This crate contains no code.** The statements live next to the implementation they describe —
+<a href=#16 id=16 data-nosnippet>16</a>//! today across [`linera_chain`] and [`linera_core`] — and this crate exists only so that a single
+<a href=#17 id=17 data-nosnippet>17</a>//! index can link to all of them. Neither of those crates can do that on its own —
+<a href=#18 id=18 data-nosnippet>18</a>//! `linera-core` depends on `linera-chain`, so the chain crate cannot name the progress and
+<a href=#19 id=19 data-nosnippet>19</a>//! liveness results, and an index living there would have to describe half the specification in
+<a href=#20 id=20 data-nosnippet>20</a>//! prose. Sitting above both, this crate can cite every statement by path, so every cross
+<a href=#21 id=21 data-nosnippet>21</a>//! reference below is checked by the documentation build.
+<a href=#22 id=22 data-nosnippet>22</a>//!
+<a href=#23 id=23 data-nosnippet>23</a>//! ```bash
+<a href=#24 id=24 data-nosnippet>24</a>//! cargo doc -p linera-spec --open
+<a href=#25 id=25 data-nosnippet>25</a>//! ```
+<a href=#26 id=26 data-nosnippet>26</a>//!
+<a href=#27 id=27 data-nosnippet>27</a>//! # Headline results
+<a href=#28 id=28 data-nosnippet>28</a>//!
+<a href=#29 id=29 data-nosnippet>29</a>//! Three results anchor the consensus core, each concerning one microchain's sequence of blocks.
+<a href=#30 id=30 data-nosnippet>30</a>//!
+<a href=#31 id=31 data-nosnippet>31</a>//! * **Safety** — [`CommitAgreement`]: for any chain and height, all valid confirmed block
+<a href=#32 id=32 data-nosnippet>32</a>//!   certificates certify the same block. No synchrony, availability or fairness assumption is
+<a href=#33 id=33 data-nosnippet>33</a>//!   used; only [`MaxByzantineWeight`] and the cryptographic and persistence assumptions.
+<a href=#34 id=34 data-nosnippet>34</a>//! * **Accountability** — [`AccountableSafety`]: if agreement *does* fail, the two conflicting
+<a href=#35 id=35 data-nosnippet>35</a>//!   certificates alone convict validators of weight at least [`validity_threshold`] — more than
+<a href=#36 id=36 data-nosnippet>36</a>//!   [`MaxByzantineWeight`] permits — and no correct validator is ever convictable. It assumes
+<a href=#37 id=37 data-nosnippet>37</a>//!   strictly less than safety does, since it must hold precisely where safety does not.
+<a href=#38 id=38 data-nosnippet>38</a>//! * **Liveness** — [`UnboundedProgress`]: with an active correct client and after GST, every
+<a href=#39 id=39 data-nosnippet>39</a>//!   correct reachable validator's [`ChainTipState::next_block_height`] grows without bound.
+<a href=#40 id=40 data-nosnippet>40</a>//!
+<a href=#41 id=41 data-nosnippet>41</a>//! # Reading order
+<a href=#42 id=42 data-nosnippet>42</a>//!
+<a href=#43 id=43 data-nosnippet>43</a>//! The proofs live next to the code they are about, but they are written to be read in this
+<a href=#44 id=44 data-nosnippet>44</a>//! order, and each statement cites only statements above it.
+<a href=#45 id=45 data-nosnippet>45</a>//!
+<a href=#46 id=46 data-nosnippet>46</a>//! | section | where |
+<a href=#47 id=47 data-nosnippet>47</a>//! |---|---|
+<a href=#48 id=48 data-nosnippet>48</a>//! | System model | [`linera_chain::manager::proof::model`] |
+<a href=#49 id=49 data-nosnippet>49</a>//! | Fault and network assumptions | [`linera_chain::manager::proof::model`], then [`linera_core::proof::assumptions`] |
+<a href=#50 id=50 data-nosnippet>50</a>//! | Protocol objects and definitions | [`linera_chain::data_types::proof::objects`] |
+<a href=#51 id=51 data-nosnippet>51</a>//! | Quorum properties | [`linera_chain::data_types::proof::quorum`] |
+<a href=#52 id=52 data-nosnippet>52</a>//! | Voting rules | [`linera_chain::manager::proof::voting`] |
+<a href=#53 id=53 data-nosnippet>53</a>//! | Locking and certificate invariants | [`linera_chain::manager::proof::rounds`], then [`linera_chain::manager::proof::locking`] |
+<a href=#54 id=54 data-nosnippet>54</a>//! | Commit rule | [`linera_chain::manager::proof::commit`] |
+<a href=#55 id=55 data-nosnippet>55</a>//! | Safety proof | [`linera_chain::manager::proof::safety`] |
+<a href=#56 id=56 data-nosnippet>56</a>//! | Accountability | [`linera_chain::justification::proof`] |
+<a href=#57 id=57 data-nosnippet>57</a>//! | Leaders, timeouts and round advancement | [`linera_chain::manager::proof::timeouts`] |
+<a href=#58 id=58 data-nosnippet>58</a>//! | Progress lemmas | [`linera_core::proof::progress`] |
+<a href=#59 id=59 data-nosnippet>59</a>//! | Liveness proof | [`linera_core::proof::liveness`] |
+<a href=#60 id=60 data-nosnippet>60</a>//! | Availability, crash recovery and catch-up | [`linera_core::proof::availability`] |
+<a href=#61 id=61 data-nosnippet>61</a>//! | Client notifications | [`linera_core::proof::notifications`] |
+<a href=#62 id=62 data-nosnippet>62</a>//! | What a checkpoint preserves | [`linera_chain::proof::checkpoints`] |
+<a href=#63 id=63 data-nosnippet>63</a>//!
+<a href=#64 id=64 data-nosnippet>64</a>//! # How to read a statement
+<a href=#65 id=65 data-nosnippet>65</a>//!
+<a href=#66 id=66 data-nosnippet>66</a>//! Every claim is a public marker trait with no members, no implementors and no runtime
+<a href=#67 id=67 data-nosnippet>67</a>//! footprint. Its **name is its identity**; its doc comment carries the statement and, unless it
+<a href=#68 id=68 data-nosnippet>68</a>//! is a definition or an assumption, a proof. **Supertraits are proof dependencies**: a statement
+<a href=#69 id=69 data-nosnippet>69</a>//! lists as supertraits exactly the earlier statements whose truth its proof consumes.
+<a href=#70 id=70 data-nosnippet>70</a>//!
+<a href=#71 id=71 data-nosnippet>71</a>//! ```text
+<a href=#72 id=72 data-nosnippet>72</a>//! pub trait RoundProgress:
+<a href=#73 id=73 data-nosnippet>73</a>//!     EventuallyCorrectLeader + LockRecovery + ProposalAccepted + …
+<a href=#74 id=74 data-nosnippet>74</a>//! //  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<a href=#75 id=75 data-nosnippet>75</a>//! //  the statements this proof consumes
+<a href=#76 id=76 data-nosnippet>76</a>//! ```
+<a href=#77 id=77 data-nosnippet>77</a>//!
+<a href=#78 id=78 data-nosnippet>78</a>//! That shape buys five checks with no bespoke tooling: unique identifiers (Rust name
+<a href=#79 id=79 data-nosnippet>79</a>//! resolution), existence of every cited statement and every cited Rust item
+<a href=#80 id=80 data-nosnippet>80</a>//! (`rustdoc::broken_intra_doc_links`, denied in CI), acyclicity of the dependency graph
+<a href=#81 id=81 data-nosnippet>81</a>//! (`rustc`, `E0391`), and a rendered, clickable dependency list on each statement's page. There
+<a href=#82 id=82 data-nosnippet>82</a>//! is deliberately no numbering: names are stable under insertion, and a stale citation is a
+<a href=#83 id=83 data-nosnippet>83</a>//! build failure rather than a silently wrong cross reference. The same goes for the sections
+<a href=#84 id=84 data-nosnippet>84</a>//! above — they are ordered, not numbered, so adding or splitting one renames nothing and
+<a href=#85 id=85 data-nosnippet>85</a>//! invalidates no reference.
+<a href=#86 id=86 data-nosnippet>86</a>//!
+<a href=#87 id=87 data-nosnippet>87</a>//! Each statement opens with one of six labels, all of which mean something on their own:
+<a href=#88 id=88 data-nosnippet>88</a>//!
+<a href=#89 id=89 data-nosnippet>89</a>//! | label | carries a proof | meaning |
+<a href=#90 id=90 data-nosnippet>90</a>//! |---|---|---|
+<a href=#91 id=91 data-nosnippet>91</a>//! | **Definition** | no | fixes a term, and pins it to the Rust it denotes |
+<a href=#92 id=92 data-nosnippet>92</a>//! | **Assumption** | no | something the implementation does not establish and a deployment must supply |
+<a href=#93 id=93 data-nosnippet>93</a>//! | **Invariant** | yes | holds in every reachable state, proved by induction over transitions |
+<a href=#94 id=94 data-nosnippet>94</a>//! | **Lemma** | yes | a proved statement |
+<a href=#95 id=95 data-nosnippet>95</a>//! | **Theorem** | yes | one of the results the specification exists to establish |
+<a href=#96 id=96 data-nosnippet>96</a>//! | **Remark** / **Caveat** | no | an observation or a limitation, asserting nothing new |
+<a href=#97 id=97 data-nosnippet>97</a>//!
+<a href=#98 id=98 data-nosnippet>98</a>//! None of them is *relational*: nothing is labelled by what it follows from. These pages are
+<a href=#99 id=99 data-nosnippet>99</a>//! reached from anywhere by link, so there is no preceding result for a label to refer back to —
+<a href=#100 id=100 data-nosnippet>100</a>//! and the supertrait list already names what a statement follows from, exactly and checkably.
+<a href=#101 id=101 data-nosnippet>101</a>//!
+<a href=#102 id=102 data-nosnippet>102</a>//! # The safety/liveness split
+<a href=#103 id=103 data-nosnippet>103</a>//!
+<a href=#104 id=104 data-nosnippet>104</a>//! The two arguments are deliberately disjoint in their assumptions, and the module layout
+<a href=#105 id=105 data-nosnippet>105</a>//! reflects that:
+<a href=#106 id=106 data-nosnippet>106</a>//!
+<a href=#107 id=107 data-nosnippet>107</a>//! ```text
+<a href=#108 id=108 data-nosnippet>108</a>//!  MaxByzantineWeight, UnforgeableSignatures,           EventualSynchrony, ClockAccuracy,
+<a href=#109 id=109 data-nosnippet>109</a>//!  DurablePersistence, SequentialChainState,            CorrectValidatorAvailability,
+<a href=#110 id=110 data-nosnippet>110</a>//!  EpochAgreement, DeterministicExecution               ActiveCorrectDriver, LeaderFairness,
+<a href=#111 id=111 data-nosnippet>111</a>//!         |                                             RoundTimeoutGrowth, FullReachability
+<a href=#112 id=112 data-nosnippet>112</a>//!         v                                                     |
+<a href=#113 id=113 data-nosnippet>113</a>//!   quorum properties                                           |
+<a href=#114 id=114 data-nosnippet>114</a>//!         |                                                     |
+<a href=#115 id=115 data-nosnippet>115</a>//!         v                                                     v
+<a href=#116 id=116 data-nosnippet>116</a>//!   voting rules  --&gt;  rounds  --&gt;  locking  --&gt;  commit  --&gt;  progress
+<a href=#117 id=117 data-nosnippet>117</a>//!                                       |                        |
+<a href=#118 id=118 data-nosnippet>118</a>//!                                       v                        v
+<a href=#119 id=119 data-nosnippet>119</a>//!                                    SAFETY                   LIVENESS
+<a href=#120 id=120 data-nosnippet>120</a>//!                              CommitAgreement            UnboundedProgress
+<a href=#121 id=121 data-nosnippet>121</a>//!                                       |
+<a href=#122 id=122 data-nosnippet>122</a>//!                                       v
+<a href=#123 id=123 data-nosnippet>123</a>//!                                 ACCOUNTABILITY
+<a href=#124 id=124 data-nosnippet>124</a>//!                                AccountableSafety
+<a href=#125 id=125 data-nosnippet>125</a>//! ```
+<a href=#126 id=126 data-nosnippet>126</a>//!
+<a href=#127 id=127 data-nosnippet>127</a>//! Everything in the right-hand column can fail — the network can partition forever, every client
+<a href=#128 id=128 data-nosnippet>128</a>//! can go away, clocks can drift — without endangering [`CommitAgreement`]. Nothing in the
+<a href=#129 id=129 data-nosnippet>129</a>//! left-hand column can fail without endangering it. Accountability hangs below safety rather
+<a href=#130 id=130 data-nosnippet>130</a>//! than above it: it consumes *fewer* assumptions than [`CommitAgreement`] does, because its job
+<a href=#131 id=131 data-nosnippet>131</a>//! is to hold in the one regime where safety does not.
+<a href=#132 id=132 data-nosnippet>132</a>//!
+<a href=#133 id=133 data-nosnippet>133</a>//! # Known gaps
+<a href=#134 id=134 data-nosnippet>134</a>//!
+<a href=#135 id=135 data-nosnippet>135</a>//! The specification records, rather than papers over, the places where the implementation does
+<a href=#136 id=136 data-nosnippet>136</a>//! not quite discharge what a proof wants. In rough order of significance:
+<a href=#137 id=137 data-nosnippet>137</a>//!
+<a href=#138 id=138 data-nosnippet>138</a>//! * [`FullReachability`] — the lock-recovery step wants the proposer to reach *every* correct
+<a href=#139 id=139 data-nosnippet>139</a>//!   validator, while `synchronize_chain_state` guarantees only a quorum plus a grace period.
+<a href=#140 id=140 data-nosnippet>140</a>//!   Affects liveness only.
+<a href=#141 id=141 data-nosnippet>141</a>//! * [`MissingDependenciesAreRecoverable`] — a block that consumes a message or reads an event
+<a href=#142 id=142 data-nosnippet>142</a>//!   depends on data originating on a *third* chain. Blobs, ancestors and chain state are
+<a href=#143 id=143 data-nosnippet>143</a>//!   self-suppliable, so a lagging validator is simply handed them; these two classes are not. If
+<a href=#144 id=144 data-nosnippet>144</a>//!   the proposer does not follow the sending or publishing chain either, the validator waits on
+<a href=#145 id=145 data-nosnippet>145</a>//!   its own catch-up of that chain, which no assumption bounds — so
+<a href=#146 id=146 data-nosnippet>146</a>//!   [`ValidationQuorumForms`]'s `2Δ` step does not apply to such blocks. Affects liveness only.
+<a href=#147 id=147 data-nosnippet>147</a>//! * [`AccountabilityScope`] — incorrect block execution is not attributable, and its effects are
+<a href=#148 id=148 data-nosnippet>148</a>//!   not confined to one chain: a wrong `messages` or `events` field is consumed by other chains
+<a href=#149 id=149 data-nosnippet>149</a>//!   whose resulting blocks are themselves properly certified. The protections are
+<a href=#150 id=150 data-nosnippet>150</a>//!   [`CertifiedBlockWasExecuted`] and [`IncomingBundlesAreSelfDerived`], and unlike the
+<a href=#151 id=151 data-nosnippet>151</a>//!   accountability results both need [`MaxByzantineWeight`]. Tracked in
+<a href=#152 id=152 data-nosnippet>152</a>//!   [issue #6675](https://github.com/linera-io/linera-protocol/issues/6675).
+<a href=#153 id=153 data-nosnippet>153</a>//! * [`FastRetryPreservesBlock`] — closing the gap between "same proposal" and "same block" for a
+<a href=#154 id=154 data-nosnippet>154</a>//!   fast-round retry relies on [`DeterministicExecution`] rather than on a runtime check at the
+<a href=#155 id=155 data-nosnippet>155</a>//!   retry. Affects safety, and is the one step that reaches outside consensus into execution.
+<a href=#156 id=156 data-nosnippet>156</a>//! * [`ProposalGate`] — several safety-critical guards live at the call site in
+<a href=#157 id=157 data-nosnippet>157</a>//!   `chain_worker::state` rather than inside the [`ChainManager`] methods they protect; in
+<a href=#158 id=158 data-nosnippet>158</a>//!   particular [`create_final_vote`] would sign twice in a round if invoked directly.
+<a href=#159 id=159 data-nosnippet>159</a>//! * [`SafetyStateRecovery`] — the correspondence between a [`ManagerSafetySnapshot`] and the
+<a href=#160 id=160 data-nosnippet>160</a>//!   instance it is restored into rests on a height check at the single call site, not on
+<a href=#161 id=161 data-nosnippet>161</a>//!   anything the type enforces.
+<a href=#162 id=162 data-nosnippet>162</a>//! * [`VoteConstructionSites`] — an exhaustive-search argument over the five signing sites, which
+<a href=#163 id=163 data-nosnippet>163</a>//!   a sixth would invalidate.
+<a href=#164 id=164 data-nosnippet>164</a>//!
+<a href=#165 id=165 data-nosnippet>165</a>//! # Coverage
+<a href=#166 id=166 data-nosnippet>166</a>//!
+<a href=#167 id=167 data-nosnippet>167</a>//! Established today: agreement on the *sequence of blocks* of a single microchain, and what a
+<a href=#168 id=168 data-nosnippet>168</a>//! certified block guarantees to nodes that were absent when it was certified.
+<a href=#169 id=169 data-nosnippet>169</a>//!
+<a href=#170 id=170 data-nosnippet>170</a>//! Not yet covered, in the sense that no statement here constrains them. Where consensus does say
+<a href=#171 id=171 data-nosnippet>171</a>//! something adjacent, it is named.
+<a href=#172 id=172 data-nosnippet>172</a>//!
+<a href=#173 id=173 data-nosnippet>173</a>//! * **State-transition correctness** — that executing the agreed blocks yields the right state.
+<a href=#174 id=174 data-nosnippet>174</a>//!   [`DeterministicExecution`] is assumed rather than proved, and *termination* of execution is
+<a href=#175 id=175 data-nosnippet>175</a>//!   not stated at all. What is guaranteed is that a certified block was executed by some correct
+<a href=#176 id=176 data-nosnippet>176</a>//!   validator ([`CertifiedBlockWasExecuted`]), that a voter matched every consumed bundle against
+<a href=#177 id=177 data-nosnippet>177</a>//!   its own inbox ([`IncomingBundlesAreSelfDerived`]), and that the inputs execution needs can be
+<a href=#178 id=178 data-nosnippet>178</a>//!   supplied to a validator lacking them ([`MissingDependenciesAreRecoverable`]), and that its
+<a href=#179 id=179 data-nosnippet>179</a>//!   outputs — published blobs, events and the certificate — reach storage before the block counts
+<a href=#180 id=180 data-nosnippet>180</a>//!   as processed ([`BlockOutputsArePersisted`]).
+<a href=#181 id=181 data-nosnippet>181</a>//! * **Cross-chain messaging** as a subsystem — delivery in particular: nothing states that an
+<a href=#182 id=182 data-nosnippet>182</a>//!   outbox is ever drained, so no bundle is guaranteed to arrive. What *is* stated is that an
+<a href=#183 id=183 data-nosnippet>183</a>//!   inbox holds only bundles its origin really sent ([`InboxHoldsOnlySentBundles`]), that no two
+<a href=#184 id=184 data-nosnippet>184</a>//!   blocks consume the same bundle ([`BundleConsumedAtMostOnce`]), and that each chain's own
+<a href=#185 id=185 data-nosnippet>185</a>//!   block sequence is unique ([`UniqueChain`]).
+<a href=#186 id=186 data-nosnippet>186</a>//! * **Committee reconfiguration** — epoch changes are agreed *by* this protocol on the admin
+<a href=#187 id=187 data-nosnippet>187</a>//!   chain; [`EpochAgreement`] records what is assumed about them.
+<a href=#188 id=188 data-nosnippet>188</a>//! * **Chain ownership and lifecycle** — who may propose at a height, and how that changes;
+<a href=#189 id=189 data-nosnippet>189</a>//!   [`ConsensusInstance`] records what is assumed about it.
+<a href=#190 id=190 data-nosnippet>190</a>//! * **Resource control and fees** — metering, declared block limits, and fee conservation.
+<a href=#191 id=191 data-nosnippet>191</a>//! * **Event streams** as a subsystem — append-only-ness and the publisher-side guarantees behind
+<a href=#192 id=192 data-nosnippet>192</a>//!   a cross-chain `OracleResponse::Event` read.
+<a href=#193 id=193 data-nosnippet>193</a>//!
+<a href=#194 id=194 data-nosnippet>194</a>//! [`CommitAgreement`]: linera_chain::manager::proof::safety::CommitAgreement
+<a href=#195 id=195 data-nosnippet>195</a>//! [`UniqueChain`]: linera_chain::manager::proof::safety::UniqueChain
+<a href=#196 id=196 data-nosnippet>196</a>//! [`AccountableSafety`]: linera_chain::justification::proof::AccountableSafety
+<a href=#197 id=197 data-nosnippet>197</a>//! [`AccountabilityScope`]: linera_chain::justification::proof::AccountabilityScope
+<a href=#198 id=198 data-nosnippet>198</a>//! [`UnboundedProgress`]: linera_core::proof::liveness::UnboundedProgress
+<a href=#199 id=199 data-nosnippet>199</a>//! [`ChainTipState::next_block_height`]: linera_chain::ChainTipState::next_block_height
+<a href=#200 id=200 data-nosnippet>200</a>//! [`MaxByzantineWeight`]: linera_chain::manager::proof::model::MaxByzantineWeight
+<a href=#201 id=201 data-nosnippet>201</a>//! [`DeterministicExecution`]: linera_chain::manager::proof::model::DeterministicExecution
+<a href=#202 id=202 data-nosnippet>202</a>//! [`EpochAgreement`]: linera_chain::manager::proof::model::EpochAgreement
+<a href=#203 id=203 data-nosnippet>203</a>//! [`ConsensusInstance`]: linera_chain::manager::proof::model::ConsensusInstance
+<a href=#204 id=204 data-nosnippet>204</a>//! [`CertifiedBlockWasExecuted`]: linera_chain::manager::proof::commit::CertifiedBlockWasExecuted
+<a href=#205 id=205 data-nosnippet>205</a>//! [`IncomingBundlesAreSelfDerived`]: linera_chain::manager::proof::commit::IncomingBundlesAreSelfDerived
+<a href=#206 id=206 data-nosnippet>206</a>//! [`FullReachability`]: linera_core::proof::assumptions::FullReachability
+<a href=#207 id=207 data-nosnippet>207</a>//! [`MissingDependenciesAreRecoverable`]: linera_core::proof::availability::MissingDependenciesAreRecoverable
+<a href=#208 id=208 data-nosnippet>208</a>//! [`BlockOutputsArePersisted`]: linera_core::proof::availability::BlockOutputsArePersisted
+<a href=#209 id=209 data-nosnippet>209</a>//! [`InboxHoldsOnlySentBundles`]: linera_core::proof::availability::InboxHoldsOnlySentBundles
+<a href=#210 id=210 data-nosnippet>210</a>//! [`BundleConsumedAtMostOnce`]: linera_core::proof::availability::BundleConsumedAtMostOnce
+<a href=#211 id=211 data-nosnippet>211</a>//! [`ValidationQuorumForms`]: linera_core::proof::progress::ValidationQuorumForms
+<a href=#212 id=212 data-nosnippet>212</a>//! [`FastRetryPreservesBlock`]: linera_chain::manager::proof::safety::FastRetryPreservesBlock
+<a href=#213 id=213 data-nosnippet>213</a>//! [`ProposalGate`]: linera_chain::manager::proof::voting::ProposalGate
+<a href=#214 id=214 data-nosnippet>214</a>//! [`VoteConstructionSites`]: linera_chain::manager::proof::voting::VoteConstructionSites
+<a href=#215 id=215 data-nosnippet>215</a>//! [`SafetyStateRecovery`]: linera_chain::manager::proof::locking::SafetyStateRecovery
+<a href=#216 id=216 data-nosnippet>216</a>//! [`ChainManager`]: linera_chain::manager::ChainManager
+<a href=#217 id=217 data-nosnippet>217</a>//! [`create_final_vote`]: linera_chain::manager::ChainManager::create_final_vote
+<a href=#218 id=218 data-nosnippet>218</a>//! [`ManagerSafetySnapshot`]: linera_chain::manager::ManagerSafetySnapshot
+<a href=#219 id=219 data-nosnippet>219</a>//! [`validity_threshold`]: linera_execution::committee::Committee::validity_threshold
+<a href=#220 id=220 data-nosnippet>220</a>
+<a href=#221 id=221 data-nosnippet>221</a></span><span class="attr">#![deny(missing_docs)]
+</span></code></pre></div></section></main></body></html>

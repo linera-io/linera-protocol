@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["domain_to_ascii","domain_to_ascii_cow","domain_to_ascii_strict","domain_to_unicode"],"mod":["punycode","uts46"],"struct":["Config","Errors","Idna"]};

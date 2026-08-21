@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["LineInfo","SampleType","Value"],"struct":["HistogramCount","Labels","Sample","Scrape","SummaryCount"]};

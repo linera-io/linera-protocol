@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"attr":["wasm_bindgen"]};
