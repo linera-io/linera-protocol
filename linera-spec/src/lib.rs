@@ -106,7 +106,7 @@
 //!
 //! ```text
 //!  MaxByzantineWeight, UnforgeableSignatures,           EventualSynchrony, ClockAccuracy,
-//!  DurablePersistence, SerializedChainState,            CorrectValidatorAvailability,
+//!  DurablePersistence, SequentialChainState,            CorrectValidatorAvailability,
 //!  EpochAgreement, DeterministicExecution               ActiveCorrectDriver, LeaderFairness,
 //!         |                                             RoundTimeoutGrowth, FullReachability
 //!         v                                                     |

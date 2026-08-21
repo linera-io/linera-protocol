@@ -12,7 +12,7 @@
 
 use linera_chain::manager::proof::{
     commit::{CommittedBlock, IncomingBundlesAreSelfDerived},
-    model::{CorrectValidator, SerializedChainState, StorageAtomicity},
+    model::{CorrectValidator, SequentialChainState, StorageAtomicity},
 };
 
 use super::assumptions::{
@@ -62,7 +62,7 @@ use super::assumptions::{
 ///
 /// **What becomes visible early.** Certificates, blobs and events are written to storage shared
 /// across chains — the channel by which chains observe each other at all — while the tip and the
-/// inboxes are per-chain state no other worker reads ([`SerializedChainState`]). Between the two
+/// inboxes are per-chain state no other worker reads ([`SequentialChainState`]). Between the two
 /// writes, then, a block's outputs are globally readable while the producing chain has not yet
 /// recorded the block locally. That is harmless because `certificate.check` precedes every one of
 /// these writes: what becomes visible early is content a quorum has already certified, and by
@@ -288,7 +288,7 @@ pub trait MissingDependenciesAreRecoverable:
 /// [`StorageAtomicity`]: linera_chain::manager::proof::model::StorageAtomicity
 /// [`CorrectValidator`]: linera_chain::manager::proof::model::CorrectValidator
 pub trait EffectsSurviveRestart:
-    StorageAtomicity + SerializedChainState + CorrectValidator
+    StorageAtomicity + SequentialChainState + CorrectValidator
 {
 }
 
@@ -302,7 +302,7 @@ pub trait EffectsSurviveRestart:
 /// `linera_rpc` routes each to the shard owning the target chain, so the request comes from
 /// another worker of the same validator, which built it in `build_network_actions` from its own
 /// persisted outbox for a block it had processed ([`EffectsSurviveRestart`], sender half). No
-/// other validator's word enters, and by [`SerializedChainState`] no other process writes this
+/// other validator's word enters, and by [`SequentialChainState`] no other process writes this
 /// chain's inboxes. `select_message_bundles` additionally drops bundles whose epoch has been
 /// revoked, unless they were already anticipated. ∎
 ///
@@ -311,7 +311,7 @@ pub trait EffectsSurviveRestart:
 /// own provenance.
 ///
 /// [`MessageBundle`]: linera_chain::data_types::MessageBundle
-pub trait InboxHoldsOnlySentBundles: CorrectValidator + SerializedChainState {}
+pub trait InboxHoldsOnlySentBundles: CorrectValidator + SequentialChainState {}
 
 /// **Lemma (A bundle is consumed at most once).** No two blocks of a chain consume the same
 /// [`MessageBundle`] from the same origin, even though delivery is at-least-once.

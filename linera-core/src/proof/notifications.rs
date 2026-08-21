@@ -129,7 +129,8 @@ pub trait NoProofDependsOnNotifications: NotificationsAreBestEffort {}
 ///
 /// Serving them is the ordinary node surface: `download_certificate`, `download_certificates` and
 /// `download_certificates_by_heights`. A node that receives one of these notifications can fetch
-/// the certificate, verify it against the committee, and push it onward — `send_confirmed_certificate`
+/// the certificate, verify it against the committee for its epoch, and push it onward —
+/// `send_confirmed_certificate`
 /// is exactly that path. ∎
 ///
 /// This is the precise sense in which a notification is worth acting on despite carrying no
