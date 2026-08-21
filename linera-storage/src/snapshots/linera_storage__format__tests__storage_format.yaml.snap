@@ -11,8 +11,10 @@ partitions:
       Flat:
         entries:
           - key:
-              Literal:
-                - 4
+              Fixed:
+                variant: NetworkDescription
+                bytes:
+                  - 4
             value:
               Bcs:
                 type_name: NetworkDescription
@@ -35,14 +37,18 @@ partitions:
       Flat:
         entries:
           - key:
-              Literal:
-                - 2
+              Fixed:
+                variant: LiteCertificate
+                bytes:
+                  - 2
             value:
               Bcs:
                 type_name: LiteCertificate
           - key:
-              Literal:
-                - 3
+              Fixed:
+                variant: Block
+                bytes:
+                  - 3
             value:
               Bcs:
                 type_name: ConfirmedBlock
@@ -53,14 +59,18 @@ partitions:
       Flat:
         entries:
           - key:
-              Literal:
-                - 0
+              Fixed:
+                variant: Blob
+                bytes:
+                  - 0
             value:
               Opaque:
                 description: the contents of the blob
           - key:
-              Literal:
-                - 1
+              Fixed:
+                variant: BlobState
+                bytes:
+                  - 1
             value:
               Bcs:
                 type_name: BlobState

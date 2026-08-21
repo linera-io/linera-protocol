@@ -19,15 +19,18 @@
 
 use serde::Serialize;
 
-use crate::db_storage::{
-    BLOB_KEY, BLOB_STATE_KEY, BLOCK_KEY, LITE_CERTIFICATE_KEY, NETWORK_DESCRIPTION_KEY,
-};
+use crate::db_storage::EntryKey;
 
 /// How the bytes of a key are produced.
 #[derive(Debug, Serialize)]
 pub enum KeyFormat {
-    /// A fixed byte string.
-    Literal(Vec<u8>),
+    /// A fixed entry, named by its [`EntryKey`](crate::EntryKey) variant.
+    Fixed {
+        /// The name of the variant.
+        variant: String,
+        /// Its stored bytes.
+        bytes: Vec<u8>,
+    },
     /// The BCS encoding of a value of the named type.
     Bcs {
         /// The name of the encoded type.
@@ -98,6 +101,16 @@ pub struct StorageFormat {
     pub partitions: Vec<Partition>,
 }
 
+/// Describes a fixed entry key by asking it for its own bytes.
+fn fixed(key: EntryKey) -> KeyFormat {
+    KeyFormat::Fixed {
+        // The derived `Debug` of a fieldless variant is its name, so there is no second
+        // name-to-variant mapping to keep in step.
+        variant: format!("{key:?}"),
+        bytes: key.as_bytes().to_vec(),
+    }
+}
+
 impl StorageFormat {
     /// Describes the layout this build of `linera-storage` reads and writes.
     pub fn current() -> Self {
@@ -110,7 +123,7 @@ impl StorageFormat {
                     payload: None,
                     body: PartitionBody::Flat {
                         entries: vec![FlatEntry {
-                            key: KeyFormat::Literal(NETWORK_DESCRIPTION_KEY.to_vec()),
+                            key: fixed(EntryKey::NetworkDescription),
                             value: ValueFormat::Bcs {
                                 type_name: "NetworkDescription",
                             },
@@ -140,13 +153,13 @@ impl StorageFormat {
                     body: PartitionBody::Flat {
                         entries: vec![
                             FlatEntry {
-                                key: KeyFormat::Literal(LITE_CERTIFICATE_KEY.to_vec()),
+                                key: fixed(EntryKey::LiteCertificate),
                                 value: ValueFormat::Bcs {
                                     type_name: "LiteCertificate",
                                 },
                             },
                             FlatEntry {
-                                key: KeyFormat::Literal(BLOCK_KEY.to_vec()),
+                                key: fixed(EntryKey::Block),
                                 value: ValueFormat::Bcs {
                                     type_name: "ConfirmedBlock",
                                 },
@@ -161,13 +174,13 @@ impl StorageFormat {
                     body: PartitionBody::Flat {
                         entries: vec![
                             FlatEntry {
-                                key: KeyFormat::Literal(BLOB_KEY.to_vec()),
+                                key: fixed(EntryKey::Blob),
                                 value: ValueFormat::Opaque {
                                     description: "the contents of the blob",
                                 },
                             },
                             FlatEntry {
-                                key: KeyFormat::Literal(BLOB_STATE_KEY.to_vec()),
+                                key: fixed(EntryKey::BlobState),
                                 value: ValueFormat::Bcs {
                                     type_name: "BlobState",
                                 },
@@ -268,6 +281,19 @@ mod tests {
                 partition.variant,
                 "declared tag for {} does not match its encoding",
                 partition.name
+            );
+        }
+    }
+
+    /// The spelled-out bytes must be the BCS encoding, or reads and the description disagree
+    /// with what a decoder would compute.
+    #[test]
+    fn entry_keys_match_bcs() {
+        for key in EntryKey::ALL {
+            assert_eq!(
+                key.as_bytes(),
+                bcs::to_bytes(key).unwrap(),
+                "{key:?} does not encode to its stated bytes"
             );
         }
     }
