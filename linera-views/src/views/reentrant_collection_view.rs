@@ -288,16 +288,54 @@ impl<C: Context, W> ReentrantByteCollectionView<C, W> {
 }
 
 impl<W: View> ReentrantByteCollectionView<W::Context, W> {
+    /// The context of the subview stored at `short_key`.
+    fn subview_context(context: &W::Context, short_key: &[u8]) -> W::Context {
+        let key = context
+            .base_key()
+            .base_tag_index(KeyTag::Subview as u8, short_key);
+        context.clone_with_base_key(key)
+    }
+
+    /// The keys deciding whether the entry at `short_key` exists and, if it does, loading its
+    /// subview: the index marker followed by the subview's initialization keys.
+    fn entry_keys(
+        context: &W::Context,
+        subview_context: &W::Context,
+        short_key: &[u8],
+    ) -> Result<Vec<Vec<u8>>, ViewError> {
+        let mut keys = Vec::with_capacity(1 + W::NUM_INIT_KEYS);
+        keys.push(
+            context
+                .base_key()
+                .base_tag_index(KeyTag::Index as u8, short_key),
+        );
+        keys.extend(W::pre_load(subview_context)?);
+        Ok(keys)
+    }
+
+    /// Builds the subview out of the values read for `entry_keys`, or `None` when the index
+    /// marker is absent. The marker is stored with an empty value, so its presence and not
+    /// its content is what decides.
+    fn post_load_entry(
+        subview_context: W::Context,
+        values: &[Option<Vec<u8>>],
+    ) -> Result<Option<W>, ViewError> {
+        let Some((marker, init_values)) = values.split_first() else {
+            return Ok(None);
+        };
+        if marker.is_none() {
+            return Ok(None);
+        }
+        Ok(Some(W::post_load(subview_context, init_values)?))
+    }
+
     /// Reads the view and if missing returns the default view
     async fn wrapped_view(
         context: &W::Context,
         delete_storage_first: bool,
         short_key: &[u8],
     ) -> Result<Arc<RwLock<W>>, ViewError> {
-        let key = context
-            .base_key()
-            .base_tag_index(KeyTag::Subview as u8, short_key);
-        let context = context.clone_with_base_key(key);
+        let context = Self::subview_context(context, short_key);
         // Obtain a view and set its pending state to the default (e.g. empty) state
         let view = if delete_storage_first {
             W::new(context)?
@@ -341,16 +379,12 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         } else if self.delete_storage_first {
             None
         } else {
-            let key_index = self
-                .context
-                .base_key()
-                .base_tag_index(KeyTag::Index as u8, short_key);
-            if self.context.store().contains_key(&key_index).await? {
-                let view = Self::wrapped_view(&self.context, false, short_key).await?;
-                Some(view)
-            } else {
-                None
-            }
+            // The index marker and the subview's initialization keys are read together, so
+            // that loading an entry costs a single round trip whether or not it exists.
+            let subview_context = Self::subview_context(&self.context, short_key);
+            let keys = Self::entry_keys(&self.context, &subview_context, short_key)?;
+            let values = self.context.store().read_multi_values_bytes(&keys).await?;
+            Self::post_load_entry(subview_context, &values)?.map(|view| Arc::new(RwLock::new(view)))
         })
     }
 
@@ -660,8 +694,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         short_keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<ReadGuardedView<W>>>, ViewError> {
         let mut results = vec![None; short_keys.len()];
-        let mut keys_to_check = Vec::new();
-        let mut keys_to_check_metadata = Vec::new();
+        let mut entries_to_load = Vec::new();
 
         for (position, short_key) in short_keys.into_iter().enumerate() {
             if let Some(update) = self.updates.get(&short_key) {
@@ -669,46 +702,33 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                     results[position] = Some((short_key, view.clone()));
                 }
             } else if !self.delete_storage_first {
-                let key_index = self
-                    .context
-                    .base_key()
-                    .base_tag_index(KeyTag::Index as u8, &short_key);
-                keys_to_check.push(key_index);
-                keys_to_check_metadata.push((position, short_key));
+                entries_to_load.push((position, short_key));
             }
         }
 
-        let found_keys = self.context.store().contains_keys(&keys_to_check).await?;
-        let entries_to_load = keys_to_check_metadata
-            .into_iter()
-            .zip(found_keys)
-            .filter_map(|(metadata, found)| found.then_some(metadata))
-            .map(|(position, short_key)| {
-                let subview_key = self
-                    .context
-                    .base_key()
-                    .base_tag_index(KeyTag::Subview as u8, &short_key);
-                let subview_context = self.context.clone_with_base_key(subview_key);
-                (position, short_key.to_owned(), subview_context)
-            })
-            .collect::<Vec<_>>();
         if !entries_to_load.is_empty() {
-            let mut keys_to_load = Vec::with_capacity(entries_to_load.len() * W::NUM_INIT_KEYS);
-            for (_, _, context) in &entries_to_load {
-                keys_to_load.extend(W::pre_load(context)?);
+            // The index markers and the subviews' initialization keys are read together, so
+            // that loading entries costs a single round trip whether or not they exist.
+            let entry_len = 1 + W::NUM_INIT_KEYS;
+            let mut keys = Vec::with_capacity(entries_to_load.len() * entry_len);
+            let mut subview_contexts = Vec::with_capacity(entries_to_load.len());
+            for (_, short_key) in &entries_to_load {
+                let subview_context = Self::subview_context(&self.context, short_key);
+                keys.extend(Self::entry_keys(
+                    &self.context,
+                    &subview_context,
+                    short_key,
+                )?);
+                subview_contexts.push(subview_context);
             }
-            let values = self
-                .context
-                .store()
-                .read_multi_values_bytes(&keys_to_load)
-                .await?;
-            for (loaded_values, (position, short_key, context)) in values
-                .chunks_exact_or_repeat(W::NUM_INIT_KEYS)
-                .zip(entries_to_load)
+            let values = self.context.store().read_multi_values_bytes(&keys).await?;
+            for ((position, short_key), (entry_values, subview_context)) in entries_to_load
+                .into_iter()
+                .zip(values.chunks_exact(entry_len).zip(subview_contexts))
             {
-                let view = W::post_load(context, loaded_values)?;
-                let wrapped_view = Arc::new(RwLock::new(view));
-                results[position] = Some((short_key, wrapped_view));
+                if let Some(view) = Self::post_load_entry(subview_context, entry_values)? {
+                    results[position] = Some((short_key, Arc::new(RwLock::new(view))));
+                }
             }
         }
 
