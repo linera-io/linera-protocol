@@ -15,7 +15,7 @@
 //!
 //! [`CertificateCarriesCorrectVote`]: crate::data_types::proof::quorum::CertificateCarriesCorrectVote
 
-use crate::manager::proof::model::{CorrectValidator, SerializedChainState};
+use crate::manager::proof::model::{CorrectValidator, SequentialChainState};
 
 /// **Lemma (Vote construction sites).** A correct validator signs a block-related vote only in
 /// [`ChainManager::create_vote`] and [`ChainManager::create_final_vote`], and a timeout vote only
@@ -90,7 +90,7 @@ pub trait VoteConstructionSites: CorrectValidator {}
 ///   `chain.manager.check_validated_block(&certificate)`. A `Skip` outcome returns early; an
 ///   `Err` propagates via `?`. Only `Ok(Accept)` falls through.
 ///
-/// By [`SerializedChainState`] no other transition on this instance interleaves, so the state
+/// By [`SequentialChainState`] no other transition on this instance interleaves, so the state
 /// the guard inspected is the state `create_vote` / `create_final_vote` then mutates. ∎
 ///
 /// **Where this is fragile.** The guards are at the call sites, not inside the signing methods:
@@ -106,7 +106,7 @@ pub trait VoteConstructionSites: CorrectValidator {}
 /// [`ChainManager::update_signed_proposal`]: crate::manager::ChainManager::update_signed_proposal
 /// [`ChainManager::current_round`]: method@crate::manager::ChainManager::current_round
 /// [`Outcome::Accept`]: crate::manager::Outcome::Accept
-pub trait ProposalGate: SerializedChainState {}
+pub trait ProposalGate: SequentialChainState {}
 
 /// **Lemma (Validation rounds strictly increase).** If a correct validator's
 /// [`validated_vote`] holds a vote in round `s`, it casts no further validation vote in any

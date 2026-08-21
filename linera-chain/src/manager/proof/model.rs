@@ -201,7 +201,7 @@ pub trait UnforgeableSignatures {}
 /// [`ChainManagerInfo`]: crate::manager::ChainManagerInfo
 pub trait DurablePersistence {}
 
-/// **Assumption (Serialized instance state).** The transitions of one consensus instance are
+/// **Assumption (Sequential instance state).** The transitions of one consensus instance are
 /// mutually exclusive and each runs to completion: no two of them interleave their reads and
 /// writes of the same [`ChainManager`](crate::manager::ChainManager).
 ///
@@ -246,7 +246,7 @@ pub trait DurablePersistence {}
 /// [`UnlockingJustification`]: crate::manager::proof::safety::UnlockingJustification
 /// [`ChainManager::check_proposed_block`]: crate::manager::ChainManager::check_proposed_block
 /// [`ChainManager::create_vote`]: crate::manager::ChainManager::create_vote
-pub trait SerializedChainState {}
+pub trait SequentialChainState {}
 
 /// **Assumption (Atomic persistence).** A single `WritableKeyValueStore::write_batch` — one batch
 /// against one root key — is applied atomically, within whatever key-count and size limits the
@@ -268,7 +268,7 @@ pub trait SerializedChainState {}
 /// `write_batch`. A crash part-way therefore leaves a resumable journal rather than a torn
 /// state. That slow path requires exclusive access to the keys under the chain's root — it fails
 /// with `JournalingError::JournalRequiresExclusiveAccess` otherwise — which is exactly what
-/// [`SerializedChainState`] supplies.
+/// [`SequentialChainState`] supplies.
 ///
 /// **Two things are called `write_batch`, and only one is atomic.** The store-level one above is.
 /// `DbStorage::write_batch` is not: it takes a `MultiPartitionBatch` keyed by root key, opens a
