@@ -5388,7 +5388,7 @@ where
         let before = reached;
         reached = Some(
             sender_task
-                .send_missing_blocks(chain_id, target, reached, MAX_CATCH_UP_BLOCKS)
+                .send_missing_blocks(chain_id, target, reached, MAX_CATCH_UP_BLOCKS, None)
                 .await?,
         );
         rounds += 1;
@@ -5544,7 +5544,7 @@ where
 
     // Re-offer an old block, exactly as a re-execution would.
     let reached = sender_task
-        .send_block(&certificate, &[], Some(tip), 100)
+        .send_block(&certificate, &[], Some(tip), 100, None)
         .await?;
     assert_eq!(
         reached, tip,
@@ -5655,12 +5655,90 @@ where
     // Ask with no cursor at all — the state a failed send leaves behind. One bounded round must
     // come back with what the validator actually holds, so the queue can act on the truth.
     let reached = sender_task
-        .send_missing_blocks(chain_id, tip, None, 2)
+        .send_missing_blocks(chain_id, tip, None, 2, None)
         .await?;
     assert_eq!(
         reached,
         BlockHeight(2),
         "a bounded round must report the validator's own height afterwards",
+    );
+    Ok(())
+}
+
+/// A catch-up window that cannot reach the chain's checkpoint pushes the checkpoint itself, so
+/// the destination installs the state instead of crawling towards it.
+///
+/// Without this the window is not merely slow, it can stall outright: `send_missing_blocks` skips
+/// heights whose certificates are not in storage, and a checkpointed chain is exactly where those
+/// are liable to be gone. A window sitting entirely below the checkpoint then sends nothing, the
+/// reported height never moves, and the pair retries the same empty window forever.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_send_missing_blocks_pushes_a_checkpoint_past_the_window<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use crate::remote_node::RemoteNode;
+
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let chain = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let target = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = chain.chain_id();
+
+    // Validator 3 misses the whole chain, so it stays at height 0 with the checkpoint above it.
+    builder.set_fault_type([3], FaultType::Offline);
+    chain
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    chain
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    let checkpoint_cert = chain.checkpoint().await.unwrap().unwrap();
+    assert_eq!(checkpoint_cert.block().header.height, BlockHeight::from(2));
+    for _ in 0..2 {
+        chain
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(target.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+    let tip = chain.chain_info().await?.next_block_height;
+    assert_eq!(tip, BlockHeight(5));
+    builder.set_fault_type([3], FaultType::Honest);
+    assert_eq!(builder.next_block_height(3, chain_id).await, BlockHeight(0));
+
+    let storage = builder.validator_storage(0);
+    let node = builder.node(3);
+    let mut sender_task = crate::chain_worker::export::BlockSender {
+        remote_node: RemoteNode {
+            public_key: node.name(),
+            node,
+        },
+        storage,
+        certificate_upload_batch_size: 100,
+    };
+
+    // A window of 2 from height 0 stops at height 2 — the checkpoint — and would need another
+    // round to cross it. Pushing the checkpoint first lets the same single round finish the
+    // chain, so reaching the tip is what distinguishes the two behaviours.
+    //
+    // The height is passed in, as the queue passes it: it is announced by the chain's own
+    // worker, because export loading the chain itself would race the worker's `ChainStateView`.
+    let checkpoint_height = checkpoint_cert.block().header.height;
+    let reached = sender_task
+        .send_missing_blocks(chain_id, tip, None, 2, Some(checkpoint_height))
+        .await?;
+    assert_eq!(
+        reached, tip,
+        "the checkpoint push must carry the destination past a window it could not reach",
     );
     Ok(())
 }

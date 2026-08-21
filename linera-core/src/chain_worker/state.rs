@@ -1447,6 +1447,7 @@ where
             blobs,
             epoch,
             (**self.chain.exported_heights.get()).clone(),
+            *self.chain.latest_checkpoint_height.get(),
         );
 
         // Fold in what the queue has recorded so far — which never includes the block we just
