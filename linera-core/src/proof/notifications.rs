@@ -3,11 +3,16 @@
 
 //! What a notification tells a client, and what it does not.
 //!
-//! A [`Notification`] is a hint that shortens the wait between a change and a client noticing it.
-//! From a correct validator it is sound — what it reports really happened — and from any validator
-//! it is best effort, since it may never arrive and carries nothing that could be checked if it
-//! did. The results here fix each half, and together they are the reason for the third: nothing in
-//! this specification may depend on a notification.
+//! A [`Notification`] tells a client that a chain has changed. From a correct validator it is sound
+//! — what it reports really happened — and from any validator it is best effort, since it may never
+//! arrive and carries nothing that could be checked if it did.
+//!
+//! That combination would be alarming if clients merely used notifications to go faster. They do
+//! not: a `ChainListener` acts on them, processing inboxes and following new chains, so an
+//! application's own liveness can rest on one arriving. What makes best-effort delivery tolerable
+//! is not that nobody depends on it, but that the dependence is *self-repairing* — handlers bring a
+//! chain up to date rather than applying the change they were told about, so any later notification
+//! does the work of every lost one. The exception is the last.
 //!
 //! [`Notification`]: crate::worker::Notification
 
@@ -78,34 +83,67 @@ pub trait NotificationImpliesPersistedChange: CorrectValidator + StorageAtomicit
 /// * *The process crashed in between.* [`NotificationImpliesPersistedChange`] orders the save
 ///   before the dispatch, which leaves exactly this window: saved, not yet notified, gone.
 ///
-/// Delivery is therefore neither retried nor acknowledged, and no notification is durable.
+/// Delivery is therefore neither retried nor acknowledged, and no notification is durable. What
+/// bounds the damage is [`LostNotificationsCoalesce`], not any property of delivery itself.
 pub trait NotificationsAreBestEffort {}
 
-/// **Invariant (No proof depends on a notification arriving).** No statement in this specification
-/// has the delivery of a [`Notification`] among its premises.
+/// **Lemma (A lost notification is repaired by the next one).** If a client misses a notification
+/// for a chain but receives any later one for that same chain, it ends in the state it would have
+/// reached had none been lost. Only a loss with no successor has lasting effect.
 ///
-/// *Proof.* By inspection of the whole specification: no statement names a notification in its
-/// dependencies, and the progress argument reaches its conclusions without one. What drives a
-/// chain forward is [`ActiveCorrectDriver`] — a client that polls and retries — together with the
-/// `linera_core::updater` loops, which learn what a validator is missing from the *error it
-/// returns*, never from a notification. [`MissingDependenciesAreRecoverable`] is that argument, and
-/// nothing in it consults a notification. ∎
+/// *Proof.* No handler applies the change it was told about; each brings the chain up to date.
+/// In `linera_client::chain_listener`, `Reason::NewIncomingBundle` and `Reason::NewEvents` both
+/// reduce to `maybe_notify_inbox_processing`, which pokes a per-chain [`Notify`]; the waiting loop
+/// then runs `ChainClient::process_inbox_without_prepare`, which drains *everything* pending rather
+/// than the one bundle named. `Reason::NewBlock` calls `update_wallet` for the chain and re-derives
+/// its event subscriptions. `Reason::NewRound` calls `update_validators`.
 ///
-/// This is what makes both ways a notification can fail harmless. A lost one costs latency, never
-/// correctness and never progress. A *fabricated* one — which a faulty validator can send freely,
-/// notifications being unauthenticated — costs at most a wasted query, since the client acts on
-/// what it then reads and not on what it was told. It also fixes their role: notifications are an
-/// optimization over polling, and a client that ignores them entirely is slower but no less
-/// correct.
+/// Each handler is therefore idempotent and its effect depends only on the chain's current state,
+/// not on which notification triggered it. Running it once after `k` notifications achieves what
+/// running it `k` times would. Two mechanisms make the coalescing safe rather than lossy:
+/// `Notify::notify_one` stores a permit when no task is waiting, so a notification arriving *during*
+/// processing is not dropped but starts another pass; and the pass itself reads the inbox, so work
+/// that arrived while it ran is picked up regardless. ∎
 ///
-/// **Re-established, not preserved.** Like any exhaustive-search argument this one holds only for
-/// the statements that exist. A future statement that assumed a client learns of a change promptly
-/// would break it, and would have to introduce a delivery assumption to say so.
+/// **The last notification is the one that matters.** `ChainListener::next_action` selects over the
+/// notification streams, the cancellation token and its command channel — and nothing else. There
+/// is no timer and no periodic poll. So if the final notification for a chain is lost, no later one
+/// repairs it and the listener waits indefinitely, with pending bundles unprocessed and subscribed
+/// events unread. The window this lemma closes is bounded by the *next* notification; when there is
+/// no next one, it does not close.
 ///
-/// [`Notification`]: crate::worker::Notification
+/// This is a real exposure for applications rather than a theoretical one, and it is the reason
+/// [`NotificationsAreBestEffort`] must not be read as "notifications do not matter". They do; what
+/// is true is narrower — losing one in the middle of a stream is free.
+///
+/// [`Notify`]: https://docs.rs/tokio/latest/tokio/sync/struct.Notify.html
+pub trait LostNotificationsCoalesce: NotificationsAreBestEffort {}
+
+/// **Lemma (Chain progress does not depend on notifications).** A chain's block height grows without
+/// bound under the liveness assumptions whether or not any notification is delivered.
+///
+/// This is the boundary worth drawing, because it is *not* true of everything a client does. What
+/// is independent of notifications is the protocol: a validator never waits for one — it has none to
+/// wait for, since notifications travel only outward to clients — and the progress argument reaches
+/// its conclusions from [`ActiveCorrectDriver`], a client that polls and retries, together with the
+/// `linera_core::updater` loops, which learn what a validator is missing from the *error it returns*
+/// rather than from any notification ([`MissingDependenciesAreRecoverable`]).
+///
+/// *Proof.* By inspection of the closure of `UnboundedProgress`: no statement in it names a
+/// notification, and none of the transitions it depends on reads one. `Notifier::notify_chain` has
+/// no caller inside the consensus path; its only effect is to write to client subscriptions. ∎
+///
+/// **What does depend on them is application liveness.** A `ChainListener` processes an inbox
+/// because it was told to, so a chain whose owner is a `ChainListener` advances only when
+/// notifications arrive — the client is the driver [`ActiveCorrectDriver`] assumes, and
+/// notifications are what wakes it. So the split is: consensus cannot be stalled by losing
+/// notifications, an application can. [`LostNotificationsCoalesce`] bounds that to the case where no
+/// further notification arrives.
+///
 /// [`ActiveCorrectDriver`]: super::assumptions::ActiveCorrectDriver
 /// [`MissingDependenciesAreRecoverable`]: super::availability::MissingDependenciesAreRecoverable
-pub trait NoProofDependsOnNotifications: NotificationsAreBestEffort {}
+/// [`UnboundedProgress`]: super::liveness::UnboundedProgress
+pub trait ChainProgressIsIndependentOfNotifications: LostNotificationsCoalesce {}
 
 /// **Lemma (A notification is backed by a certificate the validator can serve — except for a new
 /// round).** For every notification a correct validator emits other than `Reason::NewRound`, that
