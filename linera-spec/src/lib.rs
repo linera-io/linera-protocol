@@ -55,6 +55,7 @@
 //! | Safety proof | [`linera_chain::manager::proof::safety`] |
 //! | Accountability | [`linera_chain::justification::proof`] |
 //! | Leaders, timeouts and round advancement | [`linera_chain::manager::proof::timeouts`] |
+//! | Committees and epochs | [`linera_chain::proof::epochs`] |
 //! | Progress lemmas | [`linera_core::proof::progress`] |
 //! | Liveness proof | [`linera_core::proof::liveness`] |
 //! | Availability, crash recovery and catch-up | [`linera_core::proof::availability`] |
@@ -93,7 +94,13 @@
 //! | **Invariant** | yes | holds in every reachable state, proved by induction over transitions |
 //! | **Lemma** | yes | a proved statement |
 //! | **Theorem** | yes | one of the results the specification exists to establish |
+//! | **Goal** | no | a property the protocol is meant to have and does not yet |
 //! | **Remark** / **Caveat** | no | an observation or a limitation, asserting nothing new |
+//!
+//! **Assumption** and **Goal** are opposites worth keeping apart: an assumption is discharged
+//! outside the code, by a deployment; a goal is undischarged inside it, by work not yet done. So
+//! that a proof can never rest on something known to be false, the dependency edge runs one way —
+//! a goal may name proved statements as supertraits, and nothing may name a goal.
 //!
 //! None of them is *relational*: nothing is labelled by what it follows from. These pages are
 //! reached from anywhere by link, so there is no preceding result for a label to refer back to —
