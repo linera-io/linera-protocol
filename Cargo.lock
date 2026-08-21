@@ -5921,6 +5921,7 @@ dependencies = [
  "clap",
  "futures",
  "hex",
+ "insta",
  "itertools 0.14.0",
  "linera-base",
  "linera-cache",

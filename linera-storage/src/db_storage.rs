@@ -270,19 +270,19 @@ pub mod metrics {
 }
 
 /// The key used for blobs. The Blob ID itself is contained in the root key.
-const BLOB_KEY: &[u8] = &[0];
+pub(crate) const BLOB_KEY: &[u8] = &[0];
 
 /// The key used for blob states. The Blob ID itself is contained in the root key.
-const BLOB_STATE_KEY: &[u8] = &[1];
+pub(crate) const BLOB_STATE_KEY: &[u8] = &[1];
 
 /// The key used for lite certificates. The cryptohash itself is contained in the root key.
-const LITE_CERTIFICATE_KEY: &[u8] = &[2];
+pub(crate) const LITE_CERTIFICATE_KEY: &[u8] = &[2];
 
 /// The key used for confirmed blocks. The cryptohash itself is contained in the root key.
-const BLOCK_KEY: &[u8] = &[3];
+pub(crate) const BLOCK_KEY: &[u8] = &[3];
 
 /// The key used for the network description.
-const NETWORK_DESCRIPTION_KEY: &[u8] = &[4];
+pub(crate) const NETWORK_DESCRIPTION_KEY: &[u8] = &[4];
 
 fn get_block_keys() -> Vec<Vec<u8>> {
     vec![LITE_CERTIFICATE_KEY.to_vec(), BLOCK_KEY.to_vec()]

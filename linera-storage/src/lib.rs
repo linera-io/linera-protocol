@@ -6,6 +6,8 @@
 #![deny(missing_docs)]
 
 mod db_storage;
+/// A machine-readable description of the storage layout.
+pub mod format;
 
 use std::sync::Arc as StdArc;
 
