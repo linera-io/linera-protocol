@@ -49,6 +49,12 @@ pub enum StorageServiceStoreError {
     #[error(transparent)]
     GrpcError(#[from] Box<Status>),
 
+    /// A `write_batch` RPC failed. Unlike [`StorageServiceStoreError::GrpcError`], which also
+    /// covers reads, the server may or may not have applied the batch, so the in-memory view
+    /// must be reloaded from storage.
+    #[error("storage service write-batch error: {0}")]
+    WriteBatchError(Box<Status>),
+
     /// The key size must be at most 1 MB
     #[error("The key size must be at most 1 MB")]
     KeyTooLong,
@@ -74,6 +80,10 @@ impl From<Status> for StorageServiceStoreError {
 
 impl KeyValueStoreError for StorageServiceStoreError {
     const BACKEND: &'static str = "service";
+
+    fn must_reload_view(&self) -> bool {
+        matches!(self, Self::WriteBatchError(_))
+    }
 }
 
 /// Returns the storage service endpoint used for testing, read from the environment.
