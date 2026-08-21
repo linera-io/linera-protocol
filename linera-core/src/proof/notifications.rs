@@ -4,8 +4,8 @@
 //! What a notification tells a client, and what it does not.
 //!
 //! A [`Notification`] tells a client that a chain has changed. From a correct validator it is sound
-//! — what it reports really happened — and from any validator it is best effort, since it may never
-//! arrive and carries nothing that could be checked if it did.
+//! — what it reports really happened — but from any validator it may simply never arrive, and it
+//! carries nothing that could be checked if it did.
 //!
 //! The channel is **lossy by model**, not merely unreliable in practice, so nothing here may assume
 //! a notification arrives. That would be alarming if clients used notifications merely to go
@@ -104,7 +104,7 @@ pub trait NotificationImpliesPersistedChange: CorrectValidator + StorageAtomicit
 /// What bounds the damage from a genuine loss is [`LostNotificationsCoalesce`].
 ///
 /// [`Notification`]: crate::worker::Notification
-pub trait NotificationsAreBestEffort {}
+pub trait NotificationChannelIsLossy {}
 
 /// **Lemma (A lost notification is repaired by the next one).** If a client misses a notification
 /// for a chain but receives any later one for that same chain, it ends in the state it would have
@@ -132,11 +132,11 @@ pub trait NotificationsAreBestEffort {}
 /// no next one, it does not close.
 ///
 /// This is a real exposure for applications rather than a theoretical one, and it is the reason
-/// [`NotificationsAreBestEffort`] must not be read as "notifications do not matter". They do; what
+/// [`NotificationChannelIsLossy`] must not be read as "notifications do not matter". They do; what
 /// is true is narrower — losing one in the middle of a stream is free.
 ///
 /// [`Notify`]: https://docs.rs/tokio/latest/tokio/sync/struct.Notify.html
-pub trait LostNotificationsCoalesce: NotificationsAreBestEffort {}
+pub trait LostNotificationsCoalesce: NotificationChannelIsLossy {}
 
 /// **Lemma (A notification is backed by a certificate the validator can serve — except for a new
 /// round).** For every notification a correct validator emits other than `Reason::NewRound`, that
