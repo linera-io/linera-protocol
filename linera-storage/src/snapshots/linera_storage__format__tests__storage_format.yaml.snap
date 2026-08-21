@@ -1,0 +1,112 @@
+---
+source: linera-storage/src/format.rs
+expression: "StorageFormat::current()"
+---
+root_key_type: RootKey
+partitions:
+  - name: NetworkDescription
+    variant: 0
+    payload: ~
+    body:
+      Flat:
+        entries:
+          - key:
+              Fixed:
+                variant: NetworkDescription
+                bytes:
+                  - 4
+            value:
+              Bcs:
+                type_name: NetworkDescription
+  - name: BlockExporterState
+    variant: 1
+    payload: u32
+    body:
+      RootView:
+        type_name: BlockExporterStateView
+  - name: ChainState
+    variant: 2
+    payload: ChainId
+    body:
+      RootView:
+        type_name: ChainStateView
+  - name: BlockHash
+    variant: 3
+    payload: CryptoHash
+    body:
+      Flat:
+        entries:
+          - key:
+              Fixed:
+                variant: LiteCertificate
+                bytes:
+                  - 2
+            value:
+              Bcs:
+                type_name: LiteCertificate
+          - key:
+              Fixed:
+                variant: Block
+                bytes:
+                  - 3
+            value:
+              Bcs:
+                type_name: ConfirmedBlock
+  - name: BlobId
+    variant: 4
+    payload: BlobId
+    body:
+      Flat:
+        entries:
+          - key:
+              Fixed:
+                variant: Blob
+                bytes:
+                  - 0
+            value:
+              Opaque:
+                description: the contents of the blob
+          - key:
+              Fixed:
+                variant: BlobState
+                bytes:
+                  - 1
+            value:
+              Bcs:
+                type_name: BlobState
+  - name: Event
+    variant: 5
+    payload: ChainId
+    body:
+      Flat:
+        entries:
+          - key:
+              Bcs:
+                type_name: RestrictedEventId
+            value:
+              Opaque:
+                description: the contents of the event
+  - name: BlockByHeight
+    variant: 6
+    payload: ChainId
+    body:
+      Flat:
+        entries:
+          - key:
+              Bcs:
+                type_name: BlockHeight
+            value:
+              Bcs:
+                type_name: CryptoHash
+  - name: EventBlockHeight
+    variant: 7
+    payload: ChainId
+    body:
+      Flat:
+        entries:
+          - key:
+              Bcs:
+                type_name: RestrictedEventId
+            value:
+              Bcs:
+                type_name: BlockHeight

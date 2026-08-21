@@ -6,6 +6,8 @@
 #![deny(missing_docs)]
 
 mod db_storage;
+/// A machine-readable description of the storage layout.
+pub mod format;
 
 use std::sync::Arc as StdArc;
 
@@ -43,7 +45,8 @@ use linera_views::{context::Context, views::RootView, ViewError};
 #[cfg(with_metrics)]
 pub use crate::db_storage::metrics;
 pub use crate::db_storage::{
-    ChainStatesFirstAssignment, DbStorage, RootKey, StorageCacheConfig, StorageCaches, WallClock,
+    ChainStatesFirstAssignment, DbStorage, EntryKey, RootKey, StorageCacheConfig, StorageCaches,
+    WallClock,
 };
 #[cfg(with_testing)]
 pub use crate::db_storage::{TestClock, DEFAULT_STORAGE_CACHE_CONFIG};
