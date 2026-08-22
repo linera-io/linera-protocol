@@ -202,9 +202,10 @@ impl<Env: Environment> LiteChainClient<Env> {
         );
         let certificate =
             ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default());
-        let cached_certificate = self
-            .value_cache
-            .insert(&certificate.hash(), certificate.clone());
+        // Hoisted so the certificate can be moved into the cache: cloning it here deep-copies
+        // the whole confirmed block on every single block.
+        let certificate_hash = certificate.hash();
+        let cached_certificate = self.value_cache.insert(&certificate_hash, certificate);
 
         // Broadcast the certificate so every validator commits the block. Only advance our own
         // state once at least one validator actually accepted it, so we don't get out of sync
@@ -255,7 +256,7 @@ impl<Env: Environment> LiteChainClient<Env> {
         }
         anyhow::ensure!(committed, "no validator accepted the confirmed certificate");
 
-        self.previous_block_hash = Some(certificate.hash());
+        self.previous_block_hash = Some(certificate_hash);
         self.height = self.height.try_add_one()?;
         // Only now that the block committed (so its bundles are being removed from the inboxes)
         // do we adopt the next pending set. On a failed block we keep `self.pending_bundles` as
@@ -288,6 +289,10 @@ impl<Env: Environment> LiteChainClient<Env> {
         let responses = join_all(self.nodes.iter().map(|(public_key, node)| {
             let node = node.clone();
             let mut query = ChainInfoQuery::new(self.chain_id);
+            // Only `manager.requested_confirmed` is read below, but the flag is all-or-
+            // nothing on the wire (`add_values` also attaches the proposed and locking
+            // blocks), so each validator returns roughly two extra block-sized payloads per
+            // block. Narrowing it needs a new query field, not a change here.
             query.request_manager_values = true;
             if process_messages {
                 query = query.with_pending_message_bundles();

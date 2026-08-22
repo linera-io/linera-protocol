@@ -72,6 +72,11 @@ pub enum ClientMode {
     Full,
     /// A storage-free proposer: keeps no chain state and executes nothing, so the generator
     /// stops being part of what is measured. Three round trips per block.
+    ///
+    /// Reads the validator set and quorum weights from the wallet's *genesis* committee, so
+    /// on a network whose committee has since changed it would target stale addresses. Fine
+    /// for a freshly provisioned benchmark network; check before pointing it at a long-lived
+    /// one.
     Lite,
 }
 
