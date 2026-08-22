@@ -685,6 +685,17 @@ Start a single benchmark process, maintaining a given TPS
 * `--delay-between-chains-ms <DELAY_BETWEEN_CHAINS_MS>` — The delay between chains, in milliseconds. For example, if set to 200ms, the first chain will start, then the second will start 200 ms after the first one, the third 200 ms after the second one, and so on. This is used for slowly ramping up the TPS, so we don't pound the validators with the full TPS all at once
 * `--config-path <CONFIG_PATH>` — Path to YAML file containing chain IDs to send transfers to. If not provided, only transfers between chains in the same wallet
 * `--single-destination-per-block` — Transaction distribution mode. If false (default), distributes transactions evenly across chains within each block. If true, sends all transactions in each block to a single chain, rotating through chains for subsequent blocks
+* `--client-mode <CLIENT_MODE>` — Which client to drive the chains with
+
+  Default value: `full`
+
+  Possible values:
+  - `full`:
+    A real `ChainClient`: executes every block locally and keeps chain state, so it measures what a client experiences. Two round trips per block
+  - `lite`:
+    A storage-free proposer: keeps no chain state and executes nothing, so the generator stops being part of what is measured. Three round trips per block
+
+* `--fan-out <FAN_OUT>` — How many distinct destination chains each chain sends to. Unset means every other benchmarked chain, so cross-chain fan-out grows with `--num-chains` and cannot be varied on its own; setting it pins fan-out while everything else is held fixed
 
 
 
@@ -719,6 +730,17 @@ Run multiple benchmark processes in parallel
 * `--delay-between-chains-ms <DELAY_BETWEEN_CHAINS_MS>` — The delay between chains, in milliseconds. For example, if set to 200ms, the first chain will start, then the second will start 200 ms after the first one, the third 200 ms after the second one, and so on. This is used for slowly ramping up the TPS, so we don't pound the validators with the full TPS all at once
 * `--config-path <CONFIG_PATH>` — Path to YAML file containing chain IDs to send transfers to. If not provided, only transfers between chains in the same wallet
 * `--single-destination-per-block` — Transaction distribution mode. If false (default), distributes transactions evenly across chains within each block. If true, sends all transactions in each block to a single chain, rotating through chains for subsequent blocks
+* `--client-mode <CLIENT_MODE>` — Which client to drive the chains with
+
+  Default value: `full`
+
+  Possible values:
+  - `full`:
+    A real `ChainClient`: executes every block locally and keeps chain state, so it measures what a client experiences. Two round trips per block
+  - `lite`:
+    A storage-free proposer: keeps no chain state and executes nothing, so the generator stops being part of what is measured. Three round trips per block
+
+* `--fan-out <FAN_OUT>` — How many distinct destination chains each chain sends to. Unset means every other benchmarked chain, so cross-chain fan-out grows with `--num-chains` and cannot be varied on its own; setting it pins fan-out while everything else is held fixed
 * `--processes <PROCESSES>` — The number of benchmark processes to run in parallel
 
   Default value: `1`

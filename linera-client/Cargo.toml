@@ -51,6 +51,7 @@ clap.workspace = true
 futures.workspace = true
 hdrhistogram = { workspace = true }
 linera-base.workspace = true
+linera-cache.workspace = true
 linera-chain.workspace = true
 linera-core.workspace = true
 linera-execution.workspace = true

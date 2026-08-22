@@ -52,6 +52,7 @@ use linera_client::{
         ChainListener, ChainListenerConfig, ClientContext as _, ClientContextExt as _,
     },
     config::{CommitteeConfig, GenesisConfig},
+    lite_client::{LiteBenchmarkClient, LiteChainClient},
 };
 use linera_core::{
     client::{chain_client, ListeningMode},
@@ -69,8 +70,9 @@ use linera_persistent::{self as persistent, Persist as _};
 use linera_service::{
     cli::{
         command::{
-            BenchmarkCommand, BenchmarkOptions, ChainCommand, ClientCommand, DatabaseToolCommand,
-            NetCommand, ProjectCommand, ResourceControlPolicyOverrides, WalletCommand,
+            BenchmarkCommand, BenchmarkOptions, ChainCommand, ClientCommand, ClientMode,
+            DatabaseToolCommand, NetCommand, ProjectCommand, ResourceControlPolicyOverrides,
+            WalletCommand,
         },
         net_up_utils,
     },
@@ -805,6 +807,8 @@ impl Runnable for Job {
                         options: benchmark_options,
                     } => {
                         let BenchmarkOptions {
+                            client_mode,
+                            fan_out,
                             num_chains,
                             tokens_per_chain,
                             transactions_per_block,
@@ -904,11 +908,17 @@ impl Runnable for Job {
                             .iter()
                             .map(|client| -> anyhow::Result<Box<dyn OperationGenerator>> {
                                 let source = client.chain_id();
-                                let destinations: Vec<ChainId> = all_chain_ids
+                                // Without --fan-out every chain messages every other, so
+                                // cross-chain cost is a side effect of --num-chains rather
+                                // than a variable that can be swept on its own.
+                                let mut destinations: Vec<ChainId> = all_chain_ids
                                     .iter()
                                     .copied()
                                     .filter(|id| *id != source)
                                     .collect();
+                                if let Some(fan_out) = fan_out {
+                                    destinations.truncate(fan_out);
+                                }
                                 if let Some(app_id) = fungible_application_id {
                                     Ok(Box::new(FungibleTransferGenerator::new(
                                         app_id,
@@ -927,11 +937,51 @@ impl Runnable for Job {
                             })
                             .collect::<Result<_, _>>()?;
 
-                        let benchmark_clients: Vec<Arc<dyn BenchmarkClient>> = chain_clients
-                            .iter()
-                            .cloned()
-                            .map(|client| Arc::new(client) as Arc<dyn BenchmarkClient>)
-                            .collect();
+                        // Both modes drive the same chains through the same harness; they
+                        // differ only in what proposes the blocks.
+                        let benchmark_clients: Vec<Arc<dyn BenchmarkClient>> = match client_mode {
+                            ClientMode::Full => chain_clients
+                                .iter()
+                                .cloned()
+                                .map(|client| Arc::new(client) as Arc<dyn BenchmarkClient>)
+                                .collect(),
+                            ClientMode::Lite => {
+                                let ctx = shared_context.lock().await;
+                                let committee = ctx.wallet().genesis_config().committee.clone();
+                                let nodes: Vec<_> = ctx
+                                    .make_node_provider()
+                                    .make_nodes(&committee)
+                                    .context("failed to create validator node clients")?
+                                    .collect();
+                                anyhow::ensure!(
+                                    !nodes.is_empty(),
+                                    "the committee has no validators"
+                                );
+                                // Shared by every chain this process drives; the lite
+                                // client uses it only to sign proposals.
+                                let core_client = ctx.client.clone();
+                                drop(ctx);
+
+                                let mut clients: Vec<Arc<dyn BenchmarkClient>> =
+                                    Vec::with_capacity(chain_clients.len());
+                                for client in &chain_clients {
+                                    let owner = client.identity().await?;
+                                    let lite = LiteChainClient::seed(
+                                        client.chain_id(),
+                                        owner,
+                                        nodes.clone(),
+                                        committee.clone(),
+                                        core_client.clone(),
+                                        false,
+                                    )
+                                    .await?;
+                                    clients.push(Arc::new(LiteBenchmarkClient::new(
+                                        lite, false, None,
+                                    )));
+                                }
+                                clients
+                            }
+                        };
 
                         linera_client::benchmark::Benchmark::run_benchmark(
                             bps,

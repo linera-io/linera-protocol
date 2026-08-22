@@ -380,6 +380,11 @@ impl<Env: Environment> ClientContext<Env> {
         self.client.wallet()
     }
 
+    /// Returns a reference to the signer.
+    pub fn signer(&self) -> &Env::Signer {
+        self.client.signer()
+    }
+
     /// Returns the ID of the admin chain.
     pub fn admin_chain_id(&self) -> ChainId {
         self.client.admin_chain_id()

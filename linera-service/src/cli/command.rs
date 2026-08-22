@@ -62,6 +62,19 @@ impl std::str::FromStr for ValidatorToAdd {
     }
 }
 
+/// Which client the benchmark drives its chains with.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ClientMode {
+    /// A real `ChainClient`: executes every block locally and keeps chain state, so it
+    /// measures what a client experiences. Two round trips per block.
+    #[default]
+    Full,
+    /// A storage-free proposer: keeps no chain state and executes nothing, so the generator
+    /// stops being part of what is measured. Three round trips per block.
+    Lite,
+}
+
 #[derive(Clone, clap::Args, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 /// Options controlling the behavior of the benchmark command.
@@ -134,6 +147,16 @@ pub struct BenchmarkOptions {
     /// to a single chain, rotating through chains for subsequent blocks.
     #[arg(long)]
     pub single_destination_per_block: bool,
+
+    /// Which client to drive the chains with.
+    #[arg(long, value_enum, default_value_t = ClientMode::Full)]
+    pub client_mode: ClientMode,
+
+    /// How many distinct destination chains each chain sends to. Unset means every other
+    /// benchmarked chain, so cross-chain fan-out grows with `--num-chains` and cannot be
+    /// varied on its own; setting it pins fan-out while everything else is held fixed.
+    #[arg(long)]
+    pub fan_out: Option<usize>,
 }
 
 impl Default for BenchmarkOptions {
@@ -152,6 +175,8 @@ impl Default for BenchmarkOptions {
             delay_between_chains_ms: None,
             config_path: None,
             single_destination_per_block: false,
+            client_mode: ClientMode::default(),
+            fan_out: None,
         }
     }
 }

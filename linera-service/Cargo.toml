@@ -233,10 +233,6 @@ path = "src/schema_export.rs"
 name = "linera-benchmark"
 path = "src/benchmark.rs"
 
-[[bin]]
-name = "linera-lite-benchmark"
-path = "src/lite_benchmark.rs"
-
 [[bench]]
 name = "transfers"
 harness = false

@@ -255,6 +255,10 @@ pub enum BenchmarkError {
     JoinError(#[from] task::JoinError),
     #[error("Chain client error: {0}")]
     ChainClient(#[from] chain_client::Error),
+    /// The storage-free client has no `chain_client::Error` to wrap, so its failures arrive
+    /// as a message.
+    #[error("Lite client error: {0}")]
+    LiteClient(String),
     #[error("Current histogram count is less than previous histogram count")]
     HistogramCountMismatch,
     #[error("Expected histogram value, got {0:?}")]
