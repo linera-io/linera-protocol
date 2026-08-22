@@ -245,7 +245,6 @@ impl RunOptions {
             retry_delay: self.retry_delay,
             max_retries: self.max_retries,
             max_backoff: self.max_backoff,
-            simulated_latency: Duration::ZERO,
         };
 
         if let Some(port) = self.metrics_port {

@@ -71,9 +71,6 @@ pub struct GrpcClient {
     retry_delay: Duration,
     max_retries: u32,
     max_backoff: Duration,
-    /// An artificial delay added before every request, simulating extra network latency.
-    /// See `NodeOptions::simulated_latency`.
-    simulated_latency: Duration,
     /// Shared across all `GrpcClient` instances created by the same `GrpcNodeProvider`.
     /// Tracks when each validator address last had a subscription failure, so that
     /// other chains don't independently retry the same dead validator.
@@ -88,7 +85,6 @@ impl GrpcClient {
         retry_delay: Duration,
         max_retries: u32,
         max_backoff: Duration,
-        simulated_latency: Duration,
         subscription_cooldowns: Arc<papaya::HashMap<String, Instant>>,
     ) -> Self {
         let client = ValidatorNodeClient::new(channel)
@@ -100,7 +96,6 @@ impl GrpcClient {
             retry_delay,
             max_retries,
             max_backoff,
-            simulated_latency,
             subscription_cooldowns,
         }
     }
@@ -170,9 +165,6 @@ impl GrpcClient {
             error: "could not convert request to proto".to_string(),
         })?;
         loop {
-            if !self.simulated_latency.is_zero() {
-                linera_base::time::timer::sleep(self.simulated_latency).await;
-            }
             #[allow(unused_mut)]
             let mut request = Request::new(request_inner.clone());
             // Inject OpenTelemetry context (trace context + baggage) into gRPC metadata.

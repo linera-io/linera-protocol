@@ -30,7 +30,6 @@ async fn client() {
         retry_delay,
         max_retries,
         linera_rpc::node_provider::DEFAULT_MAX_BACKOFF,
-        std::time::Duration::ZERO,
         std::sync::Arc::new(papaya::HashMap::new()),
     )
     .get_version_info()

@@ -20,7 +20,6 @@ pub struct GrpcNodeProvider {
     retry_delay: Duration,
     max_retries: u32,
     max_backoff: Duration,
-    simulated_latency: Duration,
     /// Shared across all `GrpcClient` instances. When a subscription to a validator
     /// fails, the failure time is recorded here so that other chains (which share the
     /// same provider) skip retrying the same dead validator.
@@ -34,14 +33,12 @@ impl GrpcNodeProvider {
         let retry_delay = options.retry_delay;
         let max_retries = options.max_retries;
         let max_backoff = options.max_backoff;
-        let simulated_latency = options.simulated_latency;
         let pool = GrpcConnectionPool::new(transport_options);
         Self {
             pool,
             retry_delay,
             max_retries,
             max_backoff,
-            simulated_latency,
             subscription_cooldowns: Arc::new(papaya::HashMap::new()),
         }
     }
@@ -70,7 +67,6 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
             self.retry_delay,
             self.max_retries,
             self.max_backoff,
-            self.simulated_latency,
             self.subscription_cooldowns.clone(),
         ))
     }
