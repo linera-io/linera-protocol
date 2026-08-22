@@ -5181,6 +5181,7 @@ version = "0.16.0"
 dependencies = [
  "amm",
  "anyhow",
+ "async-trait",
  "base64 0.22.1",
  "bcs",
  "cfg_aliases",

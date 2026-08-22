@@ -48,6 +48,45 @@ pub trait OperationGenerator: Send + 'static {
     fn generate_operations(&mut self, owner: AccountOwner, count: usize) -> Vec<Operation>;
 }
 
+/// A client the benchmark can drive, so the same harness runs against either the full
+/// [`ChainClient`] or a storage-free proposer.
+///
+/// The benchmark loop only ever asks a client to commit one block of operations, which is
+/// what makes the two interchangeable: everything else -- rate control, block sizing,
+/// destination selection, reporting -- is the harness's job and is shared.
+#[cfg_attr(not(web), async_trait::async_trait)]
+#[cfg_attr(web, async_trait::async_trait(?Send))]
+pub trait BenchmarkClient: Send + Sync + 'static {
+    /// The chain this client proposes on.
+    fn chain_id(&self) -> ChainId;
+
+    /// The owner the generated operations are attributed to.
+    async fn owner(&self) -> Result<AccountOwner, BenchmarkError>;
+
+    /// Proposes a block carrying `operations` and returns once it is committed.
+    async fn commit_operations(&self, operations: Vec<Operation>) -> Result<(), BenchmarkError>;
+}
+
+#[cfg_attr(not(web), async_trait::async_trait)]
+#[cfg_attr(web, async_trait::async_trait(?Send))]
+impl<Env: Environment> BenchmarkClient for ChainClient<Env> {
+    fn chain_id(&self) -> ChainId {
+        ChainClient::chain_id(self)
+    }
+
+    async fn owner(&self) -> Result<AccountOwner, BenchmarkError> {
+        self.identity().await.map_err(BenchmarkError::ChainClient)
+    }
+
+    async fn commit_operations(&self, operations: Vec<Operation>) -> Result<(), BenchmarkError> {
+        self.execute_operations(operations, vec![])
+            .await
+            .map_err(BenchmarkError::ChainClient)?
+            .expect("should execute block with operations");
+        Ok(())
+    }
+}
+
 /// Generates native fungible token transfer operations between chains.
 pub struct NativeFungibleTransferGenerator {
     source_chain_id: ChainId,
@@ -296,7 +335,7 @@ impl<Env: Environment> Benchmark<Env> {
     #[expect(clippy::too_many_arguments)]
     pub async fn run_benchmark<C: ClientContext<Environment = Env> + 'static>(
         bps: usize,
-        chain_clients: Vec<ChainClient<Env>>,
+        chain_clients: Vec<Arc<dyn BenchmarkClient>>,
         generators: Vec<Box<dyn OperationGenerator>>,
         transactions_per_block: usize,
         health_check_endpoints: Option<String>,
@@ -744,7 +783,7 @@ impl<Env: Environment> Benchmark<Env> {
         chain_idx: usize,
         chain_id: ChainId,
         bps: usize,
-        chain_client: ChainClient<Env>,
+        chain_client: Arc<dyn BenchmarkClient>,
         mut generator: Box<dyn OperationGenerator>,
         transactions_per_block: usize,
         shutdown_notifier: CancellationToken,
@@ -767,10 +806,7 @@ impl<Env: Environment> Benchmark<Env> {
             runtime_control_sender.send(()).await?;
         }
 
-        let owner = chain_client
-            .identity()
-            .await
-            .map_err(BenchmarkError::ChainClient)?;
+        let owner = chain_client.owner().await?;
 
         loop {
             tokio::select! {
@@ -780,13 +816,10 @@ impl<Env: Environment> Benchmark<Env> {
                     info!("Shutdown signal received, stopping benchmark");
                     break;
                 }
-                result = chain_client.execute_operations(
+                result = chain_client.commit_operations(
                     generator.generate_operations(owner, transactions_per_block),
-                    vec![]
                 ) => {
-                    result
-                        .map_err(BenchmarkError::ChainClient)?
-                        .expect("should execute block with operations");
+                    result?;
 
                     let current_bps_count = bps_count.fetch_add(1, Ordering::Relaxed) + 1;
                     if current_bps_count >= bps {

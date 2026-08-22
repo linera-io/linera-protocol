@@ -45,8 +45,8 @@ use linera_base::{
 };
 use linera_client::{
     benchmark::{
-        BenchmarkConfig, FungibleTransferGenerator, NativeFungibleTransferGenerator,
-        OperationGenerator,
+        BenchmarkClient, BenchmarkConfig, FungibleTransferGenerator,
+        NativeFungibleTransferGenerator, OperationGenerator,
     },
     chain_listener::{
         ChainListener, ChainListenerConfig, ClientContext as _, ClientContextExt as _,
@@ -927,9 +927,15 @@ impl Runnable for Job {
                             })
                             .collect::<Result<_, _>>()?;
 
+                        let benchmark_clients: Vec<Arc<dyn BenchmarkClient>> = chain_clients
+                            .iter()
+                            .cloned()
+                            .map(|client| Arc::new(client) as Arc<dyn BenchmarkClient>)
+                            .collect();
+
                         linera_client::benchmark::Benchmark::run_benchmark(
                             bps,
-                            chain_clients.clone(),
+                            benchmark_clients,
                             generators,
                             transactions_per_block,
                             health_check_endpoints.clone(),
