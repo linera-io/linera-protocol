@@ -413,8 +413,8 @@ struct ChainAnnouncement {
     /// The height after the chain's newest announced block.
     tip: BlockHeight,
     /// The chain's latest checkpoint, read from the view the *worker* owns. Export must never
-    /// load the chain itself: `Storage::load_chain` opens the chain partition exclusively, and a
-    /// second live `ChainStateView` racing the worker's is documented as corrupting.
+    /// open the chain's own partition: `Storage` does so exclusively, and a second live
+    /// `ChainStateView` racing the worker's is documented as corrupting.
     checkpoint: Option<BlockHeight>,
 }
 
@@ -2097,7 +2097,7 @@ where
     /// still correct wherever a checkpoint cannot be had.
     ///
     /// `checkpoint_height` is announced by the chain's own worker rather than read here. Export
-    /// must not call `Storage::load_chain`: it opens the chain partition exclusively, and a
+    /// must never open the chain's partition to find it: `Storage` opens it exclusively, and a
     /// second live `ChainStateView` racing the worker's is documented as causing "invalid states
     /// and data corruption".
     async fn push_checkpoint_if_useful(
