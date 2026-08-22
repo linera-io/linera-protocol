@@ -48,6 +48,45 @@ pub trait OperationGenerator: Send + 'static {
     fn generate_operations(&mut self, owner: AccountOwner, count: usize) -> Vec<Operation>;
 }
 
+/// A client the benchmark can drive, so the same harness runs against either the full
+/// [`ChainClient`] or a storage-free proposer.
+///
+/// The benchmark loop only ever asks a client to commit one block of operations, which is
+/// what makes the two interchangeable: everything else -- rate control, block sizing,
+/// destination selection, reporting -- is the harness's job and is shared.
+#[cfg_attr(not(web), async_trait::async_trait)]
+#[cfg_attr(web, async_trait::async_trait(?Send))]
+pub trait BenchmarkClient: Send + Sync + 'static {
+    /// The chain this client proposes on.
+    fn chain_id(&self) -> ChainId;
+
+    /// The owner the generated operations are attributed to.
+    async fn owner(&self) -> Result<AccountOwner, BenchmarkError>;
+
+    /// Proposes a block carrying `operations` and returns once it is committed.
+    async fn commit_operations(&self, operations: Vec<Operation>) -> Result<(), BenchmarkError>;
+}
+
+#[cfg_attr(not(web), async_trait::async_trait)]
+#[cfg_attr(web, async_trait::async_trait(?Send))]
+impl<Env: Environment> BenchmarkClient for ChainClient<Env> {
+    fn chain_id(&self) -> ChainId {
+        ChainClient::chain_id(self)
+    }
+
+    async fn owner(&self) -> Result<AccountOwner, BenchmarkError> {
+        self.identity().await.map_err(BenchmarkError::ChainClient)
+    }
+
+    async fn commit_operations(&self, operations: Vec<Operation>) -> Result<(), BenchmarkError> {
+        self.execute_operations(operations, vec![])
+            .await
+            .map_err(BenchmarkError::ChainClient)?
+            .expect("should execute block with operations");
+        Ok(())
+    }
+}
+
 /// Generates native fungible token transfer operations between chains.
 pub struct NativeFungibleTransferGenerator {
     source_chain_id: ChainId,
@@ -55,14 +94,22 @@ pub struct NativeFungibleTransferGenerator {
     destination_index: usize,
     rng: SmallRng,
     single_destination_per_block: bool,
+    avoid_self: bool,
 }
 
 impl NativeFungibleTransferGenerator {
     /// Creates a generator that sends native token transfers from the source chain.
+    ///
+    /// If `avoid_self` is true, `self.source_chain_id` is skipped whenever the destination
+    /// list has more than one entry (the historical behavior: a caller that wants a mix of
+    /// self- and cross-chain traffic should build a destination list that already includes
+    /// `source_chain_id` explicitly and pass `avoid_self = false`, otherwise it would never
+    /// actually be selected).
     pub fn new(
         source_chain_id: ChainId,
         mut destination_chains: Vec<ChainId>,
         single_destination_per_block: bool,
+        avoid_self: bool,
     ) -> Result<Self, BenchmarkError> {
         // With a single chain, send to self.
         if destination_chains.is_empty() {
@@ -76,6 +123,7 @@ impl NativeFungibleTransferGenerator {
             destination_index: 0,
             rng,
             single_destination_per_block,
+            avoid_self,
         })
     }
 
@@ -87,7 +135,10 @@ impl NativeFungibleTransferGenerator {
         let destination_chain_id = self.destination_chains[self.destination_index];
         self.destination_index += 1;
         // Skip self when there are other destinations available.
-        if destination_chain_id == self.source_chain_id && self.destination_chains.len() > 1 {
+        if destination_chain_id == self.source_chain_id
+            && self.destination_chains.len() > 1
+            && self.avoid_self
+        {
             self.next_destination()
         } else {
             destination_chain_id
@@ -204,6 +255,10 @@ pub enum BenchmarkError {
     JoinError(#[from] task::JoinError),
     #[error("Chain client error: {0}")]
     ChainClient(#[from] chain_client::Error),
+    /// The storage-free client has no `chain_client::Error` to wrap, so its failures arrive
+    /// as a message.
+    #[error("Lite client error: {0}")]
+    LiteClient(String),
     #[error("Current histogram count is less than previous histogram count")]
     HistogramCountMismatch,
     #[error("Expected histogram value, got {0:?}")]
@@ -284,13 +339,13 @@ impl<Env: Environment> Benchmark<Env> {
     #[expect(clippy::too_many_arguments)]
     pub async fn run_benchmark<C: ClientContext<Environment = Env> + 'static>(
         bps: usize,
-        chain_clients: Vec<ChainClient<Env>>,
+        chain_clients: Vec<Arc<dyn BenchmarkClient>>,
         generators: Vec<Box<dyn OperationGenerator>>,
         transactions_per_block: usize,
         health_check_endpoints: Option<String>,
         runtime_in_seconds: Option<u64>,
         delay_between_chains_ms: Option<u64>,
-        chain_listener: ChainListener<C>,
+        chain_listener: Option<ChainListener<C>>,
         shutdown_notifier: &CancellationToken,
     ) -> Result<(), BenchmarkError> {
         assert_eq!(
@@ -305,11 +360,19 @@ impl<Env: Environment> Benchmark<Env> {
         let notifier = Arc::new(Notify::new());
         let barrier = Arc::new(Barrier::new(num_chains + 1));
 
-        let chain_listener_future = chain_listener
-            .run()
-            .await
-            .map_err(|_| BenchmarkError::ChainListenerStartupError)?;
-        let chain_listener_handle = tokio::spawn(chain_listener_future.in_current_span());
+        // Only the full client needs it: it keeps local chain state in sync in the
+        // background. The storage-free client has no local state to sync, and running one
+        // anyway would put exactly the work it avoids back onto the load generator.
+        let chain_listener_handle = match chain_listener {
+            Some(chain_listener) => {
+                let future = chain_listener
+                    .run()
+                    .await
+                    .map_err(|_| BenchmarkError::ChainListenerStartupError)?;
+                Some(tokio::spawn(future.in_current_span()))
+            }
+            None => None,
+        };
 
         let bps_control_task = Self::bps_control_task(
             &barrier,
@@ -388,8 +451,10 @@ impl<Env: Environment> Benchmark<Env> {
             runtime_control_task.await?;
         }
 
-        if let Err(e) = chain_listener_handle.await? {
-            tracing::error!("chain listener error: {e}");
+        if let Some(chain_listener_handle) = chain_listener_handle {
+            if let Err(e) = chain_listener_handle.await? {
+                tracing::error!("chain listener error: {e}");
+            }
         }
 
         Ok(())
@@ -732,7 +797,7 @@ impl<Env: Environment> Benchmark<Env> {
         chain_idx: usize,
         chain_id: ChainId,
         bps: usize,
-        chain_client: ChainClient<Env>,
+        chain_client: Arc<dyn BenchmarkClient>,
         mut generator: Box<dyn OperationGenerator>,
         transactions_per_block: usize,
         shutdown_notifier: CancellationToken,
@@ -755,10 +820,7 @@ impl<Env: Environment> Benchmark<Env> {
             runtime_control_sender.send(()).await?;
         }
 
-        let owner = chain_client
-            .identity()
-            .await
-            .map_err(BenchmarkError::ChainClient)?;
+        let owner = chain_client.owner().await?;
 
         loop {
             tokio::select! {
@@ -768,13 +830,10 @@ impl<Env: Environment> Benchmark<Env> {
                     info!("Shutdown signal received, stopping benchmark");
                     break;
                 }
-                result = chain_client.execute_operations(
+                result = chain_client.commit_operations(
                     generator.generate_operations(owner, transactions_per_block),
-                    vec![]
                 ) => {
-                    result
-                        .map_err(BenchmarkError::ChainClient)?
-                        .expect("should execute block with operations");
+                    result?;
 
                     let current_bps_count = bps_count.fetch_add(1, Ordering::Relaxed) + 1;
                     if current_bps_count >= bps {

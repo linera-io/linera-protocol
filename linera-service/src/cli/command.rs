@@ -62,6 +62,24 @@ impl std::str::FromStr for ValidatorToAdd {
     }
 }
 
+/// Which client the benchmark drives its chains with.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ClientMode {
+    /// A real `ChainClient`: executes every block locally and keeps chain state, so it
+    /// measures what a client experiences. Two round trips per block.
+    #[default]
+    Full,
+    /// A storage-free proposer: keeps no chain state and executes nothing, so the generator
+    /// stops being part of what is measured. Three round trips per block.
+    ///
+    /// Reads the validator set and quorum weights from the wallet's *genesis* committee, so
+    /// on a network whose committee has since changed it would target stale addresses. Fine
+    /// for a freshly provisioned benchmark network; check before pointing it at a long-lived
+    /// one.
+    Lite,
+}
+
 #[derive(Clone, clap::Args, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 /// Options controlling the behavior of the benchmark command.
@@ -134,6 +152,34 @@ pub struct BenchmarkOptions {
     /// to a single chain, rotating through chains for subsequent blocks.
     #[arg(long)]
     pub single_destination_per_block: bool,
+
+    /// Which client to drive the chains with.
+    #[arg(long, value_enum, default_value_t = ClientMode::Full)]
+    pub client_mode: ClientMode,
+
+    /// How many distinct destination chains each chain sends to. Unset means every other
+    /// benchmarked chain, so cross-chain fan-out grows with `--num-chains` and cannot be
+    /// varied on its own; setting it pins fan-out while everything else is held fixed.
+    #[arg(long)]
+    pub fan_out: Option<usize>,
+
+    /// Keep sending cross-chain messages but never drain the inboxes they fill, isolating
+    /// the sending side. Inboxes then grow for the whole run, which is fine for a short
+    /// benchmark and is not a realistic steady state. `--client-mode lite` only.
+    #[arg(long)]
+    pub skip_message_processing: bool,
+
+    /// The maximum number of incoming message bundles to drain into each block, on top of
+    /// its own operations. Defaults to twice the block's operation count, so a backlog is
+    /// spread over several blocks instead of one huge one. `--client-mode lite` only.
+    #[arg(long)]
+    pub max_incoming_bundles_per_block: Option<usize>,
+
+    /// Broadcast each confirmed certificate in its compact, value-free form (hash plus
+    /// signatures) where possible. A validator that has forgotten the value transparently
+    /// gets a retry with the full certificate. `--client-mode lite` only.
+    #[arg(long)]
+    pub light_certificates: bool,
 }
 
 impl Default for BenchmarkOptions {
@@ -152,6 +198,11 @@ impl Default for BenchmarkOptions {
             delay_between_chains_ms: None,
             config_path: None,
             single_destination_per_block: false,
+            client_mode: ClientMode::default(),
+            fan_out: None,
+            skip_message_processing: false,
+            max_incoming_bundles_per_block: None,
+            light_certificates: false,
         }
     }
 }

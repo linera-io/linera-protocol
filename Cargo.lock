@@ -5181,6 +5181,7 @@ version = "0.16.0"
 dependencies = [
  "amm",
  "anyhow",
+ "async-trait",
  "base64 0.22.1",
  "bcs",
  "cfg_aliases",
@@ -5196,6 +5197,7 @@ dependencies = [
  "gloo-utils",
  "hdrhistogram",
  "linera-base",
+ "linera-cache",
  "linera-chain",
  "linera-client",
  "linera-core",
@@ -5808,6 +5810,7 @@ dependencies = [
  "insta",
  "is-terminal",
  "linera-base",
+ "linera-cache",
  "linera-chain",
  "linera-client",
  "linera-core",
