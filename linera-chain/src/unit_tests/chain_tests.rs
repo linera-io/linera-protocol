@@ -966,6 +966,64 @@ async fn test_next_height_to_preprocess_with_misordered_keys() {
     );
 }
 
+/// `preprocessed_blocks` is sparse for a chain we merely receive from — it is populated only at
+/// the heights that actually carry messages to us — so a height we do not hold can sit BETWEEN
+/// two we do. `block_hashes` must report that hole in place. Compacting it away would shift every
+/// later entry, and callers zip the result against the heights they asked for, so height 6 would
+/// be paired with block 9's hash and persisted that way.
+#[tokio::test]
+async fn test_block_hashes_reports_interior_gaps_in_place() {
+    let chain_id = TestEnvironment::new().admin_chain_id();
+    let mut chain = ChainStateView::new(chain_id).await;
+
+    let hash5 = CryptoHash::test_hash("five");
+    let hash9 = CryptoHash::test_hash("nine");
+    chain
+        .preprocessed_blocks
+        .insert(&BlockHeight(5), hash5)
+        .unwrap();
+    chain
+        .preprocessed_blocks
+        .insert(&BlockHeight(9), hash9)
+        .unwrap();
+
+    let heights = (5..10).map(BlockHeight).collect::<Vec<_>>();
+
+    assert_eq!(
+        chain.block_hashes(heights).await.unwrap(),
+        vec![Some(hash5), None, None, None, Some(hash9)],
+    );
+}
+
+/// `block_hashes` reads executed blocks from `confirmed_log` and preprocessed ones from
+/// `preprocessed_blocks`, so it queries two stores in separate batches. The results must still
+/// come back in the caller's order, including when the requested heights are not ascending and
+/// straddle the tip.
+#[tokio::test]
+async fn test_block_hashes_preserves_non_ascending_input_order() {
+    let chain_id = TestEnvironment::new().admin_chain_id();
+    let mut chain = ChainStateView::new(chain_id).await;
+
+    let hash0 = CryptoHash::test_hash("zero");
+    let hash1 = CryptoHash::test_hash("one");
+    let hash4 = CryptoHash::test_hash("four");
+    chain.confirmed_log.push(hash0);
+    chain.confirmed_log.push(hash1);
+    chain.tip_state.get_mut().next_block_height = BlockHeight(2);
+    chain
+        .preprocessed_blocks
+        .insert(&BlockHeight(4), hash4)
+        .unwrap();
+
+    // 4 is preprocessed, 0 and 1 are confirmed, and 3 is a height we never had.
+    let heights = [4, 0, 3, 1].map(BlockHeight).to_vec();
+
+    assert_eq!(
+        chain.block_hashes(heights).await.unwrap(),
+        vec![Some(hash4), Some(hash0), None, Some(hash1)],
+    );
+}
+
 /// View struct without a trailing field, simulating the `ChainStateView` layout
 /// on `testnet_conway` (18 fields, positions 0–17).
 #[derive(RootView)]

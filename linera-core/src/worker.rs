@@ -1916,7 +1916,7 @@ where
         &self,
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
-    ) -> Result<Vec<CryptoHash>, WorkerError> {
+    ) -> Result<Vec<Option<CryptoHash>>, WorkerError> {
         self.chain_read(chain_id, |guard| async move {
             guard.get_block_hashes(heights).await
         })

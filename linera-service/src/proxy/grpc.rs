@@ -73,7 +73,7 @@ use tonic::{
 };
 use tonic_web::GrpcWebLayer;
 use tower::{builder::ServiceBuilder, Layer, Service};
-use tracing::{debug, info, instrument, Instrument as _, Level};
+use tracing::{debug, info, instrument, warn, Instrument as _, Level};
 
 #[cfg(with_metrics)]
 pub(crate) mod metrics {
@@ -654,14 +654,30 @@ where
             }
         };
 
-        // Write back the height->hash indices we learned from the fallback
-        let indices: Vec<(BlockHeight, linera_base::crypto::CryptoHash)> =
-            heights.into_iter().zip(hashes.iter().copied()).collect();
-        self.0
-            .storage
-            .write_certificate_height_indices(chain_id, &indices)
-            .await
-            .map_err(Self::view_error_to_status)?;
+        // The response is compacted: heights the shard does not hold are dropped from
+        // `requested_sent_certificate_hashes`, and the gap can be interior, so zipping would pair
+        // a real block with someone else's height and persist it. The wire type carries no
+        // placeholder telling us which heights were dropped, so only the exact-length case can be
+        // indexed here.
+        if hashes.len() == heights.len() {
+            let indices: Vec<(BlockHeight, linera_base::crypto::CryptoHash)> =
+                heights.into_iter().zip(hashes.iter().copied()).collect();
+            self.0
+                .storage
+                .write_certificate_height_indices(chain_id, &indices)
+                .await
+                .map_err(Self::view_error_to_status)?;
+        } else {
+            warn!(
+                %chain_id,
+                requested = heights.len(),
+                returned = hashes.len(),
+                first_height = ?heights.first(),
+                last_height = ?heights.last(),
+                "skipping height->hash index write: shard returned fewer hashes than requested \
+                 heights, so the pairing is ambiguous"
+            );
+        }
 
         Ok(hashes)
     }
