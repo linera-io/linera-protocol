@@ -999,17 +999,28 @@ where
         }
 
         // Fallback to the traditional approach
-        let hashes = self
+        let maybe_hashes = self
             .local_node
             .get_block_hashes(chain_id, heights.clone())
             .await?;
+
+        // Pair each hash with the height it belongs to BEFORE dropping the ones we do not have.
+        // The gap can be interior — a chain we merely receive from is stored only at its
+        // message-bearing heights — so compacting first would shift every later pair and we would
+        // persist a wrong height for a real block.
+        let indices: Vec<_> = heights
+            .iter()
+            .copied()
+            .zip(&maybe_hashes)
+            .filter_map(|(height, hash)| hash.map(|hash| (height, hash)))
+            .collect();
+        let hashes: Vec<_> = indices.iter().map(|(_, hash)| *hash).collect();
 
         let certificates = storage.read_certificates(&hashes).await?;
 
         match ResultReadCertificates::new(certificates, hashes.clone()) {
             ResultReadCertificates::Certificates(certs) => {
                 // Write back the height->hash indices we learned from the fallback
-                let indices: Vec<_> = heights.into_iter().zip(hashes.clone()).collect();
                 storage
                     .write_certificate_height_indices(chain_id, &indices)
                     .await?;

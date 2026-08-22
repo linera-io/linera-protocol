@@ -593,7 +593,16 @@ where
             .flatten()
             .copied()
             .collect::<BTreeSet<_>>();
-        let hashes = self.chain.block_hashes(heights.iter().copied()).await?;
+        // Heights we do not hold are dropped here on purpose: the zip below pairs blocks with
+        // their own hashes, and the map is keyed by each block's own height, so a hole cannot
+        // shift anything.
+        let hashes = self
+            .chain
+            .block_hashes(heights.iter().copied())
+            .await?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
 
         let blocks = self.read_confirmed_blocks(hashes.clone()).await?;
 
@@ -1546,7 +1555,7 @@ where
             heights_to_re_add.push(current_height);
             // Load the block at current_height to find the previous message block
             let hash = match &*self.chain.block_hashes([current_height]).await? {
-                [hash] => *hash,
+                [Some(hash)] => *hash,
                 _ => {
                     return Err(WorkerError::ConfirmedBlockHashNotFound {
                         height: current_height,
@@ -1820,11 +1829,13 @@ where
         Ok(results.into_iter().collect())
     }
 
-    /// Gets block hashes for specified heights.
+    /// Gets the hash of each requested block, or `None` for heights we do not have.
+    ///
+    /// Positionally aligned with `heights`; see [`ChainStateView::block_hashes`].
     pub(crate) async fn get_block_hashes(
         &self,
         heights: Vec<BlockHeight>,
-    ) -> Result<Vec<CryptoHash>, WorkerError> {
+    ) -> Result<Vec<Option<CryptoHash>>, WorkerError> {
         Ok(self.chain.block_hashes(heights).await?)
     }
 
@@ -2537,11 +2548,13 @@ where
             }
             info.requested_pending_message_bundles = bundles;
         }
+        // The wire type carries no placeholder for a height we do not hold, so the response is
+        // compacted. Consumers must not zip it against the heights they requested.
         let hashes = self
             .chain
             .block_hashes(query.request_sent_certificate_hashes_by_heights)
             .await?;
-        info.requested_sent_certificate_hashes = hashes;
+        info.requested_sent_certificate_hashes = hashes.into_iter().flatten().collect();
         if let Some(start) = query.request_received_log_excluding_first_n {
             let start = usize::try_from(start).map_err(|_| ArithmeticError::Overflow)?;
             let max_received_log_entries = self.config.chain_info_max_received_log_entries;
