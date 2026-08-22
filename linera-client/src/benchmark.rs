@@ -345,7 +345,7 @@ impl<Env: Environment> Benchmark<Env> {
         health_check_endpoints: Option<String>,
         runtime_in_seconds: Option<u64>,
         delay_between_chains_ms: Option<u64>,
-        chain_listener: ChainListener<C>,
+        chain_listener: Option<ChainListener<C>>,
         shutdown_notifier: &CancellationToken,
     ) -> Result<(), BenchmarkError> {
         assert_eq!(
@@ -360,11 +360,19 @@ impl<Env: Environment> Benchmark<Env> {
         let notifier = Arc::new(Notify::new());
         let barrier = Arc::new(Barrier::new(num_chains + 1));
 
-        let chain_listener_future = chain_listener
-            .run()
-            .await
-            .map_err(|_| BenchmarkError::ChainListenerStartupError)?;
-        let chain_listener_handle = tokio::spawn(chain_listener_future.in_current_span());
+        // Only the full client needs it: it keeps local chain state in sync in the
+        // background. The storage-free client has no local state to sync, and running one
+        // anyway would put exactly the work it avoids back onto the load generator.
+        let chain_listener_handle = match chain_listener {
+            Some(chain_listener) => {
+                let future = chain_listener
+                    .run()
+                    .await
+                    .map_err(|_| BenchmarkError::ChainListenerStartupError)?;
+                Some(tokio::spawn(future.in_current_span()))
+            }
+            None => None,
+        };
 
         let bps_control_task = Self::bps_control_task(
             &barrier,
@@ -443,8 +451,10 @@ impl<Env: Environment> Benchmark<Env> {
             runtime_control_task.await?;
         }
 
-        if let Err(e) = chain_listener_handle.await? {
-            tracing::error!("chain listener error: {e}");
+        if let Some(chain_listener_handle) = chain_listener_handle {
+            if let Err(e) = chain_listener_handle.await? {
+                tracing::error!("chain listener error: {e}");
+            }
         }
 
         Ok(())

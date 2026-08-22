@@ -894,14 +894,18 @@ impl Runnable for Job {
 
                         let shared_context =
                             std::sync::Arc::new(futures::lock::Mutex::new(context));
-                        let chain_listener = ChainListener::new(
-                            listener_config,
-                            shared_context.clone(),
-                            storage.clone(),
-                            shutdown_notifier.clone(),
-                            mpsc::unbounded_channel().1,
-                            true, // Enabling background sync for benchmarks
-                        );
+                        let chain_listener = match client_mode {
+                            ClientMode::Full => Some(ChainListener::new(
+                                listener_config,
+                                shared_context.clone(),
+                                storage.clone(),
+                                shutdown_notifier.clone(),
+                                mpsc::unbounded_channel().1,
+                                true, // Enabling background sync for benchmarks
+                            )),
+                            // The storage-free client keeps no local state to sync.
+                            ClientMode::Lite => None,
+                        };
                         let all_chain_ids: Vec<ChainId> =
                             chain_clients.iter().map(|c| c.chain_id()).collect();
                         let generators: Vec<Box<dyn OperationGenerator>> = chain_clients
@@ -911,14 +915,28 @@ impl Runnable for Job {
                                 // Without --fan-out every chain messages every other, so
                                 // cross-chain cost is a side effect of --num-chains rather
                                 // than a variable that can be swept on its own.
-                                let mut destinations: Vec<ChainId> = all_chain_ids
+                                let others: Vec<ChainId> = all_chain_ids
                                     .iter()
                                     .copied()
                                     .filter(|id| *id != source)
                                     .collect();
-                                if let Some(fan_out) = fan_out {
-                                    destinations.truncate(fan_out);
-                                }
+                                // Each source takes a window starting at its own index, so
+                                // every chain has the same in-degree. Truncating the same
+                                // list for every source instead would point all traffic at
+                                // the first `fan_out` chains and measure a hotspot.
+                                let destinations = match fan_out {
+                                    None => others,
+                                    Some(_) if others.is_empty() => others,
+                                    Some(fan_out) => {
+                                        let start = all_chain_ids
+                                            .iter()
+                                            .position(|id| *id == source)
+                                            .unwrap_or(0);
+                                        (0..fan_out.min(others.len()))
+                                            .map(|offset| others[(start + offset) % others.len()])
+                                            .collect()
+                                    }
+                                };
                                 if let Some(app_id) = fungible_application_id {
                                     Ok(Box::new(FungibleTransferGenerator::new(
                                         app_id,
