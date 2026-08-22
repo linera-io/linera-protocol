@@ -78,6 +78,9 @@ pub enum FaultType {
     DontSendConfirmVote,
     DontProcessValidated,
     DontSendValidateVote,
+    /// Refuses blocks that install a checkpoint, and behaves honestly for everything else — a
+    /// validator that declines to adopt someone else's execution state but still replays history.
+    RejectCheckpoints,
 }
 
 /// A validator used for testing. "Faulty" validators ignore block proposals (but not
@@ -162,6 +165,16 @@ where
         certificate: CacheArc<ConfirmedBlockCertificate>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
+        // Checked here as well as on the lite path: a validator that declines checkpoints declines
+        // them however they arrive, and export sends the full certificate when the destination
+        // never signed the block.
+        if self.fault_type == FaultType::RejectCheckpoints
+            && certificate.block().starts_with_checkpoint()
+        {
+            return Err(NodeError::ClientIoError {
+                error: "refusing to install a checkpoint".to_string(),
+            });
+        }
         self.spawn_and_receive(move |validator, sender| {
             validator.do_handle_certificate::<ConfirmedBlock>(
                 CacheArc::unwrap_or_clone(certificate),
@@ -398,7 +411,8 @@ where
                 error: "offline".to_string(),
             }),
             FaultType::NoChains => Err(NodeError::InactiveChain(proposal.content.block.chain_id)),
-            FaultType::DontSendValidateVote
+            FaultType::RejectCheckpoints
+            | FaultType::DontSendValidateVote
             | FaultType::Honest
             | FaultType::DontSendConfirmVote
             | FaultType::DontProcessValidated => {
@@ -432,6 +446,14 @@ where
         let validator = client.lock().await;
         let result = async move {
             match validator.state.full_certificate(certificate).await? {
+                Either::Left(confirmed)
+                    if self.fault_type == FaultType::RejectCheckpoints
+                        && confirmed.block().starts_with_checkpoint() =>
+                {
+                    Err(NodeError::ClientIoError {
+                        error: "refusing to install a checkpoint".to_string(),
+                    })
+                }
                 Either::Left(confirmed) => {
                     self.do_handle_certificate_internal::<ConfirmedBlock>(confirmed, &validator)
                         .await
@@ -459,6 +481,7 @@ where
             }
             FaultType::NoChains => Err(NodeError::InactiveChain(certificate.value().chain_id())),
             FaultType::Honest
+            | FaultType::RejectCheckpoints
             | FaultType::DontSendConfirmVote
             | FaultType::DontProcessValidated
             | FaultType::DontSendValidateVote => {
@@ -507,6 +530,7 @@ where
             }),
             FaultType::NoChains => Err(NodeError::InactiveChain(query.chain_id)),
             FaultType::Honest
+            | FaultType::RejectCheckpoints
             | FaultType::DontSendConfirmVote
             | FaultType::DontProcessValidated
             | FaultType::DontSendValidateVote

@@ -49,7 +49,7 @@ use futures::{stream::FuturesUnordered, FutureExt as _, StreamExt as _};
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
-    crypto::ValidatorPublicKey,
+    crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{Blob, BlockHeight, Epoch, TimeDelta, Timestamp},
     identifiers::{BlobId, ChainId, StreamId},
     time::{timer::timeout, Duration},
@@ -405,10 +405,20 @@ impl ProgressMap {
 
 type SharedProgress = Arc<Mutex<ProgressMap>>;
 
-/// The height after each chain's newest announced block. Written on every `export` call before
-/// the queue is tried, so a block the full queue drops still raises the repair target the tick
-/// measures destinations against.
-type SharedTips = Arc<Mutex<HashMap<ChainId, BlockHeight>>>;
+/// What the worker announces about a chain on every `export` call, before the queue is tried, so
+/// a block the full queue drops still raises the repair target the tick measures destinations
+/// against.
+#[derive(Clone, Copy)]
+struct ChainAnnouncement {
+    /// The height after the chain's newest announced block.
+    tip: BlockHeight,
+    /// The chain's latest checkpoint, read from the view the *worker* owns. Export must never
+    /// open the chain's own partition: `Storage` does so exclusively, and a second live
+    /// `ChainStateView` racing the worker's is documented as corrupting.
+    checkpoint: Option<BlockHeight>,
+}
+
+type SharedTips = Arc<Mutex<HashMap<ChainId, ChainAnnouncement>>>;
 
 impl BlockExportHandle {
     /// Queues a block for export and returns immediately. A full queue drops the block — never
@@ -420,6 +430,7 @@ impl BlockExportHandle {
         blobs: Vec<CacheArc<Blob>>,
         epoch: Epoch,
         exported_heights: BTreeMap<ValidatorPublicKey, BlockHeight>,
+        latest_checkpoint: Option<BlockHeight>,
     ) {
         // Announced before the queue is tried: a dropped block must still raise the repair
         // target, or a chain whose *last* block was dropped would never be repaired at all.
@@ -427,8 +438,14 @@ impl BlockExportHandle {
             let header = &certificate.block().header;
             let tip = header.height.try_add_one().unwrap_or(BlockHeight::MAX);
             let mut tips = self.tips.lock().expect("tips mutex is never poisoned");
-            let entry = tips.entry(header.chain_id).or_insert(tip);
-            *entry = (*entry).max(tip);
+            let entry = tips.entry(header.chain_id).or_insert(ChainAnnouncement {
+                tip,
+                checkpoint: None,
+            });
+            entry.tip = entry.tip.max(tip);
+            // Only ever rises, like the tip: a later announcement carrying `None` is a worker
+            // that has not loaded the register, not a checkpoint that was withdrawn.
+            entry.checkpoint = entry.checkpoint.max(latest_checkpoint);
         }
         let blob_bytes = blobs.iter().map(|blob| blob.bytes().len()).sum::<usize>();
         // The byte budget is enforced, not merely measured: a block count alone would let a few
@@ -586,6 +603,9 @@ struct ChainRecord {
     /// The height after the chain's last known block: what a destination must reach to be
     /// caught up.
     tip: BlockHeight,
+    /// The chain's latest checkpoint, as announced by its worker. Carried here so a catch-up
+    /// round can reach for it without export ever loading the chain itself.
+    checkpoint: Option<BlockHeight>,
     /// When this chain last saw a block or a completed send, for the convergence sweep.
     last_activity: Timestamp,
     /// Sorted by index, so lookups binary-search integers. A flat vector rather than a map
@@ -608,6 +628,7 @@ impl ChainRecord {
     ) -> Self {
         ChainRecord {
             tip: BlockHeight::ZERO,
+            checkpoint: None,
             last_activity: now,
             // Already in index order, which is the order `dests` must keep.
             dests: destinations
@@ -1079,6 +1100,7 @@ where
             let budget = self.budget_remaining();
             let record = self.chains.get_mut(&chain_id).expect("inserted above");
             let record_tip = record.tip;
+            let record_checkpoint = record.checkpoint;
             let chain_dest = record.dest_entry(index);
             let dest = self
                 .destinations
@@ -1101,6 +1123,7 @@ where
                     dest,
                     chain_dest,
                     record_tip,
+                    record_checkpoint,
                     Some((block.certificate.clone(), block.blobs.clone())),
                 );
             } else if chain_dest.next_height.is_none_or(|next| next < record_tip) {
@@ -1326,13 +1349,15 @@ where
         // cloned — the workers contend on this mutex every block, and once folded the records
         // carry the truth.
         let tips = std::mem::take(&mut *self.tips.lock().expect("tips mutex is never poisoned"));
-        for (chain_id, tip) in tips {
+        for (chain_id, announcement) in tips {
+            let ChainAnnouncement { tip, checkpoint } = announcement;
             let record = self
                 .chains
                 .entry(chain_id)
                 .or_insert_with(|| ChainRecord::new(now, &self.destinations, &BTreeMap::new()));
             let advanced = record.tip < tip;
             record.tip = record.tip.max(tip);
+            record.checkpoint = record.checkpoint.max(checkpoint);
             if advanced {
                 // The scan that used to notice this is gone, so a tip moving forward records
                 // the chains it just put behind, here and now.
@@ -1762,6 +1787,7 @@ where
         dest: &mut DestState<P::Node>,
         chain_dest: &mut ChainDest,
         target: BlockHeight,
+        checkpoint: Option<BlockHeight>,
         live: Option<(CacheArc<ConfirmedBlockCertificate>, Vec<CacheArc<Blob>>)>,
     ) {
         let generation = dest.generation;
@@ -1794,12 +1820,12 @@ where
             let result = match live {
                 Some((certificate, blobs)) => {
                     sender
-                        .send_block(&certificate, &blobs, cursor, max_catch_up)
+                        .send_block(&certificate, &blobs, cursor, max_catch_up, checkpoint)
                         .await
                 }
                 None => {
                     sender
-                        .send_missing_blocks(chain_id, target, cursor, max_catch_up)
+                        .send_missing_blocks(chain_id, target, cursor, max_catch_up, checkpoint)
                         .await
                 }
             };
@@ -1876,11 +1902,12 @@ where
                 continue;
             };
             let tip = record.tip;
+            let checkpoint = record.checkpoint;
             let Some(chain_dest) = record.dest_mut(index) else {
                 continue;
             };
             Self::spawn_job(
-                jobs, storage, config, chain_id, index, dest, chain_dest, tip, None,
+                jobs, storage, config, chain_id, index, dest, chain_dest, tip, checkpoint, None,
             );
         }
         spawned
@@ -1911,6 +1938,15 @@ fn is_local_scoped(error: &chain_client::Error) -> bool {
         error,
         chain_client::Error::ReadCertificatesError(_) | chain_client::Error::ViewError(_)
     )
+}
+
+/// How a block the *destination* asked for but we cannot supply is reported.
+///
+/// Deliberately not a read error: `is_local_scoped` would halve the queue's shared budget, so one
+/// peer's reply would throttle export to every other destination and blame our own storage. The
+/// client can map this to a read error safely because it has no shared window; export cannot.
+fn missing_block_error(hash: CryptoHash) -> chain_client::Error {
+    chain_client::Error::RemoteNodeError(NodeError::BlocksNotFound(vec![hash]))
 }
 
 /// Escalating backoff shared by both scopes: doubles from `retry_delay` per consecutive failure,
@@ -1963,6 +1999,7 @@ where
         blobs: &[CacheArc<Blob>],
         destination_next_height: Option<BlockHeight>,
         max_catch_up: u64,
+        checkpoint: Option<BlockHeight>,
     ) -> Result<BlockHeight, chain_client::Error> {
         let block = certificate.block();
         let (chain_id, height) = (block.header.chain_id, block.header.height);
@@ -1970,8 +2007,14 @@ where
         let next_height = if destination_next_height == Some(height) {
             height
         } else {
-            self.send_missing_blocks(chain_id, height, destination_next_height, max_catch_up)
-                .await?
+            self.send_missing_blocks(
+                chain_id,
+                height,
+                destination_next_height,
+                max_catch_up,
+                checkpoint,
+            )
+            .await?
         };
         // Not exactly at this block: either the gap was larger than one chunk, or the validator
         // is already past it — a re-executed chain re-offers its whole history — and in both
@@ -1990,12 +2033,16 @@ where
     /// caller once. Heights whose certificates are not in storage are skipped — a chain we merely
     /// receive from is stored only at its message-bearing blocks, and the destination
     /// preprocesses above such gaps.
+    ///
+    /// A gap too large to close in one round first tries a checkpoint, which is what keeps that
+    /// skipping safe: see [`Self::push_checkpoint_if_useful`].
     pub(crate) async fn send_missing_blocks(
         &mut self,
         chain_id: ChainId,
         target_next_height: BlockHeight,
         destination_next_height: Option<BlockHeight>,
         max_blocks: u64,
+        checkpoint: Option<BlockHeight>,
     ) -> Result<BlockHeight, chain_client::Error> {
         let mut next_height = match destination_next_height {
             Some(height) => height,
@@ -2007,6 +2054,21 @@ where
                     .next_block_height
             }
         };
+        if next_height.0.saturating_add(max_blocks) < target_next_height.0 {
+            // Best-effort, deliberately: a destination may refuse a checkpoint and must still be
+            // caught up by replaying. Propagating here would fail the round before the replay
+            // below runs, leaving such a destination permanently behind.
+            match self
+                .push_checkpoint_if_useful(chain_id, next_height, checkpoint)
+                .await
+            {
+                Ok(reached) => next_height = reached,
+                Err(error) => debug!(
+                    %chain_id, %error,
+                    "Checkpoint push rejected; falling back to replaying blocks",
+                ),
+            }
+        }
         let last = target_next_height
             .0
             .min(next_height.0.saturating_add(max_blocks));
@@ -2028,6 +2090,53 @@ where
             }
         }
         Ok(next_height)
+    }
+
+    /// Pushes our latest checkpoint certificate if the destination has not reached it, so it
+    /// installs the chain's execution state instead of replaying every block below it, and
+    /// returns the height it reports afterwards.
+    ///
+    /// This is what makes a bounded catch-up window safe on a checkpointed chain: pre-checkpoint
+    /// certificates may be pruned, [`Self::send_missing_blocks`] skips heights it cannot read, and
+    /// a window sitting entirely below the checkpoint therefore sends *nothing* and retries the
+    /// same empty round forever. Reaching the checkpoint is the whole fix — the destination
+    /// already restores rather than preprocesses a block that starts with one.
+    ///
+    /// Mirrors the client's `RemoteNodeUpdater::push_checkpoint_if_useful`. A missing checkpoint
+    /// and an absent certificate are both *not useful* rather than errors. A push the destination
+    /// **rejects** does return an error, which the caller swallows: replaying blocks is still
+    /// correct wherever a checkpoint cannot be had, and a validator is free not to accept one.
+    ///
+    /// `checkpoint_height` is announced by the chain's own worker rather than read here. Export
+    /// must never open the chain's partition to find it: `Storage` opens it exclusively, and a
+    /// second live `ChainStateView` racing the worker's is documented as causing "invalid states
+    /// and data corruption".
+    async fn push_checkpoint_if_useful(
+        &mut self,
+        chain_id: ChainId,
+        next_height: BlockHeight,
+        checkpoint_height: Option<BlockHeight>,
+    ) -> Result<BlockHeight, chain_client::Error> {
+        let Some(checkpoint_height) = checkpoint_height else {
+            return Ok(next_height);
+        };
+        // Strictly below means the destination is already past it; `send_missing_blocks` then
+        // has certificates it can actually read, so replaying is both correct and cheaper.
+        if checkpoint_height < next_height {
+            return Ok(next_height);
+        }
+        let Some(certificate) = self
+            .storage
+            .read_certificates_by_heights(chain_id, &[checkpoint_height])
+            .await?
+            .into_iter()
+            .flatten()
+            .next()
+        else {
+            return Ok(next_height);
+        };
+        let info = self.send_confirmed_certificate(&certificate, &[]).await?;
+        Ok(info.next_block_height)
     }
 
     /// Sends one confirmed certificate, uploading blobs the validator reports missing.
@@ -2056,6 +2165,7 @@ where
         // The same once-per-cause loop as the client's `RemoteNodeUpdater`: a second
         // `BlobsNotFound` naming new blobs is still recoverable, only repeating a cause is not.
         let mut sent_blobs = false;
+        let mut sent_blocks = false;
         loop {
             match result {
                 Err(NodeError::BlobsNotFound(blob_ids)) if !sent_blobs => {
@@ -2067,6 +2177,21 @@ where
                         .upload_blobs(blobs.into_iter().map(CacheArc::into_std).collect())
                         .await?;
                     sent_blobs = true;
+                }
+                // Only a checkpoint certificate provokes this: the destination trusts these
+                // hashes through the checkpoint but lacks the block bytes. Its trust-mark accept
+                // path takes them whatever epoch they carry, so uploading them unblocks the
+                // restore.
+                Err(NodeError::BlocksNotFound(hashes)) if !sent_blocks => {
+                    let certificates = self.storage.read_certificates(&hashes).await?;
+                    for (hash, maybe_certificate) in hashes.iter().zip(certificates) {
+                        let missing =
+                            maybe_certificate.ok_or_else(|| missing_block_error(*hash))?;
+                        self.remote_node
+                            .handle_confirmed_certificate(missing, delivery)
+                            .await?;
+                    }
+                    sent_blocks = true;
                 }
                 result => return Ok(result?),
             }
@@ -2107,9 +2232,33 @@ where
 
 #[cfg(test)]
 mod tests {
-    use linera_base::crypto::CryptoHash;
 
     use super::*;
+
+    /// A block the *destination* named must never be scoped to our own storage.
+    ///
+    /// `LocalScoped` halves the queue's shared budget, so misfiling this would let one peer's
+    /// reply throttle export to every other destination — and blame our storage while doing it.
+    /// The two controls below are what make that assertion mean anything: a genuine read failure
+    /// must still be local, and the recovery must still be reached at all.
+    #[test]
+    fn a_destinations_missing_block_is_scoped_to_that_destination() {
+        // The production constructor, not a hand-rolled copy: mapping the call site back to a
+        // read error has to fail here.
+        let hash = CryptoHash::test_hash("nonexistent");
+        let from_destination = missing_block_error(hash);
+        assert!(!is_local_scoped(&from_destination));
+        assert!(!is_chain_scoped(&from_destination));
+
+        // Control: a real local read failure is still ours, so the halving still has a trigger.
+        assert!(is_local_scoped(
+            &chain_client::Error::ReadCertificatesError(vec![hash])
+        ));
+        // Control: sibling recoveries keep their own scopes.
+        assert!(is_chain_scoped(&chain_client::Error::RemoteNodeError(
+            NodeError::BlobsNotFound(vec![])
+        )));
+    }
 
     /// Every rejection in `check()` guards a distinct failure mode, so each invalid field must be
     /// caught on its own — including `max_retry_delay`, whose zero used to slip through and turn
