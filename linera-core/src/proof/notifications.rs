@@ -3,11 +3,21 @@
 
 //! What a notification tells a client, and what it does not.
 //!
-//! A [`Notification`] is a hint that shortens the wait between a change and a client noticing it.
-//! From a correct validator it is sound — what it reports really happened — and from any validator
-//! it is best effort, since it may never arrive and carries nothing that could be checked if it
-//! did. The results here fix each half, and together they are the reason for the third: nothing in
-//! this specification may depend on a notification.
+//! A [`Notification`] tells a client that a chain has changed. From a correct validator it is sound
+//! — what it reports really happened — but from any validator it may simply never arrive, and it
+//! carries nothing that could be checked if it did.
+//!
+//! The channel is **lossy by model**, not merely unreliable in practice, so nothing here may assume
+//! a notification arrives. That would be alarming if clients used notifications merely to go
+//! faster. They do not: a `ChainListener` acts on them, processing inboxes and following new
+//! chains, so an application's own liveness can rest on one arriving.
+//!
+//! What makes a lossy channel tolerable is that the dependence is *self-repairing*, in three ways
+//! that are independent of each other: a client subscribes to every validator, so one silence is
+//! covered by the rest; establishing a stream resynchronizes chain state, so a gap is closed rather
+//! than replayed; and handlers bring a chain up to date rather than applying the change they were
+//! told about, so any later notification does the work of every lost one. All three need the client
+//! to be connected to somebody.
 //!
 //! [`Notification`]: crate::worker::Notification
 
@@ -68,44 +78,85 @@ use super::availability::{BlockOutputsArePersisted, InboxHoldsOnlySentBundles};
 /// [`CommitAgreement`]: linera_chain::manager::proof::safety::CommitAgreement
 pub trait NotificationImpliesPersistedChange: CorrectValidator + StorageAtomicity {}
 
-/// **Caveat (Notifications are best effort).** A change can be persisted and its notification
-/// never reach any client. Three ways, none of them an error:
+/// **Definition (The notification channel is lossy).** The channel carrying [`Notification`]s from
+/// a validator to a client may drop any message, without notice to either side. Delivery is never
+/// retried, never acknowledged, and never durable.
 ///
-/// * *Nobody is listening.* `Notifier::notify_chain` looks the chain up in its sender map and
-///   returns immediately when there is no entry.
-/// * *The receiver went away.* A failed `sender.send` is ignored and the dead sender reaped; for
-///   the delivery notifiers, `notifier.send(())` failing is logged at debug and dropped.
-/// * *The process crashed in between.* [`NotificationImpliesPersistedChange`] orders the save
-///   before the dispatch, which leaves exactly this window: saved, not yet notified, gone.
+/// *Where this sits in the fault model.* Network loss needs no separate treatment — a notification
+/// is a message between participants, so [`EventualSynchrony`] already permits it to be dropped
+/// before GST and forbids that after. What this definition adds are three *local* ways to lose one,
+/// which the network model does not describe: `Notifier::notify_chain` returns immediately when the
+/// chain has no entry in its sender map; a failed `sender.send` is ignored and the dead sender
+/// reaped; and [`NotificationImpliesPersistedChange`] orders the save before the dispatch, leaving a
+/// window in which a change is persisted and the process dies before anything is sent.
 ///
-/// Delivery is therefore neither retried nor acknowledged, and no notification is durable.
-pub trait NotificationsAreBestEffort {}
-
-/// **Invariant (No proof depends on a notification arriving).** No statement in this specification
-/// has the delivery of a [`Notification`] among its premises.
+/// The third behaves like a crash and is modelled as one: [`CorrectValidator`] permits a crash at
+/// any time, freely before GST and with bounded recovery after. So no result may assume a
+/// *particular* notification arrives, and a result may assume that a client which stays connected
+/// to a reachable correct validator eventually learns.
 ///
-/// *Proof.* By inspection of the whole specification: no statement names a notification in its
-/// dependencies, and the progress argument reaches its conclusions without one. What drives a
-/// chain forward is [`ActiveCorrectDriver`] — a client that polls and retries — together with the
-/// `linera_core::updater` loops, which learn what a validator is missing from the *error it
-/// returns*, never from a notification. [`MissingDependenciesAreRecoverable`] is that argument, and
-/// nothing in it consults a notification. ∎
+/// **The model has no notion of a partial crash, and this is where one would be needed.** A
+/// validator whose notification dispatch stops while its consensus path keeps running is not
+/// described by anything here: it is not faulty, since it signs nothing wrong; it is not crashed,
+/// since the process is alive and answering; and it is not merely "slow or unreachable", the escape
+/// [`CorrectValidator`] does allow, because it responds normally to everything except this. The
+/// crash model is whole-process — a validator stops and restarts, losing unpersisted state — with
+/// nothing between up and down. Component-level failure inside a live validator is outside the
+/// model, and [`LostNotificationsAreRepaired`] shows it is not a harmless omission: it defeats two
+/// of the three mechanisms that would otherwise repair a loss.
 ///
-/// This is what makes both ways a notification can fail harmless. A lost one costs latency, never
-/// correctness and never progress. A *fabricated* one — which a faulty validator can send freely,
-/// notifications being unauthenticated — costs at most a wasted query, since the client acts on
-/// what it then reads and not on what it was told. It also fixes their role: notifications are an
-/// optimization over polling, and a client that ignores them entirely is slower but no less
-/// correct.
+/// This is why the alternative statement — "no result depends on notification delivery" — is not
+/// worth making. In a model where the channel is lossy it cannot fail to hold; it is a property of
+/// the specification rather than of the system.
 ///
-/// **Re-established, not preserved.** Like any exhaustive-search argument this one holds only for
-/// the statements that exist. A future statement that assumed a client learns of a change promptly
-/// would break it, and would have to introduce a delivery assumption to say so.
+/// What repairs an individual loss is [`LostNotificationsAreRepaired`].
 ///
 /// [`Notification`]: crate::worker::Notification
-/// [`ActiveCorrectDriver`]: super::assumptions::ActiveCorrectDriver
-/// [`MissingDependenciesAreRecoverable`]: super::availability::MissingDependenciesAreRecoverable
-pub trait NoProofDependsOnNotifications: NotificationsAreBestEffort {}
+/// [`EventualSynchrony`]: super::assumptions::EventualSynchrony
+pub trait NotificationChannelIsLossy {}
+
+/// **Lemma (A lost notification is repaired).** A client that misses a notification still reaches
+/// the state it would have reached, provided it remains connected to at least one correct validator
+/// that has the change. Three independent mechanisms do this, and none of them replays the lost
+/// message.
+///
+/// *Redundancy.* `ChainClient::listen` opens one subscription per validator in the committee, via
+/// `update_notification_streams`, and processes them concurrently. Every validator that processes a
+/// change notifies about it, so a client loses a notification only when *every* validator it is
+/// subscribed to fails to deliver that one — not when any single one does.
+///
+/// *Resynchronization on (re)subscribe.* Establishing a stream is not just an attachment point: the
+/// same future calls `Client::synchronize_chain_state_from` against that validator before yielding
+/// the stream, precisely because, in the code's own words, "we may have missed notifications since
+/// the last time we synchronized". Since `update_notification_streams` is re-run on every
+/// `Reason::NewBlock`, and a dropped connection is re-established through the same path, a gap in
+/// the stream is closed by *state synchronization* rather than by recovering the messages that fell
+/// in it.
+///
+/// *Coalescing.* No handler applies the change it was told about; each brings the chain up to date.
+/// In `linera_client::chain_listener`, `Reason::NewIncomingBundle` and `Reason::NewEvents` both
+/// reduce to `maybe_notify_inbox_processing`, whose waiting loop runs
+/// `ChainClient::process_inbox_without_prepare` — draining *everything* pending, not the one bundle
+/// named. `Reason::NewBlock` calls `update_wallet` and re-derives event subscriptions. Handlers are
+/// therefore idempotent and depend only on current state, so one run after `k` notifications
+/// achieves what `k` runs would. `Notify::notify_one` stores a permit when no task is waiting, so a
+/// notification arriving *during* a pass starts another rather than being swallowed. ∎
+///
+/// **What is not repaired.** Every mechanism above assumes a failure that is either whole-process or
+/// network-level, because those are the failures the model has. A validator that is up, answering
+/// RPCs and voting normally, but silently delivering no notifications — the partial crash
+/// [`NotificationChannelIsLossy`] describes — defeats two of the three. Redundancy survives only if
+/// such a failure is independent across validators, which a systematic one is not. Resynchronization
+/// never runs, because it is triggered by establishing a stream and no stream ever drops: the client
+/// holds a healthy connection to a validator that has stopped talking.
+///
+/// Coalescing is then irrelevant, since nothing arrives to coalesce. The client is not told it is
+/// learning nothing, and nothing escalates: `ChainListener::next_action` selects over the
+/// notification streams, the cancellation token and its command channel, and there is no timer among
+/// them. Pending bundles stay unprocessed and subscribed events unread for as long as the condition
+/// lasts, which — being outside the fault model — is not bounded by GST or by anything else the
+/// specification states.
+pub trait LostNotificationsAreRepaired: NotificationChannelIsLossy {}
 
 /// **Lemma (A notification is backed by a certificate the validator can serve — except for a new
 /// round).** For every notification a correct validator emits other than `Reason::NewRound`, that
