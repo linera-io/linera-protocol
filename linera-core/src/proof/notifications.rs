@@ -90,11 +90,20 @@ pub trait NotificationImpliesPersistedChange: CorrectValidator + StorageAtomicit
 /// reaped; and [`NotificationImpliesPersistedChange`] orders the save before the dispatch, leaving a
 /// window in which a change is persisted and the process dies before anything is sent.
 ///
-/// All three behave like a crash rather than like corruption, and are modelled the same way
-/// [`CorrectValidator`] models one: permitted freely before GST, and after GST not persisting long
-/// enough to prevent progress. So no result may assume a *particular* notification arrives, and a
-/// result may assume that a client which stays connected to a reachable correct validator
-/// eventually learns.
+/// The third behaves like a crash and is modelled as one: [`CorrectValidator`] permits a crash at
+/// any time, freely before GST and with bounded recovery after. So no result may assume a
+/// *particular* notification arrives, and a result may assume that a client which stays connected
+/// to a reachable correct validator eventually learns.
+///
+/// **The model has no notion of a partial crash, and this is where one would be needed.** A
+/// validator whose notification dispatch stops while its consensus path keeps running is not
+/// described by anything here: it is not faulty, since it signs nothing wrong; it is not crashed,
+/// since the process is alive and answering; and it is not merely "slow or unreachable", the escape
+/// [`CorrectValidator`] does allow, because it responds normally to everything except this. The
+/// crash model is whole-process — a validator stops and restarts, losing unpersisted state — with
+/// nothing between up and down. Component-level failure inside a live validator is outside the
+/// model, and [`LostNotificationsAreRepaired`] shows it is not a harmless omission: it defeats two
+/// of the three mechanisms that would otherwise repair a loss.
 ///
 /// This is why the alternative statement — "no result depends on notification delivery" — is not
 /// worth making. In a model where the channel is lossy it cannot fail to hold; it is a property of
@@ -133,14 +142,20 @@ pub trait NotificationChannelIsLossy {}
 /// achieves what `k` runs would. `Notify::notify_one` stores a permit when no task is waiting, so a
 /// notification arriving *during* a pass starts another rather than being swallowed. ∎
 ///
-/// **What is not repaired.** The mechanisms are conditional on the client having a live subscription
-/// to a validator that holds the change. A client subscribed to nobody, or whose validators are all
-/// unreachable, learns nothing and is not told that it is learning nothing — there is no timer in
-/// `ChainListener::next_action`, which selects over the notification streams, the cancellation token
-/// and its command channel and nothing else. By [`NotificationChannelIsLossy`] that condition is a
-/// pre-GST one, so the model does not admit it persisting; a deployment can still sit in it
-/// indefinitely, with pending bundles unprocessed and subscribed events unread, and nothing in the
-/// implementation escalates.
+/// **What is not repaired.** Every mechanism above assumes a failure that is either whole-process or
+/// network-level, because those are the failures the model has. A validator that is up, answering
+/// RPCs and voting normally, but silently delivering no notifications — the partial crash
+/// [`NotificationChannelIsLossy`] describes — defeats two of the three. Redundancy survives only if
+/// such a failure is independent across validators, which a systematic one is not. Resynchronization
+/// never runs, because it is triggered by establishing a stream and no stream ever drops: the client
+/// holds a healthy connection to a validator that has stopped talking.
+///
+/// Coalescing is then irrelevant, since nothing arrives to coalesce. The client is not told it is
+/// learning nothing, and nothing escalates: `ChainListener::next_action` selects over the
+/// notification streams, the cancellation token and its command channel, and there is no timer among
+/// them. Pending bundles stay unprocessed and subscribed events unread for as long as the condition
+/// lasts, which — being outside the fault model — is not bounded by GST or by anything else the
+/// specification states.
 pub trait LostNotificationsAreRepaired: NotificationChannelIsLossy {}
 
 /// **Lemma (A notification is backed by a certificate the validator can serve — except for a new
