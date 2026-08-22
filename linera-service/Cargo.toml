@@ -129,7 +129,6 @@ linera-views.workspace = true
 linera-wallet-json.workspace = true
 lru.workspace = true
 nonzero_lit.workspace = true
-num-format.workspace = true
 opentelemetry.workspace = true
 opentelemetry-otlp.workspace = true
 opentelemetry_sdk = { workspace = true, features = ["testing"] }

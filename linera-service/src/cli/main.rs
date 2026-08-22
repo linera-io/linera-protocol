@@ -809,6 +809,9 @@ impl Runnable for Job {
                         let BenchmarkOptions {
                             client_mode,
                             fan_out,
+                            skip_message_processing,
+                            max_incoming_bundles_per_block,
+                            light_certificates,
                             num_chains,
                             tokens_per_chain,
                             transactions_per_block,
@@ -980,6 +983,11 @@ impl Runnable for Job {
                                 let core_client = ctx.client.clone();
                                 drop(ctx);
 
+                                // The full client always drains its inbox, so the lite
+                                // client must too or the two modes measure different
+                                // blocks. Only meaningful with cross-chain traffic.
+                                let process_messages = num_chains > 1 && !skip_message_processing;
+
                                 let mut clients: Vec<Arc<dyn BenchmarkClient>> =
                                     Vec::with_capacity(chain_clients.len());
                                 for client in &chain_clients {
@@ -990,11 +998,13 @@ impl Runnable for Job {
                                         nodes.clone(),
                                         committee.clone(),
                                         core_client.clone(),
-                                        false,
+                                        light_certificates,
                                     )
                                     .await?;
                                     clients.push(Arc::new(LiteBenchmarkClient::new(
-                                        lite, false, None,
+                                        lite,
+                                        process_messages,
+                                        max_incoming_bundles_per_block,
                                     )));
                                 }
                                 clients

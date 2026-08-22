@@ -157,6 +157,24 @@ pub struct BenchmarkOptions {
     /// varied on its own; setting it pins fan-out while everything else is held fixed.
     #[arg(long)]
     pub fan_out: Option<usize>,
+
+    /// Keep sending cross-chain messages but never drain the inboxes they fill, isolating
+    /// the sending side. Inboxes then grow for the whole run, which is fine for a short
+    /// benchmark and is not a realistic steady state. `--client-mode lite` only.
+    #[arg(long)]
+    pub skip_message_processing: bool,
+
+    /// The maximum number of incoming message bundles to drain into each block, on top of
+    /// its own operations. Defaults to twice the block's operation count, so a backlog is
+    /// spread over several blocks instead of one huge one. `--client-mode lite` only.
+    #[arg(long)]
+    pub max_incoming_bundles_per_block: Option<usize>,
+
+    /// Broadcast each confirmed certificate in its compact, value-free form (hash plus
+    /// signatures) where possible. A validator that has forgotten the value transparently
+    /// gets a retry with the full certificate. `--client-mode lite` only.
+    #[arg(long)]
+    pub light_certificates: bool,
 }
 
 impl Default for BenchmarkOptions {
@@ -177,6 +195,9 @@ impl Default for BenchmarkOptions {
             single_destination_per_block: false,
             client_mode: ClientMode::default(),
             fan_out: None,
+            skip_message_processing: false,
+            max_incoming_bundles_per_block: None,
+            light_certificates: false,
         }
     }
 }

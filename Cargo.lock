@@ -5836,7 +5836,6 @@ dependencies = [
  "native-fungible",
  "non-fungible",
  "nonzero_lit",
- "num-format",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",

@@ -16,7 +16,6 @@ use std::{
 
 use anyhow::{anyhow, bail, Context as _, Result};
 use futures::future::join_all;
-
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey, ValidatorSignature},
     data_types::{Epoch, Round, Timestamp},
@@ -339,7 +338,7 @@ impl<Env: Environment> LiteChainClient<Env> {
 /// appear -- as an in-order per-origin prefix -- in *every* list. Bundles from one origin are
 /// FIFO by cursor, so for each origin this compares the lists element by element and keeps the
 /// longest common leading run; an origin missing from any list contributes nothing. Origins are
-/// visited in a deterministic (sorted) order. See `fetch_incoming_bundles` for why only this
+/// visited in a deterministic (sorted) order. See `fetch_confirmed_and_pending` for why only this
 /// safe intersection is used.
 fn common_prefix_bundles(per_node: Vec<Vec<IncomingBundle>>) -> Vec<IncomingBundle> {
     let Some((first, rest)) = per_node.split_first() else {
