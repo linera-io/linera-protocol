@@ -5742,3 +5742,65 @@ where
     );
     Ok(())
 }
+
+/// A destination that refuses checkpoints is still caught up, by replaying blocks.
+///
+/// Validators are free not to adopt someone else's execution state. Failing the round when a push
+/// is rejected would leave such a destination permanently behind — strictly worse than never
+/// having offered the checkpoint, because the replay below never runs.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_a_destination_refusing_checkpoints_still_replays<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use crate::remote_node::RemoteNode;
+
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let chain = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let chain_id = chain.chain_id();
+
+    builder.set_fault_type([3], FaultType::Offline);
+    chain
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    chain
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    let checkpoint_cert = chain.checkpoint().await.unwrap().unwrap();
+    let checkpoint_height = checkpoint_cert.block().header.height;
+    assert_eq!(checkpoint_height, BlockHeight::from(2));
+    let tip = chain.chain_info().await?.next_block_height;
+
+    // Honest for ordinary blocks, refuses only the checkpoint.
+    builder.set_fault_type([3], FaultType::RejectCheckpoints);
+    assert_eq!(builder.next_block_height(3, chain_id).await, BlockHeight(0));
+
+    let storage = builder.validator_storage(0);
+    let node = builder.node(3);
+    let mut sender_task = crate::chain_worker::export::BlockSender {
+        remote_node: RemoteNode {
+            public_key: node.name(),
+            node,
+        },
+        storage,
+        certificate_upload_batch_size: 100,
+    };
+
+    // The window (2) cannot reach the tip, so the push is attempted and rejected. The round must
+    // still return the height replaying reached, not an error.
+    let reached = sender_task
+        .send_missing_blocks(chain_id, tip, None, 2, Some(checkpoint_height))
+        .await?;
+    assert_eq!(
+        reached,
+        BlockHeight(2),
+        "a rejected checkpoint must fall back to replaying, not fail the round",
+    );
+    Ok(())
+}

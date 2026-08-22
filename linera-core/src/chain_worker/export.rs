@@ -1933,6 +1933,13 @@ fn is_chain_scoped(error: &chain_client::Error) -> bool {
 /// Halving the destination's window for it would punish the wrong side, but backing off only the
 /// one pair leaves every other pair reading at full rate — so the control loop cannot see the
 /// bottleneck it is creating. These shrink the queue's *global* budget instead.
+fn is_local_scoped(error: &chain_client::Error) -> bool {
+    matches!(
+        error,
+        chain_client::Error::ReadCertificatesError(_) | chain_client::Error::ViewError(_)
+    )
+}
+
 /// How a block the *destination* asked for but we cannot supply is reported.
 ///
 /// Deliberately not a read error: `is_local_scoped` would halve the queue's shared budget, so one
@@ -1940,13 +1947,6 @@ fn is_chain_scoped(error: &chain_client::Error) -> bool {
 /// client can map this to a read error safely because it has no shared window; export cannot.
 fn missing_block_error(hash: CryptoHash) -> chain_client::Error {
     chain_client::Error::RemoteNodeError(NodeError::BlocksNotFound(vec![hash]))
-}
-
-fn is_local_scoped(error: &chain_client::Error) -> bool {
-    matches!(
-        error,
-        chain_client::Error::ReadCertificatesError(_) | chain_client::Error::ViewError(_)
-    )
 }
 
 /// Escalating backoff shared by both scopes: doubles from `retry_delay` per consecutive failure,
@@ -2055,9 +2055,19 @@ where
             }
         };
         if next_height.0.saturating_add(max_blocks) < target_next_height.0 {
-            next_height = self
+            // Best-effort, deliberately: a destination may refuse a checkpoint and must still be
+            // caught up by replaying. Propagating here would fail the round before the replay
+            // below runs, leaving such a destination permanently behind.
+            match self
                 .push_checkpoint_if_useful(chain_id, next_height, checkpoint)
-                .await?;
+                .await
+            {
+                Ok(reached) => next_height = reached,
+                Err(error) => debug!(
+                    %chain_id, %error,
+                    "Checkpoint push rejected; falling back to replaying blocks",
+                ),
+            }
         }
         let last = target_next_height
             .0
@@ -2093,8 +2103,9 @@ where
     /// already restores rather than preprocesses a block that starts with one.
     ///
     /// Mirrors the client's `RemoteNodeUpdater::push_checkpoint_if_useful`. A missing checkpoint
-    /// and an absent certificate are both *not useful*, never errors: the caller's replay path is
-    /// still correct wherever a checkpoint cannot be had.
+    /// and an absent certificate are both *not useful* rather than errors. A push the destination
+    /// **rejects** does return an error, which the caller swallows: replaying blocks is still
+    /// correct wherever a checkpoint cannot be had, and a validator is free not to accept one.
     ///
     /// `checkpoint_height` is announced by the chain's own worker rather than read here. Export
     /// must never open the chain's partition to find it: `Storage` opens it exclusively, and a
