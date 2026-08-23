@@ -183,9 +183,12 @@ pub struct BenchmarkOptions {
     #[arg(long)]
     pub max_incoming_bundles_per_block: Option<usize>,
 
-    /// Interleave a self-transfer after every cross-chain transfer, so roughly half the
-    /// traffic stays on its own chain. Without this a chain only ever sends elsewhere;
-    /// with `--fan-out 0` it only ever sends to itself. Ignored at `--fan-out 0`.
+    /// Mix self-transfers in with the cross-chain ones, so roughly half the traffic stays
+    /// on its own chain. Which half is random, not alternating: the generator shuffles its
+    /// destination list, so this sets the ratio rather than an order. Without this a chain
+    /// only ever sends elsewhere; with `--fan-out 0` it only ever sends to itself, and this
+    /// flag is then ignored. Under `--single-destination-per-block` the mix applies per
+    /// block rather than per transaction, so whole blocks are self-transfers.
     #[arg(long)]
     pub mixed_self_transfers: bool,
 

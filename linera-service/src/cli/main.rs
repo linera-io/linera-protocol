@@ -941,9 +941,10 @@ impl Runnable for Job {
                                             .collect()
                                     }
                                 };
-                                // Restores the old `mixed` traffic mode: alternate a
-                                // cross-chain transfer with one back to the source, so the
-                                // generator must be told not to skip its own chain.
+                                // Restores the old `mixed` traffic mode: one self entry
+                                // per cross-chain entry, which the generator then shuffles,
+                                // giving a ~50/50 ratio rather than an alternation. It must
+                                // also be told not to skip its own chain.
                                 let destinations =
                                     if mixed_self_transfers && !destinations.is_empty() {
                                         destinations
