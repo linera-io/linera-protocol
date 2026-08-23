@@ -809,6 +809,7 @@ impl Runnable for Job {
                         let BenchmarkOptions {
                             client_mode,
                             fan_out,
+                            mixed_self_transfers,
                             skip_message_processing,
                             max_incoming_bundles_per_block,
                             light_certificates,
@@ -940,6 +941,19 @@ impl Runnable for Job {
                                             .collect()
                                     }
                                 };
+                                // Restores the old `mixed` traffic mode: alternate a
+                                // cross-chain transfer with one back to the source, so the
+                                // generator must be told not to skip its own chain.
+                                let destinations =
+                                    if mixed_self_transfers && !destinations.is_empty() {
+                                        destinations
+                                            .into_iter()
+                                            .flat_map(|other| [other, source])
+                                            .collect()
+                                    } else {
+                                        destinations
+                                    };
+
                                 if let Some(app_id) = fungible_application_id {
                                     Ok(Box::new(FungibleTransferGenerator::new(
                                         app_id,
@@ -952,7 +966,7 @@ impl Runnable for Job {
                                         source,
                                         destinations,
                                         single_destination_per_block,
-                                        true,
+                                        !mixed_self_transfers,
                                     )?))
                                 }
                             })

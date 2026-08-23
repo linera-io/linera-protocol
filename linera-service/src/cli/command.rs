@@ -183,6 +183,12 @@ pub struct BenchmarkOptions {
     #[arg(long)]
     pub max_incoming_bundles_per_block: Option<usize>,
 
+    /// Interleave a self-transfer after every cross-chain transfer, so roughly half the
+    /// traffic stays on its own chain. Without this a chain only ever sends elsewhere;
+    /// with `--fan-out 0` it only ever sends to itself. Ignored at `--fan-out 0`.
+    #[arg(long)]
+    pub mixed_self_transfers: bool,
+
     /// Broadcast each confirmed certificate in its compact, value-free form (hash plus
     /// signatures) where possible. A validator that has forgotten the value transparently
     /// gets a retry with the full certificate. `--client-mode lite` only.
@@ -208,6 +214,7 @@ impl Default for BenchmarkOptions {
             single_destination_per_block: false,
             client_mode: ClientMode::default(),
             fan_out: None,
+            mixed_self_transfers: false,
             skip_message_processing: false,
             max_incoming_bundles_per_block: None,
             light_certificates: false,
