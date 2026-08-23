@@ -961,6 +961,7 @@ impl Runnable for Job {
                                         source,
                                         destinations,
                                         single_destination_per_block,
+                                        !mixed_self_transfers,
                                     )?))
                                 } else {
                                     Ok(Box::new(NativeFungibleTransferGenerator::new(

@@ -183,15 +183,22 @@ pub struct FungibleTransferGenerator {
     destination_index: usize,
     rng: SmallRng,
     single_destination_per_block: bool,
+    avoid_self: bool,
 }
 
 impl FungibleTransferGenerator {
     /// Creates a generator that sends fungible token transfers from the source chain.
+    ///
+    /// `avoid_self` has the same meaning as on [`NativeFungibleTransferGenerator::new`]: with
+    /// it set, `source_chain_id` is skipped whenever the destination list has more than one
+    /// entry, so a caller wanting a mix of self- and cross-chain traffic passes `false` and a
+    /// list that already contains `source_chain_id`.
     pub fn new(
         application_id: ApplicationId,
         source_chain_id: ChainId,
         mut destination_chains: Vec<ChainId>,
         single_destination_per_block: bool,
+        avoid_self: bool,
     ) -> Result<Self, BenchmarkError> {
         // With a single chain, send to self (matching old behavior).
         if destination_chains.is_empty() {
@@ -206,6 +213,7 @@ impl FungibleTransferGenerator {
             destination_index: 0,
             rng,
             single_destination_per_block,
+            avoid_self,
         })
     }
 
@@ -217,7 +225,10 @@ impl FungibleTransferGenerator {
         let destination_chain_id = self.destination_chains[self.destination_index];
         self.destination_index += 1;
         // Skip self when there are other destinations available.
-        if destination_chain_id == self.source_chain_id && self.destination_chains.len() > 1 {
+        if destination_chain_id == self.source_chain_id
+            && self.destination_chains.len() > 1
+            && self.avoid_self
+        {
             self.next_destination()
         } else {
             destination_chain_id
@@ -931,5 +942,80 @@ pub fn fungible_transfer(
     Operation::User {
         application_id,
         bytes,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use linera_base::{crypto::CryptoHash, identifiers::ChainId};
+
+    use super::*;
+
+    fn chain(seed: &str) -> ChainId {
+        ChainId(CryptoHash::test_hash(seed))
+    }
+
+    /// `avoid_self` is what makes a mixed self/cross-chain workload expressible, and both
+    /// generators must honour it: the CLI hands them the same interleaved destination list,
+    /// so one ignoring the flag would silently measure 100% cross-chain traffic.
+    #[test]
+    fn avoid_self_decides_whether_the_source_is_a_destination() {
+        let source = chain("source");
+        let other = chain("other");
+        // As the CLI builds it for --mixed-self-transfers: one self entry per cross entry.
+        let interleaved = vec![other, source];
+
+        for avoid_self in [true, false] {
+            let mut native = NativeFungibleTransferGenerator::new(
+                source,
+                interleaved.clone(),
+                false,
+                avoid_self,
+            )
+            .unwrap();
+            let mut fungible = FungibleTransferGenerator::new(
+                ApplicationId::new(CryptoHash::test_hash("app")),
+                source,
+                interleaved.clone(),
+                false,
+                avoid_self,
+            )
+            .unwrap();
+
+            let native_hits = (0..100)
+                .filter(|_| native.next_destination() == source)
+                .count();
+            let fungible_hits = (0..100)
+                .filter(|_| fungible.next_destination() == source)
+                .count();
+
+            if avoid_self {
+                assert_eq!(native_hits, 0, "native sent to itself despite avoid_self");
+                assert_eq!(
+                    fungible_hits, 0,
+                    "fungible sent to itself despite avoid_self"
+                );
+            } else {
+                // The list is shuffled, so this is a ratio and not an alternation.
+                assert!(
+                    (30..=70).contains(&native_hits),
+                    "native self-share {native_hits}/100 is not ~half"
+                );
+                assert!(
+                    (30..=70).contains(&fungible_hits),
+                    "fungible self-share {fungible_hits}/100 is not ~half"
+                );
+            }
+        }
+    }
+
+    /// A lone destination is kept even when it is the source, or the generator would recurse
+    /// forever looking for somewhere else to send.
+    #[test]
+    fn a_sole_self_destination_survives_avoid_self() {
+        let source = chain("source");
+        let mut generator =
+            NativeFungibleTransferGenerator::new(source, vec![], false, true).unwrap();
+        assert_eq!(generator.next_destination(), source);
     }
 }
