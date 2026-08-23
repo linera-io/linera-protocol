@@ -691,9 +691,9 @@ Start a single benchmark process, maintaining a given TPS
 
   Possible values:
   - `full`:
-    A real `ChainClient`: executes every block locally and keeps chain state, so it measures what a client experiences. Two round trips per block
+    A real `ChainClient`: executes every block locally and keeps chain state, so it measures what a client experiences
   - `lite`:
-    A storage-free proposer: keeps no chain state and executes nothing, so the generator stops being part of what is measured. Three round trips per block
+    A storage-free proposer: keeps no chain state and executes nothing, so the generator stops being part of what is measured
 
 * `--fan-out <FAN_OUT>` — How many distinct destination chains each chain sends to. Unset means every other benchmarked chain, so cross-chain fan-out grows with `--num-chains` and cannot be varied on its own; setting it pins fan-out while everything else is held fixed
 * `--skip-message-processing` — Keep sending cross-chain messages but never drain the inboxes they fill, isolating the sending side. Inboxes then grow for the whole run, which is fine for a short benchmark and is not a realistic steady state. `--client-mode lite` only
@@ -739,9 +739,9 @@ Run multiple benchmark processes in parallel
 
   Possible values:
   - `full`:
-    A real `ChainClient`: executes every block locally and keeps chain state, so it measures what a client experiences. Two round trips per block
+    A real `ChainClient`: executes every block locally and keeps chain state, so it measures what a client experiences
   - `lite`:
-    A storage-free proposer: keeps no chain state and executes nothing, so the generator stops being part of what is measured. Three round trips per block
+    A storage-free proposer: keeps no chain state and executes nothing, so the generator stops being part of what is measured
 
 * `--fan-out <FAN_OUT>` — How many distinct destination chains each chain sends to. Unset means every other benchmarked chain, so cross-chain fan-out grows with `--num-chains` and cannot be varied on its own; setting it pins fan-out while everything else is held fixed
 * `--skip-message-processing` — Keep sending cross-chain messages but never drain the inboxes they fill, isolating the sending side. Inboxes then grow for the whole run, which is fine for a short benchmark and is not a realistic steady state. `--client-mode lite` only

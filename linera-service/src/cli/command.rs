@@ -67,11 +67,19 @@ impl std::str::FromStr for ValidatorToAdd {
 #[serde(rename_all = "kebab-case")]
 pub enum ClientMode {
     /// A real `ChainClient`: executes every block locally and keeps chain state, so it
-    /// measures what a client experiences. Two round trips per block.
+    /// measures what a client experiences.
+    ///
+    /// Two network round trips per block with the root `--allow-fast-blocks` option, which
+    /// is off by default; without it the client skips the fast round and pays a third for
+    /// the validated-then-confirmed path.
     #[default]
     Full,
     /// A storage-free proposer: keeps no chain state and executes nothing, so the generator
-    /// stops being part of what is measured. Three round trips per block.
+    /// stops being part of what is measured.
+    ///
+    /// Always proposes in `Round::Fast`, which a single-super-owner chain designates as its
+    /// first round; it cannot use the validated-then-confirmed path, so unlike `full` this
+    /// is unaffected by `--allow-fast-blocks`. Three round trips per block.
     ///
     /// Reads the validator set and quorum weights from the wallet's *genesis* committee, so
     /// on a network whose committee has since changed it would target stale addresses. Fine
