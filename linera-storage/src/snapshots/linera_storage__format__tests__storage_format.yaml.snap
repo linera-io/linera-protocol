@@ -51,7 +51,7 @@ partitions:
                   - 3
             value:
               Bcs:
-                type_name: ConfirmedBlock
+                type_name: Block
   - name: BlobId
     variant: 4
     payload: BlobId

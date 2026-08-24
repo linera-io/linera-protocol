@@ -5932,6 +5932,7 @@ dependencies = [
  "papaya",
  "prometheus",
  "serde",
+ "serde-reflection",
  "test-case",
  "test-log",
  "tokio",

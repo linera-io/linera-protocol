@@ -584,9 +584,13 @@ impl RootKey {
     }
 }
 
+/// An event identifier with the chain removed, because the chain is carried by the
+/// [`RootKey`] of the partition the event is stored in.
 #[derive(Debug, Serialize, Deserialize)]
-struct RestrictedEventId {
+pub struct RestrictedEventId {
+    /// The stream the event belongs to.
     pub stream_id: StreamId,
+    /// The index of the event within that stream.
     pub index: u32,
 }
 

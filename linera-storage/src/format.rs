@@ -17,6 +17,8 @@
 //! the data domain with `ROOT_KEY_DOMAIN` to separate it from its root-key registry. Those
 //! belong to `linera-views` and are not described here.
 
+use std::collections::BTreeSet;
+
 use serde::Serialize;
 
 use crate::db_storage::EntryKey;
@@ -112,6 +114,28 @@ fn fixed(key: EntryKey) -> KeyFormat {
 }
 
 impl StorageFormat {
+    /// The names of the types whose BCS encodings appear in keys and values.
+    ///
+    /// Every one of these must resolve in the storage type registry, or a decoder handed this
+    /// description has no way to interpret the bytes. `tests/format.rs` checks it.
+    pub fn serialized_type_names(&self) -> BTreeSet<&'static str> {
+        let mut names = BTreeSet::new();
+        for partition in &self.partitions {
+            let PartitionBody::Flat { entries } = &partition.body else {
+                continue;
+            };
+            for entry in entries {
+                if let KeyFormat::Bcs { type_name } = &entry.key {
+                    names.insert(*type_name);
+                }
+                if let ValueFormat::Bcs { type_name } = &entry.value {
+                    names.insert(*type_name);
+                }
+            }
+        }
+        names
+    }
+
     /// Describes the layout this build of `linera-storage` reads and writes.
     pub fn current() -> Self {
         StorageFormat {
@@ -160,9 +184,10 @@ impl StorageFormat {
                             },
                             FlatEntry {
                                 key: fixed(EntryKey::Block),
-                                value: ValueFormat::Bcs {
-                                    type_name: "ConfirmedBlock",
-                                },
+                                // Written as a `ConfirmedBlock`, but that wrapper serializes
+                                // transparently as the `Block` it holds: its hash is recomputed
+                                // on deserialization rather than stored.
+                                value: ValueFormat::Bcs { type_name: "Block" },
                             },
                         ],
                     },
