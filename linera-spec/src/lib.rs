@@ -171,8 +171,19 @@
 //!
 //! # Coverage
 //!
-//! Established today: agreement on the *sequence of blocks* of a single microchain, and what a
-//! certified block guarantees to nodes that were absent when it was certified.
+//! Established today, in four areas:
+//!
+//! * **Agreement** on the *sequence of blocks* of a single microchain, with its accountability
+//!   converse and its progress counterpart — the three headline results above.
+//! * **Availability** — what a certified block guarantees to nodes that were absent when it was
+//!   certified, and what a crash costs.
+//! * **Conservation across a checkpoint** — that events, messages, blobs and execution state behave
+//!   as they would have without one ([`linera_chain::proof::checkpoints`]).
+//! * **The grounding of committee knowledge** — that no committee certifies its own introduction,
+//!   which is what makes induction on the epoch legitimate ([`CommitteeKnowledgeIsWellFounded`]).
+//!
+//! Client notifications are specified too ([`linera_core::proof::notifications`]), but as a channel
+//! the model treats as lossy rather than as a guarantee anything rests on.
 //!
 //! Not yet covered, in the sense that no statement here constrains them. Where consensus does say
 //! something adjacent, it is named.
@@ -194,13 +205,18 @@
 //!   inbox holds only bundles its origin really sent ([`InboxHoldsOnlySentBundles`]), that no two
 //!   blocks consume the same bundle ([`BundleConsumedAtMostOnce`]), and that each chain's own
 //!   block sequence is unique ([`UniqueChain`]).
-//! * **Committee reconfiguration** — epoch changes are agreed *by* this protocol on the admin
-//!   chain; [`EpochAgreement`] records what is assumed about them.
+//! * **Committee reconfiguration** — partly covered now. [`CommitteeKnowledgeIsWellFounded`] fixes
+//!   where a node's knowledge of a committee comes from, and [`MaxByzantineWeight`] is assumed of
+//!   every epoch whose committee has not been revoked, so the fault bound accumulates as epochs are
+//!   created. What remains assumed is that the committee *for* an epoch is agreed, which
+//!   [`EpochAgreement`] records; and revocation is not usable in practice, so no committee is ever
+//!   retired and that accumulation never stops.
 //! * **Chain ownership and lifecycle** — who may propose at a height, and how that changes;
 //!   [`ConsensusInstance`] records what is assumed about it.
 //! * **Resource control and fees** — metering, declared block limits, and fee conservation.
 //! * **Event streams** as a subsystem — append-only-ness and the publisher-side guarantees behind
-//!   a cross-chain `OracleResponse::Event` read.
+//!   a cross-chain `OracleResponse::Event` read. What is stated concerns only the checkpoint
+//!   boundary: [`EventFloorTracksCheckpoints`] says which indices stay readable across one.
 //!
 //! [`CommitAgreement`]: linera_chain::manager::proof::safety::CommitAgreement
 //! [`UniqueChain`]: linera_chain::manager::proof::safety::UniqueChain
@@ -211,6 +227,8 @@
 //! [`MaxByzantineWeight`]: linera_chain::manager::proof::model::MaxByzantineWeight
 //! [`DeterministicExecution`]: linera_chain::manager::proof::model::DeterministicExecution
 //! [`EpochAgreement`]: linera_chain::manager::proof::model::EpochAgreement
+//! [`CommitteeKnowledgeIsWellFounded`]: linera_chain::proof::epochs::CommitteeKnowledgeIsWellFounded
+//! [`EventFloorTracksCheckpoints`]: linera_chain::proof::checkpoints::EventFloorTracksCheckpoints
 //! [`ConsensusInstance`]: linera_chain::manager::proof::model::ConsensusInstance
 //! [`CertifiedBlockWasExecuted`]: linera_chain::manager::proof::commit::CertifiedBlockWasExecuted
 //! [`IncomingBundlesAreSelfDerived`]: linera_chain::manager::proof::commit::IncomingBundlesAreSelfDerived
