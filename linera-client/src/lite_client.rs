@@ -583,9 +583,6 @@ mod tests {
                 kind: CertificateKind::Confirmed,
             },
             round: Round::Fast,
-            unlocking_round: None,
-            first_round: true,
-            justification_commitment: None,
             signature: ValidatorSignature::sign_prehash(
                 &ValidatorKeypair::generate().secret_key,
                 value_hash,
