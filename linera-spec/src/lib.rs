@@ -132,8 +132,8 @@
 //!
 //! # Known gaps
 //!
-//! The specification records, rather than papers over, the places where the implementation does
-//! not quite discharge what a proof wants. In rough order of significance:
+//! Three places where the implementation does not deliver what a proof wants. Each needs a change
+//! to the code, or a weaker result, to close; none is closed by rereading.
 //!
 //! * [`FullReachability`] — the lock-recovery step wants the proposer to reach *every* correct
 //!   validator, while `synchronize_chain_state` guarantees only a quorum plus a grace period.
@@ -150,17 +150,24 @@
 //!   [`CertifiedBlockWasExecuted`] and [`IncomingBundlesAreSelfDerived`], and unlike the
 //!   accountability results both need [`MaxByzantineWeight`]. Tracked in
 //!   [issue #6675](https://github.com/linera-io/linera-protocol/issues/6675).
-//! * [`FastRetryPreservesBlock`] — closing the gap between "same proposal" and "same block" for a
-//!   fast-round retry relies on [`DeterministicExecution`] rather than on a runtime check at the
-//!   retry. Affects safety, and is the one step that reaches outside consensus into execution.
-//! * [`ProposalGate`] — several safety-critical guards live at the call site in
-//!   `chain_worker::state` rather than inside the [`ChainManager`] methods they protect; in
-//!   particular [`create_final_vote`] would sign twice in a round if invoked directly.
-//! * [`SafetyStateRecovery`] — the correspondence between a [`ManagerSafetySnapshot`] and the
-//!   instance it is restored into rests on a height check at the single call site, not on
-//!   anything the type enforces.
-//! * [`VoteConstructionSites`] — an exhaustive-search argument over the five signing sites, which
-//!   a sixth would invalidate.
+//!
+//! # Arguments that rest on the current shape of the code
+//!
+//! These are not gaps. Each is sound as it stands, but holds because of how the code is arranged
+//! today rather than by construction, so a change of the right kind invalidates the *argument*
+//! without any statement becoming visibly wrong. They are listed so that change can be recognized
+//! when it happens.
+//!
+//! | statement | what would invalidate it |
+//! |---|---|
+//! | [`VoteConstructionSites`] | a sixth signing site; the argument is an exhaustive search over the five that exist |
+//! | [`ProposalGate`] | a new caller of the [`ChainManager`] methods it protects — the guards live at the call site in `chain_worker::state`, so [`create_final_vote`] would sign twice in a round if invoked directly |
+//! | [`SafetyStateRecovery`] | a second restore site; the correspondence between a [`ManagerSafetySnapshot`] and the instance it is restored into rests on a height check at the one call site, not on anything the type enforces |
+//!
+//! The last two describe a public method whose precondition is met by convention rather than by
+//! the type. That is a latent hazard as well as a maintenance obligation — the same shape as
+//! [issue #6686](https://github.com/linera-io/linera-protocol/issues/6686), which tracks it for
+//! `apply_confirmed_block`.
 //!
 //! # Coverage
 //!
@@ -178,6 +185,10 @@
 //!   supplied to a validator lacking them ([`MissingDependenciesAreRecoverable`]), and that its
 //!   outputs — published blobs, events and the certificate — reach storage before the block counts
 //!   as processed ([`BlockOutputsArePersisted`]).
+//!
+//!   Safety reaches into execution in exactly one place: [`FastRetryPreservesBlock`] closes the
+//!   step from "same proposal" to "same block" with [`DeterministicExecution`] rather than a
+//!   runtime check at the retry. Everywhere else the two are kept apart.
 //! * **Cross-chain messaging** as a subsystem — delivery in particular: nothing states that an
 //!   outbox is ever drained, so no bundle is guaranteed to arrive. What *is* stated is that an
 //!   inbox holds only bundles its origin really sent ([`InboxHoldsOnlySentBundles`]), that no two
