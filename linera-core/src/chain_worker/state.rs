@@ -43,6 +43,7 @@ use linera_storage::{Clock as _, Storage};
 use linera_views::{
     context::{Context, InactiveContext},
     views::{ReplaceContext as _, RootView as _, View as _},
+    ViewError,
 };
 use tokio::sync::oneshot;
 use tracing::{debug, info, instrument, trace, warn};
@@ -130,8 +131,8 @@ where
     chain_modes: Option<Arc<sync::RwLock<ChainModes>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
-    /// Set to `true` if a database `save` failure has left storage potentially
-    /// inconsistent.
+    /// Set to `true` once this instance has been retired: the cache has dropped it and a
+    /// replacement may already be serving the chain, so it must not write again.
     poisoned: bool,
     /// The process-wide export queue, if the server enabled block export.
     block_export: Option<BlockExportHandle>,
@@ -242,11 +243,28 @@ where
         self.chain.rollback();
     }
 
-    /// Returns `WorkerError::PoisonedWorker` if the worker is poisoned due to a database
-    /// `save` failure.
+    /// Returns `WorkerError::PoisonedWorker` if this instance has been retired after a storage
+    /// write that also evicted it from the worker cache.
     pub(crate) fn check_not_poisoned(&self) -> Result<(), WorkerError> {
         ensure!(!self.poisoned, WorkerError::PoisonedWorker);
         Ok(())
+    }
+
+    /// Retires this instance if `result` carries an error that also evicts it from the worker
+    /// cache, so a writer already queued on our lock cannot go on using an instance the cache has
+    /// replaced. Must be called while the write guard is held.
+    fn poison_if_must_reload<T>(&mut self, result: Result<T, ViewError>) -> Result<T, ViewError> {
+        if let Err(error) = &result {
+            if error.must_reload_view() {
+                tracing::warn!(
+                    chain_id = %self.chain_id(),
+                    ?error,
+                    "Storage write failed; retiring this chain worker instance"
+                );
+                self.poisoned = true;
+            }
+        }
+        result
     }
 
     /// Updates the last-access timestamp to the current time.
@@ -929,24 +947,29 @@ where
             .map(|blobs| blobs.into_values().collect::<Vec<_>>());
 
         if let Ok(blobs) = &blobs_result {
-            self.storage
+            let result = self
+                .storage
                 .write_blobs_and_certificate(blobs, &certificate)
-                .await?;
+                .await;
+            self.poison_if_must_reload(result)?;
             let events = block
                 .body
                 .events
                 .iter()
                 .flatten()
                 .map(|event| (event.id(chain_id), event.value.clone()));
-            self.storage.write_events(events).await?;
+            let result = self.storage.write_events(events).await;
+            self.poison_if_must_reload(result)?;
         }
 
         // Update the blob state with last used certificate hash.
         let blob_state = certificate.value().to_blob_state(blobs_result.is_ok());
         let blob_ids = required_blob_ids.into_iter().collect::<Vec<_>>();
-        self.storage
+        let result = self
+            .storage
             .maybe_write_blob_states(&blob_ids, blob_state)
-            .await?;
+            .await;
+        self.poison_if_must_reload(result)?;
 
         let blobs = blobs_result?
             .into_iter()
