@@ -27,6 +27,9 @@ pub mod util;
 /// Tooling for running throughput benchmarks against a network.
 #[cfg(not(web))]
 pub mod benchmark;
+/// A storage-free client used as a benchmark load generator.
+#[cfg(not(web))]
+pub mod lite_client;
 
 #[cfg(test)]
 mod unit_tests;
