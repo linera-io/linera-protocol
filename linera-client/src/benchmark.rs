@@ -842,22 +842,33 @@ impl<Env: Environment> Benchmark<Env> {
         let owner = chain_client.owner().await?;
 
         loop {
-            tokio::select! {
-                biased;
+            // Deliberately NOT raced against the shutdown signal. `select!` drops the losing
+            // future, and dropping a commit mid-flight abandons a block the validators have
+            // already voted on: the storage-free client keeps no local record of it, so the
+            // chain is left with an uncertified proposal at that height and every later
+            // proposal there is rejected with "Already voted to confirm a different block".
+            // Finishing the block first costs at most one block of shutdown latency.
+            if shutdown_notifier.is_cancelled() {
+                info!("Shutdown signal received, stopping benchmark");
+                break;
+            }
 
-                _ = shutdown_notifier.cancelled() => {
-                    info!("Shutdown signal received, stopping benchmark");
-                    break;
-                }
-                result = chain_client.commit_operations(
-                    generator.generate_operations(owner, transactions_per_block),
-                ) => {
-                    result?;
+            chain_client
+                .commit_operations(generator.generate_operations(owner, transactions_per_block))
+                .await?;
 
-                    let current_bps_count = bps_count.fetch_add(1, Ordering::Relaxed) + 1;
-                    if current_bps_count >= bps {
-                        notifier.notified().await;
+            let current_bps_count = bps_count.fetch_add(1, Ordering::Relaxed) + 1;
+            if current_bps_count >= bps {
+                // Safe to race: waiting on the notifier holds no chain state, and it would
+                // otherwise block until the next tick even after shutdown.
+                tokio::select! {
+                    biased;
+
+                    _ = shutdown_notifier.cancelled() => {
+                        info!("Shutdown signal received, stopping benchmark");
+                        break;
                     }
+                    _ = notifier.notified() => {}
                 }
             }
         }
