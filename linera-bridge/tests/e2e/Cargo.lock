@@ -4016,12 +4016,14 @@ name = "linera-client"
 version = "0.15.21"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bcs",
  "cfg_aliases",
  "clap",
  "futures",
  "hdrhistogram",
  "linera-base",
+ "linera-cache",
  "linera-chain",
  "linera-core",
  "linera-execution",

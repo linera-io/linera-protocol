@@ -25,7 +25,8 @@ mod local_node;
 pub mod node;
 /// Utilities for notifying subscribers about chain events.
 pub mod notifier;
-mod remote_node;
+/// A validator node paired with the validator's public key.
+pub mod remote_node;
 /// Helpers for writing tests against the core protocol.
 #[cfg(with_testing)]
 #[path = "unit_tests/test_utils.rs"]
