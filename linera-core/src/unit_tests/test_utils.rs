@@ -1399,6 +1399,11 @@ where
         chain.exported_heights.get().clone().into()
     }
 
+    /// Returns the public key of the validator at `index`.
+    pub fn validator_public_key(&self, index: usize) -> ValidatorPublicKey {
+        self.node_provider.all_nodes()[index].public_key
+    }
+
     /// Returns how many chain workers the validator at `index` currently has resident.
     pub async fn resident_chain_workers(&self, index: usize) -> usize {
         let validator = self.node_provider.all_nodes()[index].clone();

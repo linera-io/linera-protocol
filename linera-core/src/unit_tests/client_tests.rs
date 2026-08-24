@@ -4509,6 +4509,84 @@ where
     Ok(())
 }
 
+/// A validator that RECEIVES a block must not export it back to the validators that signed it.
+///
+/// The receive path runs the same `execute_contiguous_block` as a proposal, so without the
+/// signature check every validator re-exported each block straight back at its senders. Measured
+/// on a 2.5M-block catch-up before the fix: 3.18M sends back to the sender, one per block received,
+/// every one of them discarded on arrival because that peer was never behind.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_a_receiver_does_not_export_back_to_signers<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new_with_block_export(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = sender.chain_id();
+
+    // A fixed run rather than poll-until-satisfied: the quantity under test is how far the
+    // receivers' echo climbs RELATIVE to the tip, so the tip has to get well clear of the one
+    // block that can leak before any signature state exists.
+    const BLOCKS: usize = 12;
+    for _ in 0..BLOCKS {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+        builder
+            .clock()
+            .add(linera_base::data_types::TimeDelta::from_millis(50));
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(50)).await;
+    }
+
+    let tip = sender.chain_info().await?.next_block_height;
+
+    // The control, and the property that must survive the optimisation: every validator holds
+    // the whole chain. Coverage now comes from signatures PLUS exports rather than exports
+    // alone, so asserting the proposer exported to someone would be wrong — with a quorum of 3
+    // of 4 signing, it frequently has nobody left to export to, which is the point.
+    for index in 0..4 {
+        assert_eq!(
+            builder.next_block_height(index, chain_id).await,
+            tip,
+            "validator {index} does not hold the chain up to {tip}; suppressing exports to \
+             signers must not cost delivery"
+        );
+    }
+
+    // Validators 1..4 only ever RECEIVED this chain's blocks, and every certificate carries the
+    // signatures of the peers that already hold it — so each has nothing to send and never
+    // acknowledges an export. `exported_heights` records ACKNOWLEDGED sends, so a receiver that
+    // echoes shows heights climbing here; one that does not stays at zero.
+    // Bounded rather than zero: the very first block of a chain is queued before any signature
+    // state for it exists, so one may still be echoed. What must NOT happen is the receiver
+    // tracking the tip — that is the ongoing echo, one send per block received, and it is what
+    // multiplies with committee size.
+    for index in 1..4 {
+        let exported = builder.exported_heights(index, chain_id).await;
+        let highest = exported
+            .values()
+            .max()
+            .copied()
+            .unwrap_or(BlockHeight::ZERO);
+        assert!(
+            highest <= BlockHeight(2),
+            "validator {index} kept exporting blocks it had RECEIVED back at the peers that \
+             signed them: reached {highest} against tip {tip}; got {exported:?}"
+        );
+    }
+    Ok(())
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[test_log::test(tokio::test)]
@@ -4525,6 +4603,11 @@ where
     // Each save folds in whatever the export task has acknowledged *so far*, so the recorded
     // heights necessarily trail the tip: the block being saved has only just been queued. Keep
     // producing blocks until the exports of the earlier ones have been folded in.
+    //
+    // Only NON-SIGNERS are exported to now: a signature on the certificate is proof that
+    // validator already holds the block and its blobs, so sending it there is pure waste. The
+    // committee is therefore covered by signatures plus exports, not by exports alone, and the
+    // count below is no longer one-per-other-member.
     let mut exported = BTreeMap::new();
     for _ in 0..10 {
         sender
@@ -4536,7 +4619,7 @@ where
             .await
             .unwrap_ok_committed();
         exported = builder.exported_heights(0, chain_id).await;
-        if exported.len() == 3 && exported.values().all(|height| *height >= BlockHeight(1)) {
+        if !exported.is_empty() && exported.values().any(|height| *height >= BlockHeight(1)) {
             break;
         }
         builder
@@ -4545,15 +4628,15 @@ where
         linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(50)).await;
     }
 
-    // One entry per *other* committee member: a validator never exports to itself.
-    assert_eq!(
-        exported.len(),
-        3,
-        "expected the first validator to have exported to the three others, got {exported:?}"
+    // A validator never exports to itself, signer or not.
+    let own_key = builder.validator_public_key(0);
+    assert!(
+        !exported.contains_key(&own_key),
+        "a validator exported to itself, got {exported:?}"
     );
     assert!(
-        exported.values().all(|height| *height >= BlockHeight(1)),
-        "expected every destination to have acknowledged at least height 1, got {exported:?}"
+        exported.len() <= 3,
+        "expected at most one entry per OTHER committee member, got {exported:?}"
     );
 
     // The destinations really do hold the chain, and the exporter's cursors agree with them.
@@ -4685,17 +4768,23 @@ where
             .unwrap_ok_committed();
     }
 
-    // Three peers, one down, so exactly two are ever recorded. Which one is down is deliberately
-    // not asserted: `set_fault_type` indexes creation order, the committee map is keyed by public
-    // key, and the count is the property that matters.
     // A block per iteration, because `exported_heights` is only folded while a block is being
     // processed: progress acknowledged after the last block has nothing to write it. The clock
     // advance is what lets the export tick run at all — it reads the storage clock, so under the
     // test clock it only moves when the test moves it.
-    let mut exported = BTreeMap::new();
+    //
+    // The count of exports is deliberately NOT asserted. The quorum that signs each certificate
+    // is exactly the reachable set here, and a signer already holds the block, so the reachable
+    // peers need no export at all — the only remaining destination is the offline one. What the
+    // unreachable peer must not do is wedge the exporter or stall the chain.
     for _ in 0..40 {
-        exported = builder.exported_heights(0, chain_id).await;
-        if exported.len() >= 2 {
+        if (0..3)
+            .map(|index| builder.next_block_height(index, chain_id))
+            .collect::<futures::future::JoinAll<_>>()
+            .await
+            .iter()
+            .all(|height| *height > BlockHeight(1))
+        {
             break;
         }
         builder
@@ -4711,15 +4800,18 @@ where
             .await
             .unwrap_ok_committed();
     }
-    assert_eq!(
-        exported.len(),
-        2,
-        "expected the two reachable peers to be exported to, and only those; got {exported:?}",
-    );
-    assert!(
-        exported.values().all(|height| *height >= BlockHeight(1)),
-        "reachable peers should have acknowledged real progress; got {exported:?}",
-    );
+
+    // The chain kept advancing and every REACHABLE validator holds it, despite one peer being
+    // permanently unreachable.
+    let tip = sender.chain_info().await?.next_block_height;
+    assert!(tip > BlockHeight(1), "the chain did not advance, tip {tip}");
+    for index in 0..3 {
+        assert_eq!(
+            builder.next_block_height(index, chain_id).await,
+            tip,
+            "reachable validator {index} does not hold the chain up to {tip}",
+        );
+    }
     Ok(())
 }
 
