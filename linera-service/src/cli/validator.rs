@@ -694,6 +694,11 @@ impl List {
             println!("\nFaulty validators:");
             for ((name, address), errors) in faulty_validators {
                 println!("  {} at {}: {} error(s)", name, address, errors.len());
+                // A bare count sends the reader hunting for the cause in the log
+                // above; the errors are already in hand.
+                for error in errors {
+                    println!("    {error}");
+                }
             }
             anyhow::bail!("Found faulty validators");
         }
