@@ -957,6 +957,22 @@ impl Runnable for Job {
                         )
                         .await?;
 
+                        // A lite run that is cut off by --runtime-in-seconds can leave a
+                        // block it proposed but never certified, so validators hold a vote
+                        // for a height nothing has committed. These `ChainClient`s know
+                        // nothing about it -- they executed none of those blocks and lite
+                        // mode runs no `ChainListener` -- so wrapping up proposes a
+                        // *different* block at that height and validators reject it with
+                        // "Already voted to confirm a different block for height N".
+                        // `process_pending_block` both syncs and drives the dangling
+                        // proposal to confirmation, which is what makes the chain
+                        // proposable again.
+                        if client_mode == ClientMode::Lite && close_chains {
+                            for chain_client in &chain_clients {
+                                chain_client.process_pending_block().await?;
+                            }
+                        }
+
                         let mut context = std::sync::Arc::try_unwrap(shared_context)
                             .map_err(|_| anyhow::anyhow!("Failed to unwrap shared context"))?
                             .into_inner();
