@@ -1081,23 +1081,12 @@ where
 
         let now = self.storage.clock().current_time();
         let tip = height.try_add_one().unwrap_or(BlockHeight::MAX);
-        // A signature on this certificate is proof that its validator already holds the block and
-        // every blob it needs, so that validator is not a destination for it. Folded into the
-        // seed rather than applied to the live cursors alone, because a destination is often
-        // registered AFTER the first blocks arrive — seeding is what reaches those, and applying
-        // it only to already-known destinations leaked the opening blocks of every chain.
+        // A signature proves that validator already holds the block, so it is not a destination
+        // for it. Seeded rather than applied to the live cursors alone, because destinations are
+        // often registered after the first blocks of a chain have already arrived.
         //
-        // Without this, a validator that RECEIVES a block exports it straight back at the peers
-        // that sent it: the receive path runs the same `execute_contiguous_block` as a proposal
-        // and nothing downstream can tell the two apart. Measured on a 2.5M-block catch-up:
-        // 3.18M sends back to the sender, one per block received, every one of them discarded on
-        // arrival because that peer was never behind.
         // `height`, not `tip`: this map holds the highest height a destination HOLDS, and every
-        // consumer derives the cursor from it with `try_add_one` (`ChainRecord::new` and
-        // `seed_missing_cursors`), just as `record_reached` writes it back with `try_sub_one`.
-        // Seeding `tip` here would put the cursor at `height + 2`, one past the tip — and such a
-        // pair is neither contiguous nor behind, so it is never sent AND never marked lagging,
-        // which loses the block for that destination permanently.
+        // consumer derives the cursor from it with `try_add_one`.
         let mut seed = block.exported_heights.clone();
         for (validator, _) in block.certificate.signatures() {
             let entry = seed.entry(*validator).or_insert(height);
@@ -1112,8 +1101,7 @@ where
         record.last_activity = now;
         record.seed_missing_cursors(&self.destinations, &seed);
 
-        // Already-registered destinations keep their cursor, so advance those separately: a
-        // signer that is already known must not be sent a block it demonstrably has.
+        // Seeding only reaches new destinations, so advance already-registered signers too.
         let signed_by = block
             .certificate
             .signatures()
@@ -1770,8 +1758,7 @@ where
 
     /// The index of `validator` if it is already a live destination, without registering it.
     ///
-    /// Distinct from `dest_index`, which registers on miss: a signer may be this validator itself
-    /// or a peer that is not a destination, and neither may be added to the progress map.
+    /// Unlike `dest_index`, never registers: a signer may be this validator itself.
     fn dest_index_if_known(&self, validator: &ValidatorPublicKey) -> Option<DestIndex> {
         let index = *self.dest_indices.get(validator)?;
         self.destinations.contains_key(&index).then_some(index)
