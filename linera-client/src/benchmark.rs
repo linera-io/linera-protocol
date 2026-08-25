@@ -29,9 +29,9 @@ impl LatencyRecorder {
     pub fn record(&self, elapsed: std::time::Duration) {
         let micros = elapsed.as_micros().min(u64::MAX as u128) as u64;
         if let Ok(mut histogram) = self.histogram.lock() {
-            // Saturates rather than failing: a block slower than the upper bound is still a
-            // data point, and losing it would flatter the tail.
-            let _ = histogram.saturating_record(micros);
+            // Saturating rather than plain `record`: a block slower than the upper bound is
+            // still a data point, and dropping it would flatter the tail.
+            histogram.saturating_record(micros);
         }
     }
 
