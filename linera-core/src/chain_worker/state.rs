@@ -46,7 +46,7 @@ use linera_views::{
     ViewError,
 };
 use tokio::sync::oneshot;
-use tracing::{debug, info, instrument, trace, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::{
     chain_worker::{
@@ -131,8 +131,8 @@ where
     chain_modes: Option<Arc<sync::RwLock<ChainModes>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
-    /// Set to `true` once this instance has been retired: the cache has dropped it and a
-    /// replacement may already be serving the chain, so it must not write again.
+    /// Set to `true` once a storage write failed in a way that requires reloading the chain
+    /// view: this instance must not write again.
     poisoned: bool,
     /// The process-wide export queue, if the server enabled block export.
     block_export: Option<BlockExportHandle>,
@@ -243,23 +243,24 @@ where
         self.chain.rollback();
     }
 
-    /// Returns `WorkerError::PoisonedWorker` if this instance has been retired after a storage
-    /// write that also evicted it from the worker cache.
+    /// Returns `WorkerError::PoisonedWorker` if this instance has been poisoned by a storage
+    /// write that requires reloading the chain view.
     pub(crate) fn check_not_poisoned(&self) -> Result<(), WorkerError> {
         ensure!(!self.poisoned, WorkerError::PoisonedWorker);
         Ok(())
     }
 
-    /// Retires this instance if `result` carries an error that also evicts it from the worker
-    /// cache, so a writer already queued on our lock cannot go on using an instance the cache has
-    /// replaced. Must be called while the write guard is held.
+    /// Poisons this instance if `result` carries an error that requires reloading the chain view.
+    ///
+    /// Must be called while the write guard is held: `write_lock` checks the flag only *after*
+    /// acquiring the lock, so poisoning here also stops a writer already queued behind us.
     fn poison_if_must_reload<T>(&mut self, result: Result<T, ViewError>) -> Result<T, ViewError> {
         if let Err(error) = &result {
             if error.must_reload_view() {
-                tracing::warn!(
+                error!(
                     chain_id = %self.chain_id(),
                     ?error,
-                    "Storage write failed; retiring this chain worker instance"
+                    "Chain worker poisoned: storage write failed with a nonrecoverable error"
                 );
                 self.poisoned = true;
             }
@@ -2645,10 +2646,10 @@ where
     pub(crate) async fn save(&mut self) -> Result<(), WorkerError> {
         if let Err(error) = self.chain.save().await {
             if error.must_reload_view() {
-                tracing::error!(
-                    ?error,
+                error!(
                     chain_id = %self.chain_id(),
-                    "Chain save failed with a nonrecoverable error; marking worker as poisoned"
+                    ?error,
+                    "Chain worker poisoned: chain save failed with a nonrecoverable error"
                 );
                 self.poisoned = true;
             }

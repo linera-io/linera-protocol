@@ -1048,7 +1048,7 @@ where
     {
         let this = self.clone();
         linera_base::Task::spawn(async move {
-            let requests = {
+            let result = {
                 let mut guard = match handle::write_lock(&state).await {
                     Ok(guard) => guard,
                     Err(error) => {
@@ -1056,18 +1056,25 @@ where
                             %chain_id, %error,
                             "Failed to acquire write lock to reset corrupted chain state"
                         );
+                        if error.must_reload_view() {
+                            this.evict_poisoned_worker(chain_id, &state);
+                        }
                         return;
                     }
                 };
-                match guard.maybe_reset_corrupted_chain_state().await {
-                    Ok(Some(requests)) => requests,
-                    Ok(None) => return,
-                    Err(error) => {
-                        tracing::error!(
-                            %chain_id, %error, "Failed to reset corrupted chain state"
-                        );
-                        return;
+                guard.maybe_reset_corrupted_chain_state().await
+            };
+            let requests = match result {
+                Ok(Some(requests)) => requests,
+                Ok(None) => return,
+                Err(error) => {
+                    tracing::error!(
+                        %chain_id, %error, "Failed to reset corrupted chain state"
+                    );
+                    if error.must_reload_view() {
+                        this.evict_poisoned_worker(chain_id, &state);
                     }
+                    return;
                 }
             };
             if let Some(sender) = &this.outbound_cross_chain_sender {
@@ -1291,11 +1298,16 @@ where
         )
         .await?;
 
-        Ok(handle::create_chain_worker(
-            state,
-            is_tracked,
-            &self.chain_worker_config,
-        ))
+        let worker = handle::create_chain_worker(state, is_tracked, &self.chain_worker_config);
+        // Two instances of one chain racing on storage is the corruption mode we cannot
+        // otherwise observe; simultaneously live instances cannot share an address, so the
+        // Arc pointer is enough to tell them apart in the logs.
+        tracing::info!(
+            %chain_id,
+            instance = ?Arc::as_ptr(&worker),
+            "Loaded chain worker instance"
+        );
+        Ok(worker)
     }
 
     /// Tries to execute a block proposal without any verification other than block execution.
