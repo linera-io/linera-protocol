@@ -213,8 +213,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
     }
 
     /// Returns the applications whose deadlines have come, ordered by deadline and without
-    /// repetitions: an application has one state to read, so polling it twice in a row would
-    /// query it a second time for the same answer.
+    /// repetitions.
     fn process_events(&mut self) -> Vec<ApplicationId> {
         let now = Timestamp::now();
         let mut application_ids = Vec::new();
