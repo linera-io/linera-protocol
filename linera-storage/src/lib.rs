@@ -195,6 +195,10 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     /// Reads certificates by heights for a given chain.
     /// Returns a vector where each element corresponds to the input height.
     /// Elements are `None` if no certificate exists at that height.
+    ///
+    /// An index row whose block turns out to have a different height is reported as `None` and
+    /// deleted: left in place it would keep the index looking complete, so the fallback that
+    /// rewrites it correctly would never run again.
     async fn read_certificates_by_heights(
         &self,
         chain_id: ChainId,
@@ -205,6 +209,9 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     /// Returns a vector where each element corresponds to the input height.
     /// Elements are `None` if no certificate exists at that height.
     /// Each found certificate is returned as a tuple of (lite_certificate_bytes, confirmed_block_bytes).
+    ///
+    /// Unlike [`Storage::read_certificates_by_heights`] this does not check that each block really
+    /// has the height it was indexed at, because that would mean deserializing it.
     async fn read_certificates_by_heights_raw(
         &self,
         chain_id: ChainId,
@@ -220,13 +227,15 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         heights: &[BlockHeight],
     ) -> Result<Vec<Option<CryptoHash>>, ViewError>;
 
-    /// Writes certificate height index entries for a given chain.
-    /// This is used to populate the height->hash index when certificates are found
-    /// via alternative methods (e.g., from chain state).
+    /// Indexes each of the given certificates at the height in its own block header, so that
+    /// certificates found some other way (e.g. from chain state) are found by height next time.
+    ///
+    /// The caller does not supply the heights and so cannot supply wrong ones; a wrong row here
+    /// is persistent and makes the index look complete, so it is never retried.
     async fn write_certificate_height_indices(
         &self,
         chain_id: ChainId,
-        indices: &[(BlockHeight, CryptoHash)],
+        hashes: &[CryptoHash],
     ) -> Result<(), ViewError>;
 
     /// Looks up the block heights where the given events were published.

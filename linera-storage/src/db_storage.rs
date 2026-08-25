@@ -36,7 +36,7 @@ use linera_views::{
     ViewError,
 };
 use serde::{Deserialize, Serialize};
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, warn};
 #[cfg(with_testing)]
 use {
     futures::channel::oneshot::{self, Receiver},
@@ -993,36 +993,27 @@ mod tests {
         );
     }
 
-    /// Tests that `write_certificate_height_indices` correctly populates the reverse index
-    /// so that `read_certificates_by_heights` can find certificates that were written
-    /// without the height index (simulating old data or fallback scenarios).
+    /// Builds a certificate for an otherwise empty block at the given chain and height.
     #[cfg(with_testing)]
-    #[tokio::test]
-    async fn test_write_certificate_height_indices_populates_reverse_index() {
-        use linera_views::{batch::Batch, store::WritableKeyValueStore as _};
-
-        let storage = DbStorage::<MemoryDatabase, TestClock>::make_test_storage(None).await;
-        let chain_id = ChainId(CryptoHash::test_hash("test_chain"));
-
-        // Create a certificate but write ONLY the certificate data, NOT the height index.
-        // This simulates old data written before the height index feature existed.
+    fn test_certificate(chain_id: ChainId, height: BlockHeight) -> ConfirmedBlockCertificate {
+        let hash_of = |name: &str| CryptoHash::new(&TestString::new(format!("{name}_{height}")));
         let block = Block {
             header: BlockHeader {
                 chain_id,
                 epoch: Epoch::ZERO,
-                height: BlockHeight(10),
+                height,
                 timestamp: Timestamp::from(0),
-                state_hash: CryptoHash::new(&TestString::new("state_hash")),
+                state_hash: hash_of("state_hash"),
                 previous_block_hash: None,
                 authenticated_signer: None,
-                transactions_hash: CryptoHash::new(&TestString::new("tx_hash")),
-                messages_hash: CryptoHash::new(&TestString::new("msg_hash")),
-                previous_message_blocks_hash: CryptoHash::new(&TestString::new("pmb_hash")),
-                previous_event_blocks_hash: CryptoHash::new(&TestString::new("peb_hash")),
-                oracle_responses_hash: CryptoHash::new(&TestString::new("oracle_hash")),
-                events_hash: CryptoHash::new(&TestString::new("events_hash")),
-                blobs_hash: CryptoHash::new(&TestString::new("blobs_hash")),
-                operation_results_hash: CryptoHash::new(&TestString::new("op_results_hash")),
+                transactions_hash: hash_of("tx_hash"),
+                messages_hash: hash_of("msg_hash"),
+                previous_message_blocks_hash: hash_of("pmb_hash"),
+                previous_event_blocks_hash: hash_of("peb_hash"),
+                oracle_responses_hash: hash_of("oracle_hash"),
+                events_hash: hash_of("events_hash"),
+                blobs_hash: hash_of("blobs_hash"),
+                operation_results_hash: hash_of("op_results_hash"),
             },
             body: BlockBody {
                 transactions: vec![],
@@ -1035,24 +1026,45 @@ mod tests {
                 operation_results: vec![],
             },
         };
-        let confirmed_block = ConfirmedBlock::new(block);
-        let cert = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
-        let hash = cert.hash();
-        let height = BlockHeight(10);
+        ConfirmedBlockCertificate::new(ConfirmedBlock::new(block), Round::Fast, vec![])
+    }
 
-        // Write certificate data directly (bypassing add_certificate which writes the index)
-        let root_key = RootKey::ConfirmedBlock(hash).bytes();
+    /// Writes a certificate's data without its height index, bypassing `add_certificate`.
+    #[cfg(with_testing)]
+    async fn write_certificate_without_index(
+        storage: &DbStorage<MemoryDatabase, TestClock>,
+        certificate: &ConfirmedBlockCertificate,
+    ) {
+        use linera_views::{batch::Batch, store::WritableKeyValueStore as _};
+
+        let root_key = RootKey::ConfirmedBlock(certificate.hash()).bytes();
         let store = storage.database.open_shared(&root_key).unwrap();
         let mut batch = Batch::new();
         batch.put_key_value_bytes(
             crate::db_storage::LITE_CERTIFICATE_KEY.to_vec(),
-            bcs::to_bytes(&cert.lite_certificate()).unwrap(),
+            bcs::to_bytes(&certificate.lite_certificate()).unwrap(),
         );
         batch.put_key_value_bytes(
             crate::db_storage::BLOCK_KEY.to_vec(),
-            bcs::to_bytes(&cert.value()).unwrap(),
+            bcs::to_bytes(&certificate.value()).unwrap(),
         );
         store.write_batch(batch).await.unwrap();
+    }
+
+    /// Tests that `write_certificate_height_indices` correctly populates the reverse index
+    /// so that `read_certificates_by_heights` can find certificates that were written
+    /// without the height index (simulating old data or fallback scenarios).
+    #[cfg(with_testing)]
+    #[tokio::test]
+    async fn test_write_certificate_height_indices_populates_reverse_index() {
+        let storage = DbStorage::<MemoryDatabase, TestClock>::make_test_storage(None).await;
+        let chain_id = ChainId(CryptoHash::test_hash("test_chain"));
+        let height = BlockHeight(10);
+
+        // Simulates old data written before the height index feature existed.
+        let cert = test_certificate(chain_id, height);
+        let hash = cert.hash();
+        write_certificate_without_index(&storage, &cert).await;
 
         // Verify height index does NOT exist yet
         let result = storage
@@ -1070,7 +1082,7 @@ mod tests {
 
         // Write the height index (simulating what updater does after fallback)
         storage
-            .write_certificate_height_indices(chain_id, &[(height, hash)])
+            .write_certificate_height_indices(chain_id, &[hash])
             .await
             .unwrap();
 
@@ -1087,6 +1099,106 @@ mod tests {
             result[0].as_ref().unwrap().hash(),
             hash,
             "Certificate retrieved by height should match original"
+        );
+    }
+
+    /// The fallbacks that call this know which certificates they found, not which requested height
+    /// each one answers, and the holes between them are interior. Indexing a block at anything but
+    /// its own height would durably map a height onto another block's hash.
+    #[cfg(with_testing)]
+    #[tokio::test]
+    async fn test_write_certificate_height_indices_uses_each_blocks_own_height() {
+        let storage = DbStorage::<MemoryDatabase, TestClock>::make_test_storage(None).await;
+        let chain_id = ChainId(CryptoHash::test_hash("test_chain"));
+
+        // A sender whose message blocks are at 3, 7 and 9, queried over [0..10).
+        let message_heights = [3u64, 7, 9];
+        let certificates =
+            message_heights.map(|height| test_certificate(chain_id, BlockHeight(height)));
+        for certificate in &certificates {
+            write_certificate_without_index(&storage, certificate).await;
+        }
+        let hashes = certificates
+            .iter()
+            .map(ConfirmedBlockCertificate::hash)
+            .collect::<Vec<_>>();
+
+        storage
+            .write_certificate_height_indices(chain_id, &hashes)
+            .await
+            .unwrap();
+
+        let heights = (0..10).map(BlockHeight).collect::<Vec<_>>();
+        let mut expected = vec![None; heights.len()];
+        for (height, hash) in message_heights.into_iter().zip(&hashes) {
+            expected[height as usize] = Some(*hash);
+        }
+
+        // Read the rows themselves: the caches in front of them are keyed by the right heights
+        // even when the persisted rows are not, and it is the rows that outlive the process.
+        let store = storage
+            .database
+            .open_shared(&RootKey::BlockByHeight(chain_id).bytes())
+            .unwrap();
+        let keys = heights
+            .iter()
+            .map(|h| to_height_key(*h))
+            .collect::<Vec<_>>();
+        let persisted = store
+            .read_multi_values_bytes(&keys)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|value| value.map(|value| bcs::from_bytes::<CryptoHash>(&value).unwrap()))
+            .collect::<Vec<_>>();
+        assert_eq!(persisted, expected);
+
+        let indexed = storage
+            .read_certificates_by_heights(chain_id, &heights)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|certificate| certificate.map(|certificate| certificate.hash()))
+            .collect::<Vec<_>>();
+        assert_eq!(indexed, expected);
+    }
+
+    /// A row pairing a height with another block's hash makes the index look complete for that
+    /// height, so the fallback that would rewrite it never runs again. Reads must reject such a
+    /// row and delete it, or the corruption outlives every fix.
+    #[cfg(with_testing)]
+    #[tokio::test]
+    async fn test_read_certificates_by_heights_deletes_a_mispaired_index_row() {
+        use linera_views::{batch::Batch, store::WritableKeyValueStore as _};
+
+        let storage = DbStorage::<MemoryDatabase, TestClock>::make_test_storage(None).await;
+        let chain_id = ChainId(CryptoHash::test_hash("test_chain"));
+
+        let certificate = test_certificate(chain_id, BlockHeight(9));
+        write_certificate_without_index(&storage, &certificate).await;
+
+        // Point height 8, which we do not hold, at block 9 — what the old zip persisted.
+        let index_root_key = RootKey::BlockByHeight(chain_id).bytes();
+        let store = storage.database.open_shared(&index_root_key).unwrap();
+        let mut batch = Batch::new();
+        let height_key = to_height_key(BlockHeight(8));
+        batch.put_key_value_bytes(
+            height_key.clone(),
+            bcs::to_bytes(&certificate.hash()).unwrap(),
+        );
+        store.write_batch(batch).await.unwrap();
+
+        let result = storage
+            .read_certificates_by_heights(chain_id, &[BlockHeight(8)])
+            .await
+            .unwrap();
+        assert!(
+            result[0].is_none(),
+            "a block of another height must not answer for height 8"
+        );
+        assert!(
+            store.read_value_bytes(&height_key).await.unwrap().is_none(),
+            "the mispaired row must be gone, or the fallback stays locked out"
         );
     }
 }
@@ -1926,38 +2038,78 @@ where
         chain_id: ChainId,
         heights: &[BlockHeight],
     ) -> Result<Vec<Option<CacheArc<ConfirmedBlockCertificate>>>, ViewError> {
-        self.read_certificates_by_heights_raw(chain_id, heights)
-            .await?
-            .into_iter()
-            .map(|maybe_raw| match maybe_raw {
-                None => Ok(None),
-                Some(raw) => self.deserialize_and_cache_certificate(&raw.0, &raw.1),
-            })
-            .collect()
+        let raw_certificates = self
+            .read_certificates_by_heights_raw(chain_id, heights)
+            .await?;
+        let mut certificates = Vec::with_capacity(heights.len());
+        let mut stale_heights = Vec::new();
+        for (height, maybe_raw) in heights.iter().zip(raw_certificates) {
+            let Some(raw) = maybe_raw else {
+                certificates.push(None);
+                continue;
+            };
+            let certificate = self.deserialize_and_cache_certificate(&raw.0, &raw.1)?;
+            let indexed_height = certificate
+                .as_ref()
+                .map(|certificate| certificate.value().block().header.height);
+            if indexed_height.is_some_and(|indexed_height| indexed_height != *height) {
+                warn!(
+                    %chain_id,
+                    requested_height = %height,
+                    indexed_height = ?indexed_height,
+                    "dropping a height index row that points at a block of another height",
+                );
+                stale_heights.push(*height);
+                certificates.push(None);
+            } else {
+                certificates.push(certificate);
+            }
+        }
+        // Without this the row would keep the index looking complete, and the fallback that
+        // rewrites it correctly would never run again.
+        self.delete_certificate_height_indices(chain_id, &stale_heights)
+            .await?;
+        Ok(certificates)
     }
 
-    #[instrument(skip_all, fields(%chain_id, indices_len = indices.len()))]
+    #[instrument(skip_all, fields(%chain_id, hashes_len = hashes.len()))]
     async fn write_certificate_height_indices(
         &self,
         chain_id: ChainId,
-        indices: &[(BlockHeight, CryptoHash)],
+        hashes: &[CryptoHash],
     ) -> Result<(), ViewError> {
-        if indices.is_empty() {
+        let certificates = self.read_certificates(hashes).await?;
+        let mut key_values = Vec::with_capacity(hashes.len());
+        let mut heights = Vec::with_capacity(hashes.len());
+        for (hash, certificate) in hashes.iter().zip(certificates) {
+            let Some(certificate) = certificate else {
+                warn!(%chain_id, %hash, "not indexing a certificate that is not in storage");
+                continue;
+            };
+            let header = &certificate.value().block().header;
+            if header.chain_id != chain_id {
+                warn!(
+                    %chain_id, %hash, block_chain_id = %header.chain_id,
+                    "not indexing a certificate that belongs to another chain",
+                );
+                continue;
+            }
+            key_values.push((to_height_key(header.height), bcs::to_bytes(hash)?));
+            heights.push((header.height, *hash));
+        }
+        if key_values.is_empty() {
             return Ok(());
         }
-
         let mut batch = MultiPartitionBatch::new();
-        let index_root_key = RootKey::BlockByHeight(chain_id).bytes();
-        let key_values: Vec<(Vec<u8>, Vec<u8>)> = indices
-            .iter()
-            .map(|(height, hash)| {
-                let height_key = to_height_key(*height);
-                let hash_value = bcs::to_bytes(hash).unwrap();
-                (height_key, hash_value)
-            })
-            .collect();
-        batch.put_key_values(index_root_key, key_values);
-        self.write_batch(batch).await
+        batch.put_key_values(RootKey::BlockByHeight(chain_id).bytes(), key_values);
+        self.write_batch(batch).await?;
+        // Reads are cache-first, so a stale entry would outlive the row we just corrected.
+        for (height, hash) in heights {
+            self.caches
+                .block_hash_by_height
+                .insert(&(chain_id, height), hash);
+        }
+        Ok(())
     }
 
     #[instrument(skip_all, fields(event_id = ?event_id))]
@@ -2171,6 +2323,32 @@ where
             batch.put_key_value_bytes(key, value);
         }
         store.write_batch(batch).await?;
+        Ok(())
+    }
+
+    /// Removes the given heights from the chain's height index, and from the cache in front of it.
+    #[instrument(skip_all, fields(%chain_id, heights_len = heights.len()))]
+    async fn delete_certificate_height_indices(
+        &self,
+        chain_id: ChainId,
+        heights: &[BlockHeight],
+    ) -> Result<(), ViewError> {
+        if heights.is_empty() {
+            return Ok(());
+        }
+        let store = self
+            .database
+            .open_shared(&RootKey::BlockByHeight(chain_id).bytes())?;
+        let mut batch = Batch::new();
+        for height in heights {
+            batch.delete_key(to_height_key(*height));
+        }
+        store.write_batch(batch).await?;
+        for height in heights {
+            self.caches
+                .block_hash_by_height
+                .remove(&(chain_id, *height));
+        }
         Ok(())
     }
 
