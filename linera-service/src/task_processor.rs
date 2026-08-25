@@ -8,7 +8,7 @@
 
 use std::{
     cmp::Reverse,
-    collections::{BTreeMap, BTreeSet, BinaryHeap},
+    collections::{BTreeMap, BTreeSet, BinaryHeap, HashSet},
     path::PathBuf,
     sync::Arc,
 };
@@ -212,12 +212,18 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         }
     }
 
+    /// Returns the applications whose deadlines have come, ordered by deadline and without
+    /// repetitions: an application has one state to read, so polling it twice in a row would
+    /// query it a second time for the same answer.
     fn process_events(&mut self) -> Vec<ApplicationId> {
         let now = Timestamp::now();
         let mut application_ids = Vec::new();
+        let mut seen = HashSet::new();
         while let Some(deadline) = self.deadlines.pop() {
             if let Reverse((_, Some(id))) = deadline {
-                application_ids.push(id);
+                if seen.insert(id) {
+                    application_ids.push(id);
+                }
             }
             let Some(Reverse((ts, _))) = self.deadlines.peek() else {
                 break;
