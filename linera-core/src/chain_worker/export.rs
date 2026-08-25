@@ -1092,10 +1092,16 @@ where
         // and nothing downstream can tell the two apart. Measured on a 2.5M-block catch-up:
         // 3.18M sends back to the sender, one per block received, every one of them discarded on
         // arrival because that peer was never behind.
+        // `height`, not `tip`: this map holds the highest height a destination HOLDS, and every
+        // consumer derives the cursor from it with `try_add_one` (`ChainRecord::new` and
+        // `seed_missing_cursors`), just as `record_reached` writes it back with `try_sub_one`.
+        // Seeding `tip` here would put the cursor at `height + 2`, one past the tip — and such a
+        // pair is neither contiguous nor behind, so it is never sent AND never marked lagging,
+        // which loses the block for that destination permanently.
         let mut seed = block.exported_heights.clone();
         for (validator, _) in block.certificate.signatures() {
-            let entry = seed.entry(*validator).or_insert(tip);
-            *entry = (*entry).max(tip);
+            let entry = seed.entry(*validator).or_insert(height);
+            *entry = (*entry).max(height);
         }
 
         let record = self
@@ -1762,10 +1768,6 @@ where
         self.total_window.saturating_sub(in_flight)
     }
 
-    /// The index `validator`'s per-chain state is keyed by, registering it on first sight.
-    ///
-    /// Published to the handles under the progress mutex, because the chain workers read that
-    /// map back and only the registry can name the validators in it.
     /// The index of `validator` if it is already a live destination, without registering it.
     ///
     /// Distinct from `dest_index`, which registers on miss: a signer may be this validator itself
@@ -1775,6 +1777,10 @@ where
         self.destinations.contains_key(&index).then_some(index)
     }
 
+    /// The index `validator`'s per-chain state is keyed by, registering it on first sight.
+    ///
+    /// Published to the handles under the progress mutex, because the chain workers read that
+    /// map back and only the registry can name the validators in it.
     fn dest_index(&mut self, validator: ValidatorPublicKey) -> DestIndex {
         if let Some(index) = self.dest_indices.get(&validator) {
             return *index;

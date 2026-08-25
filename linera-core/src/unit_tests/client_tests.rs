@@ -4628,6 +4628,14 @@ where
         linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(50)).await;
     }
 
+    // Something was actually exported. Load-bearing: every other assertion here holds for an
+    // EMPTY map, so without this the test passes with block export switched off entirely and
+    // cannot catch a regression in the thing it is named for.
+    assert!(
+        !exported.is_empty(),
+        "nothing was exported to any committee member, got {exported:?}"
+    );
+
     // A validator never exports to itself, signer or not.
     let own_key = builder.validator_public_key(0);
     assert!(
