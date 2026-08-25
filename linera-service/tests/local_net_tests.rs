@@ -1111,6 +1111,26 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
         })
         .await?;
 
+    // --rate-auto: the search must actually converge against a real network and report a knee,
+    // not just compile. A local net is fast enough that the climb terminates quickly, and the
+    // point of the assertion is that the controller reaches a decision at all rather than
+    // climbing forever or stalling at its start rate.
+    client
+        .benchmark(BenchmarkCommand::Single {
+            options: BenchmarkOptions {
+                num_chains: 2,
+                transactions_per_block: 10,
+                bps: 2,
+                rate_auto: true,
+                target_p99_ms: 2_000,
+                runtime_in_seconds: Some(30),
+                client_mode: ClientMode::Lite,
+                close_chains: true,
+                ..Default::default()
+            },
+        })
+        .await?;
+
     net.ensure_is_running().await?;
     net.terminate().await?;
 
