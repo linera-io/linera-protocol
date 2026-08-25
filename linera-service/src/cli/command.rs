@@ -810,8 +810,7 @@ pub enum ClientCommand {
         task_retry_delay_secs: u64,
 
         /// Number of seconds after which a still-running operator task group is logged and
-        /// counted as slow. The group is not interrupted: it is reported so that one which never
-        /// returns does not stall its chain silently.
+        /// counted as slow. The group is not interrupted and runs to completion.
         /// Only relevant when operators are configured via `--operator-application-ids`
         /// or `--controller-id`.
         #[arg(long, default_value = "300")]

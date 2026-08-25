@@ -829,7 +829,7 @@ Run a GraphQL service to explore and extend the chains of the wallet
 * `--task-retry-delay-secs <TASK_RETRY_DELAY_SECS>` — Delay in seconds before retrying a failed operator task batch. Only relevant when operators are configured via `--operator-application-ids` or `--controller-id`
 
   Default value: `5`
-* `--slow-task-group-secs <SLOW_TASK_GROUP_SECS>` — Number of seconds after which a still-running operator task group is logged and counted as slow. The group is not interrupted: it is reported so that one which never returns does not stall its chain silently. Only relevant when operators are configured via `--operator-application-ids` or `--controller-id`
+* `--slow-task-group-secs <SLOW_TASK_GROUP_SECS>` — Number of seconds after which a still-running operator task group is logged and counted as slow. The group is not interrupted and runs to completion. Only relevant when operators are configured via `--operator-application-ids` or `--controller-id`
 
   Default value: `300`
 * `--read-only` — Run in read-only mode: disallow mutations and prevent queries from scheduling operations. Use this when exposing the service to untrusted clients

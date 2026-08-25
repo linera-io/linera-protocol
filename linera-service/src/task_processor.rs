@@ -38,10 +38,9 @@ pub(crate) mod metrics {
     linera_base::declare_metrics! {
         /// Task groups that have outlived [`TaskProcessorConfig::slow_group_threshold`].
         ///
-        /// The group is still running when this is incremented and may well succeed: a batch
-        /// catching up on a backlog takes far longer than a steady-state one. What makes it worth
-        /// alerting on is that nothing else reports it — the process stays healthy and its chain
-        /// simply stops advancing, so a group that never returns is otherwise silent.
+        /// A group counted here is still running and may still succeed. It is worth alerting on
+        /// because nothing else reports it: the process stays healthy while the chain the group
+        /// serves stops advancing, so a group that never returns is otherwise silent.
         pub static SLOW_TASK_GROUPS: IntCounter = register_int_counter(
             "slow_task_groups_total",
             "Number of task groups that outlived the slow-group threshold"
@@ -69,13 +68,7 @@ type Deadline = Reverse<(Timestamp, Option<ApplicationId>)>;
 pub struct TaskProcessorConfig {
     /// How long to wait before retrying a task group that failed.
     pub retry_delay: TimeDelta,
-    /// How long a task group may run before it is reported as slow.
-    ///
-    /// Reported only: the group is never interrupted. An operator that is merely slow cannot be
-    /// told apart from one that will never return, and killing it would abort work that was about
-    /// to succeed — a batch catching up on a backlog legitimately runs far longer than a
-    /// steady-state one. Since a task that is cut short is retried, a limit set below what the
-    /// work needs never completes it, it only repeats it.
+    /// How long a task group may run before it is reported as slow. The group keeps running.
     pub slow_group_threshold: TimeDelta,
 }
 
@@ -103,8 +96,7 @@ pub struct TaskProcessor<Env: linera_core::Environment> {
     operators: OperatorMap,
     config: TaskProcessorConfig,
     /// The groups currently running, so that a second copy is never started while one is in
-    /// flight. Keyed by group rather than by application: a group that is slow or stuck must not
-    /// keep its siblings from being polled.
+    /// flight.
     in_flight_groups: BTreeSet<(ApplicationId, Option<String>)>,
 }
 
@@ -265,9 +257,9 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             if let Some(cursor) = actions.set_cursor {
                 self.cursors.insert(application_id, cursor);
             }
-            // Start each group that is not already running. Groups are independent: their
-            // outcomes commute, so one that is slow, stuck or failing must neither delay the
-            // others nor keep this application from being polled again for their sake.
+            // Start each group that is not already running. Group outcomes commute, so a group
+            // that is slow, stuck or failing neither delays the others nor keeps this application
+            // from being polled again for their sake.
             for (group, tasks) in group_tasks(actions.execute_tasks) {
                 if !self
                     .in_flight_groups
@@ -281,9 +273,9 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 let config = self.config;
                 let operators = self.operators.clone();
                 tokio::spawn(async move {
-                    // Run the group on its own task so that a panic inside it is reported and
-                    // turned into a retry, rather than losing the result message and leaving the
-                    // group marked in flight forever.
+                    // Run the group on its own task: a panic inside it must surface here and
+                    // become a retry. An unreported panic sends no result message, and the group
+                    // then stays marked in flight forever.
                     let handle = tokio::spawn(Self::process_group(
                         application_id,
                         group.clone(),
@@ -492,11 +484,8 @@ async fn execute_task(
     Ok(outcome)
 }
 
-/// Awaits a task group, reporting it once if it outlives `slow_group_threshold`.
-///
-/// Reporting only — the group keeps running afterwards. Cutting it short would abort work that may
-/// be about to succeed, and since the task would then be retried, a threshold below what the work
-/// needs would repeat it forever instead of ever completing it.
+/// Awaits a task group, reporting it once if it outlives `slow_group_threshold` and then
+/// continuing to wait for it.
 async fn await_group(
     application_id: ApplicationId,
     group: &Option<String>,
@@ -664,8 +653,8 @@ mod tests {
             // Far below what the group takes, so the slow path is the one exercised.
             slow_group_threshold: TimeDelta::from_millis(10),
         };
-        // The point of the assertion: crossing the threshold reports the group, it does not cut
-        // it short, so the result it was about to produce still comes back.
+        // Crossing the threshold reports the group without cutting it short, so the value it
+        // produces still comes back.
         let retry_at = await_group(app_id(), &Some("group".to_string()), handle, config).await;
         assert_eq!(retry_at, expected);
     }
