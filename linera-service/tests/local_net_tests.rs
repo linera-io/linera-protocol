@@ -1111,25 +1111,38 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
         })
         .await?;
 
-    // --rate-auto: the search must actually converge against a real network and report a knee,
-    // not just compile. A local net is fast enough that the climb terminates quickly, and the
-    // point of the assertion is that the controller reaches a decision at all rather than
-    // climbing forever or stalling at its start rate.
-    client
-        .benchmark(BenchmarkCommand::Single {
+    // --rate-auto: assert the search reached a knee above its own start rate. A clean exit
+    // proves nothing here — a run that never converged, and one that converged at zero, both
+    // exit zero too, which is exactly what this case existed to rule out and did not.
+    let stderr = client
+        .benchmark_capturing_stderr(BenchmarkCommand::Single {
             options: BenchmarkOptions {
                 num_chains: 2,
                 transactions_per_block: 10,
                 bps: 2,
                 rate_auto: true,
                 target_p99_ms: 2_000,
-                runtime_in_seconds: Some(30),
+                runtime_in_seconds: Some(120),
                 client_mode: ClientMode::Lite,
                 close_chains: true,
                 ..Default::default()
             },
         })
         .await?;
+    let knee = stderr
+        .lines()
+        .find(|line| line.contains("rate search converged"))
+        .and_then(|line| line.split("knee_bps=").nth(1))
+        .and_then(|rest| rest.split_whitespace().next())
+        .and_then(|value| value.parse::<usize>().ok())
+        .context("the rate search never reported a converged knee")?;
+    assert!(
+        knee > 2,
+        "the search converged at {knee} bps, no better than its start rate: it found a ceiling \
+         rather than measuring one"
+    );
+    // Printed so a CI log carries the measured knee, not just a pass.
+    println!("rate search converged at {knee} bps");
 
     net.ensure_is_running().await?;
     net.terminate().await?;

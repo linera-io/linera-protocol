@@ -904,6 +904,25 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera benchmark` to completion and returns its stderr, for tests that must assert
+    /// on what the run reported rather than only on a zero exit status.
+    pub async fn benchmark_capturing_stderr(&self, args: BenchmarkCommand) -> Result<String> {
+        let output = self
+            .benchmark_command_with_envs(args, &[("RUST_LOG", "linera=info")])
+            .await?
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await?;
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+        anyhow::ensure!(
+            output.status.success(),
+            "benchmark exited with {}; stderr:\n{stderr}",
+            output.status
+        );
+        Ok(stderr)
+    }
+
     /// Runs `linera benchmark`, but detached: don't wait for the command to finish, just spawn it
     /// and return the child process, and the handles to the stdout and stderr.
     pub async fn benchmark_detached(

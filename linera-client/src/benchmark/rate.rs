@@ -20,6 +20,21 @@ use std::time::Duration;
 /// one slow block decides the verdict. 200 puts two samples above the 99th percentile.
 pub const MIN_P99_SAMPLES: u64 = 200;
 
+/// How long a window may wait for [`MIN_P99_SAMPLES`] before being judged on what it has.
+///
+/// A slow network never reaches the floor in useful time — 200 blocks at 2 bps is 100 seconds —
+/// so without a ceiling the search stalls instead of measuring. Past it the window is judged
+/// anyway and its `samples` count logged, making a thin tail visible rather than silently weak.
+/// At campaign rates the floor is met in well under a second, so this only binds on slow runs.
+pub const MAX_WINDOW_SECS: u64 = 3;
+
+/// Consecutive failed commits on one chain before the run is abandoned.
+///
+/// An overshoot failure is a measurement — the rate is simply not sustainable — but a chain
+/// wedged by an uncertified proposal fails identically and never recovers, silently dragging
+/// every later window down. A run of failures is that, not congestion.
+pub const MAX_CONSECUTIVE_COMMIT_FAILURES: u32 = 20;
+
 /// One control interval's worth of measurement.
 #[derive(Clone, Copy, Debug)]
 pub struct Observation {

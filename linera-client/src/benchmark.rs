@@ -441,6 +441,10 @@ impl<Env: Environment> Benchmark<Env> {
             None => None,
         };
 
+        // Captured before `rate_search` is moved into the controller. Workers need it to know
+        // whether a failed commit is an overshoot to report or a genuine error to raise.
+        let rate_auto = rate_search.is_some();
+
         // One share per chain, held in an atomic so `--rate-auto` can move the whole fleet's
         // target mid-run: the controller rewrites these, the workers re-read them per block.
         let bps_shares: Vec<Arc<AtomicUsize>> = Self::split_bps(bps, num_chains);
@@ -489,6 +493,7 @@ impl<Env: Environment> Benchmark<Env> {
                         notifier_clone,
                         runtime_control_sender_clone,
                         delay_between_chains_ms,
+                        rate_auto,
                     ))
                     .await?;
 
@@ -513,7 +518,13 @@ impl<Env: Environment> Benchmark<Env> {
         }
         info!("All benchmark tasks completed successfully");
 
-        bps_control_task.await?;
+        if let Some(knee_bps) = bps_control_task.await? {
+            info!(
+                knee_bps,
+                knee_tps = knee_bps * transactions_per_block,
+                "rate search converged; the highest rate that held the latency budget"
+            );
+        }
         if let Some(metrics_watcher) = metrics_watcher {
             metrics_watcher.await??;
         }
@@ -568,7 +579,7 @@ impl<Env: Environment> Benchmark<Env> {
         bps_shares: Vec<Arc<AtomicUsize>>,
         latencies: LatencyRecorder,
         mut search: Option<rate::RateSearch>,
-    ) -> task::JoinHandle<()> {
+    ) -> task::JoinHandle<Option<usize>> {
         let shutdown_notifier = shutdown_notifier.clone();
         let bps_counts = bps_counts.to_vec();
         let notifier = notifier.clone();
@@ -584,18 +595,9 @@ impl<Env: Environment> Benchmark<Env> {
                 // one second holds too few samples for a p99, so a window can span several ticks.
                 let mut window_blocks = 0usize;
                 let mut window_start = time::Instant::now();
+                let mut converged = None;
                 loop {
                     if shutdown_notifier.is_cancelled() {
-                        // A run cut short by `--runtime-in-seconds` still has a measurement to
-                        // report: without this the search is dropped unread and the run is
-                        // indistinguishable from one that found no sustainable rate at all.
-                        if let Some(search) = search.as_ref() {
-                            info!(
-                                knee_bps = search.best_so_far(),
-                                knee_tps = search.best_so_far() * transactions_per_block,
-                                "rate search cut short; highest rate confirmed within the budget"
-                            );
-                        }
                         info!("Shutdown signal received in bps control task");
                         break;
                     }
@@ -630,10 +632,14 @@ impl<Env: Environment> Benchmark<Env> {
                     // whatever it asks for next.
                     if let Some(search) = search.as_mut() {
                         window_blocks += current_bps_count;
-                        let Some((p99, samples)) = latencies.take_p99(rate::MIN_P99_SAMPLES) else {
-                            // Too few blocks so far to support a p99. Keep widening the window
-                            // rather than judging on a maximum dressed up as a tail, and rather
-                            // than counting a slow startup as a failure.
+                        // Wait for enough samples to support a p99, but not forever: a slow
+                        // network never reaches the floor, and a stalled search measures nothing.
+                        let floor = if window_start.elapsed().as_secs() >= rate::MAX_WINDOW_SECS {
+                            1
+                        } else {
+                            rate::MIN_P99_SAMPLES
+                        };
+                        let Some((p99, samples)) = latencies.take_p99(floor) else {
                             continue;
                         };
                         // Rate over the SAME window the p99 came from: the window may span
@@ -660,12 +666,7 @@ impl<Env: Environment> Benchmark<Env> {
                                 );
                             }
                             rate::Decision::Converged { best_bps } => {
-                                info!(
-                                    knee_bps = best_bps,
-                                    knee_tps = best_bps * transactions_per_block,
-                                    "rate search converged; the highest rate that held the \
-                                     latency budget"
-                                );
+                                converged = Some(best_bps);
                                 shutdown_notifier.cancel();
                                 break;
                             }
@@ -674,6 +675,9 @@ impl<Env: Environment> Benchmark<Env> {
                 }
 
                 info!("Exiting bps control task");
+                // Returned rather than logged in-task: the runtime limit cancels, the workers
+                // stop and the process unwinds, so anything emitted from here races the exit.
+                converged.or_else(|| search.as_ref().map(rate::RateSearch::best_so_far))
             }
             .instrument(tracing::info_span!("bps_control")),
         )
@@ -970,6 +974,7 @@ impl<Env: Environment> Benchmark<Env> {
         notifier: Arc<Notify>,
         runtime_control_sender: Option<mpsc::Sender<()>>,
         delay_between_chains_ms: Option<u64>,
+        rate_auto: bool,
     ) -> Result<(), BenchmarkError> {
         barrier.wait().await;
         if let Some(delay_between_chains_ms) = delay_between_chains_ms {
@@ -985,6 +990,7 @@ impl<Env: Environment> Benchmark<Env> {
         }
 
         let owner = chain_client.owner().await?;
+        let mut consecutive_failures = 0u32;
 
         loop {
             // Deliberately NOT raced against the shutdown signal. `select!` drops the losing
@@ -999,10 +1005,30 @@ impl<Env: Environment> Benchmark<Env> {
             }
 
             let started = Instant::now();
-            chain_client
+            let commit = chain_client
                 .commit_operations(generator.generate_operations(owner, transactions_per_block))
-                .await?;
-            latencies.record(started.elapsed());
+                .await;
+            match commit {
+                Ok(()) => {
+                    consecutive_failures = 0;
+                    latencies.record(started.elapsed());
+                }
+                // The search has to overshoot to bracket the knee, so a commit that fails at
+                // the overshoot rate is the measurement: it lands as missing throughput and
+                // the rate is judged unsustained. Only meaningful under `--rate-auto`, which
+                // will come back down; at a fixed rate there is nothing to back off to.
+                Err(error) if rate_auto => {
+                    consecutive_failures += 1;
+                    warn!(%error, consecutive_failures, "commit failed; counting this rate as unsustained");
+                    // A chain wedged by an uncertified proposal fails identically to an
+                    // overshoot but never recovers, and would silently drag every later
+                    // measurement down. Repeated failures are that, not congestion.
+                    if consecutive_failures >= rate::MAX_CONSECUTIVE_COMMIT_FAILURES {
+                        return Err(error);
+                    }
+                }
+                Err(error) => return Err(error),
+            }
 
             // Read the share fresh each block: under `--rate-auto` the controller moves the
             // target while the run is in flight, and a share captured at startup would pin
