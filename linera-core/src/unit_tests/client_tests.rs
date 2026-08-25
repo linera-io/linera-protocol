@@ -4609,8 +4609,9 @@ where
     // committee is therefore covered by signatures plus exports, not by exports alone, and the
     // count below is no longer one-per-other-member.
     let mut exported = BTreeMap::new();
+    let mut always_signed: Option<BTreeSet<_>> = None;
     for _ in 0..10 {
-        sender
+        let certificate = sender
             .transfer_to_account(
                 AccountOwner::CHAIN,
                 Amount::from_millis(1),
@@ -4618,6 +4619,18 @@ where
             )
             .await
             .unwrap_ok_committed();
+        // Intersection, not the last block's signers: which validators sign is a quorum and
+        // varies per block, so a validator absent from one block may legitimately have been
+        // exported that one.
+        let signers = certificate
+            .signatures()
+            .iter()
+            .map(|(key, _)| *key)
+            .collect::<BTreeSet<_>>();
+        always_signed = Some(match always_signed {
+            None => signers,
+            Some(previous) => previous.intersection(&signers).copied().collect(),
+        });
         exported = builder.exported_heights(0, chain_id).await;
         if !exported.is_empty() && exported.values().any(|height| *height >= BlockHeight(1)) {
             break;
@@ -4646,6 +4659,15 @@ where
         exported.len() <= 3,
         "expected at most one entry per OTHER committee member, got {exported:?}"
     );
+
+    // The property this test is named for: a validator that signed EVERY block demonstrably holds
+    // all of them, so it must never have been an export destination.
+    for key in &always_signed.unwrap_or_default() {
+        assert!(
+            !exported.contains_key(key),
+            "exported to {key}, which signed every block; got {exported:?}"
+        );
+    }
 
     // The destinations really do hold the chain, and the exporter's cursors agree with them.
     let tip = sender.chain_info().await?.next_block_height;
