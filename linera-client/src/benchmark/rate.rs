@@ -15,6 +15,11 @@
 
 use std::time::Duration;
 
+/// Blocks an observation window must hold before its p99 is believed: `value_at_quantile(0.99)`
+/// returns the largest sample whenever n < 100, so below this the "tail" is really a maximum and
+/// one slow block decides the verdict. 200 puts two samples above the 99th percentile.
+pub const MIN_P99_SAMPLES: u64 = 200;
+
 /// One control interval's worth of measurement.
 #[derive(Clone, Copy, Debug)]
 pub struct Observation {
@@ -70,10 +75,12 @@ impl Default for RateSearchConfig {
 
 /// Climbs toward the highest rate that holds `target_p99`.
 ///
-/// Two phases. It first doubles (or `growth`s) until an interval misses the budget, which
-/// brackets the knee between the last good rate and the first bad one; then it bisects that
-/// bracket until the two are within `resolution`. Doubling first matters: an additive ramp puts
-/// its coarsest resolution exactly where the curve bends.
+/// Two phases. It first moves geometrically to bracket the knee — multiplying by `growth` while
+/// the network keeps up, halving while it does not — and then bisects the resulting bracket
+/// until its ends are within `resolution`. Moving geometrically first matters: an additive ramp
+/// puts its coarsest resolution exactly where the curve bends. Halving downward matters because
+/// `start_bps` is only a guess; a search that gave up when its opening guess was too high would
+/// report no knee precisely when the operator most needs the number.
 #[derive(Debug)]
 pub struct RateSearch {
     config: RateSearchConfig,
@@ -147,9 +154,17 @@ impl RateSearch {
                     .max(self.target + 1);
                 Decision::Hold(self.target)
             }
-            // The very first target already failed. There is no knee to report: the network
-            // cannot sustain even the starting rate inside the budget.
-            (None, Some(_)) => Decision::Converged { best_bps: 0 },
+            // Nothing has passed yet, so the knee is below where we started. Halve downward to
+            // bracket it: `--bps` is the operator's opening guess, and guessing high must still
+            // yield a measurement rather than an immediate no-knee verdict.
+            (None, Some(bad)) => {
+                if bad <= 1 {
+                    Decision::Converged { best_bps: 0 }
+                } else {
+                    self.target = bad / 2;
+                    Decision::Hold(self.target)
+                }
+            }
             (Some(good), Some(bad)) => {
                 // Adjacent integers cannot be subdivided: the midpoint would be `good` again
                 // and the search would re-test a rate it has already confirmed, forever. That
@@ -230,12 +245,34 @@ mod tests {
         );
     }
 
-    /// A network that cannot even serve the starting rate has no knee to report. Reporting the
-    /// start rate anyway would invent a result.
+    /// A network that cannot serve *any* rate has no knee to report. Reporting the start rate
+    /// anyway would invent a result.
     #[test]
     fn a_network_that_never_meets_the_budget_reports_no_knee() {
         let found = converge(RateSearchConfig::default(), |_| ms(9_000));
         assert_eq!(found, 0);
+    }
+
+    /// A knee below the opening guess must still be measured. `--bps` is a guess, and the
+    /// benchmark runbook opens well above what a cluster is likely to sustain, so a search that
+    /// only climbed would report no knee exactly when the number matters.
+    #[test]
+    fn it_searches_downward_when_the_start_rate_is_too_high() {
+        for knee in [1, 7, 140, 999] {
+            let config = RateSearchConfig {
+                start_bps: 4096,
+                ..RateSearchConfig::default()
+            };
+            let found = converge(config, |bps| if bps <= knee { ms(10) } else { ms(5_000) });
+            assert!(
+                found <= knee,
+                "reported {found} as sustainable but the knee is {knee}"
+            );
+            assert!(
+                found as f64 >= knee as f64 * 0.5,
+                "reported {found}, far below the real knee {knee}, from a start of 4096"
+            );
+        }
     }
 
     /// Latency inside budget is not enough on its own: if the generators cannot actually offer

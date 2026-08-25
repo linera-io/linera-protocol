@@ -35,19 +35,18 @@ impl LatencyRecorder {
         }
     }
 
-    /// Returns the p99 for this interval and starts a new one.
-    ///
-    /// Draining is what makes the controller responsive: a cumulative histogram would carry
-    /// every slow block from every earlier rate forward, so the tail could never recover once
-    /// the search had overshot.
-    pub fn take_p99(&self) -> Option<std::time::Duration> {
+    /// Returns the p99 and its sample count, draining the window — but only once `min_samples`
+    /// blocks back it; under the floor the histogram is left intact so the window widens instead.
+    /// Draining once supported is what lets the tail recover after the search overshoots.
+    pub fn take_p99(&self, min_samples: u64) -> Option<(std::time::Duration, u64)> {
         let mut histogram = self.histogram.lock().ok()?;
-        if histogram.is_empty() {
+        let count = histogram.len();
+        if count < min_samples.max(1) {
             return None;
         }
         let p99 = histogram.value_at_quantile(0.99);
         histogram.reset();
-        Some(std::time::Duration::from_micros(p99))
+        Some((std::time::Duration::from_micros(p99), count))
     }
 }
 
@@ -442,7 +441,7 @@ impl<Env: Environment> Benchmark<Env> {
             None => None,
         };
 
-        // One share per chain, held in an atomic so `--rate auto` can move the whole fleet's
+        // One share per chain, held in an atomic so `--rate-auto` can move the whole fleet's
         // target mid-run: the controller rewrites these, the workers re-read them per block.
         let bps_shares: Vec<Arc<AtomicUsize>> = Self::split_bps(bps, num_chains);
         let latencies = LatencyRecorder::new();
@@ -578,8 +577,25 @@ impl<Env: Environment> Benchmark<Env> {
             async move {
                 barrier.wait().await;
                 let mut one_second_interval = time::interval(time::Duration::from_secs(1));
+                // The rate the fleet is currently being asked for. Under `--rate-auto` the
+                // search moves this every interval, so the parameter `bps` is only the start.
+                let mut current_target = bps;
+                // Blocks and elapsed time backing the observation being assembled. At low rates
+                // one second holds too few samples for a p99, so a window can span several ticks.
+                let mut window_blocks = 0usize;
+                let mut window_start = time::Instant::now();
                 loop {
                     if shutdown_notifier.is_cancelled() {
+                        // A run cut short by `--runtime-in-seconds` still has a measurement to
+                        // report: without this the search is dropped unread and the run is
+                        // indistinguishable from one that found no sustainable rate at all.
+                        if let Some(search) = search.as_ref() {
+                            info!(
+                                knee_bps = search.best_so_far(),
+                                knee_tps = search.best_so_far() * transactions_per_block,
+                                "rate search cut short; highest rate confirmed within the budget"
+                            );
+                        }
                         info!("Shutdown signal received in bps control task");
                         break;
                     }
@@ -593,9 +609,9 @@ impl<Env: Environment> Benchmark<Env> {
                     let formatted_current_tps = (current_bps_count * transactions_per_block)
                         .to_formatted_string(&Locale::en);
                     let formatted_tps_goal =
-                        (bps * transactions_per_block).to_formatted_string(&Locale::en);
-                    let formatted_bps_goal = bps.to_formatted_string(&Locale::en);
-                    if current_bps_count >= bps {
+                        (current_target * transactions_per_block).to_formatted_string(&Locale::en);
+                    let formatted_bps_goal = current_target.to_formatted_string(&Locale::en);
+                    if current_bps_count >= current_target {
                         info!(
                             "Achieved {} BPS/{} TPS",
                             formatted_current_bps, formatted_current_tps
@@ -610,25 +626,36 @@ impl<Env: Environment> Benchmark<Env> {
                         );
                     }
 
-                    // `--rate auto`: feed the interval to the search and move the fleet to
+                    // `--rate-auto`: feed the window to the search and move the fleet to
                     // whatever it asks for next.
                     if let Some(search) = search.as_mut() {
-                        let Some(p99) = latencies.take_p99() else {
-                            // No blocks committed this interval: nothing to judge. Judging it
-                            // as a failure would let a slow startup end the search.
+                        window_blocks += current_bps_count;
+                        let Some((p99, samples)) = latencies.take_p99(rate::MIN_P99_SAMPLES) else {
+                            // Too few blocks so far to support a p99. Keep widening the window
+                            // rather than judging on a maximum dressed up as a tail, and rather
+                            // than counting a slow startup as a failure.
                             continue;
                         };
+                        // Rate over the SAME window the p99 came from: the window may span
+                        // several ticks at low rates, and dividing by one second would then
+                        // understate the rate the tail was measured at.
+                        let elapsed = window_start.elapsed().as_secs_f64().max(f64::EPSILON);
                         let observation = rate::Observation {
-                            achieved_bps: current_bps_count as f64,
+                            achieved_bps: window_blocks as f64 / elapsed,
                             p99,
                         };
+                        window_blocks = 0;
+                        window_start = time::Instant::now();
                         match search.observe(observation) {
                             rate::Decision::Hold(target) => {
                                 Self::set_bps(&bps_shares, target);
+                                current_target = target;
                                 info!(
                                     target_bps = target,
                                     p99_ms = p99.as_millis() as u64,
-                                    achieved_bps = current_bps_count,
+                                    achieved_bps = observation.achieved_bps,
+                                    samples = samples,
+                                    window_s = elapsed,
                                     "rate search"
                                 );
                             }
@@ -977,7 +1004,7 @@ impl<Env: Environment> Benchmark<Env> {
                 .await?;
             latencies.record(started.elapsed());
 
-            // Read the share fresh each block: under `--rate auto` the controller moves the
+            // Read the share fresh each block: under `--rate-auto` the controller moves the
             // target while the run is in flight, and a share captured at startup would pin
             // every worker to the rate the search began at.
             let share = bps_share.load(Ordering::Relaxed);
