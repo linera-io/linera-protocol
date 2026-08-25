@@ -3,6 +3,7 @@
 
 use std::{
     collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    pin::pin,
     sync::Arc,
     time::Duration,
 };
@@ -10,8 +11,9 @@ use std::{
 use futures::{future, lock::Mutex, Future, FutureExt as _, StreamExt};
 use linera_base::{
     crypto::{CryptoHash, Signer},
-    data_types::{ChainDescription, MessagePolicy, TimeDelta, Timestamp},
+    data_types::{BlockHeight, ChainDescription, MessagePolicy, TimeDelta, Timestamp},
     identifiers::{AccountOwner, BlobType, ChainId},
+    time::Instant,
     util::future::FutureSyncExt as _,
     Task,
 };
@@ -798,6 +800,33 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     }
 }
 
+/// How often a parked inbox task reports that it has still received no notification.
+/// Being parked is a legitimate steady state, so the report is `info!` rather than `warn!`.
+const PARKED_REPORT_INTERVAL: Duration = Duration::from_secs(300);
+
+/// How often an inbox task reports that an inbox-processing await has not returned.
+const INBOX_STALL_REPORT_INTERVAL: Duration = Duration::from_secs(60);
+
+/// Awaits `inner`, calling `report` with the elapsed time every `interval` while it stays pending.
+///
+/// Purely diagnostic. `inner` is pinned once and polled to completion by the same `select!`
+/// arm every iteration, so a timer tick only logs: it never drops or restarts `inner`, and
+/// therefore cannot lose a `Notify` permit or abandon an in-flight inbox call.
+async fn report_while_pending<F: Future>(
+    inner: F,
+    interval: Duration,
+    mut report: impl FnMut(Duration),
+) -> F::Output {
+    let pending_since = Instant::now();
+    let mut inner = pin!(inner.fuse());
+    loop {
+        futures::select! {
+            output = inner => return output,
+            () = linera_base::time::timer::sleep(interval).fuse() => report(pending_since.elapsed()),
+        }
+    }
+}
+
 /// Per-chain inbox processing loop. Runs as a long-lived tokio task. Wakes on
 /// `inbox_notify` signals and processes the inbox, handling round-leader timeouts
 /// internally. Multiple notifications while busy collapse into a single permit.
@@ -809,10 +838,30 @@ async fn inbox_processing_loop<C: ClientContext>(
     cancellation_token: CancellationToken,
 ) {
     let chain_id = client.chain_id();
+    // Tracked in-process because the diagnostics below must stay readable when storage is
+    // exactly what is unavailable: querying the chain's height would hang alongside the task.
+    let mut last_created_height: Option<BlockHeight> = None;
     loop {
+        debug!(%chain_id, ?last_created_height, "Parking inbox task until the next notification");
+        let parked_since = Instant::now();
         futures::select! {
             () = cancellation_token.cancelled().fuse() => break,
-            () = inbox_notify.notified().fuse() => {
+            () = report_while_pending(
+                inbox_notify.notified(),
+                PARKED_REPORT_INTERVAL,
+                move |parked| info!(
+                    %chain_id,
+                    stage = "awaiting_notification",
+                    parked_secs = parked.as_secs(),
+                    ?last_created_height,
+                    "Inbox task is still parked and has received no notification",
+                ),
+            ).fuse() => {
+                debug!(
+                    %chain_id,
+                    parked_ms = parked_since.elapsed().as_millis() as u64,
+                    "Inbox task woken by a notification",
+                );
                 if config.skip_process_inbox {
                     debug!("Not processing inbox for {chain_id:.8} due to listener configuration");
                     continue;
@@ -831,22 +880,45 @@ async fn inbox_processing_loop<C: ClientContext>(
                 // because we're not the leader, sleep until the timeout then retry.
                 // A new notification or cancellation can interrupt the sleep.
                 loop {
-                    match client.process_inbox_without_prepare().await {
+                    debug!(%chain_id, "Calling process_inbox_without_prepare");
+                    let call_started = Instant::now();
+                    let result = report_while_pending(
+                        client.process_inbox_without_prepare(),
+                        INBOX_STALL_REPORT_INTERVAL,
+                        move |pending| warn!(
+                            %chain_id,
+                            stage = "process_inbox_without_prepare",
+                            pending_secs = pending.as_secs(),
+                            ?last_created_height,
+                            "Inbox task has not returned from process_inbox_without_prepare",
+                        ),
+                    )
+                    .await;
+                    let elapsed_ms = call_started.elapsed().as_millis() as u64;
+                    if let Ok((certs, _)) = &result {
+                        last_created_height = certs
+                            .last()
+                            .map(|cert| cert.inner().height())
+                            .or(last_created_height);
+                    }
+                    match result {
                         Err(chain_client::Error::CannotFindKeyForChain(chain_id)) => {
-                            debug!(%chain_id, "Cannot find key for chain");
+                            debug!(%chain_id, elapsed_ms, "Cannot find key for chain");
                             break;
                         }
                         Err(error) => {
-                            warn!(%error, "Failed to process inbox");
+                            warn!(%chain_id, %error, elapsed_ms, "Failed to process inbox");
                             break;
                         }
                         Ok((certs, None)) => {
                             if certs.is_empty() {
-                                debug!(%chain_id, "done processing inbox: no blocks created");
+                                debug!(%chain_id, elapsed_ms, "done processing inbox: no blocks created");
                             } else {
                                 info!(
                                     %chain_id,
                                     created_block_count = %certs.len(),
+                                    elapsed_ms,
+                                    ?last_created_height,
                                     "done processing inbox",
                                 );
                             }
@@ -856,6 +928,8 @@ async fn inbox_processing_loop<C: ClientContext>(
                             info!(
                                 %chain_id,
                                 created_block_count = %certs.len(),
+                                elapsed_ms,
+                                ?last_created_height,
                                 timeout = %new_timeout,
                                 "waiting for round timeout before continuing to process the inbox",
                             );
@@ -871,8 +945,22 @@ async fn inbox_processing_loop<C: ClientContext>(
                     }
                 }
 
-                if let Err(error) = context.lock().await.update_wallet(&client).await {
-                    warn!(%error, "Failed to update wallet after inbox processing");
+                // The context mutex is shared by every chain in the process, so a stall here
+                // is a whole-worker fault rather than a per-chain one.
+                let update = report_while_pending(
+                    async { context.lock().await.update_wallet(&client).await },
+                    INBOX_STALL_REPORT_INTERVAL,
+                    move |pending| warn!(
+                        %chain_id,
+                        stage = "update_wallet",
+                        pending_secs = pending.as_secs(),
+                        ?last_created_height,
+                        "Inbox task has not returned from the post-processing wallet update",
+                    ),
+                )
+                .await;
+                if let Err(error) = update {
+                    warn!(%chain_id, %error, "Failed to update wallet after inbox processing");
                 }
             }
         }
