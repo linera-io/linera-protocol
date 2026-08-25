@@ -801,7 +801,6 @@ impl<C: ClientContext + 'static> ChainListener<C> {
 }
 
 /// How often a parked inbox task reports that it has still received no notification.
-/// Being parked is a legitimate steady state, so the report is `info!` rather than `warn!`.
 const PARKED_REPORT_INTERVAL: Duration = Duration::from_secs(300);
 
 /// How often an inbox task reports that an inbox-processing await has not returned.
@@ -809,9 +808,8 @@ const INBOX_STALL_REPORT_INTERVAL: Duration = Duration::from_secs(60);
 
 /// Awaits `inner`, calling `report` with the elapsed time every `interval` while it stays pending.
 ///
-/// Purely diagnostic. `inner` is pinned once and polled to completion by the same `select!`
-/// arm every iteration, so a timer tick only logs: it never drops or restarts `inner`, and
-/// therefore cannot lose a `Notify` permit or abandon an in-flight inbox call.
+/// `inner` is pinned once and re-polled by the same `select!` arm every iteration; a tick only
+/// logs. Do not rebind it — dropping `inner` here would discard a `Notify` permit.
 async fn report_while_pending<F: Future>(
     inner: F,
     interval: Duration,
@@ -840,9 +838,12 @@ async fn inbox_processing_loop<C: ClientContext>(
     let chain_id = client.chain_id();
     // Tracked in-process because the diagnostics below must stay readable when storage is
     // exactly what is unavailable: querying the chain's height would hang alongside the task.
-    let mut last_created_height: Option<BlockHeight> = None;
+    let mut last_height_this_task_created: Option<BlockHeight> = None;
+    // Paired with the exit line below so that "no lines at all for this chain" is a distinct
+    // diagnosis from "the task is parked", rather than being indistinguishable from an old binary.
+    info!(%chain_id, "Inbox task started");
     loop {
-        debug!(%chain_id, ?last_created_height, "Parking inbox task until the next notification");
+        debug!(%chain_id, ?last_height_this_task_created, "Parking inbox task until the next notification");
         let parked_since = Instant::now();
         futures::select! {
             () = cancellation_token.cancelled().fuse() => break,
@@ -853,7 +854,7 @@ async fn inbox_processing_loop<C: ClientContext>(
                     %chain_id,
                     stage = "awaiting_notification",
                     parked_secs = parked.as_secs(),
-                    ?last_created_height,
+                    ?last_height_this_task_created,
                     "Inbox task is still parked and has received no notification",
                 ),
             ).fuse() => {
@@ -889,17 +890,28 @@ async fn inbox_processing_loop<C: ClientContext>(
                             %chain_id,
                             stage = "process_inbox_without_prepare",
                             pending_secs = pending.as_secs(),
-                            ?last_created_height,
+                            ?last_height_this_task_created,
                             "Inbox task has not returned from process_inbox_without_prepare",
                         ),
                     )
                     .await;
-                    let elapsed_ms = call_started.elapsed().as_millis() as u64;
+                    let elapsed = call_started.elapsed();
+                    let elapsed_ms = elapsed.as_millis() as u64;
+                    // Terminates a stall that reported above, so recovery is distinguishable from
+                    // the task dying mid-stall. The ordinary outcome only logs at `debug!`.
+                    if elapsed >= INBOX_STALL_REPORT_INTERVAL {
+                        info!(
+                            %chain_id,
+                            stage = "process_inbox_without_prepare",
+                            elapsed_ms,
+                            "Inbox task returned after a reported stall",
+                        );
+                    }
                     if let Ok((certs, _)) = &result {
-                        last_created_height = certs
+                        last_height_this_task_created = certs
                             .last()
                             .map(|cert| cert.inner().height())
-                            .or(last_created_height);
+                            .or(last_height_this_task_created);
                     }
                     match result {
                         Err(chain_client::Error::CannotFindKeyForChain(chain_id)) => {
@@ -918,7 +930,7 @@ async fn inbox_processing_loop<C: ClientContext>(
                                     %chain_id,
                                     created_block_count = %certs.len(),
                                     elapsed_ms,
-                                    ?last_created_height,
+                                    ?last_height_this_task_created,
                                     "done processing inbox",
                                 );
                             }
@@ -929,14 +941,19 @@ async fn inbox_processing_loop<C: ClientContext>(
                                 %chain_id,
                                 created_block_count = %certs.len(),
                                 elapsed_ms,
-                                ?last_created_height,
+                                ?last_height_this_task_created,
                                 timeout = %new_timeout,
                                 "waiting for round timeout before continuing to process the inbox",
                             );
                             let delta = new_timeout.timestamp.delta_since(Timestamp::now());
                             if delta > TimeDelta::ZERO {
+                                // Not wrapped in `report_while_pending`: this wait is bounded by
+                                // `delta` and its duration was just logged above.
                                 futures::select! {
-                                    () = cancellation_token.cancelled().fuse() => return,
+                                    () = cancellation_token.cancelled().fuse() => {
+                                        info!(%chain_id, "Inbox task stopped: cancelled while waiting for the round timeout");
+                                        return;
+                                    },
                                     () = linera_base::time::timer::sleep(delta.as_duration()).fuse() => {},
                                     () = inbox_notify.notified().fuse() => {},
                                 }
@@ -945,29 +962,95 @@ async fn inbox_processing_loop<C: ClientContext>(
                     }
                 }
 
-                // The context mutex is shared by every chain in the process, so a stall here
-                // is a whole-worker fault rather than a per-chain one.
+                // Reported as two stages on purpose: `context` is shared by every chain, so one
+                // chain stalling inside the update makes every other chain stall acquiring it.
+                // Split, the waiters say `context_lock` and only the holder says `update_wallet`.
+                let mut guard = report_while_pending(
+                    context.lock(),
+                    INBOX_STALL_REPORT_INTERVAL,
+                    move |pending| warn!(
+                        %chain_id,
+                        stage = "context_lock",
+                        pending_secs = pending.as_secs(),
+                        "Inbox task is still waiting for the shared context lock",
+                    ),
+                )
+                .await;
                 let update = report_while_pending(
-                    async { context.lock().await.update_wallet(&client).await },
+                    guard.update_wallet(&client),
                     INBOX_STALL_REPORT_INTERVAL,
                     move |pending| warn!(
                         %chain_id,
                         stage = "update_wallet",
                         pending_secs = pending.as_secs(),
-                        ?last_created_height,
+                        ?last_height_this_task_created,
                         "Inbox task has not returned from the post-processing wallet update",
                     ),
                 )
                 .await;
+                drop(guard);
                 if let Err(error) = update {
                     warn!(%chain_id, %error, "Failed to update wallet after inbox processing");
                 }
             }
         }
     }
+    info!(%chain_id, "Inbox task stopped: cancelled");
 }
 
 enum Action {
     Notification(Notification),
     Stop,
+}
+
+#[cfg(all(test, not(web)))]
+mod report_while_pending_tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use super::*;
+
+    /// A report tick must not consume the `Notify` permit. Every diagnostic in this file is
+    /// wrapped around an await that must still resolve, so this is the invariant to protect.
+    #[tokio::test(start_paused = true)]
+    async fn a_tick_does_not_swallow_the_notification() {
+        let notify = Arc::new(Notify::new());
+        let reports = Arc::new(AtomicUsize::new(0));
+
+        let waiter = {
+            let notify = notify.clone();
+            let reports = reports.clone();
+            tokio::spawn(async move {
+                report_while_pending(notify.notified(), Duration::from_secs(60), move |_| {
+                    reports.fetch_add(1, Ordering::SeqCst);
+                })
+                .await
+            })
+        };
+
+        // Three intervals with nothing to wake it: the reports fire, the await stays pending.
+        tokio::time::sleep(Duration::from_secs(190)).await;
+        assert!(reports.load(Ordering::SeqCst) >= 3);
+        assert!(!waiter.is_finished());
+
+        notify.notify_one();
+        waiter
+            .await
+            .expect("the notification must still resolve it");
+    }
+
+    /// A notification arriving before the first tick resolves without reporting at all.
+    #[tokio::test(start_paused = true)]
+    async fn a_prompt_notification_reports_nothing() {
+        let notify = Arc::new(Notify::new());
+        let reports = Arc::new(AtomicUsize::new(0));
+
+        notify.notify_one();
+        let counter = reports.clone();
+        report_while_pending(notify.notified(), Duration::from_secs(60), move |_| {
+            counter.fetch_add(1, Ordering::SeqCst);
+        })
+        .await;
+
+        assert_eq!(reports.load(Ordering::SeqCst), 0);
+    }
 }
