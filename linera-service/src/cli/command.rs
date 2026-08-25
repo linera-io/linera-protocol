@@ -161,6 +161,17 @@ pub struct BenchmarkOptions {
     #[arg(long)]
     pub single_destination_per_block: bool,
 
+    /// Search for the highest rate the network sustains within `--target-p99-ms`, instead of
+    /// holding `--bps` fixed. Reports the knee: the highest rate whose tail latency stayed
+    /// inside the budget, which is the number that means something. `--bps` becomes the
+    /// starting point for the climb.
+    #[arg(long)]
+    pub rate_auto: bool,
+
+    /// The tail-latency budget for `--rate-auto`, in milliseconds.
+    #[arg(long, default_value_t = 1000)]
+    pub target_p99_ms: u64,
+
     /// Which client to drive the chains with.
     #[arg(long, value_enum, default_value_t = ClientMode::Full)]
     pub client_mode: ClientMode,
@@ -215,6 +226,8 @@ impl Default for BenchmarkOptions {
             delay_between_chains_ms: None,
             config_path: None,
             single_destination_per_block: false,
+            rate_auto: false,
+            target_p99_ms: 1000,
             client_mode: ClientMode::default(),
             fan_out: None,
             mixed_self_transfers: false,

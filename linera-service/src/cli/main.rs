@@ -807,6 +807,8 @@ impl Runnable for Job {
                         options: benchmark_options,
                     } => {
                         let BenchmarkOptions {
+                            rate_auto,
+                            target_p99_ms,
                             client_mode,
                             fan_out,
                             mixed_self_transfers,
@@ -1036,6 +1038,15 @@ impl Runnable for Job {
                             runtime_in_seconds,
                             delay_between_chains_ms,
                             chain_listener,
+                            rate_auto.then(|| {
+                                linera_client::benchmark::rate::RateSearch::new(
+                                    linera_client::benchmark::rate::RateSearchConfig {
+                                        target_p99: std::time::Duration::from_millis(target_p99_ms),
+                                        start_bps: bps,
+                                        ..Default::default()
+                                    },
+                                )
+                            }),
                             &shutdown_notifier,
                         )
                         .await?;

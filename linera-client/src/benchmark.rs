@@ -3,6 +3,60 @@
 
 pub mod rate;
 
+/// Per-interval latency, shared between the workers that measure it and the controller that
+/// reads it.
+///
+/// A `Mutex<Histogram>` rather than anything cleverer: it is taken once per committed block,
+/// which is orders of magnitude rarer than the block itself is expensive, and the alternative
+/// (per-worker histograms merged on read) buys nothing measurable while making the p99 harder
+/// to reason about.
+#[derive(Clone)]
+pub struct LatencyRecorder {
+    histogram: Arc<std::sync::Mutex<hdrhistogram::Histogram<u64>>>,
+}
+
+impl LatencyRecorder {
+    /// Records microseconds, covering 1us to 5 minutes at three significant figures.
+    pub fn new() -> Self {
+        let histogram = hdrhistogram::Histogram::new_with_bounds(1, 300_000_000, 3)
+            .expect("valid histogram bounds");
+        Self {
+            histogram: Arc::new(std::sync::Mutex::new(histogram)),
+        }
+    }
+
+    /// Adds one committed block's latency.
+    pub fn record(&self, elapsed: std::time::Duration) {
+        let micros = elapsed.as_micros().min(u64::MAX as u128) as u64;
+        if let Ok(mut histogram) = self.histogram.lock() {
+            // Saturates rather than failing: a block slower than the upper bound is still a
+            // data point, and losing it would flatter the tail.
+            let _ = histogram.saturating_record(micros);
+        }
+    }
+
+    /// Returns the p99 for this interval and starts a new one.
+    ///
+    /// Draining is what makes the controller responsive: a cumulative histogram would carry
+    /// every slow block from every earlier rate forward, so the tail could never recover once
+    /// the search had overshot.
+    pub fn take_p99(&self) -> Option<std::time::Duration> {
+        let mut histogram = self.histogram.lock().ok()?;
+        if histogram.is_empty() {
+            return None;
+        }
+        let p99 = histogram.value_at_quantile(0.99);
+        histogram.reset();
+        Some(std::time::Duration::from_micros(p99))
+    }
+}
+
+impl Default for LatencyRecorder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 use std::{
     collections::HashMap,
     path::Path,
@@ -359,6 +413,7 @@ impl<Env: Environment> Benchmark<Env> {
         runtime_in_seconds: Option<u64>,
         delay_between_chains_ms: Option<u64>,
         chain_listener: Option<ChainListener<C>>,
+        rate_search: Option<rate::RateSearch>,
         shutdown_notifier: &CancellationToken,
     ) -> Result<(), BenchmarkError> {
         assert_eq!(
@@ -387,6 +442,11 @@ impl<Env: Environment> Benchmark<Env> {
             None => None,
         };
 
+        // One share per chain, held in an atomic so `--rate auto` can move the whole fleet's
+        // target mid-run: the controller rewrites these, the workers re-read them per block.
+        let bps_shares: Vec<Arc<AtomicUsize>> = Self::split_bps(bps, num_chains);
+        let latencies = LatencyRecorder::new();
+
         let bps_control_task = Self::bps_control_task(
             &barrier,
             shutdown_notifier,
@@ -394,13 +454,14 @@ impl<Env: Environment> Benchmark<Env> {
             &notifier,
             transactions_per_block,
             bps,
+            bps_shares.clone(),
+            latencies.clone(),
+            rate_search,
         );
 
         let (runtime_control_task, runtime_control_sender) =
             Self::runtime_control_task(shutdown_notifier, runtime_in_seconds, num_chains);
 
-        let bps_initial_share = bps / num_chains;
-        let mut bps_remainder = bps % num_chains;
         let mut join_set = task::JoinSet::<Result<(), BenchmarkError>>::new();
         for (chain_idx, (chain_client, generator)) in
             chain_clients.into_iter().zip(generators).enumerate()
@@ -411,18 +472,15 @@ impl<Env: Environment> Benchmark<Env> {
             let bps_count_clone = bps_counts[chain_idx].clone();
             let notifier_clone = notifier.clone();
             let runtime_control_sender_clone = runtime_control_sender.clone();
-            let bps_share = if bps_remainder > 0 {
-                bps_remainder -= 1;
-                bps_initial_share + 1
-            } else {
-                bps_initial_share
-            };
+            let bps_share = bps_shares[chain_idx].clone();
+            let latencies_clone = latencies.clone();
             join_set.spawn(
                 async move {
                     Box::pin(Self::run_benchmark_internal(
                         chain_idx,
                         chain_id,
                         bps_share,
+                        latencies_clone,
                         chain_client,
                         generator,
                         transactions_per_block,
@@ -474,6 +532,33 @@ impl<Env: Environment> Benchmark<Env> {
     }
 
     // The bps control task will control the BPS from the threads.
+    /// Splits a fleet-wide target into per-chain shares, distributing the remainder so the
+    /// shares sum to exactly `bps` rather than losing up to `num_chains - 1` to truncation.
+    fn split_bps(bps: usize, num_chains: usize) -> Vec<Arc<AtomicUsize>> {
+        let base = bps / num_chains;
+        let remainder = bps % num_chains;
+        (0..num_chains)
+            .map(|i| {
+                Arc::new(AtomicUsize::new(if i < remainder {
+                    base + 1
+                } else {
+                    base
+                }))
+            })
+            .collect()
+    }
+
+    /// Rewrites the shares in place for a new fleet-wide target.
+    fn set_bps(shares: &[Arc<AtomicUsize>], bps: usize) {
+        let base = bps / shares.len();
+        let remainder = bps % shares.len();
+        for (i, share) in shares.iter().enumerate() {
+            let value = if i < remainder { base + 1 } else { base };
+            share.store(value, Ordering::Relaxed);
+        }
+    }
+
+    #[expect(clippy::too_many_arguments)]
     fn bps_control_task(
         barrier: &Arc<Barrier>,
         shutdown_notifier: &CancellationToken,
@@ -481,6 +566,9 @@ impl<Env: Environment> Benchmark<Env> {
         notifier: &Arc<Notify>,
         transactions_per_block: usize,
         bps: usize,
+        bps_shares: Vec<Arc<AtomicUsize>>,
+        latencies: LatencyRecorder,
+        mut search: Option<rate::RateSearch>,
     ) -> task::JoinHandle<()> {
         let shutdown_notifier = shutdown_notifier.clone();
         let bps_counts = bps_counts.to_vec();
@@ -520,6 +608,41 @@ impl<Env: Environment> Benchmark<Env> {
                             formatted_current_bps,
                             formatted_current_tps,
                         );
+                    }
+
+                    // `--rate auto`: feed the interval to the search and move the fleet to
+                    // whatever it asks for next.
+                    if let Some(search) = search.as_mut() {
+                        let Some(p99) = latencies.take_p99() else {
+                            // No blocks committed this interval: nothing to judge. Judging it
+                            // as a failure would let a slow startup end the search.
+                            continue;
+                        };
+                        let observation = rate::Observation {
+                            achieved_bps: current_bps_count as f64,
+                            p99,
+                        };
+                        match search.observe(observation) {
+                            rate::Decision::Hold(target) => {
+                                Self::set_bps(&bps_shares, target);
+                                info!(
+                                    target_bps = target,
+                                    p99_ms = p99.as_millis() as u64,
+                                    achieved_bps = current_bps_count,
+                                    "rate search"
+                                );
+                            }
+                            rate::Decision::Converged { best_bps } => {
+                                info!(
+                                    knee_bps = best_bps,
+                                    knee_tps = best_bps * transactions_per_block,
+                                    "rate search converged; the highest rate that held the \
+                                     latency budget"
+                                );
+                                shutdown_notifier.cancel();
+                                break;
+                            }
+                        }
                     }
                 }
 
@@ -809,7 +932,8 @@ impl<Env: Environment> Benchmark<Env> {
     async fn run_benchmark_internal(
         chain_idx: usize,
         chain_id: ChainId,
-        bps: usize,
+        bps_share: Arc<AtomicUsize>,
+        latencies: LatencyRecorder,
         chain_client: Arc<dyn BenchmarkClient>,
         mut generator: Box<dyn OperationGenerator>,
         transactions_per_block: usize,
@@ -847,12 +971,18 @@ impl<Env: Environment> Benchmark<Env> {
                 break;
             }
 
+            let started = Instant::now();
             chain_client
                 .commit_operations(generator.generate_operations(owner, transactions_per_block))
                 .await?;
+            latencies.record(started.elapsed());
 
+            // Read the share fresh each block: under `--rate auto` the controller moves the
+            // target while the run is in flight, and a share captured at startup would pin
+            // every worker to the rate the search began at.
+            let share = bps_share.load(Ordering::Relaxed);
             let current_bps_count = bps_count.fetch_add(1, Ordering::Relaxed) + 1;
-            if current_bps_count >= bps {
+            if current_bps_count >= share {
                 // Safe to race: waiting on the notifier holds no chain state, and it would
                 // otherwise block until the next tick even after shutdown.
                 tokio::select! {
