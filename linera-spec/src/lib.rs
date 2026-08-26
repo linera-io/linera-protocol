@@ -132,8 +132,8 @@
 //!
 //! # Known gaps
 //!
-//! The specification records, rather than papers over, the places where the implementation does
-//! not quite discharge what a proof wants. In rough order of significance:
+//! Three places where the implementation does not deliver what a proof wants. Each needs a change
+//! to the code, or a weaker result, to close; none is closed by rereading.
 //!
 //! * [`FullReachability`] — the lock-recovery step wants the proposer to reach *every* correct
 //!   validator, while `synchronize_chain_state` guarantees only a quorum plus a grace period.
@@ -150,22 +150,40 @@
 //!   [`CertifiedBlockWasExecuted`] and [`IncomingBundlesAreSelfDerived`], and unlike the
 //!   accountability results both need [`MaxByzantineWeight`]. Tracked in
 //!   [issue #6675](https://github.com/linera-io/linera-protocol/issues/6675).
-//! * [`FastRetryPreservesBlock`] — closing the gap between "same proposal" and "same block" for a
-//!   fast-round retry relies on [`DeterministicExecution`] rather than on a runtime check at the
-//!   retry. Affects safety, and is the one step that reaches outside consensus into execution.
-//! * [`ProposalGate`] — several safety-critical guards live at the call site in
-//!   `chain_worker::state` rather than inside the [`ChainManager`] methods they protect; in
-//!   particular [`create_final_vote`] would sign twice in a round if invoked directly.
-//! * [`SafetyStateRecovery`] — the correspondence between a [`ManagerSafetySnapshot`] and the
-//!   instance it is restored into rests on a height check at the single call site, not on
-//!   anything the type enforces.
-//! * [`VoteConstructionSites`] — an exhaustive-search argument over the five signing sites, which
-//!   a sixth would invalidate.
+//!
+//! # Arguments that rest on the current shape of the code
+//!
+//! These are not gaps. Each is sound as it stands, but holds because of how the code is arranged
+//! today rather than by construction, so a change of the right kind invalidates the *argument*
+//! without any statement becoming visibly wrong. They are listed so that change can be recognized
+//! when it happens.
+//!
+//! | statement | what would invalidate it |
+//! |---|---|
+//! | [`VoteConstructionSites`] | a sixth signing site; the argument is an exhaustive search over the five that exist |
+//! | [`ProposalGate`] | a new caller of the [`ChainManager`] methods it protects — the guards live at the call site in `chain_worker::state`, so [`create_final_vote`] would sign twice in a round if invoked directly |
+//! | [`SafetyStateRecovery`] | a second restore site; the correspondence between a [`ManagerSafetySnapshot`] and the instance it is restored into rests on a height check at the one call site, not on anything the type enforces |
+//!
+//! The last two describe a public method whose precondition is met by convention rather than by
+//! the type. That is a latent hazard as well as a maintenance obligation — the same shape as
+//! [issue #6686](https://github.com/linera-io/linera-protocol/issues/6686), which tracks it for
+//! `apply_confirmed_block`.
 //!
 //! # Coverage
 //!
-//! Established today: agreement on the *sequence of blocks* of a single microchain, and what a
-//! certified block guarantees to nodes that were absent when it was certified.
+//! Established today, in four areas:
+//!
+//! * **Agreement** on the *sequence of blocks* of a single microchain, with its accountability
+//!   converse and its progress counterpart — the three headline results above.
+//! * **Availability** — what a certified block guarantees to nodes that were absent when it was
+//!   certified, and what a crash costs.
+//! * **Conservation across a checkpoint** — that events, messages, blobs and execution state behave
+//!   as they would have without one ([`linera_chain::proof::checkpoints`]).
+//! * **The grounding of committee knowledge** — that no committee certifies its own introduction,
+//!   which is what makes induction on the epoch legitimate ([`CommitteeKnowledgeIsWellFounded`]).
+//!
+//! Client notifications are specified too ([`linera_core::proof::notifications`]), but as a channel
+//! the model treats as lossy rather than as a guarantee anything rests on.
 //!
 //! Not yet covered, in the sense that no statement here constrains them. Where consensus does say
 //! something adjacent, it is named.
@@ -178,18 +196,27 @@
 //!   supplied to a validator lacking them ([`MissingDependenciesAreRecoverable`]), and that its
 //!   outputs — published blobs, events and the certificate — reach storage before the block counts
 //!   as processed ([`BlockOutputsArePersisted`]).
+//!
+//!   Safety reaches into execution in exactly one place: [`FastRetryPreservesBlock`] closes the
+//!   step from "same proposal" to "same block" with [`DeterministicExecution`] rather than a
+//!   runtime check at the retry. Everywhere else the two are kept apart.
 //! * **Cross-chain messaging** as a subsystem — delivery in particular: nothing states that an
 //!   outbox is ever drained, so no bundle is guaranteed to arrive. What *is* stated is that an
 //!   inbox holds only bundles its origin really sent ([`InboxHoldsOnlySentBundles`]), that no two
 //!   blocks consume the same bundle ([`BundleConsumedAtMostOnce`]), and that each chain's own
 //!   block sequence is unique ([`UniqueChain`]).
-//! * **Committee reconfiguration** — epoch changes are agreed *by* this protocol on the admin
-//!   chain; [`EpochAgreement`] records what is assumed about them.
+//! * **Committee reconfiguration** — partly covered now. [`CommitteeKnowledgeIsWellFounded`] fixes
+//!   where a node's knowledge of a committee comes from, and [`MaxByzantineWeight`] is assumed of
+//!   every epoch whose committee has not been revoked, so the fault bound accumulates as epochs are
+//!   created. What remains assumed is that the committee *for* an epoch is agreed, which
+//!   [`EpochAgreement`] records; and revocation is not usable in practice, so no committee is ever
+//!   retired and that accumulation never stops.
 //! * **Chain ownership and lifecycle** — who may propose at a height, and how that changes;
 //!   [`ConsensusInstance`] records what is assumed about it.
 //! * **Resource control and fees** — metering, declared block limits, and fee conservation.
 //! * **Event streams** as a subsystem — append-only-ness and the publisher-side guarantees behind
-//!   a cross-chain `OracleResponse::Event` read.
+//!   a cross-chain `OracleResponse::Event` read. What is stated concerns only the checkpoint
+//!   boundary: [`EventFloorTracksCheckpoints`] says which indices stay readable across one.
 //!
 //! [`CommitAgreement`]: linera_chain::manager::proof::safety::CommitAgreement
 //! [`UniqueChain`]: linera_chain::manager::proof::safety::UniqueChain
@@ -200,6 +227,8 @@
 //! [`MaxByzantineWeight`]: linera_chain::manager::proof::model::MaxByzantineWeight
 //! [`DeterministicExecution`]: linera_chain::manager::proof::model::DeterministicExecution
 //! [`EpochAgreement`]: linera_chain::manager::proof::model::EpochAgreement
+//! [`CommitteeKnowledgeIsWellFounded`]: linera_chain::proof::epochs::CommitteeKnowledgeIsWellFounded
+//! [`EventFloorTracksCheckpoints`]: linera_chain::proof::checkpoints::EventFloorTracksCheckpoints
 //! [`ConsensusInstance`]: linera_chain::manager::proof::model::ConsensusInstance
 //! [`CertifiedBlockWasExecuted`]: linera_chain::manager::proof::commit::CertifiedBlockWasExecuted
 //! [`IncomingBundlesAreSelfDerived`]: linera_chain::manager::proof::commit::IncomingBundlesAreSelfDerived
