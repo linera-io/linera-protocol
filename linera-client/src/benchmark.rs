@@ -460,6 +460,8 @@ impl<Env: Environment> Benchmark<Env> {
             bps_shares.clone(),
             latencies.clone(),
             rate_search,
+            num_chains,
+            delay_between_chains_ms,
         );
 
         let (runtime_control_task, runtime_control_sender) =
@@ -518,12 +520,19 @@ impl<Env: Environment> Benchmark<Env> {
         }
         info!("All benchmark tasks completed successfully");
 
-        if let Some(knee_bps) = bps_control_task.await? {
-            info!(
+        match bps_control_task.await? {
+            Some(rate::SearchOutcome::Converged(knee_bps)) => info!(
                 knee_bps,
                 knee_tps = knee_bps * transactions_per_block,
                 "rate search converged; the highest rate that held the latency budget"
-            );
+            ),
+            Some(rate::SearchOutcome::CutShort(best_bps)) => warn!(
+                best_bps,
+                best_tps = best_bps * transactions_per_block,
+                "rate search cut short by the runtime limit; this is a LOWER BOUND on the knee, \
+                 not the knee"
+            ),
+            None => {}
         }
         if let Some(metrics_watcher) = metrics_watcher {
             metrics_watcher.await??;
@@ -579,7 +588,9 @@ impl<Env: Environment> Benchmark<Env> {
         bps_shares: Vec<Arc<AtomicUsize>>,
         latencies: LatencyRecorder,
         mut search: Option<rate::RateSearch>,
-    ) -> task::JoinHandle<Option<usize>> {
+        num_chains: usize,
+        delay_between_chains_ms: Option<u64>,
+    ) -> task::JoinHandle<Option<rate::SearchOutcome>> {
         let shutdown_notifier = shutdown_notifier.clone();
         let bps_counts = bps_counts.to_vec();
         let notifier = notifier.clone();
@@ -591,10 +602,17 @@ impl<Env: Environment> Benchmark<Env> {
                 // The rate the fleet is currently being asked for. Under `--rate-auto` the
                 // search moves this every interval, so the parameter `bps` is only the start.
                 let mut current_target = bps;
-                // Blocks and elapsed time backing the observation being assembled. At low rates
-                // one second holds too few samples for a p99, so a window can span several ticks.
-                let mut window_blocks = 0usize;
+                // When the window being assembled started. At low rates one second holds too
+                // few samples for a p99, so a window can span several ticks.
                 let mut window_start = time::Instant::now();
+                // Workers sleep their stagger AFTER this barrier, so the fleet is not complete
+                // until the last one wakes; judging before then measures the ramp, not the
+                // network.
+                let ramp_ms =
+                    delay_between_chains_ms.unwrap_or(0) * (num_chains.saturating_sub(1)) as u64;
+                let settle_until = time::Instant::now()
+                    + time::Duration::from_millis(ramp_ms)
+                    + time::Duration::from_secs(rate::SETTLE_SECS);
                 let mut converged = None;
                 loop {
                     if shutdown_notifier.is_cancelled() {
@@ -631,7 +649,13 @@ impl<Env: Environment> Benchmark<Env> {
                     // `--rate-auto`: feed the window to the search and move the fleet to
                     // whatever it asks for next.
                     if let Some(search) = search.as_mut() {
-                        window_blocks += current_bps_count;
+                        if time::Instant::now() < settle_until {
+                            // Drain rather than skip: warm-up latencies must not leak into the
+                            // first judged window.
+                            latencies.take_p99(1);
+                            window_start = time::Instant::now();
+                            continue;
+                        }
                         // Wait for enough samples to support a p99, but not forever: a slow
                         // network never reaches the floor, and a stalled search measures nothing.
                         let floor = if window_start.elapsed().as_secs() >= rate::MAX_WINDOW_SECS {
@@ -642,15 +666,16 @@ impl<Env: Environment> Benchmark<Env> {
                         let Some((p99, samples)) = latencies.take_p99(floor) else {
                             continue;
                         };
-                        // Rate over the SAME window the p99 came from: the window may span
-                        // several ticks at low rates, and dividing by one second would then
-                        // understate the rate the tail was measured at.
+                        // Rate over the SAME window the p99 came from, counted from COMMITTED
+                        // blocks: `samples` is the histogram's length, and the histogram is
+                        // written only on success. The per-chain counters tick on every
+                        // attempt, so using them would score a rate whose commits are failing
+                        // as fully delivered and climb straight past the ceiling.
                         let elapsed = window_start.elapsed().as_secs_f64().max(f64::EPSILON);
                         let observation = rate::Observation {
-                            achieved_bps: window_blocks as f64 / elapsed,
+                            achieved_bps: samples as f64 / elapsed,
                             p99,
                         };
-                        window_blocks = 0;
                         window_start = time::Instant::now();
                         match search.observe(observation) {
                             rate::Decision::Hold(target) => {
@@ -677,7 +702,14 @@ impl<Env: Environment> Benchmark<Env> {
                 info!("Exiting bps control task");
                 // Returned rather than logged in-task: the runtime limit cancels, the workers
                 // stop and the process unwinds, so anything emitted from here races the exit.
-                converged.or_else(|| search.as_ref().map(rate::RateSearch::best_so_far))
+                // Converged and cut-short stay distinct: a lower bound reported as a knee is
+                // the failure the e2e assertion exists to catch.
+                match converged {
+                    Some(best_bps) => Some(rate::SearchOutcome::Converged(best_bps)),
+                    None => search
+                        .as_ref()
+                        .map(|search| rate::SearchOutcome::CutShort(search.best_so_far())),
+                }
             }
             .instrument(tracing::info_span!("bps_control")),
         )

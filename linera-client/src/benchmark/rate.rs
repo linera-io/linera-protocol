@@ -35,6 +35,24 @@ pub const MAX_WINDOW_SECS: u64 = 3;
 /// every later window down. A run of failures is that, not congestion.
 pub const MAX_CONSECUTIVE_COMMIT_FAILURES: u32 = 20;
 
+/// Warm-up held before the first observation, on top of the chain-start ramp.
+///
+/// `bad` is a one-way ratchet: the first window judged unsustainable caps every later target,
+/// and no rate above it can ever be reported. A cold cache or a half-started fleet therefore
+/// pins the knee below `--bps` permanently, and — since the search now halves downward rather
+/// than reporting nothing — it does so while still returning a plausible-looking number.
+pub const SETTLE_SECS: u64 = 5;
+
+/// How a rate search ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SearchOutcome {
+    /// The knee was bracketed to within the configured resolution.
+    Converged(usize),
+    /// A runtime limit or cancellation ended the run first; this is the best rate confirmed
+    /// so far, which is a lower bound on the knee rather than the knee itself.
+    CutShort(usize),
+}
+
 /// One control interval's worth of measurement.
 #[derive(Clone, Copy, Debug)]
 pub struct Observation {
