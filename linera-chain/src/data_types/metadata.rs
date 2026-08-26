@@ -160,7 +160,9 @@ pub struct ClaimOperationMetadata {
 /// Open chain operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
 pub struct OpenChainOperationMetadata {
-    /// The initial balance credited to the new chain.
+    /// The account on the new chain credited with the initial balance.
+    pub account: AccountOwner,
+    /// The initial balance credited to `account`.
     pub balance: Amount,
     /// The ownership configuration of the new chain.
     pub ownership: ChainOwnershipMetadata,
@@ -347,6 +349,7 @@ impl From<&SystemOperation> for SystemOperationMetadata {
             },
             SystemOperation::OpenChain(config) => SystemOperationMetadata {
                 open_chain: Some(OpenChainOperationMetadata {
+                    account: config.account,
                     balance: config.balance,
                     ownership: ChainOwnershipMetadata::from(&config.ownership),
                     application_permissions: ApplicationPermissionsMetadata::from(

@@ -52,7 +52,9 @@ use tokio::sync::oneshot;
 use tracing::{debug, info, instrument, trace, warn};
 
 use crate::{
-    chain_worker::{handle::AtomicTimestamp, ChainWorkerConfig, DeliveryNotifier},
+    chain_worker::{
+        export::BlockExportHandle, handle::AtomicTimestamp, ChainWorkerConfig, DeliveryNotifier,
+    },
     client::{ChainModes, ListeningMode},
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     worker::{BatchRequest, NetworkActions, Notification, Reason, WorkerError},
@@ -83,6 +85,13 @@ pub(crate) mod metrics {
                 "Number of inboxes",
                 &[],
                 exponential_bucket_interval(1.0, 10_000.0),
+            );
+
+        pub static RECEIVED_LOG_QUERY_ENTRIES: Histogram =
+            register_histogram(
+                "received_log_query_entries",
+                "Number of received-log entries returned per chain info query that asks for them",
+                exponential_bucket_interval(1.0, 100_000.0),
             );
 
         pub static BLOCK_PROPOSALS_RECEIVED_TOTAL: IntCounter =
@@ -128,6 +137,11 @@ where
     /// Set to `true` if a database `save` failure has left storage potentially
     /// inconsistent.
     poisoned: bool,
+    /// The process-wide export queue, if the server enabled block export.
+    block_export: Option<BlockExportHandle>,
+    /// When export progress was last folded into `exported_heights`, to bound the register
+    /// rewrites on an active chain.
+    last_exported_heights_fold: Option<linera_base::time::Instant>,
 }
 
 /// The result of processing a cross-chain update.
@@ -190,6 +204,7 @@ where
         chain_id: ChainId,
         service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
         service_runtime_task: Option<web_thread_pool::Task<()>>,
+        block_export: Option<BlockExportHandle>,
     ) -> Result<Self, WorkerError> {
         let chain = storage.load_chain(chain_id).await?;
 
@@ -206,6 +221,8 @@ where
             delivery_notifier,
             knows_chain_is_active: false,
             poisoned: false,
+            block_export,
+            last_exported_heights_fold: None,
         })
     }
 
@@ -1246,6 +1263,17 @@ where
         tip: ChainTipState,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
+        // Cached only when export is on: the queue holds the shared pointer, and inserting on
+        // every executed block would otherwise churn the dedup cache for nothing.
+        let (cached, plain) = if self.block_export.is_some() {
+            (Some(self.storage.cache_certificate(certificate)), None)
+        } else {
+            (None, Some(certificate))
+        };
+        let certificate = cached
+            .as_deref()
+            .or(plain.as_ref())
+            .expect("exactly one of the two is set");
         let block_hash = certificate.hash();
         let block = certificate.block();
         let chain_id = block.header.chain_id;
@@ -1311,9 +1339,9 @@ where
                         .clone_with_base_key(ctx.base_key().bytes.clone())
                 })
                 .await;
-            certificate.into_value()
+            Cow::Borrowed(certificate.value())
         } else {
-            let (proposed_block, outcome) = certificate.into_value().into_block().into_proposal();
+            let (proposed_block, outcome) = block.clone().into_proposal();
             let (proposed_block, verified, _resource_tracker, _) = chain
                 .execute_block(
                     proposed_block,
@@ -1334,7 +1362,7 @@ where
                 ))
                 .into());
             }
-            ConfirmedBlock::new(Block::new(proposed_block, verified))
+            Cow::Owned(ConfirmedBlock::new(Block::new(proposed_block, verified)))
         };
 
         let updated_streams = chain
@@ -1344,6 +1372,8 @@ where
                 tracked.as_deref().map(|h| h.inner()),
             )
             .await?;
+        self.export_block(cached.as_ref(), published_blobs, blobs)
+            .await;
         let mut actions = self.create_network_actions(None).await?;
         trace!("Processed confirmed block {height}");
         actions.notifications.push(Notification {
@@ -1365,8 +1395,10 @@ where
         }
         self.save().await?;
 
-        self.block_values
-            .insert_hashed(Cow::Owned(confirmed_block.into_inner()));
+        self.block_values.insert_hashed(match confirmed_block {
+            Cow::Borrowed(block) => Cow::Borrowed(block.inner()),
+            Cow::Owned(block) => Cow::Owned(block.into_inner()),
+        });
 
         self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
             .await;
@@ -1376,6 +1408,76 @@ where
             actions,
             BlockOutcome::Processed,
         ))
+    }
+
+    /// Queues the block just executed for export and folds the queue's progress into the chain
+    /// state, for the save that follows to persist. Returns as soon as it is queued, and does
+    /// nothing if export is disabled. Never fails the block: export is replication, not
+    /// consensus, so a problem here is logged and the block stands.
+    async fn export_block(
+        &mut self,
+        certificate: Option<&CacheArc<ConfirmedBlockCertificate>>,
+        published_blobs: Vec<Blob>,
+        read_blobs: BTreeMap<BlobId, Blob>,
+    ) {
+        // The certificate is cached exactly when export is enabled, so both are `Some` or
+        // neither is.
+        let (Some(export), Some(certificate)) = (self.block_export.clone(), certificate) else {
+            return;
+        };
+        // The committee *after* applying the block: a validator that this very block admits has to
+        // be exported to from now on.
+        let (epoch, committee) = match self.chain.current_committee().await {
+            Ok((epoch, committee)) => (epoch, committee),
+            Err(error) => {
+                warn!(%error, "Not exporting a block of a chain with no current committee");
+                return;
+            }
+        };
+
+        // Through the cache rather than `Arc::new`: these blobs are already in storage's cache
+        // in the common case, and the cache is what keeps one allocation per blob content.
+        let blobs = published_blobs
+            .into_iter()
+            .chain(read_blobs.into_values())
+            .map(|blob| self.storage.cache_blob(blob))
+            .collect();
+        export.export(
+            certificate.clone(),
+            blobs,
+            epoch,
+            (**self.chain.exported_heights.get()).clone(),
+        );
+
+        // Fold in what the queue has recorded so far — which never includes the block we just
+        // queued. Merged by maximum: the queue drops a chain's progress once it converges, and an
+        // empty read must not regress what an earlier save persisted.
+        let acknowledged = export.progress(self.chain.chain_id(), &committee);
+        let mut merged = std::collections::BTreeMap::new();
+        for validator in committee.validators().keys() {
+            let previous = self.chain.exported_heights.get().get(validator).copied();
+            let reported = acknowledged.get(validator).copied();
+            if let Some(height) = previous.max(reported) {
+                merged.insert(*validator, height);
+            }
+        }
+        if **self.chain.exported_heights.get() != merged {
+            // Rewrites of an already-populated register are throttled: it is re-serialized
+            // whole, changes on every block of an active chain, and is a lower bound by design.
+            // The first real content is never held back. The tail of a burst may therefore
+            // never be folded at all — there is no later save to carry it — which is accepted:
+            // the cost is one query per destination when the cursor is rebuilt, and the
+            // alternative is a full register write per block.
+            let now = linera_base::time::Instant::now();
+            let throttled = !self.chain.exported_heights.get().is_empty()
+                && self.last_exported_heights_fold.is_some_and(|last| {
+                    now.duration_since(last) < self.config.exported_heights_fold_interval
+                });
+            if !throttled {
+                self.last_exported_heights_fold = Some(now);
+                self.chain.exported_heights.set(merged.into());
+            }
+        }
     }
 
     /// Schedules a notification for when cross-chain messages are delivered up to the given
@@ -2652,6 +2754,8 @@ where
                 .saturating_add(max_received_log_entries)
                 .min(chain.received_log.count());
             info.requested_received_log = chain.received_log.read(start..end).await?;
+            #[cfg(with_metrics)]
+            metrics::RECEIVED_LOG_QUERY_ENTRIES.observe(info.requested_received_log.len() as f64);
         }
         if query.request_manager_values {
             info.manager.add_values(&chain.manager);

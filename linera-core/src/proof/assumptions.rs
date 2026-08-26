@@ -33,12 +33,12 @@ pub trait EventualSynchrony {}
 /// permanently crashed. It is needed because [`CorrectValidatorsFormQuorum`] only says the
 /// correct validators *hold* enough weight; progress needs them to answer.
 ///
-/// The per-chain serialization of [`SerializedChainState`] means "bounded local time" also
+/// The per-chain serialization of [`SequentialChainState`] means "bounded local time" also
 /// requires that no single chain's queue grows without bound — a chain saturated by requests can
 /// starve its own consensus without any validator being faulty.
 ///
 /// [`CorrectValidator`]: linera_chain::manager::proof::model::CorrectValidator
-/// [`SerializedChainState`]: linera_chain::manager::proof::model::SerializedChainState
+/// [`SequentialChainState`]: linera_chain::manager::proof::model::SequentialChainState
 /// [`CorrectValidatorsFormQuorum`]: linera_chain::data_types::proof::quorum::CorrectValidatorsFormQuorum
 pub trait CorrectValidatorAvailability {}
 

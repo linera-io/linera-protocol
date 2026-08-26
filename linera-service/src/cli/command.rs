@@ -62,6 +62,32 @@ impl std::str::FromStr for ValidatorToAdd {
     }
 }
 
+/// Which client the benchmark drives its chains with.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ClientMode {
+    /// A real `ChainClient`: executes every block locally and keeps chain state, so it
+    /// measures what a client experiences.
+    ///
+    /// Two network round trips per block with the root `--allow-fast-blocks` option, which
+    /// is off by default; without it the client skips the fast round and pays a third for
+    /// the validated-then-confirmed path.
+    #[default]
+    Full,
+    /// A storage-free proposer: keeps no chain state and executes nothing, so the generator
+    /// stops being part of what is measured.
+    ///
+    /// Always proposes in `Round::Fast`, which a single-super-owner chain designates as its
+    /// first round; it cannot use the validated-then-confirmed path, so unlike `full` this
+    /// is unaffected by `--allow-fast-blocks`. Three round trips per block.
+    ///
+    /// Reads the validator set and quorum weights from the wallet's *genesis* committee, so
+    /// on a network whose committee has since changed it would target stale addresses. Fine
+    /// for a freshly provisioned benchmark network; check before pointing it at a long-lived
+    /// one.
+    Lite,
+}
+
 #[derive(Clone, clap::Args, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 /// Options controlling the behavior of the benchmark command.
@@ -134,6 +160,43 @@ pub struct BenchmarkOptions {
     /// to a single chain, rotating through chains for subsequent blocks.
     #[arg(long)]
     pub single_destination_per_block: bool,
+
+    /// Which client to drive the chains with.
+    #[arg(long, value_enum, default_value_t = ClientMode::Full)]
+    pub client_mode: ClientMode,
+
+    /// How many distinct destination chains each chain sends to. Unset means every other
+    /// benchmarked chain, so cross-chain fan-out grows with `--num-chains` and cannot be
+    /// varied on its own; setting it pins fan-out while everything else is held fixed.
+    #[arg(long)]
+    pub fan_out: Option<usize>,
+
+    /// Keep sending cross-chain messages but never drain the inboxes they fill, isolating
+    /// the sending side. Inboxes then grow for the whole run, which is fine for a short
+    /// benchmark and is not a realistic steady state. `--client-mode lite` only.
+    #[arg(long)]
+    pub skip_message_processing: bool,
+
+    /// The maximum number of incoming message bundles to drain into each block, on top of
+    /// its own operations. Defaults to twice the block's operation count, so a backlog is
+    /// spread over several blocks instead of one huge one. `--client-mode lite` only.
+    #[arg(long)]
+    pub max_incoming_bundles_per_block: Option<usize>,
+
+    /// Mix self-transfers in with the cross-chain ones, so roughly half the traffic stays
+    /// on its own chain. Which half is random, not alternating: the generator shuffles its
+    /// destination list, so this sets the ratio rather than an order. Without this a chain
+    /// only ever sends elsewhere; with `--fan-out 0` it only ever sends to itself, and this
+    /// flag is then ignored. Under `--single-destination-per-block` the mix applies per
+    /// block rather than per transaction, so whole blocks are self-transfers.
+    #[arg(long)]
+    pub mixed_self_transfers: bool,
+
+    /// Broadcast each confirmed certificate in its compact, value-free form (hash plus
+    /// signatures) where possible. A validator that has forgotten the value transparently
+    /// gets a retry with the full certificate. `--client-mode lite` only.
+    #[arg(long)]
+    pub light_certificates: bool,
 }
 
 impl Default for BenchmarkOptions {
@@ -152,6 +215,12 @@ impl Default for BenchmarkOptions {
             delay_between_chains_ms: None,
             config_path: None,
             single_destination_per_block: false,
+            client_mode: ClientMode::default(),
+            fan_out: None,
+            mixed_self_transfers: false,
+            skip_message_processing: false,
+            max_incoming_bundles_per_block: None,
+            light_certificates: false,
         }
     }
 }
@@ -381,6 +450,12 @@ pub enum ClientCommand {
         #[arg(long = "initial-balance", default_value = "0")]
         balance: Amount,
 
+        /// The account on the new chain credited with the initial balance. Defaults to the
+        /// chain account, which is the only balance that pays fees for blocks the account
+        /// itself does not authenticate.
+        #[arg(long = "balance-account", default_value = "0x00")]
+        account: AccountOwner,
+
         /// Whether to create a super owner for the new chain.
         #[arg(long)]
         super_owner: bool,
@@ -408,6 +483,12 @@ pub enum ClientCommand {
         /// balance.
         #[arg(long = "initial-balance", default_value = "0")]
         balance: Amount,
+
+        /// The account on the new chain credited with the initial balance. Defaults to the
+        /// chain account, which is the only balance that pays fees for blocks the account
+        /// itself does not authenticate.
+        #[arg(long = "balance-account", default_value = "0x00")]
+        account: AccountOwner,
     },
 
     /// Display who owns the chain, and how the owners work together proposing blocks.
@@ -808,6 +889,13 @@ pub enum ClientCommand {
         /// or `--controller-id`.
         #[arg(long, default_value = "5")]
         task_retry_delay_secs: u64,
+
+        /// Number of seconds after which a still-running operator task group is logged and
+        /// counted as slow. The group is not interrupted and runs to completion.
+        /// Only relevant when operators are configured via `--operator-application-ids`
+        /// or `--controller-id`.
+        #[arg(long, default_value = "300")]
+        slow_task_group_secs: u64,
 
         /// Run in read-only mode: disallow mutations and prevent queries from scheduling
         /// operations. Use this when exposing the service to untrusted clients.
@@ -1350,6 +1438,11 @@ pub enum WalletCommand {
         /// Whether this chain should become the default chain.
         #[arg(long)]
         set_default: bool,
+
+        /// Whether to credit the claimed tokens to the new owner's account rather than to the
+        /// chain account. Only blocks authenticated by that owner can then pay fees.
+        #[arg(long)]
+        fund_owner_account: bool,
     },
 
     /// Export the genesis configuration to a JSON file.

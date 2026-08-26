@@ -444,15 +444,26 @@ where
         #[graphql(desc = "The owner of the new chain.")] owner: AccountOwner,
         #[graphql(desc = "The balance of the chain being created. Zero if `None`.")]
         balance: Option<Amount>,
+        #[graphql(
+            desc = "The account on the new chain credited with the balance. The chain account \
+                    itself if `None`."
+        )]
+        account: Option<AccountOwner>,
     ) -> Result<ChainId, Error> {
         let ownership = ChainOwnership::single(owner);
         let balance = balance.unwrap_or(Amount::ZERO);
+        let account = account.unwrap_or(AccountOwner::CHAIN);
         let description = self
             .apply_client_command(&chain_id, move |client| {
                 let ownership = ownership.clone();
                 async move {
                     let result = client
-                        .open_chain(ownership, ApplicationPermissions::default(), balance)
+                        .open_chain(
+                            ownership,
+                            ApplicationPermissions::default(),
+                            account,
+                            balance,
+                        )
                         .await
                         .map_err(Error::from)
                         .map(|outcome| outcome.map(|(chain_id, _)| chain_id));
@@ -474,6 +485,11 @@ where
         #[graphql(desc = "The weights of the owners")] weights: Option<Vec<u64>>,
         #[graphql(desc = "The number of multi-leader rounds")] multi_leader_rounds: Option<u32>,
         #[graphql(desc = "The balance of the chain. Zero if `None`")] balance: Option<Amount>,
+        #[graphql(
+            desc = "The account on the new chain credited with the balance. The chain account \
+                    itself if `None`."
+        )]
+        account: Option<AccountOwner>,
         #[graphql(desc = "The duration of the fast round, in milliseconds; default: no timeout")]
         fast_round_ms: Option<u64>,
         #[graphql(
@@ -518,13 +534,14 @@ where
         };
         let ownership = ChainOwnership::multiple(owners, multi_leader_rounds, timeout_config);
         let balance = balance.unwrap_or(Amount::ZERO);
+        let account = account.unwrap_or(AccountOwner::CHAIN);
         let description = self
             .apply_client_command(&chain_id, move |client| {
                 let ownership = ownership.clone();
                 let application_permissions = application_permissions.clone().unwrap_or_default();
                 async move {
                     let result = client
-                        .open_chain(ownership, application_permissions, balance)
+                        .open_chain(ownership, application_permissions, account, balance)
                         .await
                         .map_err(Error::from)
                         .map(|outcome| outcome.map(|(chain_id, _)| chain_id));

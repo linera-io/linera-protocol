@@ -22,8 +22,8 @@ pub trait KeyValueStoreError:
     /// The name of the backend.
     const BACKEND: &'static str;
 
-    /// Returns `true` if this error represents a journal resolution failure,
-    /// which may leave storage in an inconsistent state requiring a view reload.
+    /// Returns `true` if this error may have left storage in an undetermined state,
+    /// so the view must be reloaded before being used again.
     fn must_reload_view(&self) -> bool {
         false
     }

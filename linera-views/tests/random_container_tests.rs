@@ -161,7 +161,7 @@ async fn key_value_store_view_mutability() -> Result<()> {
         let mut new_state_vec = state_vec.clone();
         for _ in 0..count_oper {
             let choice = rng.gen_range(0..5);
-            let entry_count = view.store.count().await?;
+            let entry_count = view.store.iterative_count().await?;
             if choice == 0 {
                 // inserting random stuff
                 let n_ins = rng.gen_range(0..10);

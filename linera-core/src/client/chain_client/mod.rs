@@ -1061,9 +1061,15 @@ impl<Env: Environment> ChainClient<Env> {
             std::mem::take(received_log_batches.as_mut())
         };
 
+        let received_logs_total = received_logs.iter().map(|x| x.1.len()).sum::<usize>();
+        #[cfg(with_metrics)]
+        super::metrics::FIND_RECEIVED_CERTIFICATES_LOG_ENTRIES
+            .with_label_values(&[])
+            .observe(received_logs_total as f64);
+
         debug!(
             received_logs_len = %received_logs.len(),
-            received_logs_total = %received_logs.iter().map(|x| x.1.len()).sum::<usize>(),
+            %received_logs_total,
             "collected received logs"
         );
 
@@ -1073,6 +1079,15 @@ impl<Env: Environment> ChainClient<Env> {
                 ValidatorTrackers::new(received_logs, &trackers),
             )
         };
+
+        #[cfg(with_metrics)]
+        {
+            super::metrics::FIND_RECEIVED_CERTIFICATES_SENDER_CHAINS
+                .with_label_values(&[])
+                .observe(received_logs.num_chains() as f64);
+            super::metrics::SENDER_CERTIFICATES_DISCOVERED_TOTAL
+                .inc_by(received_logs.num_certs() as u64);
+        }
 
         debug!(
             num_chains = %received_logs.num_chains(),
@@ -1140,6 +1155,9 @@ impl<Env: Environment> ChainClient<Env> {
             .await?;
 
         validator_trackers.filter_out_already_known(&mut received_logs, &local_next_heights);
+
+        #[cfg(with_metrics)]
+        super::metrics::SENDER_CERTIFICATES_MISSING_TOTAL.inc_by(received_logs.num_certs() as u64);
 
         debug!(
             remaining_total_certificates = %received_logs.num_certs(),
@@ -2590,12 +2608,13 @@ impl<Env: Environment> ChainClient<Env> {
         .await
     }
 
-    /// Opens a new chain with a derived UID.
+    /// Opens a new chain with a derived UID, crediting `balance` to `account` on it.
     #[instrument(level = "trace", skip(self))]
     pub async fn open_chain(
         &self,
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
+        account: AccountOwner,
         balance: Amount,
     ) -> Result<ClientOutcome<(ChainDescription, ConfirmedBlockCertificate)>, Error> {
         // Check if we have a key for any owner before consuming ownership.
@@ -2608,6 +2627,7 @@ impl<Env: Environment> ChainClient<Env> {
         }
         let config = OpenChainConfig {
             ownership,
+            account,
             balance,
             application_permissions,
         };

@@ -5181,6 +5181,7 @@ version = "0.16.0"
 dependencies = [
  "amm",
  "anyhow",
+ "async-trait",
  "base64 0.22.1",
  "bcs",
  "cfg_aliases",
@@ -5196,6 +5197,7 @@ dependencies = [
  "gloo-utils",
  "hdrhistogram",
  "linera-base",
+ "linera-cache",
  "linera-chain",
  "linera-client",
  "linera-core",
@@ -5226,7 +5228,6 @@ dependencies = [
  "test-log",
  "test-strategy",
  "thiserror 1.0.69",
- "thiserror-context",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -5463,7 +5464,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
- "thiserror-context",
 ]
 
 [[package]]
@@ -5668,7 +5668,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
- "thiserror-context",
  "tracing",
  "trait-variant",
 ]
@@ -5811,6 +5810,7 @@ dependencies = [
  "insta",
  "is-terminal",
  "linera-base",
+ "linera-cache",
  "linera-chain",
  "linera-client",
  "linera-core",
@@ -6241,15 +6241,18 @@ dependencies = [
  "hex",
  "js-sys",
  "linera-base",
+ "linera-chain",
  "linera-client",
  "linera-core",
  "linera-execution",
  "linera-faucet-client",
  "linera-rpc",
+ "linera-sdk",
  "linera-storage",
  "linera-views",
  "serde",
  "serde-wasm-bindgen 0.6.5",
+ "serde_bytes",
  "thiserror 1.0.69",
  "tokio",
  "tokio-util",
@@ -10279,12 +10282,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "thiserror-context"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d4cf778b0694c0adf030668380054b3a382f1e5e6a2e9a0b54bc5e677045bca"
-
-[[package]]
 name = "thiserror-impl"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11770,9 +11767,9 @@ dependencies = [
 
 [[package]]
 name = "web-thread"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "060cfc12637ebaf48b344331cea64fe6d13fed9a1381fb6cce10c3c7495778b4"
+checksum = "530b2c4dae7b3ce941d735a2be6c5759290b57fa64d354fd5560bb24046b87e9"
 dependencies = [
  "futures",
  "pin-project-lite",

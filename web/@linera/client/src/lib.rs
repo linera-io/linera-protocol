@@ -34,6 +34,8 @@ pub use error::Error;
 pub mod listener;
 pub use listener::Listener;
 pub mod faucet;
+pub mod formats;
+pub use formats::Formats;
 pub mod lock;
 
 pub mod crypto;

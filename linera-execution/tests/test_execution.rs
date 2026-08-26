@@ -1137,9 +1137,23 @@ async fn test_multiple_messages_from_different_applications() -> anyhow::Result<
     Ok(())
 }
 
-/// Tests the system API calls `open_chain` and `chain_ownership`.
+/// Tests the system API calls `open_chain` and `chain_ownership`, funding the new chain's own
+/// account.
 #[tokio::test]
 async fn test_open_chain() -> anyhow::Result<()> {
+    Box::pin(run_open_chain_test(AccountOwner::CHAIN)).await
+}
+
+/// Tests that `open_chain` can credit the initial balance to an owner's account instead of the
+/// new chain's own account.
+#[tokio::test]
+async fn test_open_chain_funding_an_owner_account() -> anyhow::Result<()> {
+    Box::pin(run_open_chain_test(AccountPublicKey::test_key(3).into())).await
+}
+
+/// Opens a child chain crediting `child_account` with one token, and checks the parent's debit
+/// as well as the new chain's state after initialization.
+async fn run_open_chain_test(child_account: AccountOwner) -> anyhow::Result<()> {
     let committee = Committee::make_simple(vec![(
         ValidatorPublicKey::test_key(0),
         AccountPublicKey::test_key(0),
@@ -1178,6 +1192,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
     };
     let child_application_permissions = ApplicationPermissions::new_single(application_id);
     let child_config = InitialChainConfig {
+        account: child_account,
         balance: Amount::ONE,
         ownership: child_ownership.clone(),
         application_permissions: child_application_permissions.clone(),
@@ -1193,8 +1208,12 @@ async fn test_open_chain() -> anyhow::Result<()> {
             let destination = Account::chain(dummy_chain_description(2).id());
             runtime.transfer(AccountOwner::CHAIN, destination, Amount::ONE)?;
             let application_permissions = child_application_permissions.clone();
-            let chain_id =
-                runtime.open_chain(child_ownership, application_permissions, Amount::ONE)?;
+            let chain_id = runtime.open_chain(
+                child_ownership,
+                application_permissions,
+                child_account,
+                Amount::ONE,
+            )?;
             assert_eq!(chain_id, child_id);
             Ok(vec![])
         }
@@ -1226,6 +1245,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
     let created_description: ChainDescription =
         bcs::from_bytes(new_blob.bytes()).expect("should deserialize a chain description");
     assert_eq!(created_description.config().balance, Amount::ONE);
+    assert_eq!(created_description.config().account, child_account);
     assert_eq!(created_description.config().ownership, child_ownership);
 
     // Initialize the child chain using the new blob.
@@ -1245,7 +1265,18 @@ async fn test_open_chain() -> anyhow::Result<()> {
         .initialize_chain(child_description.id())
         .await
         .expect("should initialize chain correctly");
-    assert_eq!(*child_view.system.balance.get(), Amount::ONE);
+    if child_account.is_chain() {
+        assert_eq!(*child_view.system.balance.get(), Amount::ONE);
+        assert!(child_view.system.balances.indices().await?.is_empty());
+    } else {
+        // The chain itself is left without funds: only blocks authenticated by `child_account`
+        // can pay fees on it.
+        assert_eq!(*child_view.system.balance.get(), Amount::ZERO);
+        assert_eq!(
+            child_view.system.balances.get(&child_account).await?,
+            Some(Amount::ONE)
+        );
+    }
     assert_eq!(*child_view.system.ownership.get().await?, child_ownership);
     assert_eq!(
         *child_view.system.committee_hash.get(),
