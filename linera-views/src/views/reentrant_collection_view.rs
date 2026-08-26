@@ -141,13 +141,6 @@ where
     }
 }
 
-/// We need to find new base keys in order to implement the collection view.
-/// We do this by appending a value to the base key.
-///
-/// Sub-views in a collection share a common key prefix, like in other view types. However,
-/// just concatenating the shared prefix with sub-view keys makes it impossible to distinguish if a
-/// given key belongs to a child sub-view or a grandchild sub-view (consider for example if a
-/// collection is stored inside the collection).
 impl<W: View> View for ReentrantByteCollectionView<W::Context, W> {
     const NUM_INIT_KEYS: usize = 0;
 
