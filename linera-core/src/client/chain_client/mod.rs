@@ -68,6 +68,7 @@ use super::{
 };
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome, RoundTimeout},
+    delegate::DelegatedOutcome,
     environment::Environment,
     local_node::{LocalNodeClient, LocalNodeError},
     node::{
@@ -2299,7 +2300,7 @@ impl<Env: Environment> ChainClient<Env> {
                 match err {
                     LocalNodeError::BlobsNotFound(_) => {
                         local_node
-                            .handle_pending_blobs(self.chain_id, blobs)
+                            .handle_pending_blobs(self.chain_id, blobs.clone())
                             .await?;
                         local_node.handle_block_proposal(*proposal.clone()).await?;
                     }
@@ -2316,33 +2317,118 @@ impl<Env: Environment> ChainClient<Env> {
         let block = Block::new(proposed_block, outcome);
         // Send the query to validators.
         let submit_block_proposal_start = linera_base::time::Instant::now();
-        let certificate = if round.is_fast() {
-            let hashed_value = ConfirmedBlock::new(block);
-            self.client
-                .submit_block_proposal(committee.clone(), proposal, hashed_value)
-                .await?
-        } else {
-            let hashed_value = ValidatedBlock::new(block);
-            let certificate = self
-                .client
-                .submit_block_proposal(committee.clone(), proposal, hashed_value.clone())
-                .await?;
-            self.client.finalize_block(&committee, certificate).await?
+        // A delegate collects the votes for us, finalizes a validated certificate, and delivers
+        // the block's cross-chain messages, all from close to the validators. It cannot open a
+        // round, so whenever it stops short we form the certificate here from the same signed
+        // proposal.
+        let delegated = self
+            .try_delegated_submission(&proposal, &block, &blobs, &committee)
+            .await;
+        let (certificate, delivered) = match delegated {
+            Some(certificate) => (certificate, true),
+            None if round.is_fast() => {
+                let hashed_value = ConfirmedBlock::new(block);
+                let certificate = self
+                    .client
+                    .submit_block_proposal(committee.clone(), proposal, hashed_value)
+                    .await?;
+                (certificate, false)
+            }
+            None => {
+                let hashed_value = ValidatedBlock::new(block);
+                let certificate = self
+                    .client
+                    .submit_block_proposal(committee.clone(), proposal, hashed_value.clone())
+                    .await?;
+                let certificate = self.client.finalize_block(&committee, certificate).await?;
+                (certificate, false)
+            }
         };
         self.send_timing(submit_block_proposal_start, TimingType::SubmitBlockProposal);
         tracing::debug!(
             total_process_ms = process_start.elapsed().as_millis(),
             "process_pending_block_without_prepare completing"
         );
-        debug!(round = %certificate.round, "Sending confirmed block to validators");
         let certificate = self.client.storage_client().cache_certificate(certificate);
-        self.update_validators(Some(&committee), Some(certificate.clone()))
-            .await?;
+        if !delivered {
+            debug!(round = %certificate.round, "Sending confirmed block to validators");
+            self.update_validators(Some(&committee), Some(certificate.clone()))
+                .await?;
+        }
         // Clear the pending proposal now that the block has been committed.
         *proposal_guard = None;
         Ok(ClientOutcome::Committed(Some(CacheArc::unwrap_or_clone(
             certificate,
         ))))
+    }
+
+    /// Asks the configured delegate, if any, to carry `proposal` through the rest of the round
+    /// it was signed for, and returns the confirmation certificate it formed.
+    ///
+    /// Returns `None` when there is no delegate, when the delegate could not be reached, or
+    /// when it stopped at something that needs a new owner signature. The caller then forms the
+    /// certificate itself from the very same signed proposal: a super owner that proposes two
+    /// different blocks for one round can wedge its chain until the round times out, so a
+    /// fallback must re-submit the existing proposal rather than build another.
+    ///
+    /// The delegate is not trusted. The certificate it returns is accepted only if it carries a
+    /// quorum of this committee's signatures over the block we proposed, which is the same
+    /// check the certificate would have to pass had we collected the votes ourselves.
+    #[instrument(level = "trace", skip_all)]
+    async fn try_delegated_submission(
+        &self,
+        proposal: &BlockProposal,
+        block: &Block,
+        blobs: &[Blob],
+        committee: &Committee,
+    ) -> Option<ConfirmedBlockCertificate> {
+        let delegate = self.client.confirmation_delegate()?;
+        let address = delegate.address();
+        let outcome = delegate
+            .submit_and_confirm(
+                proposal.clone(),
+                block.clone(),
+                blobs.to_vec(),
+                self.options.cross_chain_message_delivery,
+            )
+            .await;
+        let certificate = match outcome {
+            Ok(DelegatedOutcome::Confirmed(certificate)) => *certificate,
+            Ok(DelegatedOutcome::NeedsOwner(info)) => {
+                debug!(
+                    delegate = address,
+                    round = %info.manager.current_round,
+                    "Delegate handed the proposal back; submitting it to the validators",
+                );
+                return None;
+            }
+            Err(error) => {
+                warn!(
+                    delegate = address,
+                    %error,
+                    "Delegate failed; submitting the proposal to the validators",
+                );
+                return None;
+            }
+        };
+        if certificate.block() != block {
+            warn!(
+                delegate = address,
+                "Delegate returned a certificate for a different block; \
+                 submitting the proposal to the validators",
+            );
+            return None;
+        }
+        if let Err(error) = certificate.check(committee) {
+            warn!(
+                delegate = address,
+                %error,
+                "Delegate returned an unverifiable certificate; \
+                 submitting the proposal to the validators",
+            );
+            return None;
+        }
+        Some(certificate)
     }
 
     #[expect(
