@@ -1,12 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
-
 use async_graphql::SimpleObject;
 use hex_game::{Board, Clock, Timeouts};
 use linera_sdk::{
-    linera_base_types::{AccountOwner, ChainId},
+    linera_base_types::{AccountOwner, ChainId, NonCanonicalBTreeSet},
     views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
 };
 use serde::{Deserialize, Serialize};
@@ -32,5 +30,5 @@ pub struct HexState {
     /// The timeouts.
     pub timeouts: RegisterView<Timeouts>,
     /// Temporary chains for individual games, by player.
-    pub game_chains: MapView<AccountOwner, BTreeSet<GameChain>>,
+    pub game_chains: MapView<AccountOwner, NonCanonicalBTreeSet<GameChain>>,
 }

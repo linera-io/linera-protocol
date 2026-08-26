@@ -75,7 +75,7 @@ use custom_debug_derive::Debug;
 use futures::future::Either;
 use linera_base::{
     crypto::{AccountPublicKey, CryptoError, ValidatorSecretKey},
-    data_types::{Blob, BlockHeight, Epoch, Round, Timestamp},
+    data_types::{Blob, BlockHeight, Epoch, NonCanonicalBTreeMap, Round, Timestamp},
     ensure,
     identifiers::{AccountOwner, BlobId, ChainId},
     ownership::ChainOwnership,
@@ -102,10 +102,13 @@ use crate::{
 /// The result of verifying a (valid) query.
 #[derive(Eq, PartialEq)]
 pub enum Outcome {
+    /// The query is accepted and should be acted upon.
     Accept,
+    /// The query can be skipped without further action.
     Skip,
 }
 
+/// A reference to a vote for either a validated or a confirmed block.
 pub type ValidatedOrConfirmedVote<'a> = Either<&'a Vote<ValidatedBlock>, &'a Vote<ConfirmedBlock>>;
 
 /// The latest block that validators may have voted to confirm: this is either the block proposal
@@ -130,6 +133,7 @@ impl LockingBlock {
         }
     }
 
+    /// Returns the ID of the chain this locking block belongs to.
     pub fn chain_id(&self) -> ChainId {
         match self {
             Self::Fast(proposal) => proposal.content.block.chain_id,
@@ -202,7 +206,7 @@ where
     #[cfg_attr(with_graphql, graphql(skip))]
     pub current_round: RegisterView<C, Round>,
     /// The owners that take over in fallback mode.
-    pub fallback_owners: RegisterView<C, BTreeMap<AccountOwner, u64>>,
+    pub fallback_owners: RegisterView<C, NonCanonicalBTreeMap<AccountOwner, u64>>,
 }
 
 #[cfg(with_graphql)]
@@ -239,7 +243,7 @@ where
 
         let fallback_owners = fallback_owners
             .map(|(pub_key, weight)| (AccountOwner::from(pub_key), weight))
-            .collect::<BTreeMap<_, _>>();
+            .collect::<NonCanonicalBTreeMap<_, _>>();
         let fallback_distribution = calculate_distribution(fallback_owners.iter());
 
         let current_round = ownership.first_round();
@@ -265,16 +269,6 @@ where
     /// Returns the most recent validated vote we cast.
     pub fn validated_vote(&self) -> Option<&Vote<ValidatedBlock>> {
         self.validated_vote.get().as_ref()
-    }
-
-    /// Returns the most recent timeout vote we cast.
-    pub fn timeout_vote(&self) -> Option<&Vote<Timeout>> {
-        self.timeout_vote.get().as_ref()
-    }
-
-    /// Returns the most recent fallback vote we cast.
-    pub fn fallback_vote(&self) -> Option<&Vote<Timeout>> {
-        self.fallback_vote.get().as_ref()
     }
 
     /// Returns the lowest round where we can still vote to validate or confirm a block. This is
@@ -449,12 +443,12 @@ where
     /// Signs a vote to validate the proposed block.
     pub fn create_vote(
         &mut self,
-        proposal: BlockProposal,
+        proposal: &BlockProposal,
         block: Block,
         key_pair: Option<&ValidatorSecretKey>,
         local_time: Timestamp,
         blobs: BTreeMap<BlobId, Blob>,
-    ) -> Result<Option<ValidatedOrConfirmedVote>, ChainError> {
+    ) -> Result<Option<ValidatedOrConfirmedVote<'_>>, ChainError> {
         let round = proposal.content.round;
 
         match &proposal.original_proposal {
@@ -550,6 +544,24 @@ where
             return Ok(Some(blob));
         }
         self.locking_blobs.get(blob_id).await
+    }
+
+    /// Returns the requested blobs if they belong to the proposal or the locking block.
+    pub async fn pending_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
+        let mut blobs = self.proposed_blobs.multi_get(blob_ids).await?;
+        let mut missing_indices = Vec::new();
+        let mut missing_blob_ids = Vec::new();
+        for (i, (blob, blob_id)) in blobs.iter().zip(blob_ids).enumerate() {
+            if blob.is_none() {
+                missing_indices.push(i);
+                missing_blob_ids.push(blob_id);
+            }
+        }
+        let second_blobs = self.locking_blobs.multi_get(missing_blob_ids).await?;
+        for (blob, i) in second_blobs.into_iter().zip(missing_indices) {
+            blobs[i] = blob;
+        }
+        Ok(blobs)
     }
 
     /// Updates `current_round` and `round_timeout` if necessary.
@@ -763,6 +775,55 @@ where
     }
 }
 
+/// The safety-critical fields of a [`ChainManager`]: previously cast votes and the
+/// locking block. Re-applying these after a chain reset prevents a validator from
+/// being tricked into double-signing at a height/round it has already voted on.
+#[derive(Debug, Default)]
+pub struct ManagerSafetySnapshot {
+    confirmed_vote: Option<Vote<ConfirmedBlock>>,
+    validated_vote: Option<Vote<ValidatedBlock>>,
+    timeout_vote: Option<Vote<Timeout>>,
+    fallback_vote: Option<Vote<Timeout>>,
+    locking_block: Option<LockingBlock>,
+    locking_blobs: Vec<(BlobId, Blob)>,
+}
+
+impl ManagerSafetySnapshot {
+    /// Reads the safety-critical fields from the given `manager`.
+    pub async fn capture<C>(manager: &ChainManager<C>) -> Result<Self, ViewError>
+    where
+        C: Context + Clone + 'static,
+    {
+        Ok(Self {
+            confirmed_vote: manager.confirmed_vote.get().clone(),
+            validated_vote: manager.validated_vote.get().clone(),
+            timeout_vote: manager.timeout_vote.get().clone(),
+            fallback_vote: manager.fallback_vote.get().clone(),
+            locking_block: manager.locking_block.get().clone(),
+            locking_blobs: manager.locking_blobs.index_values().await?,
+        })
+    }
+
+    /// Writes the captured fields back into `manager`, overriding anything that
+    /// may have been produced by re-execution. The restored state is the safe
+    /// upper bound on what this validator has already committed to.
+    pub fn restore<C>(self, manager: &mut ChainManager<C>) -> Result<(), ViewError>
+    where
+        C: Context + Clone + 'static,
+    {
+        manager.confirmed_vote.set(self.confirmed_vote);
+        manager.validated_vote.set(self.validated_vote);
+        manager.timeout_vote.set(self.timeout_vote);
+        manager.fallback_vote.set(self.fallback_vote);
+        manager.locking_block.set(self.locking_block);
+        manager.locking_blobs.clear();
+        for (blob_id, blob) in self.locking_blobs {
+            manager.locking_blobs.insert(&blob_id, blob)?;
+        }
+        Ok(())
+    }
+}
+
 /// Chain manager information that is included in `ChainInfo` sent to clients.
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
@@ -862,6 +923,23 @@ impl ChainManagerInfo {
             .get()
             .as_ref()
             .map(|vote| Box::new(vote.value.clone()));
+    }
+
+    /// Returns whether `owner` may propose a block in the current round, based on the
+    /// already-computed [`leader`](Self::leader) for that round.
+    ///
+    /// [`leader`](Self::leader) is `None` in the fast and multi-leader rounds, where any
+    /// eligible owner may propose; in the single-leader and validator rounds it names the
+    /// only owner allowed to propose. Unlike [`should_propose`](Self::should_propose),
+    /// this needs no seed or committee, since the leader is taken as given.
+    pub fn can_propose(&self, owner: &AccountOwner) -> bool {
+        match &self.leader {
+            Some(leader) => leader == owner,
+            None => match self.current_round {
+                Round::Fast => self.ownership.super_owners.contains(owner),
+                _ => self.ownership.can_propose_in_multi_leader_round(owner),
+            },
+        }
     }
 
     /// Returns whether the `identity` is allowed to propose a block in `round`.

@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_service::storage::{StorageMigration, StoreConfig};
+use linera_service::storage::{StorageCacheConfig, StorageMigration, StoreConfig};
 use linera_views::{
-    lru_prefix_cache::StorageCacheConfig,
+    lru_prefix_cache::StorageCacheConfig as ViewsStorageCacheConfig,
     scylla_db::{ScyllaDbDatabase, ScyllaDbStoreConfig, ScyllaDbStoreInternalConfig},
     store::KeyValueDatabase,
 };
@@ -63,6 +63,34 @@ pub struct ScyllaDbConfig {
     #[arg(long, default_value = "10000000")]
     pub max_cache_find_key_values_size: usize,
 
+    /// The maximal number of entries in the blob cache.
+    #[arg(long, default_value = "1000")]
+    pub blob_cache_size: usize,
+
+    /// The maximal number of entries in the confirmed block cache.
+    #[arg(long, default_value = "1000")]
+    pub confirmed_block_cache_size: usize,
+
+    /// The maximal number of entries in the assembled certificate cache.
+    #[arg(long, default_value = "1000")]
+    pub certificate_cache_size: usize,
+
+    /// The maximal number of entries in the raw certificate cache.
+    #[arg(long, default_value = "1000")]
+    pub certificate_raw_cache_size: usize,
+
+    /// The maximal number of entries in the event cache.
+    #[arg(long, default_value = "1000")]
+    pub event_cache_size: usize,
+
+    /// The maximal number of entries in the block-hash-by-height cache.
+    #[arg(long, default_value = "1000")]
+    pub block_hash_by_height_cache_size: usize,
+
+    /// The maximal number of entries in the event-block-height cache.
+    #[arg(long, default_value = "1000")]
+    pub event_block_height_cache_size: usize,
+
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1")]
     pub replication_factor: u32,
@@ -73,7 +101,7 @@ pub type ScyllaDbRunner = Runner<ScyllaDbDatabase, ScyllaDbConfig>;
 impl ScyllaDbRunner {
     pub async fn load() -> Result<Self, IndexerError> {
         let config = <IndexerConfig<ScyllaDbConfig> as clap::Parser>::parse();
-        let storage_cache_config = StorageCacheConfig {
+        let storage_cache_config = ViewsStorageCacheConfig {
             max_cache_size: config.client.max_cache_size,
             max_value_entry_size: config.client.max_value_entry_size,
             max_find_keys_entry_size: config.client.max_find_keys_entry_size,
@@ -100,7 +128,20 @@ impl ScyllaDbRunner {
         };
         store_config
             .clone()
-            .run_with_store(StorageMigration)
+            .run_with_store(
+                StorageCacheConfig {
+                    blob_cache_size: config.client.blob_cache_size,
+                    confirmed_block_cache_size: config.client.confirmed_block_cache_size,
+                    certificate_cache_size: config.client.certificate_cache_size,
+                    certificate_raw_cache_size: config.client.certificate_raw_cache_size,
+                    event_cache_size: config.client.event_cache_size,
+                    block_hash_by_height_cache_size: config.client.block_hash_by_height_cache_size,
+                    event_block_height_cache_size: config.client.event_block_height_cache_size,
+                    cache_cleanup_interval_secs:
+                        linera_service::storage::DEFAULT_CLEANUP_INTERVAL_SECS,
+                },
+                StorageMigration,
+            )
             .await
             .expect("ScyllaDb migration failed");
         let database = ScyllaDbDatabase::connect(&scylladb_store_config, &namespace).await?;

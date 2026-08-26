@@ -1,12 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
-
 use async_graphql::SimpleObject;
 use fungible::Account;
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount},
+    linera_base_types::{AccountOwner, Amount, NonCanonicalBTreeSet},
     views::{
         linera_views, CustomCollectionView, MapView, QueueView, RegisterView, RootView, View,
         ViewStorageContext,
@@ -43,7 +41,7 @@ pub struct KeyBook {
 #[derive(Default, Clone, Debug, Serialize, Deserialize, SimpleObject)]
 pub struct AccountInfo {
     /// The list of orders
-    pub orders: BTreeSet<OrderId>,
+    pub orders: NonCanonicalBTreeSet<OrderId>,
 }
 
 /// The price level is contained in a QueueView

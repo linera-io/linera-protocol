@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![recursion_limit = "256"]
+
 use criterion::{criterion_group, criterion_main, Criterion};
 use futures::{
     stream::{self, FuturesUnordered},
@@ -113,7 +115,7 @@ fn prepare_transfers(
         })
         .collect::<Vec<_>>();
 
-    let chain_transfers = chains
+    chains
         .into_iter()
         .enumerate()
         .map(|(index, chain)| {
@@ -132,10 +134,6 @@ fn prepare_transfers(
 
             (chain, transfers)
         })
-        .collect::<Vec<_>>();
-
-    chain_transfers
-        .into_iter()
         .map(move |(chain, transfers)| async move {
             tokio::spawn(async move {
                 for (sender, recipient) in transfers {

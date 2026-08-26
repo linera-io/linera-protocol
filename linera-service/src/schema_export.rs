@@ -7,7 +7,7 @@ use futures::lock::Mutex;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlobContent, BlockHeight, Epoch, NetworkDescription, Timestamp},
-    identifiers::{AccountOwner, BlobId, ChainId},
+    identifiers::{AccountOwner, BlobId, ChainId, EventId},
 };
 use linera_chain::{
     data_types::BlockProposal,
@@ -31,7 +31,7 @@ use linera_core::{
 use linera_execution::committee::Committee;
 use linera_sdk::linera_base_types::ValidatorPublicKey;
 use linera_service::node_service::NodeService;
-use linera_storage::DbStorage;
+use linera_storage::{Arc as CacheArc, DbStorage};
 use linera_version::VersionInfo;
 use linera_views::memory::MemoryDatabase;
 
@@ -69,7 +69,7 @@ impl ValidatorNode for DummyValidatorNode {
 
     async fn handle_confirmed_certificate(
         &self,
-        _: GenericCertificate<ConfirmedBlock>,
+        _: CacheArc<GenericCertificate<ConfirmedBlock>>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)
@@ -121,6 +121,13 @@ impl ValidatorNode for DummyValidatorNode {
         Err(NodeError::UnexpectedMessage)
     }
 
+    async fn download_blobs(
+        &self,
+        _: Vec<BlobId>,
+    ) -> Result<linera_core::node::BlobStream, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
+
     async fn download_certificate(
         &self,
         _: CryptoHash,
@@ -155,6 +162,24 @@ impl ValidatorNode for DummyValidatorNode {
         &self,
         _blob_id: BlobId,
     ) -> Result<ConfirmedBlockCertificate, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
+
+    async fn event_block_heights(
+        &self,
+        _: Vec<EventId>,
+    ) -> Result<Vec<Option<BlockHeight>>, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
+
+    async fn previous_event_blocks(
+        &self,
+        _: ChainId,
+        _: Vec<linera_base::identifiers::StreamId>,
+    ) -> Result<
+        std::collections::BTreeMap<linera_base::identifiers::StreamId, (BlockHeight, CryptoHash)>,
+        NodeError,
+    > {
         Err(NodeError::UnexpectedMessage)
     }
 }
@@ -238,8 +263,13 @@ async fn main() -> std::io::Result<()> {
         None,
         Arc::new(Mutex::new(DummyContext)),
         false, // read-only mode disabled for schema export
+        None,  // no query cache for schema export
+        None,
+        tokio_util::sync::CancellationToken::new(),
+        false, // memory profiling disabled for schema export
+        false, // not paused
     );
     let schema = service.schema().sdl();
-    print!("{}", schema);
+    print!("{schema}");
     Ok(())
 }

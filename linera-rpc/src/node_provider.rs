@@ -18,6 +18,7 @@ pub struct NodeProvider {
 }
 
 impl NodeProvider {
+    /// Creates a new [`NodeProvider`] with the given node options.
     pub fn new(options: NodeOptions) -> Self {
         Self {
             grpc: GrpcNodeProvider::new(options),
@@ -39,7 +40,7 @@ impl ValidatorNodeProvider for NodeProvider {
         }
 
         if address.starts_with("grpc") {
-            return Ok(Client::Grpc(self.grpc.make_node(&address)?));
+            return Ok(Client::Grpc(Box::new(self.grpc.make_node(&address)?)));
         }
 
         Err(NodeError::CannotResolveValidatorAddress { address })
@@ -53,12 +54,18 @@ impl ValidatorNodeProvider for NodeProvider {
 /// - <https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md>
 pub const DEFAULT_MAX_BACKOFF: Duration = Duration::from_secs(30);
 
+/// Options for configuring the clients created by a node provider.
 #[derive(Copy, Clone)]
 pub struct NodeOptions {
+    /// The maximum time to wait when sending a request.
     pub send_timeout: Duration,
+    /// The maximum time to wait when receiving a response.
     pub recv_timeout: Duration,
+    /// The delay between retries.
     pub retry_delay: Duration,
+    /// The maximum number of retries for a request.
     pub max_retries: u32,
+    /// The maximum backoff delay between retries.
     pub max_backoff: Duration,
 }
 

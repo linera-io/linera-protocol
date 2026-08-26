@@ -3,15 +3,20 @@
 
 //! This module manages the state of a Linera chain, including cross-chain communication.
 
+#![deny(missing_docs)]
+
+/// Block types and the wrappers that pair them with their execution outcomes.
 pub mod block;
 mod certificate;
 
+/// Convenience re-exports of the public block and certificate types.
 pub mod types {
     pub use super::{block::*, certificate::*};
 }
 
 mod block_tracker;
 mod chain;
+/// Data types exchanged while proposing, voting on, and confirming blocks.
 pub mod data_types;
 mod inbox;
 pub mod manager;
@@ -20,7 +25,7 @@ mod pending_blobs;
 #[cfg(with_testing)]
 pub mod test;
 
-pub use chain::ChainStateView;
+pub use chain::{BlockExecution, BlockExecutionPhase, ChainIdSet, ChainStateView, ChainTipState};
 use data_types::{MessageBundle, PostedMessage};
 use linera_base::{
     bcs,
@@ -32,7 +37,9 @@ use linera_execution::ExecutionError;
 use linera_views::ViewError;
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+/// An error that occurred while validating or executing a block on a chain.
+#[derive(Error, Debug, strum::IntoStaticStr)]
+#[allow(missing_docs)]
 pub enum ChainError {
     #[error("Cryptographic error: {0}")]
     CryptoError(#[from] CryptoError),
@@ -45,15 +52,6 @@ pub enum ChainError {
 
     #[error("The chain being queried is not active {0}")]
     InactiveChain(ChainId),
-    #[error(
-        "Cannot vote for block proposal of chain {chain_id} because a message \
-         from chain {origin} at height {height} has not been received yet"
-    )]
-    MissingCrossChainUpdate {
-        chain_id: ChainId,
-        origin: ChainId,
-        height: BlockHeight,
-    },
     #[error(
         "Message in block proposed to {chain_id} does not match the previously received messages from \
         origin {origin:?}: was {bundle:?} instead of {previous_bundle:?}"
@@ -137,8 +135,20 @@ pub enum ChainError {
     CertificateValidatorReuse,
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
+    #[error(
+        "Inbox gap on chain {chain_id} from origin {origin}: \
+        expected height {expected_height}, got {actual_height}"
+    )]
+    InboxGapDetected {
+        chain_id: ChainId,
+        origin: ChainId,
+        expected_height: BlockHeight,
+        actual_height: BlockHeight,
+    },
     #[error("Internal error {0}")]
     InternalError(String),
+    #[error("Corrupted chain state: {0}")]
+    CorruptedChainState(String),
     #[error("Block proposal has size {0} which is too large")]
     BlockProposalTooLarge(usize),
     #[error(transparent)]
@@ -157,6 +167,19 @@ pub enum ChainError {
     RoundDoesNotTimeOut,
     #[error("Not signing timeout certificate; current round times out at time {0}")]
     NotTimedOutYet(Timestamp),
+    #[error(
+        "Cannot vote for block proposal of chain {chain_id} because {} cross-chain message \
+         bundle(s) have not been received yet",
+        bundles.len()
+    )]
+    MissingCrossChainUpdates {
+        chain_id: ChainId,
+        /// The missing incoming message bundles, as `(origin chain, height)` pairs that must
+        /// all be received before this block can be validated. The validator reports every
+        /// missing bundle at once so the client can fetch them in a single round, instead of
+        /// the legacy one-rejection-per-missing-sender behavior.
+        bundles: Vec<(ChainId, BlockHeight)>,
+    },
 }
 
 impl ChainError {
@@ -194,18 +217,37 @@ impl ChainError {
             | ChainError::MissingOracleResponseList
             | ChainError::RoundDoesNotTimeOut
             | ChainError::NotTimedOutYet(_)
-            | ChainError::MissingCrossChainUpdate { .. } => false,
+            | ChainError::MissingCrossChainUpdates { .. } => false,
             ChainError::ViewError(_)
             | ChainError::UnexpectedMessage { .. }
+            | ChainError::InboxGapDetected { .. }
             | ChainError::InternalError(_)
+            | ChainError::CorruptedChainState(_)
             | ChainError::BcsError(_) => true,
             ChainError::ExecutionError(execution_error, _) => execution_error.is_local(),
         }
     }
+
+    /// Returns the qualified error variant name for the `error_type` metric label,
+    /// e.g. `"ChainError::UnexpectedBlockHeight"`.
+    ///
+    /// For `ExecutionError` variants, delegates to `ExecutionError::error_type()`
+    /// to surface the underlying error name rather than just `"ExecutionError"`.
+    pub fn error_type(&self) -> String {
+        match self {
+            ChainError::ExecutionError(execution_error, _) => execution_error.error_type(),
+            other => {
+                let variant: &'static str = other.into();
+                format!("ChainError::{variant}")
+            }
+        }
+    }
 }
 
+/// The phase of block execution during which an error occurred.
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
+#[allow(missing_docs)]
 pub enum ChainExecutionContext {
     Query,
     DescribeApplication,
@@ -214,7 +256,9 @@ pub enum ChainExecutionContext {
     Block,
 }
 
+/// Extension trait for attaching a [`ChainExecutionContext`] to an execution error.
 pub trait ExecutionResultExt<T> {
+    /// Converts the error into a [`ChainError`], tagging it with the given execution context.
     fn with_execution_context(self, context: ChainExecutionContext) -> Result<T, ChainError>;
 }
 
@@ -225,4 +269,19 @@ where
     fn with_execution_context(self, context: ChainExecutionContext) -> Result<T, ChainError> {
         self.map_err(|error| ChainError::ExecutionError(Box::new(error.into()), context))
     }
+}
+
+/// Registers every metric this crate declares.
+///
+/// Without this, a metric is only exported after the code path that observes it has run, so a
+/// rarely-taken path leaves its panels blank and makes a routine restart look like the metric
+/// was removed.
+#[cfg(with_metrics)]
+pub fn init_metrics() {
+    linera_base::init_metrics();
+    linera_execution::init_metrics();
+    linera_views::init_metrics();
+    chain::metrics::init_metrics();
+    inbox::metrics::init_metrics();
+    outbox::metrics::init_metrics();
 }

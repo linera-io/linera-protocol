@@ -61,7 +61,7 @@ pub struct Service {
 }
 
 impl Service {
-    pub fn with_protocol(&self, protocol: Protocol) -> String {
+    pub fn with_protocol(&self, protocol: &Protocol) -> String {
         let tls = if self.tls { "s" } else { "" };
         let (protocol, suffix) = match protocol {
             Protocol::Http => ("http", ""),
@@ -74,11 +74,11 @@ impl Service {
     }
 
     pub fn websocket(&self) -> String {
-        self.with_protocol(Protocol::WebSocket)
+        self.with_protocol(&Protocol::WebSocket)
     }
 
     pub fn http(&self) -> String {
-        self.with_protocol(Protocol::Http)
+        self.with_protocol(&Protocol::Http)
     }
 
     /// Gets one hashed value from the node service

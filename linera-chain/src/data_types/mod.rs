@@ -2,7 +2,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    sync::Arc,
+};
 
 use allocative::Allocative;
 use async_graphql::SimpleObject;
@@ -17,12 +20,14 @@ use linera_base::{
         Amount, Blob, BlockHeight, Epoch, Event, MessagePolicy, OracleResponse, Round, Timestamp,
     },
     doc_scalar, ensure, hex, hex_debug,
-    identifiers::{Account, AccountOwner, ApplicationId, BlobId, ChainId, StreamId},
+    identifiers::{
+        Account, AccountOwner, ApplicationId, BlobId, ChainId, GenericApplicationId, StreamId,
+    },
     time::Duration,
 };
 use linera_execution::{committee::Committee, Message, MessageKind, Operation, OutgoingMessage};
 use serde::{Deserialize, Serialize};
-use tracing::instrument;
+use tracing::{info, instrument};
 
 use crate::{
     block::{Block, ValidatedBlock},
@@ -98,24 +103,6 @@ impl ProposedBlock {
         })
     }
 
-    /// Returns an iterator over all incoming [`PostedMessage`]s in this block.
-    pub fn incoming_messages(&self) -> impl Iterator<Item = &PostedMessage> {
-        self.incoming_bundles()
-            .flat_map(|incoming_bundle| &incoming_bundle.bundle.messages)
-    }
-
-    /// Returns the number of incoming messages.
-    pub fn message_count(&self) -> usize {
-        self.incoming_bundles()
-            .map(|im| im.bundle.messages.len())
-            .sum()
-    }
-
-    /// Returns an iterator over all transactions as references.
-    pub fn transaction_refs(&self) -> impl Iterator<Item = &Transaction> {
-        self.transactions.iter()
-    }
-
     /// Returns all operations in this block.
     pub fn operations(&self) -> impl Iterator<Item = &Operation> {
         self.transactions.iter().filter_map(|tx| match tx {
@@ -132,6 +119,7 @@ impl ProposedBlock {
         })
     }
 
+    /// Checks that the serialized size of this block does not exceed the given maximum.
     pub fn check_proposal_size(&self, maximum_block_proposal_size: u64) -> Result<(), ChainError> {
         let size = bcs::serialized_size(self)?;
         ensure!(
@@ -167,6 +155,7 @@ pub enum Transaction {
 impl BcsHashable<'_> for Transaction {}
 
 impl Transaction {
+    /// Returns the incoming bundle, if this transaction receives messages.
     pub fn incoming_bundle(&self) -> Option<&IncomingBundle> {
         match self {
             Transaction::ReceiveMessages(bundle) => Some(bundle),
@@ -175,6 +164,7 @@ impl Transaction {
     }
 }
 
+/// GraphQL-compatible structured representation of an operation.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
 #[graphql(name = "Operation")]
 pub struct OperationMetadata {
@@ -222,6 +212,7 @@ pub struct TransactionMetadata {
 }
 
 impl TransactionMetadata {
+    /// Builds GraphQL-compatible metadata from a transaction.
     pub fn from_transaction(transaction: &Transaction) -> Self {
         match transaction {
             Transaction::ReceiveMessages(bundle) => TransactionMetadata {
@@ -253,7 +244,9 @@ impl TransactionMetadata {
     Allocative,
 )]
 pub struct ChainAndHeight {
+    /// The chain that the block belongs to.
     pub chain_id: ChainId,
+    /// The height of the block within that chain.
     pub height: BlockHeight,
 }
 
@@ -274,11 +267,19 @@ impl IncomingBundle {
         self.bundle.messages.iter()
     }
 
+    /// Returns whether the policy allows this bundle to be delivered with its current action.
+    ///
+    /// Covers the application-level rules only. The chain-level filters are applied by
+    /// [`Self::apply_policy`], which drops the bundle outright rather than rejecting it.
     fn matches_policy(&self, policy: &MessagePolicy) -> bool {
-        if let Some(chain_ids) = &policy.restrict_chain_ids_to {
-            if !chain_ids.contains(&self.origin) {
-                return false;
-            }
+        if !policy.never_reject_application_ids.is_empty()
+            && self.messages().all(|posted_msg| {
+                policy
+                    .never_reject_application_ids
+                    .contains(&posted_msg.message.application_id())
+            })
+        {
+            return true;
         }
         if let Some(app_ids) = &policy.reject_message_bundles_without_application_ids {
             if !self
@@ -299,12 +300,30 @@ impl IncomingBundle {
         !policy.is_reject()
     }
 
+    /// Applies the message policy to this bundle, returning `None` if it is dropped,
+    /// or the bundle with a possibly updated action otherwise.
+    ///
+    /// A bundle from a chain the policy filters out is dropped. A bundle the policy rejects on
+    /// application grounds is dropped only if it is skippable; otherwise it is marked rejected,
+    /// so that a tracked message bounces back to its sender instead of being stranded.
     #[instrument(level = "trace", skip(self))]
     pub fn apply_policy(mut self, policy: &MessagePolicy) -> Option<IncomingBundle> {
+        if let Some(chain_ids) = &policy.restrict_chain_ids_to {
+            if !chain_ids.contains(&self.origin) {
+                return None;
+            }
+        }
+        if policy.ignore_chain_ids.contains(&self.origin) {
+            return None;
+        }
         if !self.matches_policy(policy) {
             if self.bundle.is_skippable() {
                 return None;
             } else if !self.bundle.is_protected() {
+                info!(
+                    origin = %self.origin,
+                    "Rejecting incoming message bundle due to the message policy"
+                );
                 self.action = MessageAction::Reject;
             }
         }
@@ -323,8 +342,8 @@ pub enum MessageAction {
     Reject,
 }
 
-/// Policy for handling message bundle execution failures.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+/// Policy for handling message bundle execution failures during block execution.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum BundleFailurePolicy {
     /// Abort block execution on any bundle failure. The proposal is never modified.
     #[default]
@@ -337,16 +356,23 @@ pub enum BundleFailurePolicy {
     /// - For limit errors (block too large, fuel exceeded, etc.): discard the bundle
     ///   so it can be retried in a later block, unless it's the first transaction
     ///   (in which case it's inherently too large and gets rejected).
-    /// - For non-limit errors: reject the bundle (triggering bounced messages).
+    /// - For bundles whose messages are all from applications in
+    ///   `never_reject_application_ids`: discard the bundle (and subsequent bundles from
+    ///   the same sender) so they can be retried in a later block, and log a warning.
+    /// - For all other non-limit errors: reject the bundle (triggering bounced messages).
     /// - After `max_failures` discarded bundles, discard all remaining message bundles.
     AutoRetry {
         /// Maximum number of discarded bundles before discarding all remaining message bundles.
         max_failures: u32,
+        /// Applications whose messages must never be rejected. A failed bundle whose messages
+        /// are all from such applications is discarded instead of rejected. A bundle that
+        /// contains any message from an application not on this list can be rejected.
+        never_reject_application_ids: Arc<HashSet<GenericApplicationId>>,
     },
 }
 
-/// Policy for bundle execution during block preparation.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+/// Policy for executing message bundles during block execution.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BundleExecutionPolicy {
     /// How to handle bundle execution failures.
     pub on_failure: BundleFailurePolicy,
@@ -381,6 +407,33 @@ pub struct MessageBundle {
     pub messages: Vec<PostedMessage>,
 }
 
+impl MessageBundle {
+    /// Returns a rough estimate of the serialized size in bytes, for chunking.
+    pub fn estimated_size(&self) -> usize {
+        // Fixed overhead: height (8) + timestamp (8) + hash (32) + tx_index (4) + vec len (8)
+        let overhead = 60;
+        let messages_size: usize = self
+            .messages
+            .iter()
+            .map(PostedMessage::estimated_size)
+            .sum();
+        overhead + messages_size
+    }
+}
+
+impl PostedMessage {
+    /// Returns a rough estimate of the serialized size in bytes.
+    pub fn estimated_size(&self) -> usize {
+        // Fixed: signer option (33) + grant (16) + refund option (34) + kind (1) + index (4) + enum tag (8)
+        let overhead = 96;
+        let message_size = match &self.message {
+            Message::System(_) => 256, // conservative estimate for system messages
+            Message::User { bytes, .. } => 64 + bytes.len(),
+        };
+        overhead + message_size
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, Allocative)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 /// An earlier proposal that is being retried.
@@ -389,6 +442,7 @@ pub enum OriginalProposal {
     Fast(AccountSignature),
     /// A validated block certificate from an earlier round.
     Regular {
+        /// The validated block certificate.
         certificate: LiteCertificate<'static>,
     },
 }
@@ -399,8 +453,12 @@ pub enum OriginalProposal {
 #[derive(Clone, Debug, Serialize, Deserialize, Allocative)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct BlockProposal {
+    /// The signed content of the proposal: the proposed block, the round, and any
+    /// execution outcome from a previous round.
     pub content: ProposalContent,
+    /// The proposer's signature over `content`.
     pub signature: AccountSignature,
+    /// The earlier proposal being retried, if this proposal is a retry in a later round.
     #[debug(skip_if = Option::is_none)]
     pub original_proposal: Option<OriginalProposal>,
 }
@@ -426,6 +484,7 @@ pub struct PostedMessage {
     pub message: Message,
 }
 
+/// Extension trait for converting an `OutgoingMessage` into a `PostedMessage`.
 pub trait OutgoingMessageExt {
     /// Returns the posted message, i.e. the outgoing message without the destination.
     fn into_posted(self, index: u32) -> PostedMessage;
@@ -501,12 +560,16 @@ pub struct BlockExecutionOutcome {
 /// The hash and chain ID of a `CertificateValue`.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
 pub struct LiteValue {
+    /// The hash of the `CertificateValue`.
     pub value_hash: CryptoHash,
+    /// The chain that the value belongs to.
     pub chain_id: ChainId,
+    /// The kind of certificate this value is for.
     pub kind: CertificateKind,
 }
 
 impl LiteValue {
+    /// Creates a `LiteValue` from a certificate value.
     pub fn new<T: CertificateValue>(value: &T) -> Self {
         LiteValue {
             value_hash: value.hash(),
@@ -517,6 +580,7 @@ impl LiteValue {
 }
 
 //(deuszx): pub is temp.
+/// The value a validator signs when voting: the value hash, round and certificate kind.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct VoteValue(CryptoHash, Round, CertificateKind);
 
@@ -524,8 +588,11 @@ pub struct VoteValue(CryptoHash, Round, CertificateKind);
 #[derive(Allocative, Clone, Debug, Serialize, Deserialize)]
 #[serde(bound(deserialize = "T: Deserialize<'de>"))]
 pub struct Vote<T> {
+    /// The value being voted for.
     pub value: T,
+    /// The consensus round in which the vote was cast.
     pub round: Round,
+    /// The validator's signature over the value hash, round and certificate kind.
     pub signature: ValidatorSignature,
 }
 
@@ -566,8 +633,11 @@ impl<T> Vote<T> {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct LiteVote {
+    /// The value being voted for, as a `LiteValue`.
     pub value: LiteValue,
+    /// The consensus round in which the vote was cast.
     pub round: Round,
+    /// The validator's signature over the value hash, round and certificate kind.
     pub signature: ValidatorSignature,
 }
 
@@ -585,22 +655,26 @@ impl LiteVote {
         })
     }
 
+    /// Returns the kind of certificate this vote is for.
     pub fn kind(&self) -> CertificateKind {
         self.value.kind
     }
 }
 
 impl MessageBundle {
+    /// Returns whether all messages in this bundle can be skipped.
     pub fn is_skippable(&self) -> bool {
         self.messages.iter().all(PostedMessage::is_skippable)
     }
 
+    /// Returns whether any message in this bundle is protected.
     pub fn is_protected(&self) -> bool {
         self.messages.iter().any(PostedMessage::is_protected)
     }
 }
 
 impl PostedMessage {
+    /// Returns whether this message can be skipped.
     pub fn is_skippable(&self) -> bool {
         match self.kind {
             MessageKind::Protected | MessageKind::Tracked => false,
@@ -608,24 +682,29 @@ impl PostedMessage {
         }
     }
 
+    /// Returns whether this message is protected.
     pub fn is_protected(&self) -> bool {
         matches!(self.kind, MessageKind::Protected)
     }
 
+    /// Returns whether this message is tracked.
     pub fn is_tracked(&self) -> bool {
         matches!(self.kind, MessageKind::Tracked)
     }
 
+    /// Returns whether this message is bouncing.
     pub fn is_bouncing(&self) -> bool {
         matches!(self.kind, MessageKind::Bouncing)
     }
 }
 
 impl BlockExecutionOutcome {
+    /// Combines this outcome with a proposed block into a full block.
     pub fn with(self, block: ProposedBlock) -> Block {
         Block::new(block, self)
     }
 
+    /// Returns the IDs of all blobs referenced by oracle responses in this outcome.
     pub fn oracle_blob_ids(&self) -> HashSet<BlobId> {
         let mut required_blob_ids = HashSet::new();
         for responses in &self.oracle_responses {
@@ -639,18 +718,16 @@ impl BlockExecutionOutcome {
         required_blob_ids
     }
 
+    /// Returns whether any transaction in this outcome recorded oracle responses.
     pub fn has_oracle_responses(&self) -> bool {
         self.oracle_responses
             .iter()
             .any(|responses| !responses.is_empty())
     }
 
+    /// Returns an iterator over the IDs of all blobs created in this outcome.
     pub fn iter_created_blobs_ids(&self) -> impl Iterator<Item = BlobId> + '_ {
         self.blobs.iter().flatten().map(|blob| blob.id())
-    }
-
-    pub fn created_blobs_ids(&self) -> HashSet<BlobId> {
-        self.iter_created_blobs_ids().collect()
     }
 }
 
@@ -667,6 +744,7 @@ pub struct ProposalContent {
 }
 
 impl BlockProposal {
+    /// Creates a new block proposal, signed by the given owner.
     pub async fn new_initial<S: Signer + ?Sized>(
         owner: AccountOwner,
         round: Round,
@@ -687,6 +765,7 @@ impl BlockProposal {
         })
     }
 
+    /// Creates a proposal that retries a fast-round proposal in a later round.
     pub async fn new_retry_fast<S: Signer + ?Sized>(
         owner: AccountOwner,
         round: Round,
@@ -707,6 +786,7 @@ impl BlockProposal {
         })
     }
 
+    /// Creates a proposal that retries a validated block from an earlier round.
     pub async fn new_retry_regular<S: Signer>(
         owner: AccountOwner,
         round: Round,
@@ -739,10 +819,12 @@ impl BlockProposal {
         }
     }
 
+    /// Verifies the signature on this proposal.
     pub fn check_signature(&self) -> Result<(), CryptoError> {
         self.signature.verify(&self.content)
     }
 
+    /// Returns the IDs of the blobs that must be available to validate this proposal.
     pub fn required_blob_ids(&self) -> impl Iterator<Item = BlobId> + '_ {
         self.content.block.published_blob_ids().into_iter().chain(
             self.content
@@ -752,6 +834,7 @@ impl BlockProposal {
         )
     }
 
+    /// Returns the IDs of the blobs that are required or created by this proposal.
     pub fn expected_blob_ids(&self) -> impl Iterator<Item = BlobId> + '_ {
         self.content.block.published_blob_ids().into_iter().chain(
             self.content.outcome.iter().flat_map(|outcome| {
@@ -813,6 +896,7 @@ impl LiteVote {
     }
 }
 
+/// Helper for aggregating validator signatures on a value into a certificate.
 pub struct SignatureAggregator<'a, T: CertificateValue> {
     committee: &'a Committee,
     weight: u64,

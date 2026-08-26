@@ -42,33 +42,42 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
-    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
+pub(crate) mod metrics {
+    use linera_base::prometheus_util::{
+        exponential_bucket_interval, exponential_bucket_latencies, register_histogram_vec,
+    };
     use prometheus::HistogramVec;
 
-    pub static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "wasm_contract_instantiation_latency",
-            "Wasm contract instantiation latency",
-            &[],
-            exponential_bucket_latencies(1.0),
-        )
-    });
+    linera_base::declare_metrics! {
+        pub static CONTRACT_INSTANTIATION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "wasm_contract_instantiation_latency",
+                "Wasm contract instantiation latency",
+                &[],
+                exponential_bucket_latencies(100.0),
+            );
 
-    pub static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "wasm_service_instantiation_latency",
-            "Wasm service instantiation latency",
-            &[],
-            exponential_bucket_latencies(1.0),
-        )
-    });
+        pub static SERVICE_INSTANTIATION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "wasm_service_instantiation_latency",
+                "Wasm service instantiation latency",
+                &[],
+                exponential_bucket_latencies(100.0),
+            );
+
+        pub static WASM_BYTECODE_SIZE_BYTES: HistogramVec =
+            register_histogram_vec(
+                "wasm_bytecode_size_bytes",
+                "Size in bytes of WASM bytecodes being loaded",
+                &["type"],
+                exponential_bucket_interval(10_000.0, 100_000_000.0),
+            );
+    }
 }
 
 /// A user contract in a compiled WebAssembly module.
 #[derive(Clone)]
+#[allow(missing_docs)]
 pub enum WasmContractModule {
     #[cfg(with_wasmer)]
     Wasmer {
@@ -85,7 +94,6 @@ impl WasmContractModule {
         contract_bytecode: Bytecode,
         runtime: WasmRuntime,
     ) -> Result<Self, WasmExecutionError> {
-        let contract_bytecode = add_metering(contract_bytecode)?;
         match runtime {
             #[cfg(with_wasmer)]
             WasmRuntime::Wasmer => Self::from_wasmer(contract_bytecode).await,
@@ -135,6 +143,7 @@ impl UserContractModule for WasmContractModule {
 
 /// A user service in a compiled WebAssembly module.
 #[derive(Clone)]
+#[allow(missing_docs)]
 pub enum WasmServiceModule {
     #[cfg(with_wasmer)]
     Wasmer { module: ::wasmer::Module },
@@ -196,7 +205,7 @@ impl UserServiceModule for WasmServiceModule {
 }
 
 /// Instrument the [`Bytecode`] to add fuel metering.
-pub fn add_metering(bytecode: Bytecode) -> Result<Bytecode, WasmExecutionError> {
+pub fn add_metering(bytecode: &Bytecode) -> Result<Bytecode, WasmExecutionError> {
     struct WasmtimeRules;
 
     impl gas_metering::Rules for WasmtimeRules {
@@ -297,6 +306,7 @@ const _: () = {
 
 /// Errors that can occur when executing a user application in a WebAssembly module.
 #[derive(Debug, Error)]
+#[allow(missing_docs)]
 pub enum WasmExecutionError {
     #[error("Failed to load contract Wasm module: {_0}")]
     LoadContractModule(#[source] anyhow::Error),
@@ -340,9 +350,6 @@ impl From<::wasmer::InstantiationError> for WasmExecutionError {
 pub mod test {
     use std::{path::Path, sync::LazyLock};
 
-    #[cfg(with_fs)]
-    use super::{WasmContractModule, WasmRuntime, WasmServiceModule};
-
     fn build_applications_in_directory(dir: &str) -> Result<(), std::io::Error> {
         let output = std::process::Command::new("cargo")
             .current_dir(dir)
@@ -367,6 +374,7 @@ pub mod test {
         Ok(())
     }
 
+    /// Returns the contract and service bytecode file paths for the named example application.
     pub fn get_example_bytecode_paths(name: &str) -> Result<(String, String), std::io::Error> {
         let name = name.replace('-', "_");
         static INSTANCE: LazyLock<()> = LazyLock::new(|| build_applications().unwrap());
@@ -380,17 +388,5 @@ pub mod test {
             }
         }
         Err(std::io::Error::last_os_error())
-    }
-
-    #[cfg(with_fs)]
-    pub async fn build_example_application(
-        name: &str,
-        wasm_runtime: impl Into<Option<WasmRuntime>>,
-    ) -> Result<(WasmContractModule, WasmServiceModule), anyhow::Error> {
-        let (contract_path, service_path) = get_example_bytecode_paths(name)?;
-        let wasm_runtime = wasm_runtime.into().unwrap_or_default();
-        let contract = WasmContractModule::from_file(&contract_path, wasm_runtime).await?;
-        let service = WasmServiceModule::from_file(&service_path, wasm_runtime).await?;
-        Ok((contract, service))
     }
 }

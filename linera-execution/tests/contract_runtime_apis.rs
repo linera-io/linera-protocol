@@ -1136,7 +1136,7 @@ async fn test_change_ownership_system_api() -> anyhow::Result<()> {
         .await?;
 
     // Verify the ownership was changed.
-    assert_eq!(*view.system.ownership.get(), new_ownership);
+    assert_eq!(*view.system.ownership.get().await?, new_ownership);
 
     Ok(())
 }

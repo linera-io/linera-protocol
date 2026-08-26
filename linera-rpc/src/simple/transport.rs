@@ -10,6 +10,7 @@ use futures::{
     stream::{self, FuturesUnordered, SplitSink, SplitStream},
     Sink, SinkExt, Stream, StreamExt, TryStreamExt,
 };
+use linera_base::{data_types::Blob, identifiers::BlobId};
 use linera_core::{JoinSetExt as _, TaskHandle};
 use serde::{Deserialize, Serialize};
 use tokio::{
@@ -32,10 +33,12 @@ pub const DEFAULT_MAX_DATAGRAM_SIZE: &str = "65507";
 /// Number of tasks to spawn before attempting to reap some finished tasks to prevent memory leaks.
 const REAP_TASKS_THRESHOLD: usize = 100;
 
-// Supported transport protocols.
+/// The transport protocols supported by the simple network.
 #[derive(clap::ValueEnum, Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TransportProtocol {
+    /// The UDP transport protocol.
     Udp,
+    /// The TCP transport protocol.
     Tcp,
 }
 
@@ -49,11 +52,12 @@ impl std::str::FromStr for TransportProtocol {
 
 impl std::fmt::Display for TransportProtocol {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
 impl TransportProtocol {
+    /// Returns the URL scheme name for this transport protocol.
     pub fn scheme(&self) -> &'static str {
         match self {
             TransportProtocol::Udp => "udp",
@@ -64,6 +68,7 @@ impl TransportProtocol {
 
 /// A pool of (outgoing) data streams.
 pub trait ConnectionPool: Send {
+    /// Sends a message to the given address, opening a connection if necessary.
     fn send_message_to<'a>(
         &'a mut self,
         message: RpcMessage,
@@ -78,16 +83,25 @@ pub trait ConnectionPool: Send {
 /// may exist at the same time and handle separate requests concurrently.
 #[async_trait]
 pub trait MessageHandler: Clone {
+    /// Handles a single request message, returning an optional response.
     async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage>;
+
+    /// Handles a batch blob download request by streaming one
+    /// `RpcMessage::DownloadBlobResponse` per requested blob ID.
+    async fn handle_download_blobs(&mut self, _blob_ids: Vec<BlobId>) -> Vec<Blob> {
+        vec![]
+    }
 }
 
 /// The result of spawning a server is oneshot channel to track completion, and the set of
 /// executing tasks.
 pub struct ServerHandle {
+    /// The handle tracking completion of the server task.
     pub handle: TaskHandle<Result<(), std::io::Error>>,
 }
 
 impl ServerHandle {
+    /// Waits for the server task to finish.
     pub async fn join(self) -> Result<(), std::io::Error> {
         self.handle.await.map_err(|_| {
             std::io::Error::new(
@@ -301,7 +315,7 @@ where
     /// Gracefully shuts down the server, waiting for existing tasks to finish.
     async fn shutdown(&mut self) {
         let handlers = mem::take(&mut self.active_handlers);
-        let mut handler_results = FuturesUnordered::from_iter(handlers.into_values());
+        let mut handler_results: FuturesUnordered<_> = handlers.into_values().collect();
 
         while let Some(result) = handler_results.next().await {
             if let Err(error) = result {
@@ -309,7 +323,7 @@ where
             }
         }
 
-        self.join_set.await_all_tasks().await;
+        self.join_set.await_all_tasks_logging_panics().await;
     }
 }
 
@@ -383,7 +397,7 @@ where
     ) -> Result<(), std::io::Error> {
         let listener = TcpListener::bind(address).await?;
 
-        let mut accept_stream = stream::try_unfold(listener, |listener| async move {
+        let accept_stream = stream::try_unfold(listener, |listener| async move {
             let (socket, _) = listener.accept().await?;
             Ok::<_, io::Error>(Some((socket, listener)))
         });
@@ -396,7 +410,7 @@ where
         loop {
             tokio::select! { biased;
                 _ = shutdown_signal.cancelled() => {
-                    join_set.await_all_tasks().await;
+                    join_set.await_all_tasks_logging_panics().await;
                     return Ok(());
                 }
                 maybe_socket = accept_stream.next() => match maybe_socket {
@@ -410,7 +424,7 @@ where
                         reap_countdown -= 1;
                     }
                     Some(Err(error)) => {
-                        join_set.await_all_tasks().await;
+                        join_set.await_all_tasks_logging_panics().await;
                         return Err(error);
                     }
                     None => unreachable!(
@@ -455,9 +469,13 @@ where
                     return;
                 }
                 result = self.connection.next() => match result {
+                    Some(Ok(RpcMessage::DownloadBlobs(blob_ids))) => {
+                        self.handle_download_blobs(blob_ids).await;
+                        return;
+                    }
                     Some(Ok(message)) => self.handle_message(message).await,
                     Some(Err(error)) => {
-                        Self::handle_error(error);
+                        Self::handle_error(&error);
                         return;
                     }
                     None => break,
@@ -475,13 +493,28 @@ where
         }
     }
 
+    /// Handles a batch blob download request by streaming one response per blob.
+    async fn handle_download_blobs(&mut self, blob_ids: Vec<BlobId>) {
+        let blobs = self.handler.handle_download_blobs(blob_ids).await;
+        for blob in blobs {
+            if self.shutdown_signal.is_cancelled() {
+                break;
+            }
+            let msg = RpcMessage::DownloadBlobResponse(Box::new(blob.into_content()));
+            if let Err(error) = self.connection.send(msg).await {
+                error!("Failed to send blob response: {error}");
+                break;
+            }
+        }
+    }
+
     /// Handles an error received while attempting to receive from the connection.
     ///
     /// Ignores a successful connection termination, while logging an unexpected connection
     /// termination or any other error.
-    fn handle_error(error: codec::Error) {
+    fn handle_error(error: &codec::Error) {
         if !matches!(
-            &error,
+            error,
             codec::Error::IoError(error)
                 if error.kind() == io::ErrorKind::UnexpectedEof
                 || error.kind() == io::ErrorKind::ConnectionReset

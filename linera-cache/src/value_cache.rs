@@ -1,0 +1,589 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//! A concurrent cache with efficient eviction and single-allocation guarantees.
+//!
+//! Values are stored internally as `Arc<V>`, so cache hits return a cheap
+//! `Arc` clone instead of cloning the underlying data. A secondary weak
+//! index (`papaya::HashMap<K, Weak<V>>`) ensures that at most one allocation
+//! exists per key: if the bounded cache evicts an entry while a consumer
+//! still holds an `Arc`, re-requesting the same key returns the same
+//! allocation instead of creating a duplicate.
+
+#[cfg(with_metrics)]
+use std::any::type_name;
+use std::{
+    borrow::Cow,
+    hash::Hash,
+    sync::{Arc, Weak},
+};
+
+use linera_base::{crypto::CryptoHash, hashed::Hashed};
+use papaya::{Compute, Operation};
+use quick_cache::sync::Cache;
+
+/// Default interval between dead-entry cleanup sweeps of the weak index.
+pub const DEFAULT_CLEANUP_INTERVAL_SECS: u64 = 30;
+
+/// A concurrent cache with efficient eviction and single-allocation guarantees.
+///
+/// Backed by `quick_cache` (S3-FIFO eviction) for bounded hot-path caching, plus
+/// a lock-free `papaya::HashMap` weak index for deduplication. Together they
+/// guarantee that at most one `Arc<V>` allocation exists per key at any time.
+///
+/// A background task periodically sweeps dead `Weak` entries from the index
+/// to prevent unbounded memory growth.
+pub struct ValueCache<K, V> {
+    /// Stable instance name distinguishing this cache in metrics; several
+    /// caches may share the same key/value types within one process.
+    ///
+    /// Must be unique among the `ValueCache` instances of a process:
+    /// instances sharing a name and key/value types report into the same
+    /// metric series, so their gauges would overwrite each other. The name
+    /// is used verbatim as the `cache` Prometheus label value; any UTF-8
+    /// string is valid, but prefer a short, stable `snake_case` identifier
+    /// since dashboards and alerts query it.
+    name: &'static str,
+    cache: Arc<Cache<K, crate::Arc<V>>>,
+    weak_index: Arc<papaya::HashMap<K, Weak<V>>>,
+}
+
+impl<K, V> ValueCache<K, V>
+where
+    K: Hash + Eq + Clone + Send + Sync + 'static,
+    V: Send + Sync + 'static,
+{
+    /// Creates a new `ValueCache` with the given instance name (used as the
+    /// `cache` metric label), bounded-cache capacity, and cleanup interval
+    /// for the weak-reference index.
+    #[cfg(not(web))]
+    pub fn new(name: &'static str, size: usize, cleanup_interval_secs: u64) -> Self {
+        let cache = Arc::new(Cache::new(size));
+        let weak_index = Arc::new(papaya::HashMap::new());
+        // Report quick_cache's actual capacity, which may round the requested
+        // size up, so that occupancy (entries / capacity) cannot exceed 1.
+        #[cfg(with_metrics)]
+        metrics::CACHE_CAPACITY
+            .with_label_values(&[name, type_name::<K>(), type_name::<V>()])
+            .set(i64::try_from(cache.capacity()).unwrap_or(i64::MAX));
+        Self::spawn_cleanup_task(
+            Arc::clone(&weak_index),
+            #[cfg(with_metrics)]
+            (name, Arc::clone(&cache)),
+            std::time::Duration::from_secs(cleanup_interval_secs),
+        );
+        ValueCache {
+            name,
+            cache,
+            weak_index,
+        }
+    }
+
+    /// Creates a new `ValueCache` (web variant, no background cleanup task).
+    #[cfg(web)]
+    pub fn new(name: &'static str, size: usize, _cleanup_interval_secs: u64) -> Self {
+        ValueCache {
+            name,
+            cache: Arc::new(Cache::new(size)),
+            weak_index: Arc::new(papaya::HashMap::new()),
+        }
+    }
+
+    /// Returns the instance name of this cache.
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+
+    /// Returns the number of entries currently held in the bounded cache.
+    ///
+    /// This is the live occupancy (excludes the weak dedup index), and is
+    /// periodically sampled as the `value_cache_entries` gauge for the
+    /// occupancy-vs-capacity diagnosis.
+    pub fn len(&self) -> usize {
+        self.cache.len()
+    }
+
+    /// Returns `true` if the bounded cache currently holds no entries.
+    pub fn is_empty(&self) -> bool {
+        self.cache.is_empty()
+    }
+
+    /// Inserts a value into the cache, returning the canonical [`crate::Arc`].
+    ///
+    /// The value is wrapped in `Arc` internally. If a live `Arc` for this key
+    /// already exists (held by another consumer), the existing allocation is
+    /// reused and the new value is dropped.
+    pub fn insert(&self, key: &K, value: V) -> crate::Arc<V> {
+        self.dedup_insert(key, crate::Arc(Arc::new(value)))
+    }
+
+    /// Removes a value from the bounded cache.
+    ///
+    /// The weak index entry is intentionally kept — another consumer may
+    /// still hold an `Arc` to this value, and the weak index must be able
+    /// to deduplicate against it. Dead weak entries are cleaned up by the
+    /// background task.
+    pub fn remove(&self, key: &K) -> Option<crate::Arc<V>> {
+        let value = self.cache.peek(key);
+        if value.is_some() {
+            self.cache.remove(key);
+        }
+        self.track_cache_usage(value)
+    }
+
+    /// Returns an [`crate::Arc`] to the value, checking both the bounded
+    /// cache and the weak index.
+    pub fn get(&self, key: &K) -> Option<crate::Arc<V>> {
+        // Tier 1: bounded cache (hot path)
+        if let Some(arc) = self.cache.get(key) {
+            return self.track_cache_usage(Some(arc));
+        }
+
+        // Tier 2: weak index (catches evicted-but-still-held entries)
+        let guard = self.weak_index.guard();
+        if let Some(weak) = self.weak_index.get(key, &guard) {
+            if let Some(arc) = weak.upgrade() {
+                let arc = crate::Arc(arc);
+                // Re-insert into bounded cache for future fast lookups
+                self.cache.insert(key.clone(), arc.clone());
+                return self.track_cache_usage(Some(arc));
+            }
+        }
+
+        self.track_cache_usage(None)
+    }
+
+    /// Returns `true` if the value exists in either the bounded cache or
+    /// the weak index (with a live allocation).
+    pub fn contains(&self, key: &K) -> bool {
+        if self.cache.peek(key).is_some() {
+            return true;
+        }
+        let guard = self.weak_index.guard();
+        self.weak_index
+            .get(key, &guard)
+            .is_some_and(|weak| weak.strong_count() > 0)
+    }
+
+    /// Removes all dead `Weak` entries from the weak index.
+    #[cfg(with_testing)]
+    pub fn cleanup_dead_entries(&self) {
+        let guard = self.weak_index.guard();
+        self.weak_index
+            .retain(|_, weak| weak.strong_count() > 0, &guard);
+    }
+
+    /// Spawns a background task that periodically sweeps dead weak entries.
+    ///
+    /// No-op if no tokio runtime is available (e.g. in unit tests).
+    #[cfg(not(web))]
+    fn spawn_cleanup_task(
+        weak_index: Arc<papaya::HashMap<K, Weak<V>>>,
+        #[cfg(with_metrics)] metrics_handle: (&'static str, Arc<Cache<K, crate::Arc<V>>>),
+        cleanup_interval: std::time::Duration,
+    ) {
+        if tokio::runtime::Handle::try_current().is_err() {
+            return;
+        }
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(cleanup_interval);
+            loop {
+                interval.tick().await;
+                {
+                    let guard = weak_index.guard();
+                    weak_index.retain(|_, weak| weak.strong_count() > 0, &guard);
+                }
+                // Refresh the occupancy gauge on the same cadence as the sweep
+                // (after the guard is dropped); keeps it off the cache hot path.
+                #[cfg(with_metrics)]
+                {
+                    let (name, cache) = &metrics_handle;
+                    metrics::CACHE_ENTRIES
+                        .with_label_values(&[name, type_name::<K>(), type_name::<V>()])
+                        .set(i64::try_from(cache.len()).unwrap_or(i64::MAX));
+                }
+            }
+        });
+    }
+
+    /// Core dedup logic: atomically checks the weak index for an existing
+    /// live allocation. If found, reuses it. Otherwise inserts the new Arc.
+    /// Returns the canonical `Arc`.
+    fn dedup_insert(&self, key: &K, new_arc: crate::Arc<V>) -> crate::Arc<V> {
+        let guard = self.weak_index.guard();
+        let weak = Arc::downgrade(&new_arc.0);
+
+        let result = self.weak_index.compute(
+            key.clone(),
+            |entry| match entry {
+                Some((_k, existing_weak)) => match existing_weak.upgrade() {
+                    Some(existing_arc) => Operation::Abort(existing_arc),
+                    None => Operation::Insert(weak.clone()),
+                },
+                None => Operation::Insert(weak.clone()),
+            },
+            &guard,
+        );
+
+        let canonical_arc = match result {
+            Compute::Inserted(..) | Compute::Updated { .. } => new_arc,
+            Compute::Aborted(existing_arc) => crate::Arc(existing_arc),
+            _ => unreachable!(),
+        };
+
+        self.cache.insert(key.clone(), canonical_arc.clone());
+        canonical_arc
+    }
+
+    fn track_cache_usage(&self, maybe_value: Option<crate::Arc<V>>) -> Option<crate::Arc<V>> {
+        #[cfg(with_metrics)]
+        {
+            let metric = if maybe_value.is_some() {
+                &metrics::CACHE_HIT_COUNT
+            } else {
+                &metrics::CACHE_MISS_COUNT
+            };
+
+            metric
+                .with_label_values(&[self.name, type_name::<K>(), type_name::<V>()])
+                .inc();
+        }
+        maybe_value
+    }
+}
+
+impl<V: Clone + Send + Sync + 'static> ValueCache<CryptoHash, V> {
+    /// Inserts a value constructed from a [`Hashed<T>`] into the cache, keyed
+    /// by its hash, returning the canonical `Arc<V>`.
+    ///
+    /// The `value` is wrapped in a [`Cow`] so that it is only cloned if it
+    /// needs to be inserted in the cache.
+    pub fn insert_hashed<T>(&self, value: Cow<Hashed<T>>) -> crate::Arc<V>
+    where
+        T: Clone,
+        V: From<Hashed<T>>,
+    {
+        let hash = (*value).hash();
+        // Fast path: already in bounded cache
+        if let Some(arc) = self.cache.peek(&hash) {
+            return arc;
+        }
+        // Check weak index before cloning from Cow
+        let guard = self.weak_index.guard();
+        if let Some(weak) = self.weak_index.get(&hash, &guard) {
+            if let Some(arc) = weak.upgrade() {
+                let arc = crate::Arc(arc);
+                self.cache.insert(hash, arc.clone());
+                return arc;
+            }
+        }
+        drop(guard);
+        self.dedup_insert(&hash, crate::Arc(Arc::new(value.into_owned().into())))
+    }
+
+    /// Inserts multiple values constructed from [`Hashed<T>`]s into the cache.
+    #[cfg(with_testing)]
+    pub fn insert_all_hashed<'a, T>(&self, values: impl IntoIterator<Item = Cow<'a, Hashed<T>>>)
+    where
+        T: Clone + 'a,
+        V: From<Hashed<T>>,
+    {
+        for value in values {
+            self.insert_hashed(value);
+        }
+    }
+}
+
+#[cfg(with_metrics)]
+pub(crate) mod metrics {
+    use linera_base::prometheus_util::{register_int_counter_vec, register_int_gauge_vec};
+    use prometheus::{IntCounterVec, IntGaugeVec};
+
+    /// Shared label set: `cache` is the per-instance name passed to
+    /// [`super::ValueCache::new`], required because several caches may share
+    /// the same key/value types within one process.
+    const LABELS: &[&str] = &["cache", "key_type", "value_type"];
+
+    linera_base::declare_metrics! {
+        pub static CACHE_HIT_COUNT: IntCounterVec =
+            register_int_counter_vec("value_cache_hit", "Cache hits in `ValueCache`", LABELS);
+
+        pub static CACHE_MISS_COUNT: IntCounterVec =
+            register_int_counter_vec("value_cache_miss", "Cache misses in `ValueCache`", LABELS);
+
+        pub static CACHE_ENTRIES: IntGaugeVec =
+            register_int_gauge_vec(
+                "value_cache_entries",
+                "Number of entries held in the bounded `ValueCache`, sampled at \
+                 each cleanup sweep",
+                LABELS,
+            );
+
+        pub static CACHE_CAPACITY: IntGaugeVec =
+            register_int_gauge_vec(
+                "value_cache_capacity",
+                "Maximum number of entries of the bounded `ValueCache`",
+                LABELS,
+            );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::borrow::Cow;
+
+    use linera_base::{crypto::CryptoHash, hashed::Hashed};
+    use serde::{Deserialize, Serialize};
+
+    use super::{ValueCache, DEFAULT_CLEANUP_INTERVAL_SECS};
+    use crate::Arc as CacheArc;
+
+    /// Test cache size for unit tests.
+    const TEST_CACHE_SIZE: usize = 10;
+
+    /// A minimal hashable value for testing `ValueCache<CryptoHash, Hashed<T>>`.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    struct TestValue(u64);
+
+    impl linera_base::crypto::BcsHashable<'_> for TestValue {}
+
+    impl From<Hashed<TestValue>> for TestValue {
+        fn from(value: Hashed<TestValue>) -> Self {
+            value.into_inner()
+        }
+    }
+
+    fn create_test_value(n: u64) -> Hashed<TestValue> {
+        Hashed::new(TestValue(n))
+    }
+
+    fn create_test_values(iter: impl IntoIterator<Item = u64>) -> Vec<Hashed<TestValue>> {
+        iter.into_iter().map(create_test_value).collect()
+    }
+
+    fn new_hashed_cache(size: usize) -> ValueCache<CryptoHash, TestValue> {
+        ValueCache::new("test_hashed", size, DEFAULT_CLEANUP_INTERVAL_SECS)
+    }
+
+    fn new_string_cache(size: usize) -> ValueCache<u64, String> {
+        ValueCache::new("test_string", size, DEFAULT_CLEANUP_INTERVAL_SECS)
+    }
+
+    #[test]
+    fn test_retrieve_missing_value() {
+        let cache = new_hashed_cache(TEST_CACHE_SIZE);
+        let hash = CryptoHash::test_hash("Missing value");
+
+        assert!(cache.get(&hash).is_none());
+        assert!(!cache.contains(&hash));
+    }
+
+    #[test]
+    fn test_insert_and_get() {
+        let cache = new_hashed_cache(TEST_CACHE_SIZE);
+        let value = create_test_value(0);
+        let hash = value.hash();
+
+        cache.insert_hashed(Cow::Borrowed(&value));
+        assert!(cache.contains(&hash));
+        assert_eq!(cache.get(&hash).as_deref(), Some(value.inner()));
+    }
+
+    #[test]
+    fn test_insert_many_values() {
+        let cache = new_hashed_cache(TEST_CACHE_SIZE);
+        let values = create_test_values(0..TEST_CACHE_SIZE as u64);
+
+        for value in &values {
+            cache.insert_hashed(Cow::Borrowed(value));
+        }
+
+        for value in &values {
+            assert!(cache.contains(&value.hash()));
+            assert_eq!(cache.get(&value.hash()).as_deref(), Some(value.inner()));
+        }
+
+        // Batch insert
+        let cache2 = new_hashed_cache(TEST_CACHE_SIZE);
+        cache2.insert_all_hashed(values.iter().map(Cow::Borrowed));
+        for value in &values {
+            assert_eq!(cache2.get(&value.hash()).as_deref(), Some(value.inner()));
+        }
+    }
+
+    #[test]
+    fn test_reinsertion_dedup() {
+        let cache = new_hashed_cache(TEST_CACHE_SIZE);
+        let values = create_test_values(0..TEST_CACHE_SIZE as u64);
+
+        // First insert
+        let first_arcs: Vec<_> = values
+            .iter()
+            .map(|v| cache.insert_hashed(Cow::Borrowed(v)))
+            .collect();
+
+        // Re-inserting should return the same Arc (dedup)
+        for (value, first_arc) in values.iter().zip(&first_arcs) {
+            let second_arc = cache.insert_hashed(Cow::Borrowed(value));
+            assert!(CacheArc::ptr_eq(&second_arc, first_arc));
+        }
+    }
+
+    #[test]
+    fn test_eviction() {
+        let cache = new_hashed_cache(TEST_CACHE_SIZE);
+        let total = TEST_CACHE_SIZE * 3;
+        let values = create_test_values(0..total as u64);
+
+        for value in &values {
+            cache.insert_hashed(Cow::Borrowed(value));
+        }
+
+        let present_count = values.iter().filter(|v| cache.contains(&v.hash())).count();
+        assert!(
+            present_count <= TEST_CACHE_SIZE + 1,
+            "cache should not hold significantly more than its capacity, \
+             but has {present_count} entries for capacity {TEST_CACHE_SIZE}"
+        );
+        assert!(present_count > 0, "cache should still hold some entries");
+    }
+
+    #[test]
+    fn test_len_and_is_empty() {
+        let cache = new_string_cache(TEST_CACHE_SIZE);
+        assert!(cache.is_empty());
+        assert_eq!(cache.len(), 0);
+
+        cache.insert(&1, "a".to_string());
+        cache.insert(&2, "b".to_string());
+        assert!(!cache.is_empty());
+        assert_eq!(cache.len(), 2);
+
+        // Filling well beyond capacity caps the bounded-cache occupancy, which
+        // is exactly what the `value_cache_entries` gauge reports. Note that
+        // `len()` counts only the bounded cache, not the weak dedup index.
+        for i in 3..(TEST_CACHE_SIZE as u64 * 3) {
+            cache.insert(&i, format!("v{i}"));
+        }
+        assert!(
+            cache.len() <= TEST_CACHE_SIZE,
+            "bounded-cache occupancy {} must not exceed capacity {TEST_CACHE_SIZE}",
+            cache.len(),
+        );
+    }
+
+    #[test]
+    fn test_accessed_entry_survives_eviction() {
+        let cache = new_hashed_cache(TEST_CACHE_SIZE);
+        let promoted = create_test_value(0);
+        let promoted_hash = promoted.hash();
+
+        cache.insert_hashed(Cow::Borrowed(&promoted));
+        cache.get(&promoted_hash); // mark as hot
+
+        let extras = create_test_values(1..=TEST_CACHE_SIZE as u64 * 2);
+        for value in &extras {
+            cache.insert_hashed(Cow::Borrowed(value));
+        }
+
+        assert!(
+            cache.contains(&promoted_hash),
+            "recently accessed entry should survive eviction"
+        );
+    }
+
+    #[test]
+    fn test_promotion_of_reinsertion() {
+        let cache = new_hashed_cache(TEST_CACHE_SIZE);
+        let promoted = create_test_value(0);
+        let promoted_hash = promoted.hash();
+
+        let first = cache.insert_hashed(Cow::Borrowed(&promoted));
+        let second = cache.insert_hashed(Cow::Borrowed(&promoted));
+        assert!(CacheArc::ptr_eq(&first, &second));
+
+        let extras = create_test_values(1..=TEST_CACHE_SIZE as u64 * 2);
+        for value in &extras {
+            cache.insert_hashed(Cow::Borrowed(value));
+        }
+
+        assert!(
+            cache.contains(&promoted_hash),
+            "re-inserted entry should survive eviction"
+        );
+    }
+
+    #[test]
+    fn test_weak_index_dedup_after_eviction() {
+        let cache = new_string_cache(2);
+
+        // Insert and hold onto the Arc
+        let held = cache.insert(&1, "hello".to_string());
+
+        // Force eviction by filling the cache
+        cache.insert(&2, "world".to_string());
+        cache.insert(&3, "foo".to_string());
+        cache.insert(&4, "bar".to_string());
+
+        // Weak index should find it via the held Arc
+        let retrieved = cache
+            .get(&1)
+            .expect("held Arc should keep entry findable via weak index");
+        assert!(
+            CacheArc::ptr_eq(&retrieved, &held),
+            "must return same allocation, not a duplicate"
+        );
+
+        // Re-inserting should also return the same Arc
+        let reinserted = cache.insert(&1, "replacement".to_string());
+        assert!(CacheArc::ptr_eq(&reinserted, &held));
+        assert_eq!(&*reinserted, "hello");
+    }
+
+    #[test]
+    fn test_remove_preserves_weak_for_held_arcs() {
+        let cache = new_string_cache(TEST_CACHE_SIZE);
+
+        let held = cache.insert(&1, "hello".to_string());
+
+        // remove() evicts from bounded cache but NOT the weak index
+        cache.remove(&1);
+
+        // Still findable via weak index since we hold an Arc
+        let retrieved = cache.get(&1).expect("weak index should find held Arc");
+        assert!(CacheArc::ptr_eq(&retrieved, &held));
+    }
+
+    #[test]
+    fn test_remove_without_holder() {
+        let cache = new_string_cache(TEST_CACHE_SIZE);
+
+        cache.insert(&1, "hello".to_string());
+
+        // remove() without anyone holding an Arc — weak entry becomes dead
+        cache.remove(&1);
+        assert!(!cache.contains(&1));
+        assert!(cache.get(&1).is_none());
+    }
+
+    #[test]
+    fn test_cleanup_dead_entries() {
+        let cache = new_string_cache(2);
+
+        cache.insert(&1, "alive".to_string());
+        let _held = cache.get(&1).expect("just inserted"); // keep alive
+
+        cache.insert(&2, "dead".to_string());
+        // Don't hold key 2
+
+        // Force eviction of both by filling the cache
+        cache.insert(&3, "a".to_string());
+        cache.insert(&4, "b".to_string());
+        cache.insert(&5, "c".to_string());
+
+        cache.cleanup_dead_entries();
+
+        // Key 1 still findable (we hold an Arc)
+        assert!(cache.contains(&1));
+    }
+}

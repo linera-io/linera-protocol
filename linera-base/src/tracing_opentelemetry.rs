@@ -56,7 +56,7 @@ fn opentelemetry_skip_filter() -> FilterFn<impl Fn(&tracing::Metadata<'_>) -> bo
 ///
 /// This is an internal function used by both production and test code.
 #[cfg(feature = "opentelemetry")]
-fn init_with_tracer_provider(log_name: &str, tracer_provider: SdkTracerProvider) {
+fn init_with_tracer_provider(log_name: &str, tracer_provider: &SdkTracerProvider) {
     global::set_tracer_provider(tracer_provider.clone());
     let tracer = tracer_provider.tracer("linera");
 
@@ -73,6 +73,8 @@ fn init_with_tracer_provider(log_name: &str, tracer_provider: SdkTracerProvider)
         .with(maybe_log_file_layer)
         .with(stderr_layer)
         .init();
+
+    crate::panic_hook::init();
 }
 
 /// Builds an OpenTelemetry layer with the opentelemetry.skip filter.
@@ -153,7 +155,7 @@ pub fn init_with_opentelemetry(log_name: &str, otlp_endpoint: Option<&str>) {
         .with_sampler(opentelemetry_sdk::trace::Sampler::AlwaysOn)
         .build();
 
-    init_with_tracer_provider(log_name, tracer_provider);
+    init_with_tracer_provider(log_name, &tracer_provider);
 }
 
 /// Fallback when opentelemetry feature is not enabled.
@@ -218,6 +220,8 @@ where
     W: std::io::Write + Send + 'static,
 {
     let (subscriber, guard) = build_chrome_trace_layer_with_exporter(log_name, writer);
-    let _ = subscriber.try_init();
+    // `try_init` returns Err if a global subscriber is already set, in which case the
+    // doc comment above warns that tracing may not work as expected.
+    subscriber.try_init().ok();
     guard
 }

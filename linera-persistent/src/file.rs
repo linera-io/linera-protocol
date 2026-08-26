@@ -1,59 +1,76 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! A [`Persist`] backend that atomically saves the value to a locked file on disk.
+
 use std::{
     io::{self, BufRead as _, Write as _},
     path::Path,
 };
 
 use fs4::FileExt;
-use thiserror_context::Context;
 
 use super::Persist;
 
 /// A guard that keeps an exclusive lock on a file.
 struct Lock(fs_err::File);
 
+/// The kinds of error that persisting a value to a file can produce.
 #[derive(Debug, thiserror::Error)]
-enum ErrorInner {
+#[non_exhaustive]
+pub enum Error {
+    /// An I/O operation on the file failed.
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
+    /// The value could not be serialized to, or deserialized from, JSON.
     #[error("JSON error: {0}")]
     JsonError(#[from] serde_json::Error),
+    /// The file could not be locked for exclusive access.
+    #[error("failed to lock {}: {source}", path.display())]
+    Lock {
+        /// The path that could not be locked.
+        path: std::path::PathBuf,
+        /// The underlying I/O failure.
+        #[source]
+        source: std::io::Error,
+    },
+    /// An operation failed, and so did the cleanup that followed it.
+    #[error("failed to clean up after an error: {cleanup}; the original error was: {original}")]
+    Cleanup {
+        /// The failure of the cleanup step itself.
+        #[source]
+        cleanup: Box<Error>,
+        /// The failure that prompted the cleanup.
+        original: Box<Error>,
+    },
 }
 
-thiserror_context::impl_context!(Error(ErrorInner));
-
-/// Utility: run a fallible cleanup function if an operation failed, attaching the
-/// original operation as context to its error.
+/// Utility: run a fallible cleanup function if an operation failed, reporting both
+/// failures if the cleanup fails too.
 trait CleanupExt {
+    /// The success type of the operation.
     type Ok;
-    type Error;
 
-    fn or_cleanup<E>(self, f: impl FnOnce() -> Result<(), E>) -> Result<Self::Ok, Self::Error>
-    where
-        E: Into<Self::Error>,
-        Result<(), E>: Context<Self::Error, Self::Ok, E>;
+    /// Runs `cleanup` if the operation failed.
+    fn or_cleanup<E: Into<Error>>(
+        self,
+        cleanup: impl FnOnce() -> Result<(), E>,
+    ) -> Result<Self::Ok, Error>;
 }
 
-impl<T, W> CleanupExt for Result<T, W>
-where
-    W: std::fmt::Display + Send + Sync + 'static,
-{
+impl<T> CleanupExt for Result<T, Error> {
     type Ok = T;
-    type Error = W;
 
-    fn or_cleanup<E>(self, cleanup: impl FnOnce() -> Result<(), E>) -> Self
-    where
-        E: Into<W>,
-        Result<(), E>: Context<W, T, E>,
-    {
-        self.or_else(|error| {
-            if let Err(cleanup_error) = cleanup() {
-                Err(cleanup_error).context(error)
-            } else {
-                Err(error)
-            }
+    fn or_cleanup<E: Into<Error>>(
+        self,
+        cleanup: impl FnOnce() -> Result<(), E>,
+    ) -> Result<T, Error> {
+        self.map_err(|original| match cleanup() {
+            Ok(()) => original,
+            Err(cleanup) => Error::Cleanup {
+                cleanup: Box::new(cleanup.into()),
+                original: Box::new(original),
+            },
         })
     }
 }
@@ -121,7 +138,10 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> File<T> {
                     .create(true)
                     .open(path)?,
             )
-            .with_context(|| format!("locking path {}", path.display()))?,
+            .map_err(|source| Error::Lock {
+                path: path.into(),
+                source,
+            })?,
             path: path.into(),
             value,
         };
@@ -165,6 +185,7 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> File<T> {
         Ok(me)
     }
 
+    /// Atomically writes the current value to the file, via a temporary staging file.
     pub fn save(&self) -> Result<(), Error> {
         let mut temp_file_path = self.path.clone();
         temp_file_path.set_extension("json.new");

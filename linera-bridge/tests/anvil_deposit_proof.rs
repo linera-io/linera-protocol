@@ -1,0 +1,344 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//! Integration test: generate a deposit proof against a live Anvil node
+//! and verify it using the on-chain proof module.
+//!
+//! Prerequisites: `anvil` (foundry) and `solc` must be installed.
+//! Run: `cargo test -p linera-bridge -- --ignored test_deposit_proof`
+
+#![cfg(not(target_arch = "wasm32"))]
+
+use std::{
+    fs::File,
+    io::Write,
+    process::{Command, Stdio},
+};
+
+use alloy::{
+    network::{EthereumWallet, TransactionBuilder},
+    node_bindings::Anvil,
+    providers::{Provider, ProviderBuilder},
+    rpc::types::TransactionRequest,
+    signers::local::PrivateKeySigner,
+};
+use alloy_primitives::{Address, Bytes, B256, U256};
+use alloy_sol_types::{SolCall, SolValue};
+use linera_base::{
+    crypto::CryptoHash,
+    identifiers::{AccountOwner, ApplicationId, ChainId},
+};
+use linera_bridge::{
+    evm::{BRIDGE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE, WRAPPED_FUNGIBLE_TYPES_V1_SOURCE},
+    proof::{
+        decode_block_header, decode_receipt_logs,
+        gen::{DepositProofClient, HttpDepositProofClient},
+        parse_deposit_event, verify_receipt_inclusion,
+    },
+};
+
+const LINERA_TOKEN_SOL: &str = include_str!("../src/solidity/LineraToken.sol");
+
+// ABI bindings for contract interactions
+alloy_sol_types::sol! {
+    function approve(address spender, uint256 amount) external returns (bool);
+
+    function deposit(
+        bytes32 target_chain_id,
+        bytes32 target_application_id,
+        bytes32 target_account_owner,
+        uint256 amount
+    ) external;
+
+    struct LineraTokenConstructorArgs {
+        string name;
+        string symbol;
+        uint8 decimals_;
+        uint256 initialSupply;
+    }
+}
+
+/// Compiles a Solidity contract via `solc`, returning deployment bytecode.
+fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> Vec<u8> {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path();
+
+    for (name, content) in [
+        ("BridgeTypes.sol", BRIDGE_TYPES_SOURCE),
+        (
+            "WrappedFungibleTypesV1.sol",
+            WRAPPED_FUNGIBLE_TYPES_V1_SOURCE,
+        ),
+        ("FungibleBridge.sol", FUNGIBLE_BRIDGE_SOURCE),
+        ("LightClient.sol", linera_bridge::evm::light_client::SOURCE),
+        ("ILightClient.sol", linera_bridge::evm::ILIGHTCLIENT_SOURCE),
+        ("Microchain.sol", linera_bridge::evm::microchain::SOURCE),
+        (
+            "IBurnEventDecoder.sol",
+            linera_bridge::evm::IBURN_EVENT_DECODER_SOURCE,
+        ),
+        (
+            "FungibleBurnEventDecoderV1.sol",
+            linera_bridge::evm::FUNGIBLE_BURN_EVENT_DECODER_V1_SOURCE,
+        ),
+    ] {
+        let mut f = File::create(path.join(name)).unwrap();
+        writeln!(f, "{content}").unwrap();
+    }
+
+    let mut test_file = File::create(path.join(file_name)).unwrap();
+    writeln!(test_file, "{source_code}").unwrap();
+
+    let oz_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("src/solidity/lib/openzeppelin-contracts");
+    let oz_files: &[&str] = &[
+        "contracts/token/ERC20/ERC20.sol",
+        "contracts/token/ERC20/IERC20.sol",
+        "contracts/token/ERC20/extensions/IERC20Metadata.sol",
+        "contracts/utils/Context.sol",
+        "contracts/interfaces/draft-IERC6093.sol",
+    ];
+
+    let mut sources = serde_json::Map::new();
+    sources.insert(
+        file_name.to_string(),
+        serde_json::json!({ "urls": [format!("./{file_name}")] }),
+    );
+    for rel in oz_files {
+        let abs = oz_root.join(rel);
+        sources.insert(
+            format!("@openzeppelin/{rel}"),
+            serde_json::json!({ "urls": [abs.to_str().unwrap()] }),
+        );
+    }
+
+    let config = serde_json::json!({
+        "language": "Solidity",
+        "sources": sources,
+        "settings": {
+            "viaIR": true,
+            // Match foundry.toml / the revm test harness: without the optimizer the
+            // (post-#6548) FungibleBridge bytecode exceeds the EIP-170 24KB limit
+            // and deployment fails with CreateContractSizeLimit.
+            "optimizer": { "enabled": true, "runs": 1 },
+            "remappings": ["@openzeppelin/contracts/=@openzeppelin/contracts/"],
+            "outputSelection": { "*": { "*": ["evm.bytecode"] } }
+        }
+    });
+
+    std::fs::write(path.join("config.json"), config.to_string()).unwrap();
+
+    let config_file = File::open(path.join("config.json")).unwrap();
+    let output_file = File::create(path.join("result.json")).unwrap();
+
+    let status = Command::new("solc")
+        .current_dir(path)
+        .arg("--standard-json")
+        .arg("--allow-paths")
+        .arg(oz_root.to_str().unwrap())
+        .stdin(Stdio::from(config_file))
+        .stdout(Stdio::from(output_file))
+        .status()
+        .expect("solc must be installed");
+    assert!(status.success(), "solc compilation failed");
+
+    let contents = std::fs::read_to_string(path.join("result.json")).unwrap();
+    let json_data: serde_json::Value = serde_json::from_str(&contents).unwrap();
+
+    if let Some(errors) = json_data.get("errors") {
+        for error in errors.as_array().unwrap() {
+            let severity = error["severity"].as_str().unwrap_or("");
+            if severity == "error" {
+                panic!(
+                    "solc compilation error: {}",
+                    error["formattedMessage"].as_str().unwrap_or("unknown")
+                );
+            }
+        }
+    }
+
+    let bytecode_hex = json_data["contracts"][file_name][contract_name]["evm"]["bytecode"]
+        ["object"]
+        .as_str()
+        .expect("failed to extract bytecode from solc output");
+    hex::decode(bytecode_hex).unwrap()
+}
+
+// Fixed gas budgets sized well above measured cost. Pinning these skips
+// the per-tx `eth_estimateGas` round-trip, which removes a CI-only race
+// where the simulation runs against a stale `latest` block before the
+// previous tx's state has propagated, surfacing as `extcodesize == 0`
+// reverts (`code: 3, data: 0x`) on typed external calls.
+// FungibleBridge's runtime is ~18 KB, so deploying it costs ~5M gas (code
+// storage + initcode execution + constructor writes); keep headroom above that.
+const DEPLOY_GAS: u64 = 15_000_000;
+const CALL_GAS: u64 = 300_000;
+
+#[tokio::test]
+#[ignore] // Requires `anvil` and `solc`
+async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error>> {
+    // 1. Spawn Anvil targeting the Cancun EVM (Base's current hardfork).
+    let anvil = Anvil::new().arg("--hardfork").arg("cancun").try_spawn()?;
+    let endpoint = anvil.endpoint();
+
+    // Default Anvil account 0
+    let pk: PrivateKeySigner =
+        "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".parse()?;
+    let deployer = pk.address();
+    let wallet = EthereumWallet::from(pk);
+    let provider = ProviderBuilder::new()
+        .wallet(wallet)
+        .connect_http(endpoint.parse()?);
+
+    // Probe readiness and cache chain id so per-tx fillers don't issue
+    // extra round-trips.
+    let chain_id = provider.get_chain_id().await?;
+
+    // 2. Compile and deploy LineraToken
+    let erc20_bytecode = compile_contract(LINERA_TOKEN_SOL, "LineraToken.sol", "LineraToken");
+    let initial_supply = U256::from(1_000_000_000u64);
+    let mut erc20_deploy = erc20_bytecode;
+    erc20_deploy.extend_from_slice(
+        &LineraTokenConstructorArgs {
+            name: "TestToken".to_string(),
+            symbol: "TT".to_string(),
+            decimals_: 18,
+            initialSupply: initial_supply,
+        }
+        .abi_encode_params(),
+    );
+
+    let tx = TransactionRequest::default()
+        .with_deploy_code(Bytes::from(erc20_deploy))
+        .with_chain_id(chain_id)
+        .with_gas_limit(DEPLOY_GAS);
+    let receipt = provider.send_transaction(tx).await?.get_receipt().await?;
+    if !receipt.status() {
+        return Err("LineraToken deploy failed (reverted or out of gas)".into());
+    }
+    let token_address = receipt.contract_address.ok_or("missing erc20 address")?;
+
+    // 3. Compile and deploy FungibleBridge with the wrapped-fungible
+    // application ID baked into the constructor (immutable since #6173).
+    let target_chain_id = B256::from([0xAA; 32]);
+    let target_application_id = B256::from([0xBB; 32]);
+    let bridge_application_id = B256::from([0xDD; 32]);
+
+    let bridge_bytecode = compile_contract(
+        FUNGIBLE_BRIDGE_SOURCE,
+        "FungibleBridge.sol",
+        "FungibleBridge",
+    );
+    let bridge_constructor = (
+        deployer,                                // light_client (unused by deposit)
+        <[u8; 32]>::from(target_chain_id),       // chainId
+        token_address,                           // token
+        <[u8; 32]>::from(target_application_id), // fungibleApplicationId
+        <[u8; 32]>::from(bridge_application_id), // bridgeApplicationId
+        deployer,                                // decoder placeholder (unused by deposit)
+        Address::from([0xDA; 20]),               // pauseGuardian
+        Address::from([0xBB; 20]),               // proposer
+        Address::from([0xCC; 20]),               // canceller
+        U256::from(86_400u64),                   // timelockDelay (1 day)
+    )
+        .abi_encode_params();
+
+    let mut bridge_deploy = bridge_bytecode;
+    bridge_deploy.extend_from_slice(&bridge_constructor);
+
+    let tx = TransactionRequest::default()
+        .with_deploy_code(Bytes::from(bridge_deploy))
+        .with_chain_id(chain_id)
+        .with_gas_limit(DEPLOY_GAS);
+    let receipt = provider.send_transaction(tx).await?.get_receipt().await?;
+    if !receipt.status() {
+        return Err("FungibleBridge deploy failed (reverted or out of gas)".into());
+    }
+    let bridge_address = receipt.contract_address.ok_or("missing bridge address")?;
+
+    // 4. Approve bridge to spend tokens, then deposit
+    let deposit_amount = U256::from(1_000_000u64);
+    let target_owner = B256::from([0xCC; 32]);
+
+    let approve_data = approveCall {
+        spender: bridge_address,
+        amount: deposit_amount,
+    }
+    .abi_encode();
+    let tx = TransactionRequest::default()
+        .to(token_address)
+        .input(approve_data.into())
+        .with_chain_id(chain_id)
+        .with_gas_limit(CALL_GAS);
+    provider.send_transaction(tx).await?.get_receipt().await?;
+
+    let deposit_data = depositCall {
+        target_chain_id,
+        target_application_id,
+        target_account_owner: target_owner,
+        amount: deposit_amount,
+    }
+    .abi_encode();
+    let tx = TransactionRequest::default()
+        .to(bridge_address)
+        .input(deposit_data.into())
+        .with_chain_id(chain_id)
+        .with_gas_limit(CALL_GAS);
+    let deposit_receipt = provider.send_transaction(tx).await?.get_receipt().await?;
+    let deposit_tx_hash = deposit_receipt.transaction_hash;
+
+    // 5. Generate deposit proof using HttpDepositProofClient
+    let client = HttpDepositProofClient::new(&endpoint)?;
+    let proof = client.generate_deposit_proof(deposit_tx_hash).await?;
+
+    // 6. Verify the proof using on-chain verification functions
+
+    // Block header decoding
+    let (block_hash, receipts_root) = decode_block_header(&proof.block_header_rlp)?;
+    assert_ne!(block_hash, B256::ZERO, "block hash should be non-zero");
+
+    // Receipt inclusion proof
+    let proof_bytes: Vec<Bytes> = proof
+        .proof_nodes
+        .iter()
+        .map(|n| Bytes::copy_from_slice(n))
+        .collect();
+    verify_receipt_inclusion(
+        receipts_root,
+        proof.tx_index,
+        &proof.receipt_rlp,
+        &proof_bytes,
+    )?;
+
+    // Decode and parse the deposit event
+    let logs = decode_receipt_logs(&proof.receipt_rlp)?;
+    let deposit_log = &logs[proof.log_indices[0] as usize];
+    let deposit = parse_deposit_event(deposit_log, bridge_address)?;
+
+    // Anvil's default chain ID is 31337
+    assert_eq!(deposit.source_chain_id, U256::from(31337u64));
+    assert_eq!(
+        deposit.target_chain_id,
+        ChainId(CryptoHash::from(target_chain_id.0))
+    );
+    assert_eq!(
+        deposit.target_application_id,
+        ApplicationId::new(CryptoHash::from(target_application_id.0))
+    );
+    assert_eq!(
+        deposit.target_account_owner,
+        AccountOwner::from(target_owner.0)
+    );
+    assert_eq!(deposit.depositor, deployer);
+    assert_eq!(deposit.token, token_address);
+    assert_eq!(deposit.amount, deposit_amount);
+    assert_eq!(deposit.nonce, U256::ZERO, "first deposit nonce should be 0");
+
+    // Verify the bridge contract address in the log matches
+    assert_eq!(
+        deposit_log.address, bridge_address,
+        "event should come from bridge contract"
+    );
+
+    Ok(())
+}

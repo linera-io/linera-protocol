@@ -2,6 +2,7 @@
 name = "linera-bridge-e2e"
 version = "0.0.1"
 edition = "2021"
+rust-version = "1.88"
 publish = false
 
 # Separate workspace — avoids bollard version conflicts between
@@ -10,7 +11,11 @@ publish = false
 [workspace]
 
 [dependencies]
-alloy = { git = "https://github.com/alloy-rs/alloy", tag = "v1.0.42", default-features = false, features = [
+# Capped below 1.7: alloy >=1.7 requires Rust 1.91+, which removed
+# __rust_probestack and breaks the linera wasmer fork (v4.4.0-linera.7).
+# Remove this cap once the wasmer fork is updated with the probestack fix
+# from upstream (wasmerio/wasmer#5690).
+alloy = { version = ">=1.0.42, <1.7", default-features = false, features = [
     "rpc-types-eth",
     "json-rpc",
     "contract",
@@ -21,6 +26,8 @@ anyhow = "1"
 bcs = "0.1.6"
 futures = "0.3"
 linera-base = { path = "../../../linera-base" }
+linera-bridge = { path = "../../../linera-bridge", features = ["relay"] }
+linera-chain = { path = "../../../linera-chain" }
 linera-client = { path = "../../../linera-client", default-features = false, features = [
     "wasmer",
 ] }
@@ -29,11 +36,24 @@ linera-core = { path = "../../../linera-core", default-features = false, feature
 ] }
 linera-execution = { path = "../../../linera-execution" }
 linera-faucet-client = { path = "../../../linera-faucet/client" }
-linera-sdk = { path = "../../../linera-sdk", default-features = false }
+linera-persistent = { path = "../../../linera-persistent", features = ["fs"] }
 linera-storage = { path = "../../../linera-storage", features = ["wasmer"] }
+linera-storage-runtime = { path = "../../../linera-storage-runtime" }
 linera-views = { path = "../../../linera-views" }
+linera-wallet-json = { path = "../../../linera-wallet-json" }
 rand = { version = "0.8", default-features = false, features = ["std_rng"] }
+reqwest = { version = "0.12", default-features = false, features = [
+    "json",
+    "rustls-tls",
+] }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serial_test = "3"
+tempfile = "3"
+test-case = "3.3.1"
 testcontainers = { version = "0.27", features = ["docker-compose"] }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
+wrapped-fungible = { path = "../../../examples/wrapped-fungible" }

@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! An HTTP server exposing Prometheus metrics, optionally with memory-profiling endpoints.
+
 use std::fmt::Debug;
 
 use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
@@ -8,36 +10,115 @@ use tokio::net::ToSocketAddrs;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-#[cfg(feature = "memory-profiling")]
+#[cfg(feature = "jemalloc")]
 use crate::memory_profiler::MemoryProfiler;
 
+/// Whether memory profiling endpoints should be enabled on the metrics server.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemoryProfiling {
+    /// Memory-profiling endpoints are served.
+    Enabled,
+    /// Memory-profiling endpoints are not served.
+    Disabled,
+}
+
+impl From<bool> for MemoryProfiling {
+    fn from(enabled: bool) -> Self {
+        if enabled {
+            MemoryProfiling::Enabled
+        } else {
+            MemoryProfiling::Disabled
+        }
+    }
+}
+
+impl MemoryProfiling {
+    /// Attempts to activate jemalloc memory profiling if requested.
+    ///
+    /// Returns `MemoryProfiling::Enabled` only if activation succeeds. If the flag is
+    /// false, or jemalloc is not compiled in, or activation fails (e.g. `MALLOC_CONF` not
+    /// set), returns `MemoryProfiling::Disabled` with an appropriate warning.
+    #[cfg(feature = "jemalloc")]
+    pub async fn try_activate(requested: bool) -> Self {
+        if !requested {
+            return MemoryProfiling::Disabled;
+        }
+        match MemoryProfiler::activate().await {
+            Ok(()) => MemoryProfiling::Enabled,
+            Err(e) => {
+                tracing::warn!(
+                    "--enable-memory-profiling was passed but profiling could not be activated: {}",
+                    e
+                );
+                MemoryProfiling::Disabled
+            }
+        }
+    }
+
+    /// Non-jemalloc fallback: always returns `Disabled`, warns if profiling was requested.
+    #[cfg(not(feature = "jemalloc"))]
+    pub async fn try_activate(requested: bool) -> Self {
+        if requested {
+            tracing::warn!(
+                "--enable-memory-profiling was passed but the jemalloc feature is not compiled in"
+            );
+        }
+        MemoryProfiling::Disabled
+    }
+}
+
+/// Activates memory profiling if requested and starts the metrics server.
+///
+/// This is the single entry point that handles both activation and server startup,
+/// avoiding duplication across binaries.
+pub async fn start_metrics_with_profiling(
+    address: impl ToSocketAddrs + Debug + Send + 'static,
+    shutdown_signal: CancellationToken,
+    enable_memory_profiling: bool,
+    register_metrics: impl FnOnce(),
+) {
+    let memory_profiling = MemoryProfiling::try_activate(enable_memory_profiling).await;
+    start_metrics(address, shutdown_signal, memory_profiling, register_metrics);
+}
+
+/// Starts the metrics HTTP server on `address`, serving `/metrics` and, when profiling is
+/// enabled and available, the memory-profiling endpoints. Runs until `shutdown_signal` fires.
+///
+/// `register_metrics` is the caller's `init_metrics`. It is a parameter rather than a direct
+/// call because this crate sits below `linera-views` and friends in the dependency graph and
+/// cannot reach their metrics; taking it here makes forgetting to register a compile error
+/// instead of a metric that silently only appears once its code path first runs.
 pub fn start_metrics(
     address: impl ToSocketAddrs + Debug + Send + 'static,
     shutdown_signal: CancellationToken,
+    memory_profiling: MemoryProfiling,
+    register_metrics: impl FnOnce(),
 ) {
-    #[cfg(feature = "memory-profiling")]
-    let app = {
-        // Try to add memory profiling endpoint
-        match MemoryProfiler::check_prof_ctl() {
-            Ok(()) => {
-                info!("Memory profiling available, enabling /debug/pprof and /debug/flamegraph endpoints");
-                Router::new()
-                    .route("/metrics", get(serve_metrics))
-                    .route("/debug/pprof", get(MemoryProfiler::heap_profile))
-                    .route("/debug/flamegraph", get(MemoryProfiler::heap_flamegraph))
-            }
-            Err(e) => {
-                tracing::warn!(
-                    "Memory profiling not available: {}, serving metrics-only",
-                    e
-                );
-                Router::new().route("/metrics", get(serve_metrics))
-            }
-        }
-    };
+    start_metrics_with_extras(
+        address,
+        shutdown_signal,
+        memory_profiling,
+        None,
+        register_metrics,
+    );
+}
 
-    #[cfg(not(feature = "memory-profiling"))]
-    let app = Router::new().route("/metrics", get(serve_metrics));
+/// Like `start_metrics`, but additionally merges `extra_routes` into the metrics server's
+/// router before serving.
+pub fn start_metrics_with_extras(
+    address: impl ToSocketAddrs + Debug + Send + 'static,
+    shutdown_signal: CancellationToken,
+    memory_profiling: MemoryProfiling,
+    extra_routes: Option<Router>,
+    register_metrics: impl FnOnce(),
+) {
+    crate::runtime_metrics::register();
+    register_metrics();
+    let mut app = metrics_router(memory_profiling);
+
+    if let Some(extra) = extra_routes {
+        app = app.merge(extra);
+    }
 
     tokio::spawn(async move {
         let listener = tokio::net::TcpListener::bind(address)
@@ -50,9 +131,39 @@ pub fn start_metrics(
             .with_graceful_shutdown(shutdown_signal.cancelled_owned())
             .await
         {
-            panic!("Error serving metrics: {}", e);
+            panic!("Error serving metrics: {e}");
         }
     });
+}
+
+fn metrics_router(memory_profiling: MemoryProfiling) -> Router {
+    #[cfg(feature = "jemalloc")]
+    if memory_profiling == MemoryProfiling::Enabled {
+        match MemoryProfiler::check_prof_ctl() {
+            Ok(()) => {
+                info!("Memory profiling enabled, registering /debug/pprof and /debug/flamegraph endpoints");
+                return Router::new()
+                    .route("/metrics", get(serve_metrics))
+                    .route("/debug/pprof", get(MemoryProfiler::heap_profile))
+                    .route("/debug/flamegraph", get(MemoryProfiler::heap_flamegraph));
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Memory profiling requested but not available: {}, serving metrics-only",
+                    e
+                );
+            }
+        }
+    }
+
+    #[cfg(not(feature = "jemalloc"))]
+    if memory_profiling == MemoryProfiling::Enabled {
+        tracing::warn!(
+            "Memory profiling requested but jemalloc feature is not compiled in, serving metrics-only"
+        );
+    }
+
+    Router::new().route("/metrics", get(serve_metrics))
 }
 
 async fn serve_metrics() -> Result<String, AxumError> {

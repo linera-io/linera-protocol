@@ -10,11 +10,11 @@ permissions:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
+    runs-on: linera-io-self-hosted-builder
+    timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
 
@@ -26,142 +26,315 @@ jobs:
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
-      - name: Set env variables
+      - name: Configure Docker to push to Artifact Registry
+        run: gcloud auth configure-docker us-docker.pkg.dev --quiet
+
+      # Self-hosted builder occasionally exposes an unhealthy
+      # docker socket at job start despite
+      # RUNNER_WAIT_FOR_DOCKER_IN_SECONDS. Probe + retry so
+      # we do not fail the whole run on a startup race.
+      - name: Wait for docker daemon
         run: |
-          # Set basic variables
-          if [ -n "${{ github.head_ref }}" ]; then
-            BRANCH_NAME="${{ github.head_ref }}"
+          for i in $(seq 1 60); do
+            if docker info >/dev/null 2>&1; then
+              echo "Docker ready after ${i} attempt(s)"
+              exit 0
+            fi
+            echo "Waiting for docker daemon ($i/60)..."
+            sleep 2
+          done
+          echo "Docker daemon did not become ready in 120s"
+          exit 1
+
+      - name: Set env variables
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ -n "${HEAD_REF}" ]; then
+            BRANCH_NAME="${HEAD_REF}"
           else
-            BRANCH_NAME="${{ github.ref_name }}"
+            BRANCH_NAME="${REF_NAME}"
           fi
 
-          echo "GIT_COMMIT_SHORT=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
-          echo "GIT_COMMIT_LONG=${GITHUB_SHA}" >> $GITHUB_ENV
-          echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_ENV
-          echo "BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_ENV
+          # Docker tags forbid '/'; replace with '-' for use as a tag.
+          BRANCH_TAG="${BRANCH_NAME//\//-}"
 
-          # Build configuration
-          echo "BUILD_TIMEOUT=3h" >> $GITHUB_ENV
-          echo "BUILD_MACHINE_TYPE=e2-highcpu-32" >> $GITHUB_ENV
+          echo "GIT_COMMIT_SHORT=${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
+          echo "GIT_COMMIT_LONG=${GITHUB_SHA}" >> "$GITHUB_ENV"
+          echo "BRANCH_NAME=${BRANCH_NAME}" >> "$GITHUB_ENV"
+          echo "BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$GITHUB_ENV"
 
-          # Image registry base
           REGISTRY_BASE="us-docker.pkg.dev/linera-io-dev/linera-public-registry"
-          LINERA_IMAGE_NAME="linera"
-          INDEXER_IMAGE_NAME="linera-indexer"
-          EXPLORER_IMAGE_NAME="linera-explorer"
-          EXPORTER_IMAGE_NAME="linera-exporter"
 
-          # Main linera image names
-          echo "LINERA_IMAGE_BRANCH=${REGISTRY_BASE}/${LINERA_IMAGE_NAME}:${BRANCH_NAME}" >> $GITHUB_ENV
-          echo "LINERA_IMAGE_SHORT=${REGISTRY_BASE}/${LINERA_IMAGE_NAME}:${GITHUB_SHA:0:7}" >> $GITHUB_ENV
-          echo "LINERA_IMAGE_LONG=${REGISTRY_BASE}/${LINERA_IMAGE_NAME}:${GITHUB_SHA}" >> $GITHUB_ENV
+          for IMAGE_VAR in LINERA_VALIDATOR:linera-validator LINERA_TESTS:linera-tests INDEXER:linera-indexer EXPLORER:linera-explorer EXPORTER:linera-exporter PLAYGROUND:linera-playground; do
+            VAR="${IMAGE_VAR%%:*}"
+            NAME="${IMAGE_VAR##*:}"
+            echo "${VAR}_IMAGE_BRANCH=${REGISTRY_BASE}/${NAME}:${BRANCH_TAG}" >> "$GITHUB_ENV"
+            echo "${VAR}_IMAGE_SHORT=${REGISTRY_BASE}/${NAME}:${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
+            echo "${VAR}_IMAGE_LONG=${REGISTRY_BASE}/${NAME}:${GITHUB_SHA}" >> "$GITHUB_ENV"
+          done
 
-          # Indexer image names
-          echo "INDEXER_IMAGE_BRANCH=${REGISTRY_BASE}/${INDEXER_IMAGE_NAME}:${BRANCH_NAME}" >> $GITHUB_ENV
-          echo "INDEXER_IMAGE_SHORT=${REGISTRY_BASE}/${INDEXER_IMAGE_NAME}:${GITHUB_SHA:0:7}" >> $GITHUB_ENV
-          echo "INDEXER_IMAGE_LONG=${REGISTRY_BASE}/${INDEXER_IMAGE_NAME}:${GITHUB_SHA}" >> $GITHUB_ENV
+      - name: Prune stale Docker layers
+        run: docker system prune -af --filter "until=24h" || true
 
-          # Explorer image names
-          echo "EXPLORER_IMAGE_BRANCH=${REGISTRY_BASE}/${EXPLORER_IMAGE_NAME}:${BRANCH_NAME}" >> $GITHUB_ENV
-          echo "EXPLORER_IMAGE_SHORT=${REGISTRY_BASE}/${EXPLORER_IMAGE_NAME}:${GITHUB_SHA:0:7}" >> $GITHUB_ENV
-          echo "EXPLORER_IMAGE_LONG=${REGISTRY_BASE}/${EXPLORER_IMAGE_NAME}:${GITHUB_SHA}" >> $GITHUB_ENV
-
-          # Exporter image names
-          echo "EXPORTER_IMAGE_BRANCH=${REGISTRY_BASE}/${EXPORTER_IMAGE_NAME}:${BRANCH_NAME}" >> $GITHUB_ENV
-          echo "EXPORTER_IMAGE_SHORT=${REGISTRY_BASE}/${EXPORTER_IMAGE_NAME}:${GITHUB_SHA:0:7}" >> $GITHUB_ENV
-          echo "EXPORTER_IMAGE_LONG=${REGISTRY_BASE}/${EXPORTER_IMAGE_NAME}:${GITHUB_SHA}" >> $GITHUB_ENV
-
-      - name: Build and push all images in parallel using GCP Cloud Build
+      - name: Build and push all images in parallel
         run: |
           set -e
 
-          # Function to submit a build and return the build ID
-          submit_build() {
-            local CONFIG_FILE=$1
+          build_and_push() {
+            local DOCKERFILE=$1
             local IMAGE_BRANCH=$2
             local IMAGE_SHORT=$3
             local IMAGE_LONG=$4
             local BUILD_NAME=$5
-
-            BUILD_ID=$(gcloud builds submit . \
-              --config="$CONFIG_FILE" \
-              --substitutions="_IMAGE_PATH=${IMAGE_BRANCH},_IMAGE_NAME_SHORT_COMMIT=${IMAGE_SHORT},_IMAGE_NAME_LONG_COMMIT=${IMAGE_LONG},_GIT_COMMIT=${{ env.GIT_COMMIT_LONG }},_BUILD_DATE=${{ env.BUILD_DATE }},_BUILD_FLAG=--release,_BUILD_FOLDER=release" \
-              --timeout="${{ env.BUILD_TIMEOUT }}" \
-              --machine-type="${{ env.BUILD_MACHINE_TYPE }}" \
-              --async \
-              --format="value(id)")
-            echo "$BUILD_NAME build submitted: $BUILD_ID" >&2
-            echo "$BUILD_ID"
-          }
-
-          # Function to stream logs and wait for build completion
-          stream_build_logs() {
-            local BUILD_ID=$1
-            local BUILD_NAME=$2
-
-            echo "========================================"
-            echo "Streaming logs for $BUILD_NAME (ID: $BUILD_ID)"
-            echo "========================================"
-
-            # Stream logs (exit code only reflects log streaming, not build result)
-            gcloud builds log "$BUILD_ID" --stream || true
-
-            # Check the actual Cloud Build status
-            local BUILD_STATUS
-            BUILD_STATUS=$(gcloud builds describe "$BUILD_ID" --format="value(status)")
-
-            if [[ "$BUILD_STATUS" == "SUCCESS" ]]; then
-              echo ""
-              echo "$BUILD_NAME completed successfully (status: $BUILD_STATUS)"
-            else
-              echo ""
-              echo "$BUILD_NAME failed (status: $BUILD_STATUS)"
-              echo "Logs: https://console.cloud.google.com/cloud-build/builds/$BUILD_ID?project=linera-io-dev"
-              return 1
+            local TARGET=$6
+            local LOG_FILE="/tmp/${BUILD_NAME}.log"
+            # Only pass --build-arg build_features when a 7th arg is given (even
+            # if empty), so callers can override the Dockerfile default of
+            # scylladb,metrics,opentelemetry,jemalloc with a smaller feature set.
+            local features_arg=()
+            if [[ $# -ge 7 ]]; then
+                features_arg=(--build-arg "build_features=${7}")
             fi
+
+            {
+              echo "========================================"
+              echo "Building ${BUILD_NAME} (${DOCKERFILE}${TARGET:+ target=$TARGET})"
+              echo "========================================"
+
+              DOCKER_BUILDKIT=1 docker build \
+                -t "${IMAGE_BRANCH}" \
+                -t "${IMAGE_SHORT}" \
+                -t "${IMAGE_LONG}" \
+                -f "${DOCKERFILE}" \
+                ${TARGET:+--target "${TARGET}"} \
+                --build-arg "git_commit=${GIT_COMMIT_LONG}" \
+                --build-arg "build_date=${BUILD_DATE}" \
+                --build-arg "build_flag=--release" \
+                --build-arg "build_folder=release" \
+                "${features_arg[@]+"${features_arg[@]}"}" \
+                .
+
+              echo "Pushing ${BUILD_NAME} images..."
+              docker push "${IMAGE_BRANCH}"
+              docker push "${IMAGE_SHORT}"
+              docker push "${IMAGE_LONG}"
+
+              echo "${BUILD_NAME} completed successfully"
+            } > "${LOG_FILE}" 2>&1
           }
 
-          echo "Submitting builds to GCP Cloud Build..."
+          echo "Starting parallel builds..."
 
-          # Submit all builds
-          BUILD_ID_LINERA=$(submit_build "docker/build-image.yaml" \
-            "${{ env.LINERA_IMAGE_BRANCH }}" "${{ env.LINERA_IMAGE_SHORT }}" "${{ env.LINERA_IMAGE_LONG }}" "Linera")
+          # linera-validator: linera-server + linera-proxy. Same feature set as
+          # `linera` — this split changes which binaries ship, not features.
+          build_and_push "docker/Dockerfile" \
+            "${LINERA_VALIDATOR_IMAGE_BRANCH}" "${LINERA_VALIDATOR_IMAGE_SHORT}" "${LINERA_VALIDATOR_IMAGE_LONG}" "LineraValidator" "validator" &
+          PID_LINERA_VALIDATOR=$!
 
-          BUILD_ID_INDEXER=$(submit_build "docker/build-indexer-image.yaml" \
-            "${{ env.INDEXER_IMAGE_BRANCH }}" "${{ env.INDEXER_IMAGE_SHORT }}" "${{ env.INDEXER_IMAGE_LONG }}" "Indexer")
+          # linera-tests shares the Dockerfile and chef cache mounts with
+          # linera; --target tests builds the overlay stage that bundles
+          # the remote-net integration test binary on top of the runtime.
+          # Build with no extra features: the linera binary here is a client-side
+          # tool used by the test harness and does not need a DB backend,
+          # metrics, or a custom allocator. Without `metrics`, `linera service`
+          # does not require --metrics-port, which the test harness does not pass.
+          build_and_push "docker/Dockerfile" \
+            "${LINERA_TESTS_IMAGE_BRANCH}" "${LINERA_TESTS_IMAGE_SHORT}" "${LINERA_TESTS_IMAGE_LONG}" "LineraTests" "tests" "" &
+          PID_LINERA_TESTS=$!
 
-          BUILD_ID_EXPLORER=$(submit_build "docker/build-explorer-image.yaml" \
-            "${{ env.EXPLORER_IMAGE_BRANCH }}" "${{ env.EXPLORER_IMAGE_SHORT }}" "${{ env.EXPLORER_IMAGE_LONG }}" "Explorer")
-
-          BUILD_ID_EXPORTER=$(submit_build "docker/build-exporter-image.yaml" \
-            "${{ env.EXPORTER_IMAGE_BRANCH }}" "${{ env.EXPORTER_IMAGE_SHORT }}" "${{ env.EXPORTER_IMAGE_LONG }}" "Exporter")
-
-          echo ""
-          echo "All builds submitted. Now streaming logs and waiting for completion..."
-          echo ""
-
-          # Stream all builds in parallel
-          stream_build_logs "$BUILD_ID_LINERA" "Linera build" &
-          PID_LINERA=$!
-          stream_build_logs "$BUILD_ID_INDEXER" "Indexer build" &
+          build_and_push "docker/Dockerfile.indexer" \
+            "${INDEXER_IMAGE_BRANCH}" "${INDEXER_IMAGE_SHORT}" "${INDEXER_IMAGE_LONG}" "Indexer" "" &
           PID_INDEXER=$!
-          stream_build_logs "$BUILD_ID_EXPLORER" "Explorer build" &
+
+          build_and_push "docker/Dockerfile.explorer" \
+            "${EXPLORER_IMAGE_BRANCH}" "${EXPLORER_IMAGE_SHORT}" "${EXPLORER_IMAGE_LONG}" "Explorer" "" &
           PID_EXPLORER=$!
-          stream_build_logs "$BUILD_ID_EXPORTER" "Exporter build" &
+
+          build_and_push "docker/Dockerfile.exporter" \
+            "${EXPORTER_IMAGE_BRANCH}" "${EXPORTER_IMAGE_SHORT}" "${EXPORTER_IMAGE_LONG}" "Exporter" "" &
           PID_EXPORTER=$!
 
-          # Wait for all background jobs and check exit codes
-          EXIT_CODE=0
-          wait $PID_LINERA || EXIT_CODE=$?
-          wait $PID_INDEXER || EXIT_CODE=$?
-          wait $PID_EXPLORER || EXIT_CODE=$?
-          wait $PID_EXPORTER || EXIT_CODE=$?
+          build_and_push "docker/Dockerfile.playground" \
+            "${PLAYGROUND_IMAGE_BRANCH}" "${PLAYGROUND_IMAGE_SHORT}" "${PLAYGROUND_IMAGE_LONG}" "Playground" "" &
+          PID_PLAYGROUND=$!
 
-          if [[ $EXIT_CODE -ne 0 ]]; then
-            echo ""
-            echo "One or more image builds failed"
-            exit $EXIT_CODE
+          SUCCESS_NAMES=""
+          FAILED_NAMES=""
+          for NAME_PID in LineraValidator:$PID_LINERA_VALIDATOR LineraTests:$PID_LINERA_TESTS Indexer:$PID_INDEXER Explorer:$PID_EXPLORER Exporter:$PID_EXPORTER Playground:$PID_PLAYGROUND; do
+            NAME="${NAME_PID%%:*}"
+            PID="${NAME_PID##*:}"
+            if wait "$PID"; then
+              SUCCESS_NAMES="${SUCCESS_NAMES} ${NAME}"
+            else
+              FAILED_NAMES="${FAILED_NAMES} ${NAME}"
+              echo "::error::${NAME} build failed"
+            fi
+          done
+
+          # Print successes first, then failures, so the last thing
+          # on screen when a build fails is the failing log.
+          for NAME in ${SUCCESS_NAMES}; do
+            echo "::group::${NAME} (success)"
+            cat "/tmp/${NAME}.log" 2>/dev/null || true
+            echo "::endgroup::"
+          done
+          for NAME in ${FAILED_NAMES}; do
+            echo "::group::${NAME} (FAILED)"
+            cat "/tmp/${NAME}.log" 2>/dev/null || true
+            echo "::endgroup::"
+          done
+
+          if [ -n "${FAILED_NAMES}" ]; then
+            echo "One or more image builds failed:${FAILED_NAMES}"
+            exit 1
           fi
 
-          echo ""
           echo "All image builds completed successfully!"
+
+  # ── linera-client: multi-platform ──
+  # linera-client is the one image end users pull directly, so it ships for both
+  # linux/amd64 and linux/arm64 (Apple Silicon, Graviton). Each platform builds
+  # NATIVELY on a runner of its own architecture — cross-building this workspace
+  # under QEMU turns a ~1h Rust build into a multi-hour one.
+  #
+  # Each leg publishes only an arch-suffixed tag; merge-client-image below
+  # stitches them into a manifest list under the real tags, so the tags people
+  # actually pull are never transiently single-platform.
+  #
+  # Both legs use STANDARD GitHub-hosted runners, which are free and unlimited on
+  # public repositories. Do NOT move either to a larger runner: those are billed
+  # even on public repos. Deliberately NOT the self-hosted builder — it is busy
+  # with build-and-push, and an amd64 client build that queues behind it holds up
+  # the merge below. Without debuginfo this builds in ~22 min on a hosted runner.
+  build-client-image:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    # No warm cache on the hosted arm runner: this is a from-scratch release
+    # build of the whole dependency graph on 4 cores.
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Auth service account
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_ACTIONS_RUNNER_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Configure Docker to push to Artifact Registry
+        run: gcloud auth configure-docker us-docker.pkg.dev --quiet
+
+      - name: Wait for docker daemon
+        run: |
+          for i in $(seq 1 60); do
+            if docker info >/dev/null 2>&1; then
+              echo "Docker ready after ${i} attempt(s)"
+              exit 0
+            fi
+            echo "Waiting for docker daemon ($i/60)..."
+            sleep 2
+          done
+          echo "Docker daemon did not become ready in 120s"
+          exit 1
+
+      # A build that dies from exhausted disk or memory looks nothing like a
+      # compile error in the log, so record both up front. (The hosted arm64
+      # runner reports 145 GB free, not the 14 GB the docs table lists — disk is
+      # not the constraint here, memory during the final link is.)
+      - name: Log available resources
+        run: |
+          df -h /
+          free -h
+
+      - name: Build and push the arch-specific image
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          IMAGE="us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client:${GITHUB_SHA:0:7}-${ARCH}"
+
+          DOCKER_BUILDKIT=1 docker build \
+            -t "${IMAGE}" \
+            -f docker/Dockerfile \
+            --target client \
+            --build-arg "git_commit=${GITHUB_SHA}" \
+            --build-arg "build_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+            --build-arg "build_flag=--release" \
+            --build-arg "build_folder=release" \
+            .
+
+          # A binary that cannot start is worse than a missing image, and this is
+          # the first arm64 build we ship — check it actually runs.
+          docker run --rm "${IMAGE}" /linera --version
+
+          docker push "${IMAGE}"
+
+  merge-client-image:
+    # Plain `needs`, no `if`: this must run only when BOTH legs succeeded.
+    # Publishing whatever happened to be ready is worse than publishing nothing —
+    # a missing tag fails loudly at deploy time, while a tag that silently lacks
+    # amd64 fails at runtime on every machine we actually run on.
+    needs: build-client-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Auth service account
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_ACTIONS_RUNNER_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Configure Docker to push to Artifact Registry
+        run: gcloud auth configure-docker us-docker.pkg.dev --quiet
+
+      - name: Merge the per-arch images into one manifest list
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          BRANCH_NAME="${HEAD_REF:-${REF_NAME}}"
+          # Docker tags forbid '/'; same substitution as the build-and-push job.
+          BRANCH_TAG="${BRANCH_NAME//\//-}"
+          REPO="us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client"
+
+          SOURCES=()
+          for ARCH in amd64 arm64; do
+            SRC="${REPO}:${GITHUB_SHA:0:7}-${ARCH}"
+            # Both legs succeeded for this job to run at all, so a missing tag
+            # here means something else went wrong — never paper over it.
+            if ! docker buildx imagetools inspect "${SRC}" >/dev/null 2>&1; then
+              echo "::error::${SRC} is missing despite its build leg succeeding"
+              exit 1
+            fi
+            echo "found ${SRC}"
+            SOURCES+=("${SRC}")
+          done
+
+          docker buildx imagetools create \
+            -t "${REPO}:${BRANCH_TAG}" \
+            -t "${REPO}:${GITHUB_SHA:0:7}" \
+            -t "${REPO}:${GITHUB_SHA}" \
+            "${SOURCES[@]}"
+
+          docker buildx imagetools inspect "${REPO}:${GITHUB_SHA:0:7}"

@@ -1,6 +1,6 @@
 {
   "name": "@linera/metamask",
-  "version": "0.15.13",
+  "version": "0.15.21",
   "description": "MetaMask wallet integration for the Linera blockchain",
   "publishConfig": {
     "access": "public"
@@ -12,7 +12,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "pnpm exec tsc -p tsconfig.build.json",
+    "build": "pnpm run clean && pnpm exec tsc -p tsconfig.build.json",
     "clean": "rm -rf dist",
     "ci": "pnpm run build",
     "prepare": "pnpm run build"

@@ -2,6 +2,7 @@
 import { TransactionMetadata } from '../../gql/service'
 import Op from './Op.vue'
 import Json from './Json.vue'
+import DecodedBytes from './DecodedBytes.vue'
 
 defineProps<{
   transaction: TransactionMetadata,
@@ -40,7 +41,8 @@ defineProps<{
             <div class="row">
               <div class="col-md-6">
                 <strong>Origin:</strong>
-                <span class="font-monospace">{{ short_hash(transaction.incomingBundle.origin.sender || transaction.incomingBundle.origin) }}</span>
+                <a v-if="transaction.incomingBundle.origin.sender" @click="$root.route(undefined, [['chain', transaction.incomingBundle.origin.sender]])" class="btn btn-link btn-sm p-0 font-monospace">{{ short_hash(transaction.incomingBundle.origin.sender) }}</a>
+                <span v-else class="font-monospace">{{ typeof transaction.incomingBundle.origin === 'string' ? transaction.incomingBundle.origin : JSON.stringify(transaction.incomingBundle.origin) }}</span>
               </div>
               <div class="col-md-6">
                 <strong>Action:</strong>
@@ -59,7 +61,7 @@ defineProps<{
               </div>
               <div class="col-md-4">
                 <strong>Certificate Hash:</strong>
-                <span class="font-monospace small">{{ short_hash(transaction.incomingBundle.bundle.certificateHash) }}</span>
+                <a @click="$root.route('block', [['block', transaction.incomingBundle.bundle.certificateHash]])" class="btn btn-link btn-sm p-0 font-monospace small">{{ short_hash(transaction.incomingBundle.bundle.certificateHash) }}</a>
               </div>
             </div>
 
@@ -95,6 +97,13 @@ defineProps<{
                     <span class="badge bg-success mb-2">User Message</span>
                     <div v-if="msg.messageMetadata.applicationId" class="small">
                       <strong>Application:</strong> {{ short_app_id(msg.messageMetadata.applicationId) }}
+                    </div>
+                    <div v-if="msg.messageMetadata.userBytesHex" class="small mt-2">
+                      <strong>Message Data (hex):</strong>
+                      <pre class="mt-1 p-2 bg-light"><code>{{ msg.messageMetadata.userBytesHex }}</code></pre>
+                    </div>
+                    <div v-if="msg.messageMetadata.applicationId && msg.messageMetadata.userBytesHex" class="mt-2">
+                      <DecodedBytes :application-id="msg.messageMetadata.applicationId" :bytes-hex="msg.messageMetadata.userBytesHex" kind="message"/>
                     </div>
                   </div>
                 </div>

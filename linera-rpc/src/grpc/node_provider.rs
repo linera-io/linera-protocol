@@ -1,9 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr as _;
+use std::{str::FromStr as _, sync::Arc};
 
-use linera_base::time::Duration;
+use linera_base::time::{Duration, Instant};
 use linera_core::node::{NodeError, ValidatorNodeProvider};
 
 use super::GrpcClient;
@@ -13,15 +13,21 @@ use crate::{
     node_provider::NodeOptions,
 };
 
+/// A node provider that creates gRPC clients backed by a shared connection pool.
 #[derive(Clone)]
 pub struct GrpcNodeProvider {
     pool: GrpcConnectionPool,
     retry_delay: Duration,
     max_retries: u32,
     max_backoff: Duration,
+    /// Shared across all `GrpcClient` instances. When a subscription to a validator
+    /// fails, the failure time is recorded here so that other chains (which share the
+    /// same provider) skip retrying the same dead validator.
+    subscription_cooldowns: Arc<papaya::HashMap<String, Instant>>,
 }
 
 impl GrpcNodeProvider {
+    /// Creates a new [`GrpcNodeProvider`] with the given node options.
     pub fn new(options: NodeOptions) -> Self {
         let transport_options = transport::Options::from(&options);
         let retry_delay = options.retry_delay;
@@ -33,6 +39,7 @@ impl GrpcNodeProvider {
             retry_delay,
             max_retries,
             max_backoff,
+            subscription_cooldowns: Arc::new(papaya::HashMap::new()),
         }
     }
 }
@@ -51,7 +58,7 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
             self.pool
                 .channel(http_address.clone())
                 .map_err(|error| NodeError::GrpcError {
-                    error: format!("error creating channel: {}", error),
+                    error: format!("error creating channel: {error}"),
                 })?;
 
         Ok(GrpcClient::new(
@@ -60,6 +67,7 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
             self.retry_delay,
             self.max_retries,
             self.max_backoff,
+            self.subscription_cooldowns.clone(),
         ))
     }
 }

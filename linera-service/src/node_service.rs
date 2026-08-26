@@ -1,19 +1,30 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, future::IntoFuture, iter, net::SocketAddr, num::NonZeroU16, sync::Arc};
+use std::{
+    borrow::Cow,
+    future::IntoFuture,
+    iter,
+    net::SocketAddr,
+    num::NonZeroU16,
+    sync::{Arc, Mutex as StdMutex},
+};
 
 use async_graphql::{
-    futures_util::Stream, resolver_utils::ContainerType, EmptyMutation, Error, MergedObject,
-    OutputType, Request, Response, ScalarType, Schema, SimpleObject, Subscription,
+    futures_util::Stream,
+    registry::{MetaType, MetaTypeId, Registry},
+    resolver_utils::ContainerType,
+    EmptyMutation, Error, MergedObject, OutputType, Positioned, Request, Response, ScalarType,
+    Schema, SimpleObject, Subscription,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{extract::Path, http::StatusCode, response, response::IntoResponse, Extension, Router};
-use futures::{lock::Mutex, Future, FutureExt as _, TryStreamExt as _};
+use futures::{lock::Mutex, Future, FutureExt as _, StreamExt as _, TryStreamExt as _};
 use linera_base::{
     crypto::{CryptoError, CryptoHash},
     data_types::{
-        Amount, ApplicationDescription, ApplicationPermissions, Bytecode, Epoch, TimeDelta,
+        Amount, ApplicationDescription, ApplicationPermissions, BlockHeight, Bytecode, Epoch,
+        TimeDelta,
     },
     identifiers::{
         Account, AccountOwner, ApplicationId, ChainId, IndexAndEvent, ModuleId, StreamId,
@@ -30,10 +41,10 @@ use linera_client::chain_listener::{
     ChainListener, ChainListenerConfig, ClientContext, ListenerCommand,
 };
 use linera_core::{
-    client::{ChainClient, ChainClientError},
+    client::{chain_client, ChainClient},
     data_types::ClientOutcome,
     wallet::Wallet as _,
-    worker::Notification,
+    worker::{ChainStateViewReadGuard, Notification, Reason},
 };
 use linera_execution::{
     committee::Committee, system::AdminOperation, Operation, Query, QueryOutcome, QueryResponse,
@@ -42,18 +53,70 @@ use linera_execution::{
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
 use linera_sdk::linera_base_types::BlobContent;
+use linera_storage::Storage;
+use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tokio::sync::{mpsc::UnboundedReceiver, OwnedRwLockReadGuard};
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio_util::sync::CancellationToken;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info, instrument, trace};
 
 use crate::util;
 
+/// A pre-serialized JSON string that implements [`OutputType`] as the `JSON` scalar.
+///
+/// When the `raw_value` feature of `async-graphql` is enabled, the string is
+/// emitted directly into the GraphQL response without any parsing or
+/// intermediate tree construction.
+#[derive(Clone)]
+struct RawJson(String);
+
+impl OutputType for RawJson {
+    fn type_name() -> Cow<'static, str> {
+        Cow::Borrowed("JSON")
+    }
+
+    fn create_type_info(registry: &mut Registry) -> String {
+        registry.create_output_type::<Self, _>(MetaTypeId::Scalar, |_| MetaType::Scalar {
+            name: "JSON".to_string(),
+            description: Some("A scalar that can represent any JSON value.".to_string()),
+            is_valid: None,
+            visible: None,
+            inaccessible: false,
+            tags: Default::default(),
+            specified_by_url: None,
+            directive_invocations: Default::default(),
+            requires_scopes: Default::default(),
+        })
+    }
+
+    async fn resolve(
+        &self,
+        _ctx: &async_graphql::ContextSelectionSet<'_>,
+        _field: &Positioned<async_graphql::parser::types::Field>,
+    ) -> async_graphql::ServerResult<async_graphql::Value> {
+        // Wrap the raw JSON string with the magic token that async-graphql's
+        // ConstValue serializer recognises (with feature `raw_value`).
+        // When the response is serialised to JSON the raw string is emitted
+        // verbatim, avoiding any parsing or tree conversion.
+        //
+        Ok(async_graphql::Value::Object(
+            std::iter::once((
+                async_graphql::Name::new(async_graphql_value::RAW_VALUE_TOKEN),
+                async_graphql::Value::String(self.0.clone()),
+            ))
+            .collect(),
+        ))
+    }
+}
+
+/// The set of chains tracked by the wallet.
 #[derive(SimpleObject, Serialize, Deserialize, Clone)]
 pub struct Chains {
+    /// The IDs of the tracked chains.
     pub list: Vec<ChainId>,
+    /// The default chain of the wallet, if one is set.
     pub default: Option<ChainId>,
 }
 
@@ -67,6 +130,8 @@ pub struct QueryRoot<C> {
 /// Our root GraphQL subscription type.
 pub struct SubscriptionRoot<C> {
     context: Arc<Mutex<C>>,
+    query_subscriptions: Option<Arc<crate::query_subscription::QuerySubscriptionManager>>,
+    cancellation_token: CancellationToken,
 }
 
 /// Our root GraphQL mutation type.
@@ -77,7 +142,7 @@ pub struct MutationRoot<C> {
 #[derive(Debug, thiserror::Error)]
 enum NodeServiceError {
     #[error(transparent)]
-    ChainClient(#[from] ChainClientError),
+    ChainClient(#[from] chain_client::Error),
     #[error(transparent)]
     BcsHex(#[from] BcsHexParseError),
     #[error(transparent)]
@@ -121,6 +186,43 @@ where
             .make_chain_client(chain_id)
             .await?;
         Ok(client.subscribe()?)
+    }
+
+    /// Subscribes to the result of a pre-registered GraphQL query.
+    /// Re-executes the query on every new block and pushes changed results.
+    async fn query_result(
+        &self,
+        #[graphql(desc = "Name of the registered subscription query.")] name: String,
+        #[graphql(desc = "The chain to watch.")] chain_id: ChainId,
+        #[graphql(desc = "The application to query.")] application_id: ApplicationId,
+    ) -> Result<impl Stream<Item = RawJson>, Error> {
+        let manager = self
+            .query_subscriptions
+            .as_ref()
+            .ok_or_else(|| Error::new("no subscription queries registered"))?;
+
+        let key = crate::query_subscription::SubscriptionKey {
+            name,
+            chain_id,
+            application_id,
+        };
+
+        let receiver = manager
+            .subscribe(
+                &key,
+                Arc::clone(&self.context),
+                self.cancellation_token.clone(),
+            )
+            .map_err(|e| Error::new(e.to_string()))?;
+
+        // `sender.subscribe()` marks the current value as "already seen", so
+        // `WatchStream` would skip it and wait for the next change.  Grab the
+        // current snapshot first and prepend it to the stream so that every new
+        // subscriber gets the latest cached result immediately.
+        let current = receiver.borrow().clone();
+        let changes = tokio_stream::wrappers::WatchStream::from_changes(receiver)
+            .filter_map(|value| async move { value });
+        Ok(futures::stream::iter(current).chain(changes).map(RawJson))
     }
 }
 
@@ -173,7 +275,7 @@ where
             let timeout = match result? {
                 ClientOutcome::Committed(t) => return Ok(t),
                 ClientOutcome::Conflict(certificate) => {
-                    return Err(ChainClientError::Conflict(certificate.hash()).into());
+                    return Err(chain_client::Error::Conflict(certificate.hash()).into());
                 }
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
@@ -437,7 +539,7 @@ where
         let operation = SystemOperation::ChangeOwnership {
             super_owners: vec![new_owner],
             owners: Vec::new(),
-            multi_leader_rounds: 2,
+            multi_leader_rounds: 5,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
         };
@@ -621,10 +723,8 @@ where
     async fn chain(
         &self,
         chain_id: ChainId,
-    ) -> Result<
-        ChainStateExtendedView<<C::Environment as linera_core::Environment>::StorageContext>,
-        Error,
-    > {
+    ) -> Result<ChainStateExtendedView<<C::Environment as linera_core::Environment>::Storage>, Error>
+    {
         let client = self
             .context
             .lock()
@@ -675,7 +775,7 @@ where
         &self,
         hash: Option<CryptoHash>,
         chain_id: ChainId,
-    ) -> Result<Option<ConfirmedBlock>, Error> {
+    ) -> Result<Option<Arc<ConfirmedBlock>>, Error> {
         let client = self
             .context
             .lock()
@@ -687,8 +787,7 @@ where
             None => client.chain_info().await?.block_hash,
         };
         if let Some(hash) = hash {
-            let block = client.read_confirmed_block(hash).await?;
-            Ok(Some(block))
+            Ok(Some(client.read_confirmed_block(hash).await?))
         } else {
             Ok(None)
         }
@@ -715,7 +814,7 @@ where
         from: Option<CryptoHash>,
         chain_id: ChainId,
         limit: Option<u32>,
-    ) -> Result<Vec<ConfirmedBlock>, Error> {
+    ) -> Result<Vec<Arc<ConfirmedBlock>>, Error> {
         let client = self
             .context
             .lock()
@@ -762,20 +861,19 @@ impl ChainStateViewExtension {
 }
 
 #[derive(MergedObject)]
-struct ChainStateExtendedView<C>(ChainStateViewExtension, ReadOnlyChainStateView<C>)
+struct ChainStateExtendedView<S: Storage>(ChainStateViewExtension, ReadOnlyChainStateView<S>)
 where
-    C: linera_views::context::Context + Clone + Send + Sync + 'static,
-    C::Extra: linera_execution::ExecutionRuntimeContext;
+    ChainStateView<S::Context>: ContainerType + OutputType;
 
-/// A wrapper type that allows proxying GraphQL queries to a [`ChainStateView`] that's behind an
-/// [`OwnedRwLockReadGuard`].
-pub struct ReadOnlyChainStateView<C>(OwnedRwLockReadGuard<ChainStateView<C>>)
+/// A wrapper type that allows proxying GraphQL queries to a [`ChainStateView`] that's behind a
+/// [`ChainStateViewReadGuard`].
+pub struct ReadOnlyChainStateView<S: Storage>(ChainStateViewReadGuard<S>)
 where
-    C: linera_views::context::Context + Clone + Send + Sync + 'static;
+    ChainStateView<S::Context>: ContainerType + OutputType;
 
-impl<C> ContainerType for ReadOnlyChainStateView<C>
+impl<S: Storage> ContainerType for ReadOnlyChainStateView<S>
 where
-    C: linera_views::context::Context + Clone + Send + Sync + 'static,
+    ChainStateView<S::Context>: ContainerType + OutputType,
 {
     async fn resolve_field(
         &self,
@@ -785,16 +883,16 @@ where
     }
 }
 
-impl<C> OutputType for ReadOnlyChainStateView<C>
+impl<S: Storage> OutputType for ReadOnlyChainStateView<S>
 where
-    C: linera_views::context::Context + Clone + Send + Sync + 'static,
+    ChainStateView<S::Context>: ContainerType + OutputType,
 {
     fn type_name() -> Cow<'static, str> {
-        ChainStateView::<C>::type_name()
+        ChainStateView::<S::Context>::type_name()
     }
 
     fn create_type_info(registry: &mut async_graphql::registry::Registry) -> String {
-        ChainStateView::<C>::create_type_info(registry)
+        ChainStateView::<S::Context>::create_type_info(registry)
     }
 
     async fn resolve(
@@ -806,12 +904,11 @@ where
     }
 }
 
-impl<C> ChainStateExtendedView<C>
+impl<S: Storage> ChainStateExtendedView<S>
 where
-    C: linera_views::context::Context + Clone + Send + Sync + 'static,
-    C::Extra: linera_execution::ExecutionRuntimeContext,
+    ChainStateView<S::Context>: ContainerType + OutputType,
 {
-    fn new(view: OwnedRwLockReadGuard<ChainStateView<C>>) -> Self {
+    fn new(view: ChainStateViewReadGuard<S>) -> Self {
         Self(
             ChainStateViewExtension(view.chain_id()),
             ReadOnlyChainStateView(view),
@@ -819,6 +916,7 @@ where
     }
 }
 
+/// A summary of an application registered on a chain.
 #[derive(SimpleObject)]
 pub struct ApplicationOverview {
     id: ApplicationId,
@@ -890,6 +988,213 @@ where
     }
 }
 
+#[cfg(with_metrics)]
+pub(crate) mod query_cache_metrics {
+    use linera_base::prometheus_util::{register_int_counter_vec, register_int_gauge};
+    use prometheus::{IntCounterVec, IntGauge};
+
+    linera_base::declare_metrics! {
+        pub static QUERY_CACHE_HIT: IntCounterVec =
+            register_int_counter_vec("query_response_cache_hit", "Query response cache hits", &[]);
+
+        pub static QUERY_CACHE_MISS: IntCounterVec =
+            register_int_counter_vec(
+                "query_response_cache_miss",
+                "Query response cache misses",
+                &[],
+            );
+
+        pub static QUERY_CACHE_INVALIDATION: IntCounterVec =
+            register_int_counter_vec(
+                "query_response_cache_invalidation",
+                "Query response cache invalidations (per chain)",
+                &[],
+            );
+
+        pub static QUERY_CACHE_ENTRIES: IntGauge =
+            register_int_gauge(
+                "query_response_cache_entries",
+                "Current number of cached query responses across all chains",
+            );
+    }
+}
+
+/// Per-chain cache state: an LRU map plus the `next_block_height` at the time the
+/// cache was last invalidated. Both are behind the same mutex.
+struct PerChainCache {
+    lru: LruCache<(ApplicationId, Vec<u8>), Vec<u8>>,
+    next_block_height: BlockHeight,
+}
+
+/// An LRU cache for application query responses, keyed per chain.
+///
+/// Caches serialized response bytes keyed on `(chain_id, application_id, request_bytes)`.
+/// The entire per-chain cache is invalidated when a `NewBlock` notification arrives.
+///
+/// To prevent a race where a slow query inserts stale data *after* an invalidation,
+/// each insert carries the chain's `next_block_height` at query time.
+/// If a newer block has since been processed, the insert is silently dropped.
+struct QueryResponseCache {
+    chains: papaya::HashMap<ChainId, StdMutex<PerChainCache>>,
+    /// Chains for which we have registered a notification subscription.
+    subscribed: papaya::HashSet<ChainId>,
+    /// Sender half of the notification channel, used to subscribe new chains lazily.
+    notification_sender: StdMutex<Option<tokio::sync::mpsc::UnboundedSender<Notification>>>,
+    capacity_per_chain: std::num::NonZeroUsize,
+}
+
+impl QueryResponseCache {
+    fn new(capacity_per_chain: usize) -> Self {
+        Self {
+            chains: papaya::HashMap::new(),
+            subscribed: papaya::HashSet::new(),
+            notification_sender: StdMutex::new(None),
+            capacity_per_chain: std::num::NonZeroUsize::new(capacity_per_chain)
+                .expect("capacity must be > 0"),
+        }
+    }
+
+    /// Stores the notification sender (called once during startup).
+    fn set_notification_sender(&self, sender: tokio::sync::mpsc::UnboundedSender<Notification>) {
+        *self
+            .notification_sender
+            .lock()
+            .expect("sender mutex poisoned") = Some(sender);
+    }
+
+    /// Returns the notification sender, if set.
+    fn notification_sender(&self) -> Option<tokio::sync::mpsc::UnboundedSender<Notification>> {
+        self.notification_sender
+            .lock()
+            .expect("sender mutex poisoned")
+            .clone()
+    }
+
+    /// Marks a chain as subscribed to notifications.
+    fn mark_subscribed(&self, chain_id: ChainId) {
+        self.subscribed.pin().insert(chain_id);
+    }
+
+    /// Returns `true` if the chain is not yet subscribed to notifications.
+    fn needs_subscription(&self, chain_id: &ChainId) -> bool {
+        !self.subscribed.pin().contains(chain_id)
+    }
+
+    /// Marks initial chains as subscribed (called during startup).
+    fn mark_all_subscribed(&self, chain_ids: &[ChainId]) {
+        let pinned = self.subscribed.pin();
+        for &chain_id in chain_ids {
+            pinned.insert(chain_id);
+        }
+    }
+
+    /// Looks up a cached response. Returns `Some(bytes)` on hit, `None` on miss
+    /// (including when the chain has no cache entry yet).
+    fn get(&self, chain_id: ChainId, app_id: &ApplicationId, request: &[u8]) -> Option<Vec<u8>> {
+        let pinned = self.chains.pin();
+        let result = pinned.get(&chain_id).and_then(|mutex| {
+            mutex
+                .lock()
+                .expect("LRU mutex poisoned")
+                .lru
+                .get(&(*app_id, request.to_vec()))
+                .cloned()
+        });
+        #[cfg(with_metrics)]
+        {
+            let metric = if result.is_some() {
+                &query_cache_metrics::QUERY_CACHE_HIT
+            } else {
+                &query_cache_metrics::QUERY_CACHE_MISS
+            };
+            metric.with_label_values(&[]).inc();
+        }
+        result
+    }
+
+    /// Inserts a response into the cache, unless the chain's `next_block_height` has
+    /// advanced past the caller's snapshot (which would mean a new block arrived and
+    /// this response is potentially stale).
+    fn insert(
+        &self,
+        chain_id: ChainId,
+        app_id: ApplicationId,
+        request: Vec<u8>,
+        response: Vec<u8>,
+        next_block_height: BlockHeight,
+    ) {
+        let pinned = self.chains.pin();
+        let capacity = self.capacity_per_chain;
+        let mutex = pinned.get_or_insert_with(chain_id, || {
+            StdMutex::new(PerChainCache {
+                lru: LruCache::new(capacity),
+                next_block_height,
+            })
+        });
+        let mut cache = mutex.lock().expect("LRU mutex poisoned");
+        if next_block_height < cache.next_block_height {
+            return; // A new block arrived since this query started; discard stale response.
+        }
+        // If the chain has advanced since the last cache update, also clear stale entries.
+        // Note: This should not happen if notifications are timely. Also, this only
+        // works when we have a cache miss.
+        if next_block_height > cache.next_block_height {
+            debug!(
+                "Unexpected query cache invalidation for chain {chain_id}:\
+                 {next_block_height} > {}",
+                cache.next_block_height
+            );
+            #[cfg(with_metrics)]
+            {
+                query_cache_metrics::QUERY_CACHE_ENTRIES.sub(cache.lru.len() as i64);
+                query_cache_metrics::QUERY_CACHE_INVALIDATION
+                    .with_label_values(&[])
+                    .inc();
+            }
+            cache.lru.clear();
+            cache.next_block_height = next_block_height;
+        }
+        #[cfg(with_metrics)]
+        let prev_len = cache.lru.len();
+        cache.lru.put((app_id, request), response);
+        #[cfg(with_metrics)]
+        if cache.lru.len() != prev_len {
+            query_cache_metrics::QUERY_CACHE_ENTRIES.inc();
+        }
+    }
+
+    /// Called when a `NewBlock` notification arrives. Records the new
+    /// `next_block_height` and clears all cached responses for the chain.
+    fn invalidate_chain(&self, chain_id: &ChainId, next_block_height: BlockHeight) {
+        let pinned = self.chains.pin();
+        let capacity = self.capacity_per_chain;
+        let mutex = pinned.get_or_insert_with(*chain_id, || {
+            StdMutex::new(PerChainCache {
+                lru: LruCache::new(capacity),
+                next_block_height,
+            })
+        });
+        let mut cache = mutex.lock().expect("LRU mutex poisoned");
+        if next_block_height > cache.next_block_height {
+            #[cfg(with_metrics)]
+            {
+                query_cache_metrics::QUERY_CACHE_ENTRIES.sub(cache.lru.len() as i64);
+                query_cache_metrics::QUERY_CACHE_INVALIDATION
+                    .with_label_values(&[])
+                    .inc();
+            }
+            cache.lru.clear();
+            cache.next_block_height = next_block_height;
+        } else {
+            debug!(
+                "Query cache for chain {chain_id} was already invalidated:\
+                 {next_block_height} <= {}",
+                cache.next_block_height
+            );
+        }
+    }
+}
+
 /// The `NodeService` is a server that exposes a web-server to the client.
 /// The node service is primarily used to explore the state of a chain in GraphQL.
 pub struct NodeService<C>
@@ -904,6 +1209,13 @@ where
     context: Arc<Mutex<C>>,
     /// If true, disallow mutations and prevent queries from scheduling operations.
     read_only: bool,
+    /// Optional LRU cache for application query responses. `None` when caching is disabled.
+    query_cache: Option<Arc<QueryResponseCache>>,
+    query_subscriptions: Option<Arc<crate::query_subscription::QuerySubscriptionManager>>,
+    cancellation_token: CancellationToken,
+    enable_memory_profiling: bool,
+    /// If true, do not start the chain listener; serve queries from local state only.
+    pause: bool,
 }
 
 impl<C> Clone for NodeService<C>
@@ -919,6 +1231,11 @@ where
             default_chain: self.default_chain,
             context: Arc::clone(&self.context),
             read_only: self.read_only,
+            query_cache: self.query_cache.clone(),
+            query_subscriptions: self.query_subscriptions.clone(),
+            cancellation_token: self.cancellation_token.clone(),
+            enable_memory_profiling: self.enable_memory_profiling,
+            pause: self.pause,
         }
     }
 }
@@ -928,6 +1245,11 @@ where
     C: ClientContext,
 {
     /// Creates a new instance of the node service given a client chain and a port.
+    ///
+    /// `query_cache_size` controls the per-chain LRU cache capacity for application query
+    /// responses. Pass `None` to disable the cache (the default). Enable with
+    /// `--query-cache-size <N>`. Incompatible with `--long-lived-services`.
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         config: ChainListenerConfig,
         port: NonZeroU16,
@@ -935,7 +1257,13 @@ where
         default_chain: Option<ChainId>,
         context: Arc<Mutex<C>>,
         read_only: bool,
+        query_cache_size: Option<usize>,
+        query_subscriptions: Option<Arc<crate::query_subscription::QuerySubscriptionManager>>,
+        cancellation_token: CancellationToken,
+        enable_memory_profiling: bool,
+        pause: bool,
     ) -> Self {
+        let query_cache = query_cache_size.map(|size| Arc::new(QueryResponseCache::new(size)));
         Self {
             config,
             port,
@@ -944,14 +1272,21 @@ where
             default_chain,
             context,
             read_only,
+            query_cache,
+            query_subscriptions,
+            cancellation_token,
+            enable_memory_profiling,
+            pause,
         }
     }
 
+    /// Returns the socket address on which the metrics endpoint is served.
     #[cfg(with_metrics)]
     pub fn metrics_address(&self) -> SocketAddr {
         SocketAddr::from(([0, 0, 0, 0], self.metrics_port.get()))
     }
 
+    /// Builds the GraphQL schema served by the node service.
     pub fn schema(&self) -> NodeServiceSchema<C> {
         let query = QueryRoot {
             context: Arc::clone(&self.context),
@@ -960,6 +1295,8 @@ where
         };
         let subscription = SubscriptionRoot {
             context: Arc::clone(&self.context),
+            query_subscriptions: self.query_subscriptions.clone(),
+            cancellation_token: self.cancellation_token.clone(),
         };
 
         if self.read_only {
@@ -991,7 +1328,13 @@ where
             axum::routing::get(util::graphiql).post(Self::application_handler);
 
         #[cfg(with_metrics)]
-        monitoring_server::start_metrics(self.metrics_address(), cancellation_token.clone());
+        monitoring_server::start_metrics_with_profiling(
+            self.metrics_address(),
+            cancellation_token.clone(),
+            self.enable_memory_profiling,
+            crate::init_metrics,
+        )
+        .await;
 
         let base_router = Router::new()
             .route("/", index_handler)
@@ -1016,28 +1359,55 @@ where
 
         info!("GraphiQL IDE: http://localhost:{}", port);
 
-        let storage = self.context.lock().await.storage().clone();
+        // Spawn the cache invalidation listener if caching is enabled.
+        if let Some(cache) = &self.query_cache {
+            let guard = self.context.lock().await;
+            let chain_ids: Vec<ChainId> = guard.wallet().chain_ids().try_collect().await?;
+            let (tx, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+            guard.client().subscribe_extra(chain_ids.clone(), &tx);
+            cache.mark_all_subscribed(&chain_ids);
+            cache.set_notification_sender(tx);
+            drop(guard);
+            let cache = Arc::clone(cache);
+            tokio::spawn(async move {
+                while let Some(notification) = receiver.recv().await {
+                    if let Reason::NewBlock { height, .. } = notification.reason {
+                        let next_block_height = height
+                            .try_add_one()
+                            .expect("block height should not overflow");
+                        cache.invalidate_chain(&notification.chain_id, next_block_height);
+                    }
+                }
+            });
+        }
 
-        let chain_listener = ChainListener::new(
-            self.config,
-            self.context,
-            storage,
-            cancellation_token.clone(),
-            command_receiver,
-            true,
-        )
-        .run()
-        .await?;
-        let mut chain_listener = Box::pin(chain_listener).fuse();
         let tcp_listener =
             tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?;
         let server = axum::serve(tcp_listener, app)
-            .with_graceful_shutdown(cancellation_token.cancelled_owned())
+            .with_graceful_shutdown(cancellation_token.clone().cancelled_owned())
             .into_future();
-        futures::select! {
-            result = chain_listener => result?,
-            result = Box::pin(server).fuse() => result?,
-        };
+
+        if self.pause {
+            info!("Running in paused mode: chain synchronization is disabled");
+            server.await?;
+        } else {
+            let storage = self.context.lock().await.storage().clone();
+            let chain_listener = ChainListener::new(
+                self.config,
+                self.context,
+                storage,
+                cancellation_token.clone(),
+                command_receiver,
+                true,
+            )
+            .run()
+            .await?;
+            let mut chain_listener = Box::pin(chain_listener).fuse();
+            futures::select! {
+                result = chain_listener => result?,
+                result = Box::pin(server).fuse() => result?,
+            };
+        }
 
         Ok(())
     }
@@ -1050,13 +1420,49 @@ where
         chain_id: ChainId,
         block_hash: Option<CryptoHash>,
     ) -> Result<Vec<u8>, NodeServiceError> {
-        let QueryOutcome {
-            response,
-            operations,
-        } = self
-            .query_user_application(application_id, request, chain_id, block_hash)
+        // Only cache read-only queries against the latest state (block_hash == None).
+        let cache = block_hash
+            .is_none()
+            .then_some(self.query_cache.as_ref())
+            .flatten();
+
+        // Return immediately on cache hit.
+        if let Some(cache) = cache {
+            if let Some(cached) = cache.get(chain_id, &application_id, &request) {
+                return Ok(cached);
+            }
+        }
+
+        let (
+            QueryOutcome {
+                response,
+                operations,
+            },
+            block_height,
+        ) = self
+            .query_user_application(application_id, request.clone(), chain_id, block_hash)
             .await?;
         if operations.is_empty() {
+            if let Some(cache) = cache {
+                // Lazily subscribe to notifications for chains discovered after startup.
+                if cache.needs_subscription(&chain_id) {
+                    if let Some(sender) = cache.notification_sender() {
+                        self.context
+                            .lock()
+                            .await
+                            .client()
+                            .subscribe_extra(vec![chain_id], &sender);
+                        cache.mark_subscribed(chain_id);
+                    }
+                }
+                cache.insert(
+                    chain_id,
+                    application_id,
+                    request,
+                    response.clone(),
+                    block_height,
+                );
+            }
             return Ok(response);
         }
 
@@ -1078,12 +1484,12 @@ where
             {
                 ClientOutcome::Committed(certificate) => break certificate.hash(),
                 ClientOutcome::Conflict(certificate) => {
-                    return Err(ChainClientError::Conflict(certificate.hash()).into());
+                    return Err(chain_client::Error::Conflict(certificate.hash()).into());
                 }
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
             let mut stream = client.subscribe().map_err(|_| {
-                ChainClientError::InternalError("Could not subscribe to the local node.")
+                chain_client::Error::InternalError("Could not subscribe to the local node.")
             })?;
             util::wait_for_next_round(&mut stream, timeout).await;
         };
@@ -1091,14 +1497,15 @@ where
         Ok(serde_json::to_vec(&response)?)
     }
 
-    /// Queries a user application, returning the raw [`QueryOutcome`].
+    /// Queries a user application, returning the raw [`QueryOutcome`] and the height of the
+    /// chain's latest block at the time of the query (used for cache staleness detection).
     async fn query_user_application(
         &self,
         application_id: ApplicationId,
         bytes: Vec<u8>,
         chain_id: ChainId,
         block_hash: Option<CryptoHash>,
-    ) -> Result<QueryOutcome<Vec<u8>>, NodeServiceError> {
+    ) -> Result<(QueryOutcome<Vec<u8>>, BlockHeight), NodeServiceError> {
         let query = Query::User {
             application_id,
             bytes,
@@ -1109,18 +1516,24 @@ where
             .await
             .make_chain_client(chain_id)
             .await?;
-        let QueryOutcome {
-            response,
-            operations,
-        } = client.query_application(query, block_hash).await?;
+        let (
+            QueryOutcome {
+                response,
+                operations,
+            },
+            next_block_height,
+        ) = client.query_application(query, block_hash).await?;
         match response {
             QueryResponse::System(_) => {
                 unreachable!("cannot get a system response for a user query")
             }
-            QueryResponse::User(user_response_bytes) => Ok(QueryOutcome {
-                response: user_response_bytes,
-                operations,
-            }),
+            QueryResponse::User(user_response_bytes) => Ok((
+                QueryOutcome {
+                    response: user_response_bytes,
+                    operations,
+                },
+                next_block_height,
+            )),
         }
     }
 
@@ -1157,5 +1570,120 @@ where
             .await?;
 
         Ok(response)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use linera_base::{
+        crypto::CryptoHash,
+        data_types::BlockHeight,
+        identifiers::{ApplicationId, ChainId},
+    };
+
+    use super::QueryResponseCache;
+
+    fn test_chain(n: u64) -> ChainId {
+        ChainId(CryptoHash::test_hash(format!("chain-{n}")))
+    }
+
+    fn test_app(n: u64) -> ApplicationId {
+        ApplicationId::new(CryptoHash::test_hash(format!("app-{n}")))
+    }
+
+    #[test]
+    fn cache_hit_and_miss() {
+        let cache = QueryResponseCache::new(100);
+        let chain = test_chain(0);
+        let app = test_app(0);
+        let request = b"query { balance }".to_vec();
+        let response = b"{ \"balance\": 42 }".to_vec();
+
+        // Unknown chain — get returns None.
+        assert!(cache.get(chain, &app, &request).is_none());
+
+        // Insert creates the per-chain entry.
+        cache.insert(
+            chain,
+            app,
+            request.clone(),
+            response.clone(),
+            BlockHeight(1),
+        );
+
+        // Hit after insert.
+        assert_eq!(cache.get(chain, &app, &request), Some(response));
+    }
+
+    #[test]
+    fn per_chain_isolation() {
+        let cache = QueryResponseCache::new(100);
+        let chain_a = test_chain(0);
+        let chain_b = test_chain(1);
+        let app = test_app(0);
+        let request = b"q".to_vec();
+        let response = b"r".to_vec();
+
+        cache.insert(
+            chain_a,
+            app,
+            request.clone(),
+            response.clone(),
+            BlockHeight(1),
+        );
+
+        // Invalidating chain B must not affect chain A.
+        cache.invalidate_chain(&chain_b, BlockHeight(1));
+        assert_eq!(cache.get(chain_a, &app, &request), Some(response));
+    }
+
+    #[test]
+    fn invalidation_clears_all_entries() {
+        let cache = QueryResponseCache::new(100);
+        let chain = test_chain(0);
+        let app = test_app(0);
+
+        cache.insert(chain, app, b"q1".to_vec(), b"r1".to_vec(), BlockHeight(1));
+        cache.insert(chain, app, b"q2".to_vec(), b"r2".to_vec(), BlockHeight(1));
+
+        cache.invalidate_chain(&chain, BlockHeight(2));
+        assert!(cache.get(chain, &app, b"q1").is_none());
+        assert!(cache.get(chain, &app, b"q2").is_none());
+    }
+
+    #[test]
+    fn lru_eviction() {
+        let cache = QueryResponseCache::new(2);
+        let chain = test_chain(0);
+        let app = test_app(0);
+
+        cache.insert(chain, app, b"q1".to_vec(), b"r1".to_vec(), BlockHeight(1));
+        cache.insert(chain, app, b"q2".to_vec(), b"r2".to_vec(), BlockHeight(1));
+        // Third insert evicts q1 (least recently used).
+        cache.insert(chain, app, b"q3".to_vec(), b"r3".to_vec(), BlockHeight(1));
+
+        assert!(cache.get(chain, &app, b"q1").is_none());
+        assert!(cache.get(chain, &app, b"q2").is_some());
+        assert!(cache.get(chain, &app, b"q3").is_some());
+    }
+
+    #[test]
+    fn stale_insert_rejected_after_invalidation() {
+        let cache = QueryResponseCache::new(100);
+        let chain = test_chain(0);
+        let app = test_app(0);
+
+        // Chain is at block 3. A query starts and snapshots this height.
+        cache.insert(chain, app, b"q0".to_vec(), b"r0".to_vec(), BlockHeight(3));
+        let stale_height = BlockHeight(3);
+
+        // Block 4 arrives while the query is in flight.
+        cache.invalidate_chain(&chain, BlockHeight(4));
+
+        // Slow query finishes and tries to insert with the stale height.
+        cache.insert(chain, app, b"q".to_vec(), b"stale".to_vec(), stale_height);
+
+        // The stale insert should have been rejected.
+        assert!(cache.get(chain, &app, b"q").is_none());
     }
 }

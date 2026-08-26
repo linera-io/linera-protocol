@@ -11,7 +11,7 @@ pub fn snakify(ident: &Ident) -> Ident {
 
 /// Extends an identifier with a suffix.
 pub fn concat(ident: &Ident, suffix: &str) -> Ident {
-    transform_non_keyword_ident(ident, |s: String| format!("{}{}", s, suffix))
+    transform_non_keyword_ident(ident, |s: String| format!("{s}{suffix}"))
 }
 
 /// Applies a string transformation (`transform`) to the input `Ident`.

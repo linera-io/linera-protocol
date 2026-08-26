@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(clippy::field_reassign_with_default)]
-
 use std::{collections::BTreeMap, vec};
 
 use assert_matches::assert_matches;
@@ -1248,15 +1246,15 @@ async fn test_open_chain() -> anyhow::Result<()> {
         .await
         .expect("should initialize chain correctly");
     assert_eq!(*child_view.system.balance.get(), Amount::ONE);
-    assert_eq!(*child_view.system.ownership.get(), child_ownership);
+    assert_eq!(*child_view.system.ownership.get().await?, child_ownership);
     assert_eq!(
-        *child_view.system.committees.get(),
+        *child_view.system.committees.get().await?,
         [(Epoch::ZERO, committee)]
             .into_iter()
             .collect::<BTreeMap<_, _>>()
     );
     assert_eq!(
-        *child_view.system.application_permissions.get(),
+        *child_view.system.application_permissions.get().await?,
         ApplicationPermissions::new_single(application_id)
     );
 

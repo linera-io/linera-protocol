@@ -60,6 +60,42 @@ Prefer plural names for collections of objects: `let values = vec![1, 2, 3];`.
 Contributions should generally follow the [Rust API guidelines](https://rust-lang.github.io/api-guidelines/checklist.html) whenever possible.
 
 
+## Documenting public items
+
+The library crates enable `#![deny(missing_docs)]`, so every public item needs a `///`
+doc comment. Prefer writing a real, useful one-line doc over silencing the lint. Adding
+`#[allow(missing_docs)]` is only acceptable in the following cases:
+
+1. **Generated or macro-produced items that cannot carry doc comments.** For example code
+   from `tonic::include_proto!` / `#[wit_import]`, the `Error` newtype from
+   `thiserror_context::impl_context!`, or generated GraphQL clients. Put a *module-level*
+   `#![allow(missing_docs)]` (or `#![expect(missing_docs)]`, which additionally warns if
+   the macro ever stops generating undocumented items) on the smallest module wrapping the
+   generated code.
+
+2. **`thiserror`-derived error enums** whose variants are already described by their
+   `#[error("…")]` messages. Put a single type-level `#[allow(missing_docs)]` on the enum.
+
+3. **Large, mechanical, self-descriptive message / request / operation enums** — e.g.
+   actor-message enums, the RPC message enum, or wire/ABI operation enums — where
+   per-variant and per-field docs would only restate the obvious. Put a single type-level
+   `#[allow(missing_docs)]` on the type.
+
+Everything else (config and data structs, traits, methods, free functions, and any type
+that is *not* in one of the cases above) should be documented with real `///` comments.
+
+Two things to keep in mind:
+
+* For a clap subcommand enum whose variants are thin wrappers around documented args
+  structs (e.g. `Command { Add(Add), … }`), giving the *variant* a doc comment shadows the
+  richer `--help` text derived from the inner struct. Use a type-level
+  `#[allow(missing_docs)]` on such an enum rather than duplicating the inner docs.
+
+* For `async-graphql` types (`#[derive(SimpleObject)]`, etc.) a doc comment becomes part of
+  the generated GraphQL schema. Documenting them is encouraged, but remember to regenerate
+  the checked-in schema (`cargo run --bin linera-schema-export > …`) in the same change.
+
+
 ## Additional code style guidelines
 
 * Type annotations (such as `let x : t = ...;`, `Vec::<usize>::new()`) should be present only when required by the compiler.
@@ -68,6 +104,62 @@ Contributions should generally follow the [Rust API guidelines](https://rust-lan
 
 * Avoid `let _ = ...` to discard values, because it can hide important information like
   unawaited futures or unhandled errors. `let _x =` should only be used for RAII guards.
+
+
+## Panics
+
+We build with unwinding, and Tokio catches a panic at the task boundary rather than
+stopping the runtime. A panicking task therefore does not stop the process by itself: what
+happens next is decided entirely by whoever joins that task. Choose deliberately.
+
+* **Report every panic.** `linera_base::panic_hook::init` is installed by
+  `linera_base::tracing::init`, so panics reach the log as a `tracing` event and
+  increment `linera_panics_total`. Do not add a panic hook of your own to a binary that
+  already calls it.
+
+* **Prefer crashing over running degraded.** When a task's death silently disables a
+  subsystem — a cross-chain message forwarder, a notification fan-out, a chain listener —
+  the process should exit and be restarted rather than keep serving without it. Await such
+  tasks with `JoinSetExt::await_all_tasks`, which re-raises the panic.
+
+* **Except for work that is scoped to one request or one chain.** Handling a single RPC,
+  or executing a block for a single chain, must not be able to take the process down: a
+  panic reachable from user input would otherwise be a way for one crafted message to stop
+  every validator at once. Contain those panics and let the caller retry, using
+  `JoinSetExt::await_all_tasks_logging_panics` for sets of such tasks.
+
+* **Never swallow a panic silently.** `catch_unwind` is acceptable at a boundary where the
+  containment is the point, but log at `error!` and say in a comment why continuing is
+  safer than exiting.
+
+* `panic!`, `unwrap` and `expect` are for invariants that a bug in *our* code would break,
+  never for input we receive from a peer, a client or an application. Prefer returning an
+  error for anything reachable from outside the process.
+
+
+## Hash-consed types and `linera_cache::Arc<T>`
+
+Any content-addressed immutable data (also known as hash-consed data) — for
+example `Block`, `Blob`, `ConfirmedBlockCertificate` — should be cached and
+passed around as `linera_cache::Arc<T>` (re-exported as `linera_storage::Arc`).
+
+`linera_cache::Arc<T>` is a newtype over `std::sync::Arc<T>` with **no public
+constructor**: the only way to obtain one is through `ValueCache::insert`,
+`ValueCache::insert_hashed`, or `ValueCache::get`. This makes the
+"one allocation per content" invariant a compile-time guarantee rather than a
+convention. Concretely:
+
+- For freshly-constructed `ConfirmedBlockCertificate`s (e.g. from network or
+  proposal flows), call `Storage::cache_certificate`.
+- For freshly-constructed `ConfirmedBlock`s, call
+  `Storage::cache_confirmed_block`.
+- For freshly-constructed `Blob`s, call `Storage::cache_blob`.
+- For values being re-inserted from a borrowed reference, use
+  `ValueCache::insert_hashed`.
+
+`std::sync::Arc::new` for a hash-consed value bypasses the dedup index and
+creates a duplicate allocation; the type system prevents this by design.
+See the [`linera-cache` README](linera-cache/README.md) for details.
 
 
 ## Formatting and linting

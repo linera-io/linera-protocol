@@ -137,7 +137,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
             anyhow::bail!("Wrong QueryResponse result");
         };
         let result: serde_json::Value = serde_json::from_slice(&result).unwrap();
-        let result = read_evm_u64_entry(result);
+        let result = read_evm_u64_entry(&result);
         assert_eq!(result, value);
     }
     Ok(())
@@ -426,7 +426,7 @@ async fn test_basic_evm_features() -> anyhow::Result<()> {
         anyhow::bail!("Wrong QueryResponse result");
     };
     let result: serde_json::Value = serde_json::from_slice(&result).unwrap();
-    assert_eq!(read_evm_u64_entry(result), 0);
+    assert_eq!(read_evm_u64_entry(&result), 0);
 
     // Testing that the created contract has the right address
     let evm_address = app_id.evm_address();
@@ -446,7 +446,7 @@ async fn test_basic_evm_features() -> anyhow::Result<()> {
         anyhow::bail!("Wrong QueryResponse result");
     };
     let result: serde_json::Value = serde_json::from_slice(&result).unwrap();
-    assert_eq!(read_evm_u64_entry(result), 49);
+    assert_eq!(read_evm_u64_entry(&result), 49);
 
     Ok(())
 }

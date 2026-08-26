@@ -18,6 +18,7 @@ use serde::Serialize;
 
 use crate::{ExecutionError, Message, Operation, ResourceControlPolicy, SystemExecutionStateView};
 
+/// Tracks and controls the resources used during execution, charging fees against an account.
 #[derive(Clone, Debug, Default)]
 pub struct ResourceController<Account = Amount, Tracker = ResourceTracker> {
     /// The (fixed) policy used to charge fees and control resource usage.
@@ -304,9 +305,9 @@ impl fmt::Display for ResourceTracker {
 
         let mut lines_iter = lines.into_iter();
         if let Some(first) = lines_iter.next() {
-            write!(f, "{}", first)?;
+            write!(f, "{first}")?;
             for line in lines_iter {
-                write!(f, "\n  {}", line)?;
+                write!(f, "\n  {line}")?;
             }
         }
 
@@ -316,10 +317,13 @@ impl fmt::Display for ResourceTracker {
 
 /// How to access the balance of an account.
 pub trait BalanceHolder {
+    /// Returns the balance of the account.
     fn balance(&self) -> Result<Amount, ArithmeticError>;
 
+    /// Adds the given amount to the balance.
     fn try_add_assign(&mut self, other: Amount) -> Result<(), ArithmeticError>;
 
+    /// Subtracts the given amount from the balance.
     fn try_sub_assign(&mut self, other: Amount) -> Result<(), ArithmeticError>;
 }
 
@@ -730,7 +734,7 @@ where
 
     /// Tracks the size of a response produced by an oracle.
     pub(crate) fn track_service_oracle_response(
-        &mut self,
+        &self,
         response_bytes: usize,
     ) -> Result<(), ExecutionError> {
         ensure!(

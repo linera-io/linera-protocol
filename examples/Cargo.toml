@@ -8,6 +8,7 @@ members = [
     "counter-no-graphql",
     "crowd-funding",
     "ethereum-tracker",
+    "formats-registry",
     "fungible",
     "game-of-life-challenge",
     "gen-nft",
@@ -21,6 +22,7 @@ members = [
     "social",
     "task-processor",
     "time-expiry",
+    "wrapped-fungible",
 ]
 
 [workspace.dependencies]
@@ -41,6 +43,7 @@ getrandom = { version = "0.2.12", default-features = false, features = [
 ] }
 hex = "0.4.3"
 insta = { version = "1.36.1", features = ["yaml"] }
+linera-ethereum = { path = "../linera-ethereum" }
 linera-sdk = { path = "../linera-sdk" }
 linera-views = { path = "../linera-views", default-features = false }
 log = "0.4.20"
@@ -68,6 +71,7 @@ fungible = { path = "./fungible" }
 matching-engine = { path = "./matching-engine" }
 native-fungible = { path = "./native-fungible" }
 non-fungible = { path = "./non-fungible" }
+wrapped-fungible = { path = "./wrapped-fungible" }
 
 [profile.release]
 debug = true

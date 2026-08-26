@@ -3,7 +3,10 @@
 
 //! A library for Linera server metrics.
 
-pub mod monitoring_server;
+#![deny(missing_docs)]
 
-#[cfg(feature = "memory-profiling")]
+pub mod monitoring_server;
+mod runtime_metrics;
+
+#[cfg(feature = "jemalloc")]
 pub mod memory_profiler;

@@ -3,6 +3,9 @@ The unique identifier (UID) of a chain. This is currently computed as the hash v
 """
 scalar ChainId
 
+"""
+An indexed operation together with the location of the previous one on the same chain.
+"""
 type ChainOperation {
 	key: OperationKey!
 	previousOperation: OperationKey
@@ -26,8 +29,17 @@ An operation key to index operations
 """
 scalar OperationKey
 
+"""
+A way to refer to an operation: either by its exact key, or as the last operation on a chain.
+"""
 input OperationKeyKind @oneOf {
+	"""
+	Refers to the operation with this exact key.
+	"""
 	key: OperationKey
+	"""
+	Refers to the last operation registered for this chain.
+	"""
 	last: ChainId
 }
 

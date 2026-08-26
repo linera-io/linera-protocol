@@ -16,21 +16,20 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
     use prometheus::HistogramVec;
 
-    /// The runtime of hash computation
-    pub static REGISTER_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "register_view_hash_runtime",
-            "RegisterView hash runtime",
-            &[],
-            exponential_bucket_latencies(5.0),
-        )
-    });
+    linera_base::declare_metrics! {
+        /// The runtime of hash computation
+        pub static REGISTER_VIEW_HASH_RUNTIME: HistogramVec =
+            register_histogram_vec(
+                "register_view_hash_runtime",
+                "RegisterView hash runtime",
+                &[],
+                exponential_bucket_latencies(5.0),
+            );
+    }
 }
 
 /// A view that supports modifying a single value of type `T`.
@@ -219,13 +218,7 @@ where
     /// ```
     pub fn get_mut(&mut self) -> &mut T {
         self.delete_storage_first = false;
-        match &mut self.update {
-            Some(value) => value,
-            update => {
-                *update = Some(self.stored_value.clone());
-                update.as_mut().unwrap()
-            }
-        }
+        self.update.get_or_insert_with(|| self.stored_value.clone())
     }
 
     fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {

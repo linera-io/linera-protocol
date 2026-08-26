@@ -3,13 +3,20 @@
 
 use std::sync::Arc;
 
-use futures::{future::FutureExt as _, lock::Mutex as AsyncMutex};
+use futures::lock::Mutex as AsyncMutex;
 use linera_base::identifiers::{AccountOwner, ChainId};
-use linera_client::chain_listener::{ChainListener, ClientContext as _};
+use linera_client::chain_listener::ClientContext as _;
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
-use crate::{chain::Chain, signer::Signer, storage, wallet::Wallet, Environment, Result};
+use crate::{
+    chain::Chain,
+    listener::Listener,
+    signer::Signer,
+    storage::{self, Storage},
+    wallet::Wallet,
+    ClientContext, Error, Result,
+};
 
 /// The full client API, exposed to the wallet implementation. Calls
 /// to this API can be trusted to have originated from the user's
@@ -22,8 +29,20 @@ pub struct Client {
     // futures on the global task queue.
     // It does nothing here in this single-threaded context, but is
     // hard-coded by `ChainListener`.
-    pub(crate) client_context: Arc<AsyncMutex<linera_client::ClientContext<Environment>>>,
+    pub(crate) context: ClientContext,
+    listener: Arc<AsyncMutex<Option<Listener>>>,
+    pub(crate) chain_listener_config: linera_client::chain_listener::ChainListenerConfig,
+    pub(crate) storage: Storage,
 }
+
+/// The chain IDs returned by [`Client::chains`].
+///
+/// `wasm-bindgen` can't return a bare `Vec` of a serialized type, so the list travels as
+/// a newtype that TypeScript sees as a plain array.
+#[derive(serde::Serialize, tsify::Tsify)]
+#[tsify(into_wasm_abi)]
+#[serde(transparent)]
+pub struct ChainIds(pub Vec<ChainId>);
 
 #[derive(Default, serde::Deserialize, tsify::Tsify)]
 #[tsify(from_wasm_abi)]
@@ -66,36 +85,59 @@ impl Client {
             &options,
             default,
             genesis_config,
+            linera_core::worker::DEFAULT_BLOCK_CACHE_SIZE,
+            linera_core::worker::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
         )
         .await?;
-        // The `Arc` here is useless, but it is required by the `ChainListener` API.
-        #[expect(clippy::arc_with_non_send_sync)]
-        let client = Arc::new(AsyncMutex::new(client));
-        let client_clone = client.clone();
-        let chain_listener = ChainListener::new(
-            options.chain_listener_config,
-            client_clone,
-            storage,
-            tokio_util::sync::CancellationToken::new(),
-            tokio::sync::mpsc::unbounded_channel().1,
-            true, // Enable background sync
-        )
-        .run()
-        .boxed_local()
-        .await?
-        .boxed_local();
-        wasm_bindgen_futures::spawn_local(
-            async move {
-                if let Err(error) = chain_listener.await {
-                    tracing::error!("ChainListener error: {error:?}");
-                }
-            }
-            .boxed_local(),
-        );
-        log::info!("Linera Web client successfully initialized");
+
         Ok(Self {
-            client_context: client,
+            // The `Arc` here is useless, but it is required by the `ChainListener` API.
+            #[expect(clippy::arc_with_non_send_sync)]
+            context: Arc::new(AsyncMutex::new(client)),
+            listener: Arc::default(),
+            chain_listener_config: options.chain_listener_config,
+            storage,
         })
+    }
+
+    /// Start listening for updates on relevant chains. If already listening, does
+    /// nothing.
+    ///
+    /// # Errors
+    ///
+    /// If the chain listener could not be initialized.
+    #[wasm_bindgen]
+    pub async fn start(&self) -> Result<()> {
+        let mut guard = self.listener.lock().await;
+        if guard.is_none() {
+            *guard = Some(Listener::start(self.clone()).await?);
+        }
+        Ok(())
+    }
+
+    /// Start listening for updates on relevant chains. If already listening, does
+    /// nothing.
+    ///
+    /// # Errors
+    ///
+    /// If the chain listener could not be initialized.
+    #[wasm_bindgen]
+    pub async fn stop(&self) -> Result<()> {
+        if let Some(listener) = self.listener.lock().await.take() {
+            listener.stop().await?;
+        }
+
+        Ok(())
+    }
+
+    /// Returns the IDs of the chains in this client's wallet.
+    ///
+    /// These are the chains the client tracks and keeps synchronized. Any other chain
+    /// can still be opened with [`chain`](Self::chain), which downloads it from the
+    /// validators on demand.
+    #[wasm_bindgen]
+    pub async fn chains(&self) -> ChainIds {
+        ChainIds(self.context.lock().await.wallet().chain_ids())
     }
 
     /// Connect to a chain on the Linera network.
@@ -106,12 +148,7 @@ impl Client {
     #[wasm_bindgen]
     pub async fn chain(&self, chain: ChainId, options: Option<ChainOptions>) -> Result<Chain> {
         let options = options.unwrap_or_default();
-        let mut chain_client = self
-            .client_context
-            .lock()
-            .await
-            .make_chain_client(chain)
-            .await?;
+        let mut chain_client = self.context.lock().await.make_chain_client(chain).await?;
         if let Some(owner) = options.owner {
             chain_client.set_preferred_owner(owner);
         }
@@ -120,5 +157,29 @@ impl Client {
             chain_client,
             client: self.clone(),
         })
+    }
+
+    /// Cleanly shut down the client, completing when it is destroyed and all
+    /// resources it owns are released.
+    ///
+    /// # Errors
+    ///
+    /// If the context is being referenced by any other objects (chains,
+    /// applications…). Free these with `.free()` before disposing of this
+    /// object.
+    ///
+    /// Propagates any errors that occurred during background execution of the
+    /// client.
+    #[wasm_bindgen(js_name = asyncDispose)]
+    pub async fn async_dispose(self) -> Result<()> {
+        self.stop().await?;
+
+        let context = Arc::into_inner(self.context).ok_or(Error::new(
+            "Client disposed while being referenced elsewhere",
+        ))?;
+
+        drop(context);
+
+        Ok(())
     }
 }

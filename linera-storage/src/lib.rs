@@ -3,34 +3,39 @@
 
 //! This module defines the storage abstractions for individual chains and certificates.
 
+#![deny(missing_docs)]
+
 mod db_storage;
 mod migration;
 
-use std::sync::Arc;
+use std::sync::Arc as StdArc;
 
 use async_trait::async_trait;
 use itertools::Itertools;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        ApplicationDescription, Blob, BlockHeight, ChainDescription, CompressedBytecode,
+        ApplicationDescription, Blob, BlockHeight, ChainDescription, CompressedBytecode, Epoch,
         NetworkDescription, TimeDelta, Timestamp,
     },
-    identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
+    identifiers::{ApplicationId, BlobId, BlobType, ChainId, EventId, IndexAndEvent, StreamId},
+    time::Duration,
     vm::VmRuntime,
 };
+pub use linera_cache::{Arc, DEFAULT_CLEANUP_INTERVAL_SECS};
 use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
     ChainError, ChainStateView,
+};
+use linera_execution::{
+    committee::Committee, system::EPOCH_STREAM_NAME, BlobState, ExecutionError,
+    ExecutionRuntimeConfig, ExecutionRuntimeContext, SharedCommittees, TransactionTracker,
+    UserContractCode, UserServiceCode, WasmRuntime,
 };
 #[cfg(with_revm)]
 use linera_execution::{
     evm::revm::{EvmContractModule, EvmServiceModule},
     EvmRuntime,
-};
-use linera_execution::{
-    BlobState, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, TransactionTracker,
-    UserContractCode, UserServiceCode, WasmRuntime,
 };
 #[cfg(with_wasm_runtime)]
 use linera_execution::{WasmContractModule, WasmServiceModule};
@@ -40,7 +45,9 @@ use linera_views::{context::Context, views::RootView, ViewError};
 pub use crate::db_storage::metrics;
 #[cfg(with_testing)]
 pub use crate::db_storage::TestClock;
-pub use crate::db_storage::{ChainStatesFirstAssignment, DbStorage, WallClock};
+pub use crate::db_storage::{
+    ChainStatesFirstAssignment, DbStorage, RootKey, StorageCacheConfig, StorageCaches, WallClock,
+};
 
 /// The default namespace to be used when none is specified
 pub const DEFAULT_NAMESPACE: &str = "table_linera";
@@ -61,7 +68,8 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     /// Returns the current wall clock time.
     fn clock(&self) -> &Self::Clock;
 
-    fn thread_pool(&self) -> &Arc<linera_execution::ThreadPool>;
+    /// Returns the thread pool used to offload blocking work.
+    fn thread_pool(&self) -> &StdArc<linera_execution::ThreadPool>;
 
     /// Loads the view of a chain state.
     ///
@@ -85,19 +93,19 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     async fn read_confirmed_block(
         &self,
         hash: CryptoHash,
-    ) -> Result<Option<ConfirmedBlock>, ViewError>;
+    ) -> Result<Option<Arc<ConfirmedBlock>>, ViewError>;
 
     /// Reads a number of confirmed blocks by their hashes.
     async fn read_confirmed_blocks<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
-    ) -> Result<Vec<Option<ConfirmedBlock>>, ViewError>;
+    ) -> Result<Vec<Option<Arc<ConfirmedBlock>>>, ViewError>;
 
     /// Reads the blob with the given blob ID.
-    async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError>;
+    async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Arc<Blob>>, ViewError>;
 
     /// Reads the blobs with the given blob IDs.
-    async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError>;
+    async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Arc<Blob>>>, ViewError>;
 
     /// Reads the blob state with the given blob ID.
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<Option<BlobState>, ViewError>;
@@ -135,17 +143,44 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     /// Tests existence of the certificate with the given hash.
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError>;
 
+    /// Inserts a certificate into the in-memory dedup cache and returns the
+    /// canonical [`Arc`]. If the cache already holds an `Arc` for this hash,
+    /// the passed-in `certificate` is dropped and the existing `Arc` is
+    /// returned. This must be used (rather than `Arc::new`) for any
+    /// freshly-constructed [`ConfirmedBlockCertificate`] that should
+    /// participate in the "one allocation per content" invariant.
+    fn cache_certificate(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+    ) -> Arc<ConfirmedBlockCertificate>;
+
+    /// Inserts a blob into the in-memory dedup cache and returns the canonical
+    /// [`Arc`]. If the cache already holds an `Arc` for this blob ID, the
+    /// passed-in `blob` is dropped and the existing `Arc` is returned. This
+    /// must be used (rather than `Arc::new`) for any freshly-constructed
+    /// [`Blob`] that should participate in the "one allocation per content"
+    /// invariant.
+    fn cache_blob(&self, blob: Blob) -> Arc<Blob>;
+
+    /// Inserts a confirmed block into the in-memory dedup cache and returns
+    /// the canonical [`Arc`]. If the cache already holds an `Arc` for this
+    /// hash, the passed-in `block` is dropped and the existing `Arc` is
+    /// returned. This must be used (rather than `Arc::new`) for any
+    /// freshly-constructed [`ConfirmedBlock`] that should participate in the
+    /// "one allocation per content" invariant.
+    fn cache_confirmed_block(&self, block: ConfirmedBlock) -> Arc<ConfirmedBlock>;
+
     /// Reads the certificate with the given hash.
     async fn read_certificate(
         &self,
         hash: CryptoHash,
-    ) -> Result<Option<ConfirmedBlockCertificate>, ViewError>;
+    ) -> Result<Option<Arc<ConfirmedBlockCertificate>>, ViewError>;
 
     /// Reads a number of certificates
     async fn read_certificates(
         &self,
         hashes: &[CryptoHash],
-    ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError>;
+    ) -> Result<Vec<Option<Arc<ConfirmedBlockCertificate>>>, ViewError>;
 
     /// Reads raw certificate bytes by hashes.
     ///
@@ -155,7 +190,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     async fn read_certificates_raw(
         &self,
         hashes: &[CryptoHash],
-    ) -> Result<Vec<Option<(Vec<u8>, Vec<u8>)>>, ViewError>;
+    ) -> Result<Vec<Option<Arc<(Vec<u8>, Vec<u8>)>>>, ViewError>;
 
     /// Reads certificates by heights for a given chain.
     /// Returns a vector where each element corresponds to the input height.
@@ -164,7 +199,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         &self,
         chain_id: ChainId,
         heights: &[BlockHeight],
-    ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError>;
+    ) -> Result<Vec<Option<Arc<ConfirmedBlockCertificate>>>, ViewError>;
 
     /// Reads raw certificates by heights for a given chain.
     /// Returns a vector where each element corresponds to the input height.
@@ -174,7 +209,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         &self,
         chain_id: ChainId,
         heights: &[BlockHeight],
-    ) -> Result<Vec<Option<(Vec<u8>, Vec<u8>)>>, ViewError>;
+    ) -> Result<Vec<Option<Arc<(Vec<u8>, Vec<u8>)>>>, ViewError>;
 
     /// Returns a vector of certificate hashes for the requested chain and heights.
     /// The resulting vector maintains the order of the input `heights` argument.
@@ -194,8 +229,16 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         indices: &[(BlockHeight, CryptoHash)],
     ) -> Result<(), ViewError>;
 
+    /// Looks up the block heights where the given events were published.
+    /// Returns `None` for events that are not in the index (e.g. published before the
+    /// index was populated).
+    async fn read_event_block_heights(
+        &self,
+        event_ids: &[EventId],
+    ) -> Result<Vec<Option<BlockHeight>>, ViewError>;
+
     /// Reads the event with the given ID.
-    async fn read_event(&self, id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
+    async fn read_event(&self, id: EventId) -> Result<Option<Arc<Vec<u8>>>, ViewError>;
 
     /// Tests existence of the event with the given ID.
     async fn contains_event(&self, id: EventId) -> Result<bool, ViewError>;
@@ -223,6 +266,64 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         information: &NetworkDescription,
     ) -> Result<(), ViewError>;
 
+    /// Returns the process-global cache of committees by epoch.
+    fn shared_committees(&self) -> &SharedCommittees;
+
+    /// Returns the committee for `epoch`, consulting the shared cache first
+    /// and, on a miss, loading it from the `NewCommittee` event on the admin
+    /// chain (or from the genesis committee blob for epoch 0) plus the
+    /// committee blob. Returns `Ok(None)` if the network description, event,
+    /// or blob is not yet available locally.
+    async fn get_or_load_committee(
+        &self,
+        epoch: Epoch,
+    ) -> Result<Option<StdArc<Committee>>, ViewError> {
+        if let Some(committee) = self.shared_committees().get(epoch) {
+            return Ok(Some(committee));
+        }
+        let Some(net_description) = self.read_network_description().await? else {
+            tracing::warn!(
+                ?epoch,
+                "get_or_load_committee: NetworkDescription missing in storage"
+            );
+            return Ok(None);
+        };
+        let blob_hash = if epoch.0 == 0 {
+            net_description.genesis_committee_blob_hash
+        } else {
+            let event_id = EventId {
+                chain_id: net_description.admin_chain_id,
+                stream_id: StreamId::system(EPOCH_STREAM_NAME),
+                index: epoch.0,
+            };
+            match self.read_event(event_id.clone()).await? {
+                Some(bytes) => bcs::from_bytes(&bytes)?,
+                None => {
+                    tracing::warn!(
+                        ?epoch,
+                        ?event_id,
+                        "get_or_load_committee: NewCommittee event missing in storage"
+                    );
+                    return Ok(None);
+                }
+            }
+        };
+        let blob_id = BlobId::new(blob_hash, BlobType::Committee);
+        let Some(blob) = self.read_blob(blob_id).await? else {
+            tracing::warn!(
+                ?epoch,
+                ?blob_id,
+                "get_or_load_committee: committee blob missing in storage"
+            );
+            return Ok(None);
+        };
+        let committee: Committee = bcs::from_bytes(blob.bytes())?;
+        Ok(Some(
+            self.shared_committees()
+                .insert(epoch, StdArc::new(committee)),
+        ))
+    }
+
     /// Initializes a chain in a simple way (used for testing and to create a genesis state).
     ///
     /// # Notes
@@ -239,7 +340,10 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         self.write_blob(&Blob::new_chain_description(&description))
             .await?;
         let mut chain = self.load_chain(id).await?;
-        assert!(!chain.is_active(), "Attempting to create a chain twice");
+        assert!(
+            !chain.is_active().await?,
+            "Attempting to create a chain twice"
+        );
         let current_time = self.clock().current_time();
         chain.initialize_if_needed(current_time).await?;
         chain.save().await?;
@@ -265,7 +369,8 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
                 .ok_or(ExecutionError::BlobsNotFound(vec![
                     contract_bytecode_blob_id,
                 ]))?
-                .into_content(),
+                .content()
+                .clone(),
         };
         let compressed_contract_bytecode = CompressedBytecode {
             compressed_bytes: content.into_arc_bytes(),
@@ -331,7 +436,8 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
                 .ok_or(ExecutionError::BlobsNotFound(vec![
                     service_bytecode_blob_id,
                 ]))?
-                .into_content(),
+                .content()
+                .clone(),
         };
         let compressed_service_bytecode = CompressedBytecode {
             compressed_bytes: content.into_arc_bytes(),
@@ -381,6 +487,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         }
     }
 
+    /// Returns the storage context used by the block exporter with the given ID.
     async fn block_exporter_context(
         &self,
         block_exporter_id: u32,
@@ -389,49 +496,27 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
 
 /// The result of processing the obtained read certificates.
 pub enum ResultReadCertificates {
+    /// All requested certificates were found and successfully read.
     Certificates(Vec<ConfirmedBlockCertificate>),
+    /// The hashes for which no certificate could be read.
     InvalidHashes(Vec<CryptoHash>),
 }
 
 impl ResultReadCertificates {
     /// Creating the processed read certificates.
     pub fn new(
-        certificates: Vec<Option<ConfirmedBlockCertificate>>,
+        certificates: Vec<Option<Arc<ConfirmedBlockCertificate>>>,
         hashes: Vec<CryptoHash>,
     ) -> Self {
         let (certificates, invalid_hashes) = certificates
             .into_iter()
             .zip(hashes)
             .partition_map::<Vec<_>, Vec<_>, _, _, _>(|(certificate, hash)| match certificate {
-                Some(cert) => itertools::Either::Left(cert),
+                Some(cert) => itertools::Either::Left(Arc::unwrap_or_clone(cert)),
                 None => itertools::Either::Right(hash),
             });
         if invalid_hashes.is_empty() {
             Self::Certificates(certificates)
-        } else {
-            Self::InvalidHashes(invalid_hashes)
-        }
-    }
-}
-
-/// The result of processing the obtained read confirmed blocks.
-pub enum ResultReadConfirmedBlocks {
-    Blocks(Vec<ConfirmedBlock>),
-    InvalidHashes(Vec<CryptoHash>),
-}
-
-impl ResultReadConfirmedBlocks {
-    /// Creating the processed read confirmed blocks.
-    pub fn new(blocks: Vec<Option<ConfirmedBlock>>, hashes: Vec<CryptoHash>) -> Self {
-        let (blocks, invalid_hashes) = blocks
-            .into_iter()
-            .zip(hashes)
-            .partition_map::<Vec<_>, Vec<_>, _, _, _>(|(block, hash)| match block {
-                Some(block) => itertools::Either::Left(block),
-                None => itertools::Either::Right(hash),
-            });
-        if invalid_hashes.is_empty() {
-            Self::Blocks(blocks)
         } else {
             Self::InvalidHashes(invalid_hashes)
         }
@@ -443,10 +528,10 @@ impl ResultReadConfirmedBlocks {
 pub struct ChainRuntimeContext<S> {
     storage: S,
     chain_id: ChainId,
-    thread_pool: Arc<linera_execution::ThreadPool>,
+    thread_pool: StdArc<linera_execution::ThreadPool>,
     execution_runtime_config: ExecutionRuntimeConfig,
-    user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
-    user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
+    user_contracts: StdArc<papaya::HashMap<ApplicationId, UserContractCode>>,
+    user_services: StdArc<papaya::HashMap<ApplicationId, UserServiceCode>>,
 }
 
 #[cfg_attr(not(web), async_trait)]
@@ -456,7 +541,7 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
         self.chain_id
     }
 
-    fn thread_pool(&self) -> &Arc<linera_execution::ThreadPool> {
+    fn thread_pool(&self) -> &StdArc<linera_execution::ThreadPool> {
         &self.thread_pool
     }
 
@@ -464,11 +549,11 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
         self.execution_runtime_config
     }
 
-    fn user_contracts(&self) -> &Arc<papaya::HashMap<ApplicationId, UserContractCode>> {
+    fn user_contracts(&self) -> &StdArc<papaya::HashMap<ApplicationId, UserContractCode>> {
         &self.user_contracts
     }
 
-    fn user_services(&self) -> &Arc<papaya::HashMap<ApplicationId, UserServiceCode>> {
+    fn user_services(&self) -> &StdArc<papaya::HashMap<ApplicationId, UserServiceCode>> {
         &self.user_services
     }
 
@@ -502,16 +587,23 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
         Ok(service)
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
-        self.storage.read_blob(blob_id).await
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<StdArc<Blob>>, ViewError> {
+        Ok(self.storage.read_blob(blob_id).await?.map(Arc::into_std))
     }
 
-    async fn get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
-        self.storage.read_event(event_id).await
+    async fn get_event(&self, event_id: EventId) -> Result<Option<StdArc<Vec<u8>>>, ViewError> {
+        Ok(self.storage.read_event(event_id).await?.map(Arc::into_std))
     }
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
         self.storage.read_network_description().await
+    }
+
+    async fn get_or_load_committee(
+        &self,
+        epoch: Epoch,
+    ) -> Result<Option<StdArc<Committee>>, ViewError> {
+        self.storage.get_or_load_committee(epoch).await
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
@@ -544,9 +636,36 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
 #[cfg_attr(not(web), async_trait)]
 #[cfg_attr(web, async_trait(?Send))]
 pub trait Clock {
+    /// Returns the current time.
     fn current_time(&self) -> Timestamp;
 
-    async fn sleep(&self, delta: TimeDelta);
-
+    /// Waits until the given timestamp is reached.
     async fn sleep_until(&self, timestamp: Timestamp);
+
+    /// Waits for the given duration, measured against this clock.
+    ///
+    /// Unlike [`linera_base::time::timer::sleep`], this honors a simulated clock (e.g. a test
+    /// clock), so callers that sleep through it can be driven deterministically in virtual time.
+    async fn sleep_for(&self, duration: Duration) {
+        self.sleep_until(
+            self.current_time()
+                .saturating_add(TimeDelta::from_duration(duration)),
+        )
+        .await
+    }
+}
+
+/// Registers every metric this crate declares.
+///
+/// Without this, a metric is only exported after the code path that observes it has run, so a
+/// rarely-taken path leaves its panels blank and makes a routine restart look like the metric
+/// was removed.
+#[cfg(with_metrics)]
+pub fn init_metrics() {
+    linera_base::init_metrics();
+    linera_cache::init_metrics();
+    linera_chain::init_metrics();
+    linera_execution::init_metrics();
+    linera_views::init_metrics();
+    db_storage::metrics::init_metrics();
 }

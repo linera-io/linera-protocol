@@ -6,28 +6,20 @@
 
 #[cfg(feature = "jemalloc")]
 #[global_allocator]
-static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+static ALLOC: linera_jemallocator::Jemalloc = linera_jemallocator::Jemalloc;
 
-// jemalloc configuration for memory profiling with jemalloc_pprof
-// prof:true,prof_active:true - Enable profiling from start
-// lg_prof_sample:19 - Sample every 512KB for good detail/overhead balance
-
-// Linux/other platforms: use unprefixed malloc (with unprefixed_malloc_on_supported_platforms)
-#[cfg(all(feature = "memory-profiling", not(target_os = "macos")))]
-#[allow(non_upper_case_globals)]
+/// Configure jemalloc profiling infrastructure at startup with sampling disabled.
+/// Profiling is activated at runtime only when `--enable-memory-profiling` is passed.
+#[cfg(feature = "jemalloc")]
 #[export_name = "malloc_conf"]
-pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
-
-// macOS: use prefixed malloc (without unprefixed_malloc_on_supported_platforms)
-#[cfg(all(feature = "memory-profiling", target_os = "macos"))]
-#[allow(non_upper_case_globals)]
-#[export_name = "_rjem_malloc_conf"]
-pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
+pub static MALLOC_CONF: &[u8] = b"prof:true,prof_active:false,lg_prof_sample:19\0";
 
 use std::{
     borrow::Cow,
+    collections::HashSet,
     num::NonZeroU16,
     path::{Path, PathBuf},
+    sync::Arc,
     time::Duration,
 };
 
@@ -36,10 +28,14 @@ use async_trait::async_trait;
 use futures::{stream::FuturesUnordered, FutureExt as _, StreamExt, TryFutureExt as _};
 use linera_base::{
     crypto::{CryptoRng, Ed25519SecretKey},
+    identifiers::ChainId,
     listen_for_shutdown_signals,
 };
 use linera_client::config::{CommitteeConfig, ValidatorConfig, ValidatorServerConfig};
-use linera_core::{worker::WorkerState, JoinSetExt as _, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES};
+use linera_core::{
+    spawn_block_export_queue, worker::WorkerState, BlockExportConfig, BlockExportHandle,
+    ChainWorkerConfig, JoinSetExt as _, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
+};
 use linera_execution::{WasmRuntime, WithWasmDefault};
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
@@ -50,10 +46,11 @@ use linera_rpc::{
         ShardConfig, ShardId, TlsConfig, ValidatorInternalNetworkConfig,
         ValidatorPublicNetworkConfig,
     },
-    grpc, simple,
+    grpc, simple, NodeOptions,
 };
 use linera_sdk::linera_base_types::{AccountSecretKey, ValidatorKeypair};
 use linera_service::{
+    config::BlockExportTransport,
     storage::{AssertStorageV1, CommonStorageOptions, Runnable, StorageConfig},
     util,
 };
@@ -71,6 +68,21 @@ struct ServerContext {
     block_time_grace_period: Duration,
     chain_worker_ttl: Duration,
     chain_info_max_received_log_entries: usize,
+    cross_chain_message_chunk_limit: usize,
+    block_cache_size: usize,
+    execution_state_cache_size: usize,
+    cross_chain_batch_size_limit: usize,
+    allow_revert_confirm: bool,
+    reset_on_corrupted_chain_state_mins: Option<u64>,
+    recovery_whitelist: Option<HashSet<ChainId>>,
+    /// How to push executed blocks to the other committee validators, or `None` to not push them.
+    block_export_config: Option<BlockExportConfig>,
+    /// The transport options for the connections block export makes.
+    block_export_node_options: NodeOptions,
+    /// How block export reaches the other validators.
+    block_export_transport: BlockExportTransport,
+    #[cfg(with_metrics)]
+    enable_memory_profiling: bool,
 }
 
 impl ServerContext {
@@ -79,6 +91,7 @@ impl ServerContext {
         local_ip_addr: &str,
         shard_id: ShardId,
         storage: S,
+        block_export: Option<BlockExportHandle>,
     ) -> (WorkerState<S>, ShardId, ShardConfig)
     where
         S: Storage + Clone + Send + Sync + 'static,
@@ -89,25 +102,87 @@ impl ServerContext {
             "Public key: {}",
             self.server_config.validator_secret.public()
         );
-        let state = WorkerState::new(
-            format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port),
-            Some(self.server_config.validator_secret.copy()),
-            storage,
-        )
-        .with_allow_inactive_chains(false)
-        .with_allow_messages_from_deprecated_epochs(false)
-        .with_block_time_grace_period(self.block_time_grace_period)
-        .with_chain_worker_ttl(self.chain_worker_ttl)
-        .with_chain_info_max_received_log_entries(self.chain_info_max_received_log_entries);
+        let config = ChainWorkerConfig {
+            nickname: format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port),
+            key_pair: Some(Arc::new(self.server_config.validator_secret.copy())),
+            allow_inactive_chains: true,
+            allow_messages_from_deprecated_epochs: false,
+            block_time_grace_period: self.block_time_grace_period,
+            ttl: util::non_zero_duration(self.chain_worker_ttl),
+            chain_info_max_received_log_entries: self.chain_info_max_received_log_entries,
+            cross_chain_batch_size_limit: self.cross_chain_batch_size_limit,
+            block_cache_size: self.block_cache_size,
+            execution_state_cache_size: self.execution_state_cache_size,
+            allow_revert_confirm: self.allow_revert_confirm,
+            reset_on_corrupted_chain_state: self
+                .reset_on_corrupted_chain_state_mins
+                .map(|m| linera_base::time::Duration::from_secs(m * 60)),
+            recovery_whitelist: self.recovery_whitelist.clone(),
+            cross_chain_message_chunk_limit: self.cross_chain_message_chunk_limit,
+            ..ChainWorkerConfig::default()
+        };
+        let mut state = WorkerState::new(storage, config, None);
+        if let Some(handle) = block_export {
+            state = state.with_block_export(handle);
+        }
         (state, shard_id, shard.clone())
     }
 
+    /// Spawns the process-wide block export queue, if export is enabled. One per process: every
+    /// shard in it hands blocks to the same queue, so a peer costs one connection pool and one
+    /// rate-limit window rather than one per shard.
+    fn spawn_block_export<S>(&self, storage: S) -> Option<BlockExportHandle>
+    where
+        S: Storage + Clone + Send + Sync + 'static,
+    {
+        let export_config = self.block_export_config.clone()?;
+        let own_public_key = self.server_config.validator_secret.public();
+        let node_options = self.block_export_node_options;
+        // Both arms get the destination's committee address and differ only in who dials it. In
+        // neither do the retry fields of `node_options` take effect — the relay pool drops them,
+        // the direct provider gets zeros — because retrying is the export queue's job.
+        let handle = match self.block_export_transport {
+            BlockExportTransport::Relay => {
+                let internal_network = &self.server_config.internal_network;
+                // All of this validator's proxies, rotated over by the provider: each export
+                // leaves through exactly one of them, but successive destinations draw different
+                // ones so the egress is spread rather than landing entirely on the first.
+                let relay_addresses = internal_network
+                    .proxies
+                    .iter()
+                    .map(|proxy| proxy.internal_address(&internal_network.protocol))
+                    .collect::<Vec<_>>();
+                assert!(
+                    !relay_addresses.is_empty(),
+                    "relaying exported blocks needs at least one proxy to relay through, but this \
+                     validator's internal network configures none; use \
+                     `--block-export-transport direct` to send without a proxy",
+                );
+                spawn_block_export_queue(
+                    storage,
+                    Arc::new(grpc::RelayNodeProvider::new(relay_addresses, node_options)),
+                    export_config,
+                    Some(own_public_key),
+                )
+            }
+            BlockExportTransport::Direct => spawn_block_export_queue(
+                storage,
+                Arc::new(linera_rpc::NodeProvider::new(node_options)),
+                export_config,
+                Some(own_public_key),
+            ),
+        };
+        Some(handle)
+    }
+
+    #[cfg_attr(not(with_metrics), allow(unused_variables))]
     fn spawn_simple<S>(
         &self,
         listen_address: &str,
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
         protocol: simple::TransportProtocol,
-        shutdown_signal: CancellationToken,
+        shutdown_signal: &CancellationToken,
+        enable_memory_profiling: bool,
     ) -> JoinSet<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
@@ -130,6 +205,8 @@ impl ServerContext {
                 monitoring_server::start_metrics(
                     (listen_address.clone(), port),
                     shutdown_signal.clone(),
+                    monitoring_server::MemoryProfiling::from(enable_memory_profiling),
+                    linera_service::init_metrics,
                 );
             }
 
@@ -158,11 +235,13 @@ impl ServerContext {
         join_set
     }
 
+    #[cfg_attr(not(with_metrics), allow(unused_variables))]
     fn spawn_grpc<S>(
         &self,
         listen_address: &str,
         states: Vec<(WorkerState<S>, ShardId, ShardConfig)>,
-        shutdown_signal: CancellationToken,
+        shutdown_signal: &CancellationToken,
+        enable_memory_profiling: bool,
     ) -> JoinSet<()>
     where
         S: Storage + Clone + Send + Sync + 'static,
@@ -176,6 +255,8 @@ impl ServerContext {
                 monitoring_server::start_metrics(
                     (listen_address.to_string(), port),
                     shutdown_signal.clone(),
+                    monitoring_server::MemoryProfiling::from(enable_memory_profiling),
+                    linera_service::init_metrics,
                 );
             }
 
@@ -185,8 +266,8 @@ impl ServerContext {
                 state,
                 shard_id,
                 self.server_config.internal_network.clone(),
-                self.cross_chain_config.clone(),
-                self.notification_config.clone(),
+                &self.cross_chain_config,
+                &self.notification_config,
                 shutdown_signal.clone(),
                 &mut join_set,
             );
@@ -225,27 +306,57 @@ impl Runnable for ServerContext {
 
         tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
 
+        // Activate memory profiling once before per-shard start_metrics calls.
+        #[cfg(with_metrics)]
+        let enable_memory_profiling = {
+            let memory_profiling =
+                monitoring_server::MemoryProfiling::try_activate(self.enable_memory_profiling)
+                    .await;
+            memory_profiling == monitoring_server::MemoryProfiling::Enabled
+        };
+        #[cfg(not(with_metrics))]
+        let enable_memory_profiling = false;
+
+        // One export queue per process, shared by every shard this process runs.
+        let block_export = self.spawn_block_export(storage.clone());
+
         // Run the server
         let states = match self.shard {
             Some(shard) => {
                 info!("Running shard number {}", shard);
-                vec![self.make_shard_state(&listen_address, shard, storage)]
+                vec![self.make_shard_state(&listen_address, shard, storage, block_export)]
             }
             None => {
                 info!("Running all shards");
                 let num_shards = self.server_config.internal_network.shards.len();
                 (0..num_shards)
-                    .map(|shard| self.make_shard_state(&listen_address, shard, storage.clone()))
+                    .map(|shard| {
+                        self.make_shard_state(
+                            &listen_address,
+                            shard,
+                            storage.clone(),
+                            block_export.clone(),
+                        )
+                    })
                     .collect()
             }
         };
 
         let mut join_set = match self.server_config.internal_network.protocol {
-            NetworkProtocol::Simple(protocol) => {
-                self.spawn_simple(&listen_address, states, protocol, shutdown_notifier)
-            }
+            NetworkProtocol::Simple(protocol) => self.spawn_simple(
+                &listen_address,
+                states,
+                protocol,
+                &shutdown_notifier,
+                enable_memory_profiling,
+            ),
             NetworkProtocol::Grpc(tls_config) => match tls_config {
-                TlsConfig::ClearText => self.spawn_grpc(&listen_address, states, shutdown_notifier),
+                TlsConfig::ClearText => self.spawn_grpc(
+                    &listen_address,
+                    states,
+                    &shutdown_notifier,
+                    enable_memory_profiling,
+                ),
                 TlsConfig::Tls => bail!("TLS not supported between proxy and shards."),
             },
         };
@@ -274,6 +385,37 @@ struct ServerOptions {
     /// The number of Tokio blocking threads to use.
     #[arg(long, env = "LINERA_SERVER_TOKIO_BLOCKING_THREADS")]
     tokio_blocking_threads: Option<usize>,
+
+    /// Size of the block cache (default: 5000)
+    #[arg(long, env = "LINERA_BLOCK_CACHE_SIZE", default_value = "5000")]
+    block_cache_size: usize,
+
+    /// Size of the execution state cache (default: 10000)
+    #[arg(
+        long,
+        env = "LINERA_EXECUTION_STATE_CACHE_SIZE",
+        default_value = "10000"
+    )]
+    execution_state_cache_size: usize,
+
+    /// Enable jemalloc memory profiling endpoints on the metrics server.
+    #[cfg(feature = "jemalloc")]
+    #[arg(long, env = "LINERA_ENABLE_MEMORY_PROFILING")]
+    enable_memory_profiling: bool,
+}
+
+impl ServerOptions {
+    #[cfg(with_metrics)]
+    fn enable_memory_profiling(&self) -> bool {
+        #[cfg(feature = "jemalloc")]
+        {
+            self.enable_memory_profiling
+        }
+        #[cfg(not(feature = "jemalloc"))]
+        {
+            false
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Deserialize)]
@@ -340,6 +482,7 @@ fn make_server_config<R: CryptoRng>(
 }
 
 #[derive(clap::Parser)]
+#[allow(clippy::large_enum_variant)]
 enum ServerCommand {
     /// Runs a service for each shard of the Linera validator")
     #[command(name = "run")]
@@ -393,6 +536,140 @@ enum ServerCommand {
             env = "LINERA_SERVER_CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES",
         )]
         chain_info_max_received_log_entries: usize,
+
+        /// Maximum estimated serialized size (in bytes) of bundles in a single
+        /// cross-chain `UpdateRecipient` message. Larger sets of bundles are split
+        /// into multiple messages.
+        #[arg(
+            long,
+            default_value_t = grpc::GRPC_CHUNKED_MESSAGE_FILL_LIMIT,
+        )]
+        cross_chain_message_chunk_limit: usize,
+
+        /// Maximum number of cross-chain requests coalesced into a single batch by
+        /// the per-chain driver. Bounds the worst-case write-lock hold time.
+        #[arg(long, default_value_t = 1000)]
+        cross_chain_batch_size_limit: usize,
+
+        /// Enable the RevertConfirm recovery mechanism for inbox gaps caused by
+        /// lost persisted state.
+        #[arg(long, default_value_t = false)]
+        allow_revert_confirm: bool,
+
+        /// On detection of corrupted chain state, reset the chain state and re-execute
+        /// all blocks from scratch. Sends RevertConfirm to all known senders. The
+        /// value is the minimum number of minutes since the last reset before
+        /// another reset is allowed (to prevent loops).
+        #[arg(long)]
+        reset_on_corrupted_chain_state_mins: Option<u64>,
+
+        /// Optional whitelist of chain IDs allowed to use the `--allow-revert-confirm`
+        /// and `--reset-on-corrupted-chain-state-mins` recovery mechanisms. If not
+        /// specified, every chain is eligible. Values may be passed as a
+        /// comma-separated list or by repeating the flag.
+        #[arg(long, value_delimiter = ',')]
+        recovery_whitelist: Option<Vec<ChainId>>,
+
+        /// Push each block this validator executes to the other committee validators, so every
+        /// validator holds every chain rather than only the quorum that signed each block.
+        #[arg(
+            long,
+            default_value_t = false,
+            env = "LINERA_EXPORT_BLOCKS_TO_COMMITTEE"
+        )]
+        export_blocks_to_committee: bool,
+
+        /// How exported blocks reach the other validators: relayed through this validator's own
+        /// proxy, or sent straight from the shards. Relaying keeps shards off the internet;
+        /// sending directly removes the proxy from the path if relaying proves too expensive.
+        #[arg(
+            long,
+            value_enum,
+            default_value_t = BlockExportTransport::Relay,
+            env = "LINERA_BLOCK_EXPORT_TRANSPORT"
+        )]
+        block_export_transport: BlockExportTransport,
+
+        /// How many certificates are read from storage and pushed per batch when a block export
+        /// has to catch a lagging validator up. Only used with `--export-blocks-to-committee`.
+        #[arg(long, default_value_t = BlockExportConfig::default().certificate_upload_batch_size)]
+        block_export_batch_size: u64,
+
+        /// How many missing blocks block export pushes to one validator per round. Bounds how
+        /// long a freshly-joined validator's backfill can delay a live block.
+        #[arg(long, default_value_t = BlockExportConfig::default().max_catch_up_blocks)]
+        block_export_max_catch_up_blocks: u64,
+
+        /// How many blocks the export queue holds; a full queue drops blocks for catch-up to
+        /// re-send from storage.
+        #[arg(long, default_value_t = BlockExportConfig::default().queue_size)]
+        block_export_queue_size: usize,
+
+        /// The most blob payload bytes queued blocks may pin; past it blocks are dropped for
+        /// catch-up to re-send from storage.
+        #[arg(long, default_value_t = BlockExportConfig::default().queue_bytes)]
+        block_export_queue_bytes: usize,
+
+        /// The most concurrent sends to one destination validator. Export backs off from this
+        /// ceiling on its own when a destination slows down or fails.
+        #[arg(long, default_value_t = BlockExportConfig::default().max_in_flight_per_destination)]
+        block_export_max_in_flight: usize,
+
+        /// The most concurrent sends across all destinations. Each one can read up to
+        /// `--block-export-max-catch-up-blocks` certificates, so this is what bounds the load
+        /// catch-up puts on storage; export halves it whenever a read fails.
+        #[arg(long, default_value_t = BlockExportConfig::default().max_in_flight_total)]
+        block_export_max_in_flight_total: usize,
+
+        /// How long export remembers a fully caught-up chain before dropping its bookkeeping.
+        #[arg(
+            long = "block-export-converged-retention-ms",
+            default_value = "300000",
+            value_parser = util::parse_millis
+        )]
+        block_export_converged_retention: Duration,
+
+        /// How long block export waits for a new block before spending a round backfilling
+        /// validators that are behind. With the catch-up bound, this sets the backfill rate.
+        #[arg(
+            long = "block-export-idle-interval-ms",
+            default_value = "200",
+            value_parser = util::parse_millis
+        )]
+        block_export_idle_interval: Duration,
+
+        /// How long block export skips a validator after a failed push, doubling up to
+        /// `--block-export-max-retry-delay-ms` while it keeps failing.
+        #[arg(
+            long = "block-export-retry-delay-ms",
+            default_value = "1000",
+            value_parser = util::parse_millis
+        )]
+        block_export_retry_delay: Duration,
+
+        /// The longest block export skips a failing validator for.
+        #[arg(
+            long = "block-export-max-retry-delay-ms",
+            default_value = "60000",
+            value_parser = util::parse_millis
+        )]
+        block_export_max_retry_delay: Duration,
+
+        /// How long block export waits to open a connection to one of this validator's proxies.
+        #[arg(
+            long = "block-export-send-timeout-ms",
+            default_value = "4000",
+            value_parser = util::parse_millis
+        )]
+        block_export_send_timeout: Duration,
+
+        /// How long block export waits for a proxy to answer a relayed request.
+        #[arg(
+            long = "block-export-recv-timeout-ms",
+            default_value = "4000",
+            value_parser = util::parse_millis
+        )]
+        block_export_recv_timeout: Duration,
 
         /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
         #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
@@ -511,6 +788,8 @@ async fn run(options: ServerOptions) {
         otlp_exporter_endpoint_for(&options.command),
     );
 
+    #[cfg(with_metrics)]
+    let enable_memory_profiling = options.enable_memory_profiling();
     match options.command {
         ServerCommand::Run {
             server_config_path,
@@ -523,6 +802,25 @@ async fn run(options: ServerOptions) {
             wasm_runtime,
             chain_worker_ttl,
             chain_info_max_received_log_entries,
+            cross_chain_message_chunk_limit,
+            cross_chain_batch_size_limit,
+            allow_revert_confirm,
+            reset_on_corrupted_chain_state_mins,
+            recovery_whitelist,
+            export_blocks_to_committee,
+            block_export_transport,
+            block_export_batch_size,
+            block_export_max_catch_up_blocks,
+            block_export_queue_size,
+            block_export_queue_bytes,
+            block_export_max_in_flight,
+            block_export_max_in_flight_total,
+            block_export_converged_retention,
+            block_export_idle_interval,
+            block_export_retry_delay,
+            block_export_max_retry_delay,
+            block_export_send_timeout,
+            block_export_recv_timeout,
             otlp_exporter_endpoint: _,
         } => {
             linera_version::VERSION_INFO.log();
@@ -538,6 +836,37 @@ async fn run(options: ServerOptions) {
                 block_time_grace_period,
                 chain_worker_ttl,
                 chain_info_max_received_log_entries,
+                cross_chain_message_chunk_limit,
+                block_cache_size: common_storage_options.block_cache_size,
+                execution_state_cache_size: common_storage_options.execution_state_cache_size,
+                cross_chain_batch_size_limit,
+                allow_revert_confirm,
+                reset_on_corrupted_chain_state_mins,
+                recovery_whitelist: recovery_whitelist.map(HashSet::from_iter),
+                block_export_config: export_blocks_to_committee.then(|| {
+                    let config = BlockExportConfig {
+                        certificate_upload_batch_size: block_export_batch_size,
+                        queue_size: block_export_queue_size,
+                        queue_bytes: block_export_queue_bytes,
+                        max_in_flight_per_destination: block_export_max_in_flight,
+                        max_in_flight_total: block_export_max_in_flight_total,
+                        max_catch_up_blocks: block_export_max_catch_up_blocks,
+                        idle_catch_up_interval: block_export_idle_interval,
+                        retry_delay: block_export_retry_delay,
+                        max_retry_delay: block_export_max_retry_delay,
+                        converged_chain_retention: block_export_converged_retention,
+                    };
+                    config.check().expect("invalid block export configuration");
+                    config
+                }),
+                block_export_transport,
+                block_export_node_options: NodeOptions {
+                    send_timeout: block_export_send_timeout,
+                    recv_timeout: block_export_recv_timeout,
+                    ..NodeOptions::default()
+                },
+                #[cfg(with_metrics)]
+                enable_memory_profiling,
             };
             let wasm_runtime = wasm_runtime.with_wasm_default();
             let store_config = storage_config
@@ -545,13 +874,14 @@ async fn run(options: ServerOptions) {
                 .unwrap();
             // Validators should not output contract logs.
             let allow_application_logs = false;
+            let cache_sizes = common_storage_options.storage_cache_sizes();
             store_config
                 .clone()
-                .run_with_store(AssertStorageV1)
+                .run_with_store(cache_sizes, AssertStorageV1)
                 .await
                 .unwrap();
             store_config
-                .run_with_storage(wasm_runtime, allow_application_logs, job)
+                .run_with_storage(wasm_runtime, allow_application_logs, cache_sizes, job)
                 .boxed()
                 .await
                 .unwrap()
@@ -569,10 +899,8 @@ async fn run(options: ServerOptions) {
                 let options_string = fs_err::tokio::read_to_string(options_path)
                     .await
                     .expect("Unable to read validator options file");
-                let options: ValidatorOptions =
-                    toml::from_str(&options_string).unwrap_or_else(|_| {
-                        panic!("Invalid options file format: \n {}", options_string)
-                    });
+                let options: ValidatorOptions = toml::from_str(&options_string)
+                    .unwrap_or_else(|_| panic!("Invalid options file format: \n {options_string}"));
                 let path = options.server_config_path.clone();
                 let mut server = make_server_config(&path, &mut rng, options)
                     .expect("Unable to open server config file");
@@ -611,7 +939,7 @@ async fn run(options: ServerOptions) {
             let mut server_config =
                 persistent::File::<ValidatorServerConfig>::read(&server_config_path)
                     .expect("Failed to read server config");
-            let shards = generate_shard_configs(num_shards, host, port, metrics_port)
+            let shards = generate_shard_configs(&num_shards, &host, &port, &metrics_port)
                 .expect("Failed to generate shard configs");
             server_config.internal_network.shards = shards;
             Persist::persist(&mut server_config)
@@ -622,10 +950,10 @@ async fn run(options: ServerOptions) {
 }
 
 fn generate_shard_configs(
-    num_shards: String,
-    host: String,
-    port: String,
-    metrics_port: Option<String>,
+    num_shards: &str,
+    host: &str,
+    port: &str,
+    metrics_port: &Option<String>,
 ) -> anyhow::Result<Vec<ShardConfig>> {
     let mut shards = Vec::new();
     let len = num_shards.len();
@@ -733,13 +1061,7 @@ mod test {
     #[test]
     fn test_generate_shard_configs() {
         assert_eq!(
-            generate_shard_configs(
-                "02".into(),
-                "host%%".into(),
-                "10%%".into(),
-                Some("11%%".into())
-            )
-            .unwrap(),
+            generate_shard_configs("02", "host%%", "10%%", &Some("11%%".into())).unwrap(),
             vec![
                 ShardConfig {
                     host: "host01".into(),
@@ -754,12 +1076,6 @@ mod test {
             ],
         );
 
-        assert!(generate_shard_configs(
-            "2".into(),
-            "host%%".into(),
-            "10%%".into(),
-            Some("11%%".into())
-        )
-        .is_err());
+        assert!(generate_shard_configs("2", "host%%", "10%%", &Some("11%%".into())).is_err());
     }
 }

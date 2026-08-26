@@ -27,7 +27,8 @@ runnable = false
 "/overview.html" = "/core_concepts/overview.html"
 "/core_concepts.html" = "/core_concepts/overview.html"
 "/developers.html" = "/developers/getting_started.html"
-"/operators.html" = "/operators/devnets.html"
+# /operators.html is now a real page (operators.md) that meta-refreshes
+# to docs.infra.linera.net — no in-site redirect needed.
 
 [output.linkcheck]
 optional = true

@@ -3,6 +3,8 @@
 
 /* ABI of the Fungible Token Example Application */
 
+pub mod state;
+
 use async_graphql::scalar;
 pub use linera_sdk::abis::fungible::*;
 use linera_sdk::linera_base_types::{AccountOwner, Amount};

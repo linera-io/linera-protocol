@@ -6,7 +6,10 @@
 #[path = "./unit_tests/system_tests.rs"]
 mod tests;
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use allocative::Allocative;
 use custom_debug_derive::Debug;
@@ -22,10 +25,12 @@ use linera_base::{
 };
 use linera_views::{
     context::Context,
+    lazy_register_view::HashedLazyRegisterView,
     map_view::HashedMapView,
     register_view::HashedRegisterView,
     set_view::HashedSetView,
     views::{ClonableView, HashableView, ReplaceContext, View},
+    ViewError,
 };
 use serde::{Deserialize, Serialize};
 
@@ -44,19 +49,18 @@ pub static REMOVED_EPOCH_STREAM_NAME: &[u8] = &[1];
 
 /// The number of times the [`SystemOperation::OpenChain`] was executed.
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::register_int_counter_vec;
     use prometheus::IntCounterVec;
 
-    pub static OPEN_CHAIN_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "open_chain_count",
-            "The number of times the `OpenChain` operation was executed",
-            &[],
-        )
-    });
+    linera_base::declare_metrics! {
+        pub static OPEN_CHAIN_COUNT: IntCounterVec =
+            register_int_counter_vec(
+                "open_chain_count",
+                "The number of times the `OpenChain` operation was executed",
+                &[],
+            );
+    }
 }
 
 /// A view accessing the execution state of the system of a chain.
@@ -64,7 +68,7 @@ mod metrics {
 #[allocative(bound = "C")]
 pub struct SystemExecutionStateView<C> {
     /// How the chain was created. May be unknown for inactive chains.
-    pub description: HashedRegisterView<C, Option<ChainDescription>>,
+    pub description: HashedLazyRegisterView<C, Option<ChainDescription>>,
     /// The number identifying the current configuration.
     pub epoch: HashedRegisterView<C, Epoch>,
     /// The admin of the chain.
@@ -73,9 +77,15 @@ pub struct SystemExecutionStateView<C> {
     // Not using a `MapView` because the set active of committees is supposed to be
     // small. Plus, currently, we would create the `BTreeMap` anyway in various places
     // (e.g. the `OpenChain` operation).
-    pub committees: HashedRegisterView<C, BTreeMap<Epoch, Committee>>,
+    //
+    // Lazy: committee lookups are served from the process-global `SharedCommittees` cache
+    // (via `Storage::get_or_load_committee`), with a fall-back to this view for the
+    // mid-block case in `current_committee`. This view is only loaded when executing an
+    // operation that mutates the map (admin-chain `CreateCommittee`/`RemoveCommittee`, or
+    // `ProcessNewEpoch`/`ProcessRemovedEpoch`).
+    pub committees: HashedLazyRegisterView<C, BTreeMap<Epoch, Committee>>,
     /// Ownership of the chain.
-    pub ownership: HashedRegisterView<C, ChainOwnership>,
+    pub ownership: HashedLazyRegisterView<C, ChainOwnership>,
     /// Balance of the chain. (Available to any user able to create blocks in the chain.)
     pub balance: HashedRegisterView<C, Amount>,
     /// Balances attributed to a given owner.
@@ -85,7 +95,7 @@ pub struct SystemExecutionStateView<C> {
     /// Whether this chain has been closed.
     pub closed: HashedRegisterView<C, bool>,
     /// Permissions for applications on this chain.
-    pub application_permissions: HashedRegisterView<C, ApplicationPermissions>,
+    pub application_permissions: HashedLazyRegisterView<C, ApplicationPermissions>,
     /// Blobs that have been used or published on this chain.
     pub used_blobs: HashedSetView<C, BlobId>,
     /// The event stream subscriptions of applications on this chain.
@@ -159,6 +169,7 @@ impl OpenChainConfig {
 
 /// A system operation.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
+#[allow(missing_docs)]
 pub enum SystemOperation {
     /// Transfers `amount` units of value from the given owner's account to the recipient.
     /// If no owner is given, try to take the units out of the unattributed account.
@@ -230,6 +241,7 @@ pub enum SystemOperation {
 
 /// Operations that are only allowed on the admin chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
+#[allow(missing_docs)]
 pub enum AdminOperation {
     /// Publishes a new committee as a blob. This can be assigned to an epoch using
     /// [`AdminOperation::CreateCommittee`] in a later block.
@@ -245,6 +257,7 @@ pub enum AdminOperation {
 
 /// A system message meant to be executed on a remote chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
+#[allow(missing_docs)]
 pub enum SystemMessage {
     /// Credits `amount` units of value to the account `target` -- unless the message is
     /// bouncing, in which case `source` is credited instead.
@@ -269,6 +282,7 @@ pub struct SystemQuery;
 
 /// The response to a system query.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub struct SystemResponse {
     pub chain_id: ChainId,
     pub balance: Amount,
@@ -278,35 +292,9 @@ pub struct SystemResponse {
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
 
-impl UserData {
-    pub fn from_option_string(opt_str: Option<String>) -> Result<Self, usize> {
-        // Convert the Option<String> to Option<[u8; 32]>
-        let option_array = match opt_str {
-            Some(s) => {
-                // Convert the String to a Vec<u8>
-                let vec = s.into_bytes();
-                if vec.len() <= 32 {
-                    // Create an array from the Vec<u8>
-                    let mut array = [b' '; 32];
-
-                    // Copy bytes from the vector into the array
-                    let len = vec.len().min(32);
-                    array[..len].copy_from_slice(&vec[..len]);
-
-                    Some(array)
-                } else {
-                    return Err(vec.len());
-                }
-            }
-            None => None,
-        };
-
-        // Return the UserData with the converted Option<[u8; 32]>
-        Ok(UserData(option_array))
-    }
-}
-
+/// The result of creating a new application.
 #[derive(Debug)]
+#[allow(missing_docs)]
 pub struct CreateApplicationResult {
     pub app_id: ApplicationId,
 }
@@ -317,21 +305,35 @@ where
     C::Extra: ExecutionRuntimeContext,
 {
     /// Invariant for the states of active chains.
-    pub fn is_active(&self) -> bool {
-        self.description.get().is_some()
-            && self.ownership.get().is_active()
-            && self.current_committee().is_some()
-            && self.admin_chain_id.get().is_some()
+    pub async fn is_active(&self) -> Result<bool, ViewError> {
+        Ok(self.description.get().await?.is_some()
+            && self.ownership.get().await?.is_active()
+            && self.current_committee().await?.is_some()
+            && self.admin_chain_id.get().is_some())
     }
 
-    /// Returns the current committee, if any.
-    pub fn current_committee(&self) -> Option<(Epoch, &Committee)> {
-        let epoch = self.epoch.get();
-        let committee = self.committees.get().get(epoch)?;
-        Some((*epoch, committee))
+    /// Returns the chain's current epoch together with its committee.
+    ///
+    /// Serves lookups from the process-global [`crate::SharedCommittees`] cache, falling
+    /// back to the `NewCommittee` event on the admin chain (or the genesis committee blob
+    /// for epoch 0). If neither source has the committee — which happens when a
+    /// `CreateCommittee`/`ProcessNewEpoch` op earlier in the current block created it, but
+    /// the block hasn't been saved yet so the `NewCommittee` event isn't persisted (and
+    /// we deliberately don't populate the shared cache from an unconfirmed block) — fall
+    /// back to reading the chain's own `committees` view, where the new committee sits as
+    /// a pending update.
+    pub async fn current_committee(&self) -> Result<Option<(Epoch, Arc<Committee>)>, ViewError> {
+        let epoch = *self.epoch.get();
+        if let Some(committee) = self.context().extra().get_or_load_committee(epoch).await? {
+            return Ok(Some((epoch, committee)));
+        }
+        let Some(committee) = self.committees.get().await?.get(&epoch).cloned() else {
+            return Ok(None);
+        };
+        Ok(Some((epoch, Arc::new(committee))))
     }
 
-    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ExecutionError> {
+    async fn get_event(&self, event_id: EventId) -> Result<Arc<Vec<u8>>, ExecutionError> {
         match self.context().extra().get_event(event_id.clone()).await? {
             None => Err(ExecutionError::EventsNotFound(vec![event_id])),
             Some(vec) => Ok(vec),
@@ -381,7 +383,7 @@ where
             ChangeApplicationPermissions(application_permissions) => {
                 self.application_permissions.set(application_permissions);
             }
-            CloseChain => self.close_chain().await?,
+            CloseChain => self.close_chain()?,
             Transfer {
                 owner,
                 amount,
@@ -428,7 +430,7 @@ where
                         let committee =
                             bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
                         self.blob_used(txn_tracker, blob_id).await?;
-                        self.committees.get_mut().insert(epoch, committee);
+                        self.committees.get_mut().await?.insert(epoch, committee);
                         self.epoch.set(epoch);
                         txn_tracker.add_event(
                             StreamId::system(EPOCH_STREAM_NAME),
@@ -438,7 +440,7 @@ where
                     }
                     AdminOperation::RemoveCommittee { epoch } => {
                         ensure!(
-                            self.committees.get_mut().remove(&epoch).is_some(),
+                            self.committees.get_mut().await?.remove(&epoch).is_some(),
                             ExecutionError::InvalidCommitteeRemoval
                         );
                         txn_tracker.add_event(
@@ -485,10 +487,11 @@ where
             }
             ProcessNewEpoch(epoch) => {
                 self.check_next_epoch(epoch)?;
-                let admin_chain_id = self
-                    .admin_chain_id
-                    .get()
-                    .ok_or_else(|| ExecutionError::InactiveChain(context.chain_id))?;
+                let admin_chain_id = self.admin_chain_id.get().ok_or_else(|| {
+                    ExecutionError::InternalError(
+                        "execute_operation called for uninitialized chain",
+                    )
+                })?;
                 let event_id = EventId {
                     chain_id: admin_chain_id,
                     stream_id: StreamId::system(EPOCH_STREAM_NAME),
@@ -497,25 +500,29 @@ where
                 let bytes = txn_tracker
                     .oracle(|| async {
                         let bytes = self.get_event(event_id.clone()).await?;
-                        Ok(OracleResponse::Event(event_id.clone(), bytes))
+                        Ok(OracleResponse::Event(
+                            event_id.clone(),
+                            Arc::unwrap_or_clone(bytes),
+                        ))
                     })
                     .await?
                     .to_event(&event_id)?;
                 let blob_id = BlobId::new(bcs::from_bytes(&bytes)?, BlobType::Committee);
                 let committee = bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
                 self.blob_used(txn_tracker, blob_id).await?;
-                self.committees.get_mut().insert(epoch, committee);
+                self.committees.get_mut().await?.insert(epoch, committee);
                 self.epoch.set(epoch);
             }
             ProcessRemovedEpoch(epoch) => {
                 ensure!(
-                    self.committees.get_mut().remove(&epoch).is_some(),
+                    self.committees.get_mut().await?.remove(&epoch).is_some(),
                     ExecutionError::InvalidCommitteeRemoval
                 );
-                let admin_chain_id = self
-                    .admin_chain_id
-                    .get()
-                    .ok_or_else(|| ExecutionError::InactiveChain(context.chain_id))?;
+                let admin_chain_id = self.admin_chain_id.get().ok_or_else(|| {
+                    ExecutionError::InternalError(
+                        "execute_operation called for uninitialized chain",
+                    )
+                })?;
                 let event_id = EventId {
                     chain_id: admin_chain_id,
                     stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
@@ -524,7 +531,7 @@ where
                 txn_tracker
                     .oracle(|| async {
                         let bytes = self.get_event(event_id.clone()).await?;
-                        Ok(OracleResponse::Event(event_id, bytes))
+                        Ok(OracleResponse::Event(event_id, Arc::unwrap_or_clone(bytes)))
                     })
                     .await?;
             }
@@ -624,6 +631,7 @@ where
         }
     }
 
+    /// Transfers `amount` from `source` to `recipient`, debiting the source account.
     pub async fn transfer(
         &mut self,
         authenticated_signer: Option<AccountOwner>,
@@ -633,12 +641,13 @@ where
         amount: Amount,
     ) -> Result<Option<OutgoingMessage>, ExecutionError> {
         if source == AccountOwner::CHAIN {
+            let authenticated_signer =
+                authenticated_signer.ok_or(ExecutionError::UnauthenticatedTransferOwner)?;
             ensure!(
-                authenticated_signer.is_some()
-                    && self
-                        .ownership
-                        .get()
-                        .verify_owner(&authenticated_signer.unwrap()),
+                self.ownership
+                    .get()
+                    .await?
+                    .verify_owner(&authenticated_signer),
                 ExecutionError::UnauthenticatedTransferOwner
             );
         } else {
@@ -656,6 +665,7 @@ where
         self.credit_or_send_message(source, recipient, amount).await
     }
 
+    /// Claims `amount` from `source`'s account on `target_id` and transfers it to `recipient`.
     pub async fn claim(
         &mut self,
         authenticated_signer: Option<AccountOwner>,
@@ -759,7 +769,7 @@ where
     /// Initializes the system application state on a newly opened chain.
     /// Returns `Ok(true)` if the chain was already initialized, `Ok(false)` if it wasn't.
     pub async fn initialize_chain(&mut self, chain_id: ChainId) -> Result<bool, ExecutionError> {
-        if self.description.get().is_some() {
+        if self.description.get().await?.is_some() {
             // already initialized
             return Ok(true);
         }
@@ -799,7 +809,8 @@ where
         Ok(false)
     }
 
-    pub async fn handle_query(
+    /// Handles a query to the system state, returning the system response.
+    pub fn handle_query(
         &mut self,
         context: QueryContext,
         _query: SystemQuery,
@@ -830,20 +841,11 @@ where
             block_height,
             chain_index,
         };
+        let committees = self.committees.get().await?;
         let init_chain_config = config.init_chain_config(
             *self.epoch.get(),
-            self.committees
-                .get()
-                .keys()
-                .min()
-                .copied()
-                .unwrap_or(Epoch::ZERO),
-            self.committees
-                .get()
-                .keys()
-                .max()
-                .copied()
-                .unwrap_or(Epoch::ZERO),
+            committees.keys().min().copied().unwrap_or(Epoch::ZERO),
+            committees.keys().max().copied().unwrap_or(Epoch::ZERO),
         );
         let chain_description = ChainDescription::new(chain_origin, init_chain_config, timestamp);
         let child_id = chain_description.id();
@@ -853,11 +855,13 @@ where
         Ok(child_id)
     }
 
-    pub async fn close_chain(&mut self) -> Result<(), ExecutionError> {
+    /// Marks the chain as closed.
+    pub fn close_chain(&mut self) -> Result<(), ExecutionError> {
         self.closed.set(true);
         Ok(())
     }
 
+    /// Creates a new application from the given module and arguments, returning its ID.
     pub async fn create_application(
         &mut self,
         chain_id: ChainId,
@@ -937,45 +941,6 @@ where
         Ok(description)
     }
 
-    /// Retrieves the recursive dependencies of applications and applies a topological sort.
-    pub async fn find_dependencies(
-        &mut self,
-        mut stack: Vec<ApplicationId>,
-        txn_tracker: &mut TransactionTracker,
-    ) -> Result<Vec<ApplicationId>, ExecutionError> {
-        // What we return at the end.
-        let mut result = Vec::new();
-        // The entries already inserted in `result`.
-        let mut sorted = HashSet::new();
-        // The entries for which dependencies have already been pushed once to the stack.
-        let mut seen = HashSet::new();
-
-        while let Some(id) = stack.pop() {
-            if sorted.contains(&id) {
-                continue;
-            }
-            if seen.contains(&id) {
-                // Second time we see this entry. It was last pushed just before its
-                // dependencies -- which are now fully sorted.
-                sorted.insert(id);
-                result.push(id);
-                continue;
-            }
-            // First time we see this entry:
-            // 1. Mark it so that its dependencies are no longer pushed to the stack.
-            seen.insert(id);
-            // 2. Schedule all the (yet unseen) dependencies, then this entry for a second visit.
-            stack.push(id);
-            let app = self.describe_application(id, txn_tracker).await?;
-            for child in app.required_application_ids.iter().rev() {
-                if !seen.contains(child) {
-                    stack.push(*child);
-                }
-            }
-        }
-        Ok(result)
-    }
-
     /// Records a blob that is used in this block. If this is the first use on this chain, creates
     /// an oracle response for it.
     pub(crate) async fn blob_used(
@@ -1003,14 +968,16 @@ where
         Ok(())
     }
 
+    /// Reads the content of the blob with the given ID.
     pub async fn read_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, ExecutionError> {
         match self.context().extra().get_blob(blob_id).await {
-            Ok(Some(blob)) => Ok(blob.into()),
+            Ok(Some(blob)) => Ok(Arc::unwrap_or_clone(blob).into()),
             Ok(None) => Err(ExecutionError::BlobsNotFound(vec![blob_id])),
             Err(error) => Err(error.into()),
         }
     }
 
+    /// Returns an error unless a blob with the given ID exists.
     pub async fn assert_blob_exists(&mut self, blob_id: BlobId) -> Result<(), ExecutionError> {
         if self.context().extra().contains_blob(blob_id).await? {
             Ok(())
@@ -1020,7 +987,7 @@ where
     }
 
     async fn check_bytecode_blobs(
-        &mut self,
+        &self,
         module_id: &ModuleId,
         txn_tracker: &TransactionTracker,
     ) -> Result<Vec<BlobId>, ExecutionError> {

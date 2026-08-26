@@ -269,7 +269,7 @@ impl UserServiceModule for MockApplication {
 
 impl<Runtime> MockApplicationInstance<Runtime> {
     /// Retrieves the next [`ExpectedCall`] in the queue.
-    fn next_expected_call(&mut self) -> Option<ExpectedCall> {
+    fn next_expected_call(&self) -> Option<ExpectedCall> {
         self.expected_calls
             .lock()
             .expect("Queue of expected calls was poisoned")

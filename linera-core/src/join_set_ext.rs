@@ -17,6 +17,7 @@ mod implementation {
 
     use super::*;
 
+    /// The set of tasks spawned on the current thread in a Web environment.
     #[derive(Default)]
     pub struct JoinSet(Vec<oneshot::Receiver<()>>);
 
@@ -29,7 +30,16 @@ mod implementation {
         fn spawn_task<F: Future + 'static>(&mut self, future: F) -> TaskHandle<F::Output>;
 
         /// Awaits all tasks spawned in this [`JoinSet`].
+        ///
+        /// Unlike its native counterpart this cannot re-raise a panic: on the Web a task's
+        /// panic aborts the whole Wasm instance, so there is nothing left to re-raise.
         fn await_all_tasks(&mut self) -> impl Future<Output = ()>;
+
+        /// Awaits all tasks spawned in this [`JoinSet`].
+        ///
+        /// Identical to [`JoinSetExt::await_all_tasks`] here; the two differ only on
+        /// native targets, where a task's panic does not stop the process.
+        fn await_all_tasks_logging_panics(&mut self) -> impl Future<Output = ()>;
 
         /// Reaps tasks that have finished.
         fn reap_finished_tasks(&mut self);
@@ -64,6 +74,10 @@ mod implementation {
                 .await
         }
 
+        async fn await_all_tasks_logging_panics(&mut self) {
+            self.await_all_tasks().await
+        }
+
         fn reap_finished_tasks(&mut self) {
             self.0.retain_mut(|task| task.try_recv() == Ok(None));
         }
@@ -76,6 +90,7 @@ mod implementation {
 
     use super::*;
 
+    /// The set of tasks spawned on the Tokio runtime.
     pub type JoinSet = tokio::task::JoinSet<()>;
 
     /// An extension trait for the [`JoinSet`] type.
@@ -90,8 +105,22 @@ mod implementation {
             future: F,
         ) -> TaskHandle<F::Output>;
 
-        /// Awaits all tasks spawned in this [`JoinSet`].
+        /// Awaits all tasks spawned in this [`JoinSet`], re-raising the panic of any task
+        /// that panicked.
+        ///
+        /// Tokio catches a task's panic instead of stopping the runtime, so a set of
+        /// long-lived tasks that is merely drained leaves the process running with one of
+        /// its subsystems silently gone. Re-raising turns that into an exit, which a
+        /// supervisor can act on.
+        ///
+        /// For sets of tasks that each serve a single request or connection, where losing
+        /// one is recoverable and exiting would let one caller stop the process, use
+        /// [`JoinSetExt::await_all_tasks_logging_panics`] instead.
         async fn await_all_tasks(&mut self);
+
+        /// Awaits all tasks spawned in this [`JoinSet`], logging rather than re-raising
+        /// the panic of any task that panicked.
+        async fn await_all_tasks_logging_panics(&mut self);
 
         /// Reaps tasks that have finished.
         fn reap_finished_tasks(&mut self);
@@ -117,7 +146,28 @@ mod implementation {
         }
 
         async fn await_all_tasks(&mut self) {
-            while self.join_next().await.is_some() {}
+            while let Some(result) = self.join_next().await {
+                if let Err(error) = result {
+                    match error.try_into_panic() {
+                        // Tokio contained the panic, so the process is still running
+                        // without whatever this task was doing. Put it back.
+                        Ok(payload) => std::panic::resume_unwind(payload),
+                        Err(error) => tracing::debug!(%error, "Task was cancelled"),
+                    }
+                }
+            }
+        }
+
+        async fn await_all_tasks_logging_panics(&mut self) {
+            while let Some(result) = self.join_next().await {
+                if let Err(error) = result {
+                    if error.is_panic() {
+                        tracing::error!(%error, "Task panicked");
+                    } else {
+                        tracing::debug!(%error, "Task was cancelled");
+                    }
+                }
+            }
         }
 
         fn reap_finished_tasks(&mut self) {
@@ -160,5 +210,52 @@ impl<Output> TaskHandle<Output> {
     /// Returns [`true`] if the task is still running.
     pub fn is_running(&mut self) -> bool {
         self.output_receiver.try_recv().is_err()
+    }
+}
+
+#[cfg(all(test, not(web)))]
+mod tests {
+    use futures::future;
+
+    use super::*;
+
+    /// A set of long-lived tasks must not lose one silently: the panic reaches whoever
+    /// awaits the set, and from there the process.
+    #[tokio::test]
+    async fn test_await_all_tasks_reraises_a_panic() {
+        let joined = tokio::spawn(async {
+            let mut join_set = JoinSet::new();
+            join_set.spawn_task(async {
+                panic!("task panicked");
+            });
+            join_set.await_all_tasks().await;
+        })
+        .await;
+
+        assert!(
+            joined.expect_err("the panic reached the caller").is_panic(),
+            "await_all_tasks re-raised the task's panic",
+        );
+    }
+
+    #[tokio::test]
+    async fn test_await_all_tasks_logging_panics_keeps_going() {
+        let mut join_set = JoinSet::new();
+        join_set.spawn_task(async {
+            panic!("task panicked");
+        });
+        join_set.spawn_task(async {});
+
+        join_set.await_all_tasks_logging_panics().await;
+    }
+
+    /// Aborting a task is how shutdown works, so it must not be mistaken for a failure.
+    #[tokio::test]
+    async fn test_await_all_tasks_ignores_cancelled_tasks() {
+        let mut join_set = JoinSet::new();
+        let handle = join_set.spawn_task(future::pending::<()>());
+        handle.abort();
+
+        join_set.await_all_tasks().await;
     }
 }

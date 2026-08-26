@@ -6,10 +6,16 @@ on:
     paths-ignore:
       - 'docs/**'
       - 'mdbook/**'
+      - 'kubernetes/**'
+      - 'docker/dashboards/**'
+      - '.github/workflows/**'
   pull_request:
     paths-ignore:
       - 'docs/**'
       - 'mdbook/**'
+      - 'kubernetes/**'
+      - 'docker/dashboards/**'
+      - '.github/workflows/**'
   merge_group:
   workflow_dispatch:
 
@@ -35,19 +41,17 @@ permissions:
 
 jobs:
   compose:
-    if: ${{ github.event_name == 'merge_group' }}
-    runs-on: ubuntu-latest-16-cores
+    if: ${{ github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' }}
+    runs-on: linera-io-self-hosted-builder
     timeout-minutes: 40
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+        uses: ./.github/actions/install-protoc
       # TODO(#2709): Uncomment once this workflow runs in a custom runner
       # - name: Update aio-max-nr
         # run: echo 1048576 > /proc/sys/fs/aio-max-nr

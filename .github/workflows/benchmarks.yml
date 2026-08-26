@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 40
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Clear up some space
       run: |
@@ -28,9 +28,7 @@ jobs:
         sudo rm -rf "/usr/local/share/boost"
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      uses: ./.github/actions/install-protoc
     - name: Run benchmarks
       run: |
         cargo bench -p linera-service

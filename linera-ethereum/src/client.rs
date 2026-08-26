@@ -1,13 +1,15 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! RPC client traits for querying an Ethereum node.
+
 use std::fmt::Debug;
 
 use alloy::rpc::types::eth::{
     request::{TransactionInput, TransactionRequest},
     BlockId, BlockNumberOrTag, Filter, Log,
 };
-use alloy_primitives::{Address, Bytes, U256, U64};
+use alloy_primitives::{Address, Bytes, B256, U256, U64};
 use async_trait::async_trait;
 use linera_base::ensure;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -20,6 +22,7 @@ use crate::common::{
 /// A basic RPC client for making JSON queries
 #[async_trait]
 pub trait JsonRpcClient {
+    /// The error type returned by the client's requests.
     type Error: From<serde_json::Error> + From<EthereumQueryError>;
 
     /// The inner function that has to be implemented and access the client
@@ -70,6 +73,7 @@ impl<'a, T> JsonRpcRequest<'a, T> {
     }
 }
 
+/// A JSON-RPC response as returned by an Ethereum node.
 #[derive(Debug, Deserialize)]
 pub struct JsonRpcResponse {
     id: u64,
@@ -81,6 +85,7 @@ pub struct JsonRpcResponse {
 /// gas to be executed.
 #[async_trait]
 pub trait EthereumQueries {
+    /// The error type returned by the queries.
     type Error;
 
     /// Lists all the accounts of the Ethereum node.
@@ -121,6 +126,19 @@ pub trait EthereumQueries {
         from: &str,
         block: u64,
     ) -> Result<Bytes, Self::Error>;
+
+    /// Returns the chain ID reported by the connected EVM node.
+    async fn get_chain_id(&self) -> Result<u64, Self::Error>;
+
+    /// Checks whether a block hash is finalized and canonical on the EVM chain.
+    ///
+    /// Confirms the block exists, is at or below the latest finalized height, and
+    /// is the canonical block at that height. `eth_getBlockByHash` also returns
+    /// orphaned/uncle blocks (with their original, now non-canonical number, which
+    /// can be at or below the finalized height), so the canonical block at the
+    /// height must additionally be checked to have this exact hash.
+    /// Returns `Err(BlockNotFound)` if the hash does not exist on chain.
+    async fn is_block_hash_finalized(&self, block_hash: B256) -> Result<bool, Self::Error>;
 }
 
 pub(crate) fn get_block_id(block_number: u64) -> BlockId {
@@ -149,6 +167,11 @@ where
         Ok(result.to::<u64>())
     }
 
+    async fn get_chain_id(&self) -> Result<u64, Self::Error> {
+        let result = self.request::<_, U64>("eth_chainId", ()).await?;
+        Ok(result.to::<u64>())
+    }
+
     async fn get_balance(&self, address: &str, block_number: u64) -> Result<U256, Self::Error> {
         let address = address.parse::<Address>()?;
         let tag = get_block_id(block_number);
@@ -174,7 +197,7 @@ where
             .await?;
         events
             .into_iter()
-            .map(|x| parse_log(event_name_expanded, x))
+            .map(|x| parse_log(event_name_expanded, &x))
             .collect::<Result<_, _>>()
     }
 
@@ -195,4 +218,41 @@ where
         let tag = get_block_id(block);
         Ok(self.request::<_, Bytes>("eth_call", (tx, tag)).await?)
     }
+
+    async fn is_block_hash_finalized(&self, block_hash: B256) -> Result<bool, Self::Error> {
+        // The block must exist; learn its height.
+        let block: Option<EthBlock> = self
+            .request("eth_getBlockByHash", (block_hash, false))
+            .await?;
+        let block = block.ok_or(EthereumServiceError::BlockNotFound)?;
+        let block_number = block.number.to::<u64>();
+
+        // It must be at or below the latest finalized height.
+        let finalized: EthBlock = self
+            .request("eth_getBlockByNumber", ("finalized", false))
+            .await?;
+        if block_number > finalized.number.to::<u64>() {
+            return Ok(false);
+        }
+
+        // `eth_getBlockByHash` also returns orphaned/uncle blocks, which carry
+        // their original (now non-canonical) number and can be at or below the
+        // finalized height. Require the canonical block at this height to have
+        // this exact hash; otherwise the supplied hash is a non-canonical block
+        // that must not be treated as finalized.
+        let canonical: Option<EthBlock> = self
+            .request(
+                "eth_getBlockByNumber",
+                (BlockNumberOrTag::Number(block_number), false),
+            )
+            .await?;
+        Ok(canonical.map(|canonical| canonical.hash) == Some(block_hash))
+    }
+}
+
+/// Minimal block response: the fields needed to verify finality and canonicality.
+#[derive(Deserialize)]
+struct EthBlock {
+    number: U64,
+    hash: B256,
 }

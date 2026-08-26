@@ -1,22 +1,58 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Solidity source for the BridgeTypes library (generated).
-pub const BRIDGE_TYPES_SOURCE: &str = include_str!("solidity/BridgeTypes.sol");
+//! On-chain proof verification and off-chain relaying for the EVM ↔ Linera bridge.
 
-/// Solidity source for the FungibleTypes library (generated).
-pub const FUNGIBLE_TYPES_SOURCE: &str = include_str!("solidity/FungibleTypes.sol");
+#![recursion_limit = "256"]
+#![deny(missing_docs)]
 
-/// Solidity source for the FungibleBridge contract.
-pub const FUNGIBLE_BRIDGE_SOURCE: &str = include_str!("solidity/FungibleBridge.sol");
+// -- On-chain (Wasm-compatible, always available) --
 
-pub mod evm_client;
-pub mod light_client;
-pub mod microchain;
+/// EVM receipt proof verification and deposit event parsing.
+pub mod proof;
 
-#[cfg(test)]
+/// Canonical BCS-stable ABI types for the EVM→Linera bridge application.
+pub mod abi;
+
+// -- Off-chain only (requires `not(chain)` / default features) --
+
+/// EVM contract ABIs, relay clients, and Solidity sources.
+#[cfg(feature = "offchain")]
+pub mod evm;
+
+/// Bridge monitoring: tracks in-flight EVM↔Linera bridging requests.
+#[cfg(feature = "relay")]
+pub mod monitor;
+
+/// Relay server: HTTP proof endpoint + Linera chain inbox processing + EVM block forwarding.
+#[cfg(feature = "relay")]
+pub mod relay;
+
+// -- Test-only modules --
+
+/// Tests for the FungibleBridge EVM contract.
+#[cfg(all(test, feature = "offchain"))]
 mod fungible_bridge;
-#[cfg(test)]
+
+/// Gas usage measurements for LightClient and Microchain operations.
+#[cfg(all(test, feature = "offchain"))]
 mod gas;
-#[cfg(test)]
+
+/// Shared test helpers for EVM contract deployment and interaction.
+#[cfg(all(test, feature = "offchain"))]
 pub(crate) mod test_helpers;
+
+/// Registers every metric this crate declares.
+///
+/// Without this, a metric is only exported after the code path that observes it has run, so a
+/// rarely-taken path leaves its panels blank and makes a routine restart look like the metric
+/// was removed.
+///
+/// Gated on `relay` rather than the `with_metrics` alias the other crates use: this crate has
+/// no such alias, and its metrics live in `relay`, which is itself behind that feature. It
+/// serves no `/metrics` endpoint of its own, so it does not initialize its dependencies'
+/// metrics.
+#[cfg(feature = "relay")]
+pub fn init_metrics() {
+    relay::metrics::init_metrics();
+}

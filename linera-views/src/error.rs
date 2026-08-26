@@ -34,6 +34,8 @@ pub enum ViewError {
         /// The inner error
         #[source]
         error: Box<dyn std::error::Error + Send + Sync>,
+        /// Whether this error was caused by a journal resolution failure.
+        must_reload_view: bool,
     },
 
     /// The key must not be too long
@@ -56,4 +58,18 @@ pub enum ViewError {
     /// The values are incoherent.
     #[error("post load values error")]
     PostLoadValuesError,
+}
+
+impl ViewError {
+    /// Returns `true` if this error was caused by a journal resolution failure,
+    /// which may leave storage in an inconsistent state requiring a view reload.
+    pub fn must_reload_view(&self) -> bool {
+        matches!(
+            self,
+            ViewError::StoreError {
+                must_reload_view: true,
+                ..
+            }
+        )
+    }
 }

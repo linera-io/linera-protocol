@@ -17,7 +17,6 @@ workspace = true
 [features]
 default = ["rocksdb"]
 rocksdb = ["linera-views/rocksdb", "linera-indexer/rocksdb"]
-dynamodb = ["linera-views/dynamodb", "linera-indexer/dynamodb"]
 scylladb = ["linera-views/scylladb", "linera-indexer/scylladb"]
 wasmer = ["linera-execution/wasmer"]
 wasmtime = ["linera-execution/wasmtime"]

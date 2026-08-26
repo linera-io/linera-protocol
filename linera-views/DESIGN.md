@@ -11,7 +11,6 @@ of a key-value store whose keys are `Vec<u8>` and whose values are `Vec<u8>`.
 We provide an implementation of the trait `KeyValueDatabase` for the following key-value stores:
 * `MemoryDatabase` uses the memory (and uses internally a simple B-Tree map).
 * `RocksDbDatabase` is a disk-based key-value store
-* `DynamoDbDatabase` is the AWS-based DynamoDB service.
 * `ScyllaDbDatabase` is a cloud-based Cassandra-compatible database.
 
 The trait `KeyValueDatabase` was designed so that more storage solutions can be easily added in the future.
@@ -103,8 +102,8 @@ of any size. Internally, it splits them into smaller pieces and stores them
 using a wrapped, possibly size-limited, client.
 
 The built key-value store client has `MAX_VALUE_SIZE` set to its maximum possible
-value. This forces us to split the value into several smaller values. One key
-such example is `DynamoDb` which has a limit of 400kB on its value size.
+value. This forces us to split the value into several smaller values. This is
+useful for stores that impose a limit on their value size.
 
 Design is the following:
 * For every `key` we build several corresponding keys `[key * * * *]` that contain

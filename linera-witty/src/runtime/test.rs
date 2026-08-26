@@ -96,7 +96,7 @@ impl<UserData> MockInstance<UserData> {
                 memory.resize(address.0 as usize + allocation_size, 0);
 
                 assert!(
-                    memory.len() <= i32::MAX as usize,
+                    i32::try_from(memory.len()).is_ok(),
                     "No more memory for allocations"
                 );
 

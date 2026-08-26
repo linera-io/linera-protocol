@@ -11,7 +11,10 @@ mod tests {
     };
     use revm::{database::CacheDB, primitives::Address};
 
-    use crate::{light_client::addCommitteeCall, microchain::addBlockCall, test_helpers::*};
+    use crate::{
+        evm::{light_client::addCommitteeCall, microchain::addBlockCall},
+        test_helpers::*,
+    };
 
     #[test]
     fn test_gas_light_client_add_committee() {
@@ -28,12 +31,12 @@ mod tests {
             deploy_light_client(&mut db, deployer, &[addr], &[1], test_admin_chain_id(), 0);
 
         let (committee_bytes, blob_hash) = create_committee_blob(&new_public);
-        let transactions = create_committee_transaction(Epoch(1), blob_hash);
-        let block = create_test_block(
+        let events = vec![vec![create_committee_event(Epoch(1), blob_hash)]];
+        let block = create_test_block_with_events(
             test_admin_chain_id(),
             Epoch::ZERO,
             BlockHeight(1),
-            transactions,
+            events,
         );
         let bcs_bytes = sign_and_serialize(&secret, &public, block);
         let new_uncompressed = validator_uncompressed_key(&new_public);
@@ -64,7 +67,7 @@ mod tests {
         let mut db = CacheDB::default();
         let light_client =
             deploy_light_client(&mut db, deployer, &[addr], &[1], test_admin_chain_id(), 0);
-        let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id, 1);
+        let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id);
 
         let cert = create_signed_certificate_for_chain(&secret, &public, chain_id, BlockHeight(1));
         let bcs_bytes = bcs::to_bytes(&cert).expect("BCS serialization failed");

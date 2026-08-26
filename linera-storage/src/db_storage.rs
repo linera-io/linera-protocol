@@ -1,7 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, fmt::Debug, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt::Debug,
+    sync::{Arc, OnceLock},
+};
 
 use async_trait::async_trait;
 #[cfg(with_metrics)]
@@ -10,13 +14,16 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight, NetworkDescription, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
+    time::Duration,
 };
+use linera_cache::{Arc as CacheArc, ValueCache};
 use linera_chain::{
     types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, LiteCertificate},
     ChainStateView,
 };
 use linera_execution::{
-    BlobState, ExecutionRuntimeConfig, UserContractCode, UserServiceCode, WasmRuntime,
+    BlobState, ExecutionRuntimeConfig, SharedCommittees, UserContractCode, UserServiceCode,
+    WasmRuntime,
 };
 use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
@@ -29,211 +36,205 @@ use linera_views::{
     ViewError,
 };
 use serde::{Deserialize, Serialize};
-use tracing::instrument;
+use tracing::{debug, instrument};
 #[cfg(with_testing)]
 use {
     futures::channel::oneshot::{self, Receiver},
     linera_views::{random::generate_test_namespace, store::TestKeyValueDatabase},
-    std::{cmp::Reverse, collections::BTreeMap},
+    std::cmp::Reverse,
 };
 
 use crate::{ChainRuntimeContext, Clock, Storage};
 
+/// Prometheus metrics counting storage reads, writes and cache hits.
 #[cfg(with_metrics)]
 pub mod metrics {
-    use std::sync::LazyLock;
-
     use linera_base::prometheus_util::{
-        exponential_bucket_latencies, register_histogram_vec, register_int_counter_vec,
+        exponential_bucket_latencies, register_histogram_vec, register_int_counter,
+        register_int_counter_vec,
     };
-    use prometheus::{HistogramVec, IntCounterVec};
+    use prometheus::{HistogramVec, IntCounter, IntCounterVec};
 
-    /// The metric counting how often a blob is tested for existence from storage
-    pub(super) static CONTAINS_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "contains_blob",
-            "The metric counting how often a blob is tested for existence from storage",
-            &[],
-        )
-    });
+    /// Label name for distinguishing cache hits vs DB reads.
+    pub(super) const SOURCE_LABEL: &str = "source";
+    /// Label value for items served from the in-memory cache.
+    pub(super) const CACHE: &str = "cache";
+    /// Label value for items served from the database.
+    pub(super) const DB: &str = "db";
 
-    /// The metric counting how often multiple blobs are tested for existence from storage
-    pub(super) static CONTAINS_BLOBS_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "contains_blobs",
-            "The metric counting how often multiple blobs are tested for existence from storage",
-            &[],
-        )
-    });
+    linera_base::declare_metrics! {
+        /// The metric counting how often a blob is tested for existence from storage
+        pub(super) static CONTAINS_BLOB_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "contains_blob",
+                "The metric counting how often a blob is tested for existence from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often a blob state is tested for existence from storage
-    pub(super) static CONTAINS_BLOB_STATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "contains_blob_state",
-            "The metric counting how often a blob state is tested for existence from storage",
-            &[],
-        )
-    });
+        /// The metric counting how often multiple blobs are tested for existence from storage
+        pub(super) static CONTAINS_BLOBS_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "contains_blobs",
+                "The metric counting how often multiple blobs are tested for existence from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often a certificate is tested for existence from storage.
-    pub(super) static CONTAINS_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "contains_certificate",
-            "The metric counting how often a certificate is tested for existence from storage",
-            &[],
-        )
-    });
+        /// The metric counting how often a blob state is tested for existence from storage
+        pub(super) static CONTAINS_BLOB_STATE_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "contains_blob_state",
+                "The metric counting how often a blob state is tested for existence from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often a hashed certificate value is read from storage.
-    #[doc(hidden)]
-    pub static READ_CONFIRMED_BLOCK_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "read_confirmed_block",
-            "The metric counting how often a hashed confirmed block is read from storage",
-            &[],
-        )
-    });
+        /// The metric counting how often a certificate is tested for existence from storage.
+        pub(super) static CONTAINS_CERTIFICATE_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "contains_certificate",
+                "The metric counting how often a certificate is tested for existence from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often confirmed blocks are read from storage.
-    #[doc(hidden)]
-    pub(super) static READ_CONFIRMED_BLOCKS_COUNTER: LazyLock<IntCounterVec> =
-        LazyLock::new(|| {
+        /// The metric counting how often a hashed certificate value is read from storage.
+        #[doc(hidden)]
+        pub static READ_CONFIRMED_BLOCK_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "read_confirmed_block",
+                "The metric counting how often a hashed confirmed block is read from storage",
+                &[SOURCE_LABEL],
+            );
+
+        /// The metric counting how often confirmed blocks are read from storage.
+        #[doc(hidden)]
+        pub(super) static READ_CONFIRMED_BLOCKS_COUNTER: IntCounterVec =
             register_int_counter_vec(
                 "read_confirmed_blocks",
                 "The metric counting how often confirmed blocks are read from storage",
+                &[SOURCE_LABEL],
+            );
+
+        /// The metric counting how often a blob is read from storage.
+        #[doc(hidden)]
+        pub(super) static READ_BLOB_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "read_blob",
+                "The metric counting how often a blob is read from storage",
+                &[SOURCE_LABEL],
+            );
+
+        /// The metric counting how often a blob state is read from storage.
+        #[doc(hidden)]
+        pub(super) static READ_BLOB_STATE_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "read_blob_state",
+                "The metric counting how often a blob state is read from storage",
+                &[SOURCE_LABEL],
+            );
+
+        /// The metric counting how often a blob is written to storage.
+        #[doc(hidden)]
+        pub(super) static WRITE_BLOB_COUNTER: IntCounter =
+            register_int_counter(
+                "write_blob",
+                "The metric counting how often a blob is written to storage",
+            );
+
+        /// The metric counting how often a certificate is read from storage.
+        #[doc(hidden)]
+        pub static READ_CERTIFICATE_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "read_certificate",
+                "The metric counting how often a certificate is read from storage",
+                &[SOURCE_LABEL],
+            );
+
+        /// The metric counting how often certificates are read from storage.
+        #[doc(hidden)]
+        pub(super) static READ_CERTIFICATES_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "read_certificates",
+                "The metric counting how often certificate are read from storage",
+                &[SOURCE_LABEL],
+            );
+
+        /// The metric counting how often a certificate is written to storage.
+        #[doc(hidden)]
+        pub static WRITE_CERTIFICATE_COUNTER: IntCounter =
+            register_int_counter(
+                "write_certificate",
+                "The metric counting how often a certificate is written to storage",
+            );
+
+        /// The latency to load a chain state.
+        #[doc(hidden)]
+        pub(crate) static LOAD_CHAIN_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "load_chain_latency",
+                "The latency to load a chain state",
                 &[],
-            )
-        });
+                exponential_bucket_latencies(1000.0),
+            );
 
-    /// The metric counting how often a blob is read from storage.
-    #[doc(hidden)]
-    pub(super) static READ_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "read_blob",
-            "The metric counting how often a blob is read from storage",
-            &[],
-        )
-    });
+        /// The metric counting how often an event is read from storage.
+        #[doc(hidden)]
+        pub(super) static READ_EVENT_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "read_event",
+                "The metric counting how often an event is read from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often a blob state is read from storage.
-    #[doc(hidden)]
-    pub(super) static READ_BLOB_STATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "read_blob_state",
-            "The metric counting how often a blob state is read from storage",
-            &[],
-        )
-    });
+        /// The metric counting how often an event is tested for existence from storage
+        pub(super) static CONTAINS_EVENT_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "contains_event",
+                "The metric counting how often an event is tested for existence from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often blob states are read from storage.
-    #[doc(hidden)]
-    pub(super) static READ_BLOB_STATES_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "read_blob_states",
-            "The metric counting how often blob states are read from storage",
-            &[],
-        )
-    });
+        /// The metric counting how often an event is written to storage.
+        #[doc(hidden)]
+        pub(super) static WRITE_EVENT_COUNTER: IntCounter =
+            register_int_counter(
+                "write_event",
+                "The metric counting how often an event is written to storage",
+            );
 
-    /// The metric counting how often a blob is written to storage.
-    #[doc(hidden)]
-    pub(super) static WRITE_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "write_blob",
-            "The metric counting how often a blob is written to storage",
-            &[],
-        )
-    });
+        /// The metric counting how often a block hash is read by height from storage.
+        #[doc(hidden)]
+        pub(super) static READ_BLOCK_HASH_BY_HEIGHT_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "read_block_hash_by_height",
+                "The metric counting how often a block hash is read by height from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often a certificate is read from storage.
-    #[doc(hidden)]
-    pub static READ_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "read_certificate",
-            "The metric counting how often a certificate is read from storage",
-            &[],
-        )
-    });
+        /// The metric counting how often an event block height is read from storage.
+        #[doc(hidden)]
+        pub(super) static READ_EVENT_BLOCK_HEIGHT_COUNTER: IntCounterVec =
+            register_int_counter_vec(
+                "read_event_block_height",
+                "The metric counting how often an event block height is read from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often certificates are read from storage.
-    #[doc(hidden)]
-    pub(super) static READ_CERTIFICATES_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "read_certificates",
-            "The metric counting how often certificate are read from storage",
-            &[],
-        )
-    });
+        /// The metric counting how often the network description is read from storage.
+        #[doc(hidden)]
+        pub(super) static READ_NETWORK_DESCRIPTION: IntCounterVec =
+            register_int_counter_vec(
+                "network_description",
+                "The metric counting how often the network description is read from storage",
+                &[SOURCE_LABEL],
+            );
 
-    /// The metric counting how often a certificate is written to storage.
-    #[doc(hidden)]
-    pub static WRITE_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "write_certificate",
-            "The metric counting how often a certificate is written to storage",
-            &[],
-        )
-    });
-
-    /// The latency to load a chain state.
-    #[doc(hidden)]
-    pub(crate) static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "load_chain_latency",
-            "The latency to load a chain state",
-            &[],
-            exponential_bucket_latencies(1000.0),
-        )
-    });
-
-    /// The metric counting how often an event is read from storage.
-    #[doc(hidden)]
-    pub(super) static READ_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "read_event",
-            "The metric counting how often an event is read from storage",
-            &[],
-        )
-    });
-
-    /// The metric counting how often an event is tested for existence from storage
-    pub(super) static CONTAINS_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "contains_event",
-            "The metric counting how often an event is tested for existence from storage",
-            &[],
-        )
-    });
-
-    /// The metric counting how often an event is written to storage.
-    #[doc(hidden)]
-    pub(super) static WRITE_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "write_event",
-            "The metric counting how often an event is written to storage",
-            &[],
-        )
-    });
-
-    /// The metric counting how often the network description is read from storage.
-    #[doc(hidden)]
-    pub(super) static READ_NETWORK_DESCRIPTION: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "network_description",
-            "The metric counting how often the network description is read from storage",
-            &[],
-        )
-    });
-
-    /// The metric counting how often the network description is written to storage.
-    #[doc(hidden)]
-    pub(super) static WRITE_NETWORK_DESCRIPTION: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "write_network_description",
-            "The metric counting how often the network description is written to storage",
-            &[],
-        )
-    });
+        /// The metric counting how often the network description is written to storage.
+        #[doc(hidden)]
+        pub(super) static WRITE_NETWORK_DESCRIPTION: IntCounter =
+            register_int_counter(
+                "write_network_description",
+                "The metric counting how often the network description is written to storage",
+            );
+    }
 }
 
 /// The key used for blobs. The Blob ID itself is contained in the root key.
@@ -256,7 +257,7 @@ fn get_block_keys() -> Vec<Vec<u8>> {
 }
 
 #[derive(Default)]
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 pub(crate) struct MultiPartitionBatch {
     keys_value_bytes: Vec<(Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>)>,
 }
@@ -278,13 +279,12 @@ impl MultiPartitionBatch {
         self.put_key_values(root_key, vec![(key, value)]);
     }
 
-    fn add_blob(&mut self, blob: &Blob) -> Result<(), ViewError> {
+    fn add_blob(&mut self, blob: &Blob) {
         #[cfg(with_metrics)]
-        metrics::WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
+        metrics::WRITE_BLOB_COUNTER.inc();
         let root_key = RootKey::Blob(blob.id()).bytes();
         let key = BLOB_KEY.to_vec();
         self.put_key_value(root_key, key, blob.bytes().to_vec());
-        Ok(())
     }
 
     fn add_blob_state(&mut self, blob_id: BlobId, blob_state: &BlobState) -> Result<(), ViewError> {
@@ -308,9 +308,7 @@ impl MultiPartitionBatch {
         certificate: &ConfirmedBlockCertificate,
     ) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
-        metrics::WRITE_CERTIFICATE_COUNTER
-            .with_label_values(&[])
-            .inc();
+        metrics::WRITE_CERTIFICATE_COUNTER.inc();
         let hash = certificate.hash();
 
         // Write certificate data by hash
@@ -332,16 +330,31 @@ impl MultiPartitionBatch {
         let index_value = bcs::to_bytes(&hash)?;
         self.put_key_value(index_root_key, height_key, index_value);
 
+        // Write event block height index: chain_id -> (stream_id, index) -> height
+        let event_index_root_key = RootKey::EventBlockHeight(chain_id).bytes();
+        let height_value = bcs::to_bytes(&height)?;
+        for event in certificate.value().block().body.events.iter().flatten() {
+            let event_key = to_event_key(&EventId {
+                chain_id,
+                stream_id: event.stream_id.clone(),
+                index: event.index,
+            });
+            self.put_key_value(
+                event_index_root_key.clone(),
+                event_key,
+                height_value.clone(),
+            );
+        }
+
         Ok(())
     }
 
-    fn add_event(&mut self, event_id: EventId, value: Vec<u8>) -> Result<(), ViewError> {
+    fn add_event(&mut self, event_id: &EventId, value: Vec<u8>) {
         #[cfg(with_metrics)]
-        metrics::WRITE_EVENT_COUNTER.with_label_values(&[]).inc();
-        let key = to_event_key(&event_id);
+        metrics::WRITE_EVENT_COUNTER.inc();
+        let key = to_event_key(event_id);
         let root_key = RootKey::Event(event_id.chain_id).bytes();
         self.put_key_value(root_key, key, value);
-        Ok(())
     }
 
     fn add_network_description(
@@ -349,14 +362,111 @@ impl MultiPartitionBatch {
         information: &NetworkDescription,
     ) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
-        metrics::WRITE_NETWORK_DESCRIPTION
-            .with_label_values(&[])
-            .inc();
+        metrics::WRITE_NETWORK_DESCRIPTION.inc();
         let root_key = RootKey::NetworkDescription.bytes();
         let key = NETWORK_DESCRIPTION_KEY.to_vec();
         let value = bcs::to_bytes(information)?;
         self.put_key_value(root_key, key, value);
         Ok(())
+    }
+}
+
+/// Individual cache sizes for each `ValueCache` in `DbStorage`.
+#[derive(Clone, Copy, Debug)]
+pub struct StorageCacheConfig {
+    /// The maximum number of blobs held in the blob cache.
+    pub blob_cache_size: usize,
+    /// The maximum number of confirmed blocks held in the confirmed-block cache.
+    pub confirmed_block_cache_size: usize,
+    /// The maximum number of certificates held in the certificate cache.
+    pub certificate_cache_size: usize,
+    /// The maximum number of raw certificates held in the raw-certificate cache.
+    pub certificate_raw_cache_size: usize,
+    /// The maximum number of events held in the event cache.
+    pub event_cache_size: usize,
+    /// The maximum number of block hashes to cache, keyed by `(chain, height)`.
+    pub block_hash_by_height_cache_size: usize,
+    /// The maximum number of event-to-block-height index entries to cache.
+    pub event_block_height_cache_size: usize,
+    /// The interval, in seconds, between cache cleanup passes.
+    pub cache_cleanup_interval_secs: u64,
+}
+
+/// Default cache configuration for testing.
+#[cfg(with_testing)]
+pub const DEFAULT_STORAGE_CACHE_CONFIG: StorageCacheConfig = StorageCacheConfig {
+    blob_cache_size: 1000,
+    confirmed_block_cache_size: 1000,
+    certificate_cache_size: 1000,
+    certificate_raw_cache_size: 1000,
+    event_cache_size: 1000,
+    block_hash_by_height_cache_size: 1000,
+    event_block_height_cache_size: 1000,
+    cache_cleanup_interval_secs: linera_cache::DEFAULT_CLEANUP_INTERVAL_SECS,
+};
+
+/// Raw certificate bytes: (lite_certificate_bytes, confirmed_block_bytes).
+type RawCertificate = (Vec<u8>, Vec<u8>);
+
+/// Groups all `ValueCache` instances used by `DbStorage`.
+///
+/// All caches use `ValueCache` which stores values as `Arc<V>` internally,
+/// ensuring memory-efficient sharing across consumers. Adding a new cache
+/// here automatically inherits Arc-based sharing.
+#[derive(Clone)]
+pub struct StorageCaches {
+    pub(crate) blob: Arc<ValueCache<BlobId, Blob>>,
+    pub(crate) confirmed_block: Arc<ValueCache<CryptoHash, ConfirmedBlock>>,
+    pub(crate) certificate: Arc<ValueCache<CryptoHash, ConfirmedBlockCertificate>>,
+    pub(crate) certificate_raw: Arc<ValueCache<CryptoHash, RawCertificate>>,
+    pub(crate) event: Arc<ValueCache<EventId, Vec<u8>>>,
+    pub(crate) block_hash_by_height: Arc<ValueCache<(ChainId, BlockHeight), CryptoHash>>,
+    pub(crate) event_block_height: Arc<ValueCache<EventId, BlockHeight>>,
+    pub(crate) network_description: Arc<OnceLock<NetworkDescription>>,
+}
+
+impl StorageCaches {
+    /// Creates all caches with the given sizes.
+    pub fn new(sizes: StorageCacheConfig) -> Self {
+        let interval = sizes.cache_cleanup_interval_secs;
+        Self {
+            blob: Arc::new(ValueCache::new(
+                "storage_blob",
+                sizes.blob_cache_size,
+                interval,
+            )),
+            confirmed_block: Arc::new(ValueCache::new(
+                "storage_confirmed_block",
+                sizes.confirmed_block_cache_size,
+                interval,
+            )),
+            certificate: Arc::new(ValueCache::new(
+                "storage_certificate",
+                sizes.certificate_cache_size,
+                interval,
+            )),
+            certificate_raw: Arc::new(ValueCache::new(
+                "storage_certificate_raw",
+                sizes.certificate_raw_cache_size,
+                interval,
+            )),
+            event: Arc::new(ValueCache::new(
+                "storage_event",
+                sizes.event_cache_size,
+                interval,
+            )),
+            block_hash_by_height: Arc::new(ValueCache::new(
+                "storage_block_hash_by_height",
+                sizes.block_hash_by_height_cache_size,
+                interval,
+            )),
+            event_block_height: Arc::new(ValueCache::new(
+                "storage_event_block_height",
+                sizes.event_block_height_cache_size,
+                interval,
+            )),
+            network_description: Arc::new(OnceLock::new()),
+        }
     }
 }
 
@@ -369,26 +479,40 @@ pub struct DbStorage<Database, Clock = WallClock> {
     wasm_runtime: Option<WasmRuntime>,
     user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
     user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
+    shared_committees: SharedCommittees,
+    caches: StorageCaches,
     execution_runtime_config: ExecutionRuntimeConfig,
 }
 
+/// The root key identifying a storage partition.
 #[derive(Debug, Serialize, Deserialize)]
-pub(crate) enum RootKey {
+pub enum RootKey {
+    /// The partition holding the state of the given chain.
     ChainState(ChainId),
+    /// The partition holding the certificate for the given confirmed block hash.
     ConfirmedBlock(CryptoHash),
+    /// The partition holding the blob with the given ID.
     Blob(BlobId),
+    /// The partition holding the events of the given chain.
     Event(ChainId),
+    /// An unused placeholder variant.
     Placeholder,
+    /// The partition holding the network description.
     NetworkDescription,
+    /// The partition holding the state of the block exporter with the given ID.
     BlockExporterState(u32),
+    /// The partition holding the height-to-hash certificate index of the given chain.
     BlockByHeight(ChainId),
+    /// The partition holding the event-to-block-height index of the given chain.
+    EventBlockHeight(ChainId),
 }
 
 const CHAIN_ID_TAG: u8 = 0;
 const BLOB_ID_TAG: u8 = 2;
 
 impl RootKey {
-    pub(crate) fn bytes(&self) -> Vec<u8> {
+    /// Serializes the root key to its byte representation.
+    pub fn bytes(&self) -> Vec<u8> {
         bcs::to_bytes(self).unwrap()
     }
 }
@@ -996,15 +1120,15 @@ impl Clock for WallClock {
         Timestamp::now()
     }
 
-    async fn sleep(&self, delta: TimeDelta) {
-        linera_base::time::timer::sleep(delta.as_duration()).await
-    }
-
     async fn sleep_until(&self, timestamp: Timestamp) {
         let delta = timestamp.delta_since(Timestamp::now());
         if delta > TimeDelta::ZERO {
-            self.sleep(delta).await
+            linera_base::time::timer::sleep(delta.as_duration()).await
         }
+    }
+
+    async fn sleep_for(&self, duration: Duration) {
+        linera_base::time::timer::sleep(duration).await
     }
 }
 
@@ -1027,11 +1151,6 @@ impl TestClockInner {
             // Receiver may have been dropped if the sleep was cancelled.
             sender.send(()).ok();
         }
-    }
-
-    fn add_sleep(&mut self, delta: TimeDelta) -> Receiver<()> {
-        let target_time = self.time.saturating_add(delta);
-        self.add_sleep_until(target_time)
     }
 
     fn add_sleep_until(&mut self, time: Timestamp) -> Receiver<()> {
@@ -1067,15 +1186,6 @@ pub struct TestClock(Arc<std::sync::Mutex<TestClockInner>>);
 impl Clock for TestClock {
     fn current_time(&self) -> Timestamp {
         self.lock().time
-    }
-
-    async fn sleep(&self, delta: TimeDelta) {
-        if delta == TimeDelta::ZERO {
-            return;
-        }
-        let receiver = self.lock().add_sleep(delta);
-        // Sender may have been dropped if the clock was dropped; just stop waiting.
-        receiver.await.ok();
     }
 
     async fn sleep_until(&self, timestamp: Timestamp) {
@@ -1125,7 +1235,7 @@ impl TestClock {
         self.lock().sleep_callback = None;
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<TestClockInner> {
+    fn lock(&self) -> std::sync::MutexGuard<'_, TestClockInner> {
         self.0.lock().expect("poisoned TestClock mutex")
     }
 }
@@ -1177,18 +1287,42 @@ where
 
     #[instrument(level = "trace", skip_all, fields(%blob_id))]
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
+        if self.caches.blob.contains(&blob_id) {
+            #[cfg(with_metrics)]
+            metrics::CONTAINS_BLOB_COUNTER
+                .with_label_values(&[metrics::CACHE])
+                .inc();
+            return Ok(true);
+        }
         let root_key = RootKey::Blob(blob_id).bytes();
         let store = self.database.open_shared(&root_key)?;
         let test = store.contains_key(BLOB_KEY).await?;
         #[cfg(with_metrics)]
-        metrics::CONTAINS_BLOB_COUNTER.with_label_values(&[]).inc();
+        metrics::CONTAINS_BLOB_COUNTER
+            .with_label_values(&[metrics::DB])
+            .inc();
         Ok(test)
     }
 
     #[instrument(skip_all, fields(blob_count = blob_ids.len()))]
     async fn missing_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobId>, ViewError> {
         let mut missing_blobs = Vec::new();
+        #[cfg(with_metrics)]
+        let mut cache_hits: u64 = 0;
+        #[cfg(with_metrics)]
+        let mut db_checks: u64 = 0;
         for blob_id in blob_ids {
+            if self.caches.blob.contains(blob_id) {
+                #[cfg(with_metrics)]
+                {
+                    cache_hits += 1;
+                }
+                continue;
+            }
+            #[cfg(with_metrics)]
+            {
+                db_checks += 1;
+            }
             let root_key = RootKey::Blob(*blob_id).bytes();
             let store = self.database.open_shared(&root_key)?;
             if !store.contains_key(BLOB_KEY).await? {
@@ -1196,7 +1330,18 @@ where
             }
         }
         #[cfg(with_metrics)]
-        metrics::CONTAINS_BLOBS_COUNTER.with_label_values(&[]).inc();
+        {
+            if cache_hits > 0 {
+                metrics::CONTAINS_BLOBS_COUNTER
+                    .with_label_values(&[metrics::CACHE])
+                    .inc_by(cache_hits);
+            }
+            if db_checks > 0 {
+                metrics::CONTAINS_BLOBS_COUNTER
+                    .with_label_values(&[metrics::DB])
+                    .inc_by(db_checks);
+            }
+        }
         Ok(missing_blobs)
     }
 
@@ -1207,7 +1352,7 @@ where
         let test = store.contains_key(BLOB_STATE_KEY).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_BLOB_STATE_COUNTER
-            .with_label_values(&[])
+            .with_label_values(&[metrics::DB])
             .inc();
         Ok(test)
     }
@@ -1216,63 +1361,116 @@ where
     async fn read_confirmed_block(
         &self,
         hash: CryptoHash,
-    ) -> Result<Option<ConfirmedBlock>, ViewError> {
+    ) -> Result<Option<CacheArc<ConfirmedBlock>>, ViewError> {
+        if let Some(block) = self.caches.confirmed_block.get(&hash) {
+            #[cfg(with_metrics)]
+            metrics::READ_CONFIRMED_BLOCK_COUNTER
+                .with_label_values(&[metrics::CACHE])
+                .inc();
+            return Ok(Some(block));
+        }
         let root_key = RootKey::ConfirmedBlock(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
-        let value = store.read_value(BLOCK_KEY).await?;
+        let value = store.read_value::<ConfirmedBlock>(BLOCK_KEY).await?;
         #[cfg(with_metrics)]
         metrics::READ_CONFIRMED_BLOCK_COUNTER
-            .with_label_values(&[])
+            .with_label_values(&[metrics::DB])
             .inc();
-        Ok(value)
+        match value {
+            Some(block) => Ok(Some(self.caches.confirmed_block.insert(&hash, block))),
+            None => Ok(None),
+        }
     }
 
     #[instrument(skip_all)]
     async fn read_confirmed_blocks<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
-    ) -> Result<Vec<Option<ConfirmedBlock>>, ViewError> {
+    ) -> Result<Vec<Option<CacheArc<ConfirmedBlock>>>, ViewError> {
         let hashes = hashes.into_iter().collect::<Vec<_>>();
         if hashes.is_empty() {
             return Ok(Vec::new());
         }
-        let root_keys = Self::get_root_keys_for_certificates(&hashes);
-        let mut blocks = Vec::new();
-        for root_key in root_keys {
-            let store = self.database.open_shared(&root_key)?;
-            blocks.push(store.read_value(BLOCK_KEY).await?);
+        let mut results = vec![None; hashes.len()];
+        let mut misses = Vec::new();
+        for (i, hash) in hashes.iter().enumerate() {
+            if let Some(block) = self.caches.confirmed_block.get(hash) {
+                results[i] = Some(block);
+            } else {
+                misses.push(i);
+            }
+        }
+        if !misses.is_empty() {
+            let miss_hashes: Vec<_> = misses.iter().map(|&i| hashes[i]).collect();
+            let root_keys = Self::get_root_keys_for_certificates(&miss_hashes);
+            for (miss_idx, root_key) in misses.iter().zip(root_keys) {
+                let store = self.database.open_shared(&root_key)?;
+                if let Some(block) = store.read_value::<ConfirmedBlock>(BLOCK_KEY).await? {
+                    results[*miss_idx] = Some(
+                        self.caches
+                            .confirmed_block
+                            .insert(&hashes[*miss_idx], block),
+                    );
+                }
+            }
         }
         #[cfg(with_metrics)]
-        metrics::READ_CONFIRMED_BLOCKS_COUNTER
-            .with_label_values(&[])
-            .inc_by(hashes.len() as u64);
-        Ok(blocks)
+        {
+            let cache_hits = (hashes.len() - misses.len()) as u64;
+            if cache_hits > 0 {
+                metrics::READ_CONFIRMED_BLOCKS_COUNTER
+                    .with_label_values(&[metrics::CACHE])
+                    .inc_by(cache_hits);
+            }
+            let db_reads = misses.len() as u64;
+            if db_reads > 0 {
+                metrics::READ_CONFIRMED_BLOCKS_COUNTER
+                    .with_label_values(&[metrics::DB])
+                    .inc_by(db_reads);
+            }
+        }
+        Ok(results)
     }
 
     #[instrument(skip_all, fields(%blob_id))]
-    async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
+    async fn read_blob(&self, blob_id: BlobId) -> Result<Option<CacheArc<Blob>>, ViewError> {
+        if let Some(blob) = self.caches.blob.get(&blob_id) {
+            #[cfg(with_metrics)]
+            metrics::READ_BLOB_COUNTER
+                .with_label_values(&[metrics::CACHE])
+                .inc();
+            return Ok(Some(blob));
+        }
         let root_key = RootKey::Blob(blob_id).bytes();
         let store = self.database.open_shared(&root_key)?;
         let maybe_blob_bytes = store.read_value_bytes(BLOB_KEY).await?;
         #[cfg(with_metrics)]
-        metrics::READ_BLOB_COUNTER.with_label_values(&[]).inc();
-        Ok(maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(blob_id, blob_bytes)))
+        metrics::READ_BLOB_COUNTER
+            .with_label_values(&[metrics::DB])
+            .inc();
+        match maybe_blob_bytes {
+            Some(blob_bytes) => {
+                let blob = Blob::new_with_id_unchecked(blob_id, blob_bytes);
+                Ok(Some(self.caches.blob.insert(&blob_id, blob)))
+            }
+            None => Ok(None),
+        }
     }
 
     #[instrument(skip_all, fields(blob_ids_len = %blob_ids.len()))]
-    async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Blob>>, ViewError> {
+    async fn read_blobs(
+        &self,
+        blob_ids: &[BlobId],
+    ) -> Result<Vec<Option<CacheArc<Blob>>>, ViewError> {
         if blob_ids.is_empty() {
             return Ok(Vec::new());
         }
-        let mut blobs = Vec::new();
-        for blob_id in blob_ids {
-            blobs.push(self.read_blob(*blob_id).await?);
-        }
-        #[cfg(with_metrics)]
-        metrics::READ_BLOB_COUNTER
-            .with_label_values(&[])
-            .inc_by(blob_ids.len() as u64);
-        Ok(blobs)
+        // Each blob lives under its own root_key (partition), so cross-partition
+        // reads can't be coalesced into a single IN query. The ScyllaDB best
+        // practice is parallel queries via the shard-aware driver, which routes
+        // each query to the right shard on the right node. RocksDB benefits too:
+        // concurrent point lookups let the scheduler overlap cache/SST reads.
+        futures::future::try_join_all(blob_ids.iter().map(|blob_id| self.read_blob(*blob_id))).await
     }
 
     #[instrument(skip_all, fields(%blob_id))]
@@ -1282,7 +1480,7 @@ where
         let blob_state = store.read_value::<BlobState>(BLOB_STATE_KEY).await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_STATE_COUNTER
-            .with_label_values(&[])
+            .with_label_values(&[metrics::DB])
             .inc();
         Ok(blob_state)
     }
@@ -1295,21 +1493,18 @@ where
         if blob_ids.is_empty() {
             return Ok(Vec::new());
         }
-        let mut blob_states = Vec::new();
-        for blob_id in blob_ids {
-            blob_states.push(self.read_blob_state(*blob_id).await?);
-        }
-        #[cfg(with_metrics)]
-        metrics::READ_BLOB_STATES_COUNTER
-            .with_label_values(&[])
-            .inc_by(blob_ids.len() as u64);
-        Ok(blob_states)
+        futures::future::try_join_all(
+            blob_ids
+                .iter()
+                .map(|blob_id| self.read_blob_state(*blob_id)),
+        )
+        .await
     }
 
     #[instrument(skip_all, fields(blob_id = %blob.id()))]
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError> {
         let mut batch = MultiPartitionBatch::new();
-        batch.add_blob(blob)?;
+        batch.add_blob(blob);
         self.write_batch(batch).await?;
         Ok(())
     }
@@ -1363,7 +1558,7 @@ where
             let has_state = store.contains_key(BLOB_STATE_KEY).await?;
             blob_states.push(has_state);
             if has_state {
-                batch.add_blob(blob)?;
+                batch.add_blob(blob);
             }
         }
         self.write_batch(batch).await?;
@@ -1377,7 +1572,7 @@ where
         }
         let mut batch = MultiPartitionBatch::new();
         for blob in blobs {
-            batch.add_blob(blob)?;
+            batch.add_blob(blob);
         }
         self.write_batch(batch).await
     }
@@ -1390,20 +1585,61 @@ where
     ) -> Result<(), ViewError> {
         let mut batch = MultiPartitionBatch::new();
         for blob in blobs {
-            batch.add_blob(blob)?;
+            batch.add_blob(blob);
         }
         batch.add_certificate(certificate)?;
-        self.write_batch(batch).await
+        self.write_batch(batch).await?;
+        // Populate immutable-data caches so subsequent reads are served from memory.
+        let block = certificate.value().block();
+        let chain_id = block.header.chain_id;
+        let height = block.header.height;
+        let hash = certificate.hash();
+        self.caches
+            .block_hash_by_height
+            .insert(&(chain_id, height), hash);
+        for event in block.body.events.iter().flatten() {
+            let event_id = EventId {
+                chain_id,
+                stream_id: event.stream_id.clone(),
+                index: event.index,
+            };
+            self.caches.event_block_height.insert(&event_id, height);
+        }
+        Ok(())
+    }
+
+    fn cache_certificate(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+    ) -> CacheArc<ConfirmedBlockCertificate> {
+        self.caches
+            .certificate
+            .insert(&certificate.hash(), certificate)
+    }
+
+    fn cache_blob(&self, blob: Blob) -> CacheArc<Blob> {
+        self.caches.blob.insert(&blob.id(), blob)
+    }
+
+    fn cache_confirmed_block(&self, block: ConfirmedBlock) -> CacheArc<ConfirmedBlock> {
+        self.caches.confirmed_block.insert(&block.hash(), block)
     }
 
     #[instrument(skip_all, fields(%hash))]
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
+        if self.caches.certificate.contains(&hash) || self.caches.certificate_raw.contains(&hash) {
+            #[cfg(with_metrics)]
+            metrics::CONTAINS_CERTIFICATE_COUNTER
+                .with_label_values(&[metrics::CACHE])
+                .inc();
+            return Ok(true);
+        }
         let root_key = RootKey::ConfirmedBlock(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
         let results = store.contains_keys(&get_block_keys()).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_CERTIFICATE_COUNTER
-            .with_label_values(&[])
+            .with_label_values(&[metrics::DB])
             .inc();
         Ok(results[0] && results[1])
     }
@@ -1412,38 +1648,58 @@ where
     async fn read_certificate(
         &self,
         hash: CryptoHash,
-    ) -> Result<Option<ConfirmedBlockCertificate>, ViewError> {
+    ) -> Result<Option<CacheArc<ConfirmedBlockCertificate>>, ViewError> {
+        // Assembled certificate cache (single Arc, no re-assembly)
+        if let Some(cert) = self.caches.certificate.get(&hash) {
+            #[cfg(with_metrics)]
+            metrics::READ_CERTIFICATE_COUNTER
+                .with_label_values(&[metrics::CACHE])
+                .inc();
+            return Ok(Some(cert));
+        }
+        // Raw bytes cache — deserialize + populate caches
+        if let Some(raw) = self.caches.certificate_raw.get(&hash) {
+            #[cfg(with_metrics)]
+            metrics::READ_CERTIFICATE_COUNTER
+                .with_label_values(&[metrics::CACHE])
+                .inc();
+            return self.deserialize_and_cache_certificate(&raw.0, &raw.1);
+        }
+        // DB
         let root_key = RootKey::ConfirmedBlock(hash).bytes();
         let store = self.database.open_shared(&root_key)?;
         let values = store.read_multi_values_bytes(&get_block_keys()).await?;
         #[cfg(with_metrics)]
         metrics::READ_CERTIFICATE_COUNTER
-            .with_label_values(&[])
+            .with_label_values(&[metrics::DB])
             .inc();
-        Self::deserialize_certificate(&values, hash)
+        let Some(lite_cert_bytes) = values[0].as_ref() else {
+            return Ok(None);
+        };
+        let Some(confirmed_block_bytes) = values[1].as_ref() else {
+            return Ok(None);
+        };
+        self.caches.certificate_raw.insert(
+            &hash,
+            (lite_cert_bytes.clone(), confirmed_block_bytes.clone()),
+        );
+        self.deserialize_and_cache_certificate(lite_cert_bytes, confirmed_block_bytes)
     }
 
     #[instrument(skip_all)]
     async fn read_certificates(
         &self,
         hashes: &[CryptoHash],
-    ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError> {
+    ) -> Result<Vec<Option<CacheArc<ConfirmedBlockCertificate>>>, ViewError> {
         let raw_certs = self.read_certificates_raw(hashes).await?;
 
         raw_certs
             .into_iter()
-            .zip(hashes)
-            .map(|(maybe_raw, hash)| {
-                let Some((lite_cert_bytes, confirmed_block_bytes)) = maybe_raw else {
+            .map(|maybe_raw| {
+                let Some(raw) = maybe_raw else {
                     return Ok(None);
                 };
-                let cert = bcs::from_bytes::<LiteCertificate>(&lite_cert_bytes)?;
-                let value = bcs::from_bytes::<ConfirmedBlock>(&confirmed_block_bytes)?;
-                assert_eq!(&value.hash(), hash);
-                let certificate = cert
-                    .with_value(value)
-                    .ok_or(ViewError::InconsistentEntries)?;
-                Ok(Some(certificate))
+                self.deserialize_and_cache_certificate(&raw.0, &raw.1)
             })
             .collect()
     }
@@ -1452,28 +1708,50 @@ where
     async fn read_certificates_raw(
         &self,
         hashes: &[CryptoHash],
-    ) -> Result<Vec<Option<(Vec<u8>, Vec<u8>)>>, ViewError> {
+    ) -> Result<Vec<Option<CacheArc<(Vec<u8>, Vec<u8>)>>>, ViewError> {
         if hashes.is_empty() {
             return Ok(Vec::new());
         }
-        let root_keys = Self::get_root_keys_for_certificates(hashes);
-        let mut values = Vec::new();
-        for root_key in root_keys {
-            let store = self.database.open_shared(&root_key)?;
-            values.extend(store.read_multi_values_bytes(&get_block_keys()).await?);
+        let mut results = vec![None; hashes.len()];
+        let mut misses = Vec::new();
+        for (i, hash) in hashes.iter().enumerate() {
+            if let Some(raw) = self.caches.certificate_raw.get(hash) {
+                results[i] = Some(raw);
+            } else {
+                misses.push(i);
+            }
+        }
+        if !misses.is_empty() {
+            let miss_hashes: Vec<_> = misses.iter().map(|&i| hashes[i]).collect();
+            let root_keys = Self::get_root_keys_for_certificates(&miss_hashes);
+            for (miss_idx, root_key) in misses.iter().zip(root_keys) {
+                let store = self.database.open_shared(&root_key)?;
+                let values = store.read_multi_values_bytes(&get_block_keys()).await?;
+                if let (Some(lite), Some(block)) = (values[0].as_ref(), values[1].as_ref()) {
+                    results[*miss_idx] = Some(
+                        self.caches
+                            .certificate_raw
+                            .insert(&hashes[*miss_idx], (lite.clone(), block.clone())),
+                    );
+                }
+            }
         }
         #[cfg(with_metrics)]
-        metrics::READ_CERTIFICATES_COUNTER
-            .with_label_values(&[])
-            .inc_by(hashes.len() as u64);
-        Ok(values
-            .chunks_exact(2)
-            .map(|chunk| {
-                let lite_cert_bytes = chunk[0].as_ref()?;
-                let confirmed_block_bytes = chunk[1].as_ref()?;
-                Some((lite_cert_bytes.clone(), confirmed_block_bytes.clone()))
-            })
-            .collect())
+        {
+            let cache_hits = (hashes.len() - misses.len()) as u64;
+            if cache_hits > 0 {
+                metrics::READ_CERTIFICATES_COUNTER
+                    .with_label_values(&[metrics::CACHE])
+                    .inc_by(cache_hits);
+            }
+            let db_reads = misses.len() as u64;
+            if db_reads > 0 {
+                metrics::READ_CERTIFICATES_COUNTER
+                    .with_label_values(&[metrics::DB])
+                    .inc_by(db_reads);
+            }
+        }
+        Ok(results)
     }
 
     async fn read_certificate_hashes_by_heights(
@@ -1485,19 +1763,116 @@ where
             return Ok(Vec::new());
         }
 
-        let index_root_key = RootKey::BlockByHeight(chain_id).bytes();
-        let store = self.database.open_shared(&index_root_key)?;
-        let height_keys: Vec<Vec<u8>> = heights.iter().map(|h| to_height_key(*h)).collect();
-        let hash_bytes = store.read_multi_values_bytes(&height_keys).await?;
-        let hash_options: Vec<Option<CryptoHash>> = hash_bytes
-            .into_iter()
-            .map(|opt| {
-                opt.map(|bytes| bcs::from_bytes::<CryptoHash>(&bytes))
-                    .transpose()
-            })
-            .collect::<Result<_, _>>()?;
+        let mut results = vec![None; heights.len()];
+        let mut misses = Vec::new();
+        for (i, &height) in heights.iter().enumerate() {
+            if let Some(hash) = self.caches.block_hash_by_height.get(&(chain_id, height)) {
+                results[i] = Some(*hash);
+            } else {
+                misses.push(i);
+            }
+        }
+        #[cfg(with_metrics)]
+        {
+            let cache_hits = (heights.len() - misses.len()) as u64;
+            if cache_hits > 0 {
+                metrics::READ_BLOCK_HASH_BY_HEIGHT_COUNTER
+                    .with_label_values(&[metrics::CACHE])
+                    .inc_by(cache_hits);
+            }
+        }
+        if !misses.is_empty() {
+            let miss_keys: Vec<Vec<u8>> =
+                misses.iter().map(|&i| to_height_key(heights[i])).collect();
+            let index_root_key = RootKey::BlockByHeight(chain_id).bytes();
+            let store = self.database.open_shared(&index_root_key)?;
+            let hash_bytes = store.read_multi_values_bytes(&miss_keys).await?;
+            #[cfg(with_metrics)]
+            {
+                let db_reads = misses.len() as u64;
+                metrics::READ_BLOCK_HASH_BY_HEIGHT_COUNTER
+                    .with_label_values(&[metrics::DB])
+                    .inc_by(db_reads);
+            }
+            for (miss_idx, opt_bytes) in misses.iter().zip(hash_bytes) {
+                if let Some(bytes) = opt_bytes {
+                    let hash = bcs::from_bytes::<CryptoHash>(&bytes)?;
+                    self.caches
+                        .block_hash_by_height
+                        .insert(&(chain_id, heights[*miss_idx]), hash);
+                    results[*miss_idx] = Some(hash);
+                }
+            }
+        }
 
-        Ok(hash_options)
+        Ok(results)
+    }
+
+    async fn read_event_block_heights(
+        &self,
+        event_ids: &[EventId],
+    ) -> Result<Vec<Option<BlockHeight>>, ViewError> {
+        if event_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut results = vec![None; event_ids.len()];
+        // Check cache first; collect misses.
+        let mut misses = Vec::new();
+        for (i, event_id) in event_ids.iter().enumerate() {
+            if let Some(height) = self.caches.event_block_height.get(event_id) {
+                results[i] = Some(*height);
+            } else {
+                misses.push(i);
+            }
+        }
+        #[cfg(with_metrics)]
+        {
+            let cache_hits = (event_ids.len() - misses.len()) as u64;
+            if cache_hits > 0 {
+                metrics::READ_EVENT_BLOCK_HEIGHT_COUNTER
+                    .with_label_values(&[metrics::CACHE])
+                    .inc_by(cache_hits);
+            }
+        }
+        if misses.is_empty() {
+            return Ok(results);
+        }
+        // Group cache-miss event IDs by chain ID for batch lookups per partition.
+        let mut chain_groups = BTreeMap::<_, Vec<_>>::new();
+        for &i in &misses {
+            let event_id = &event_ids[i];
+            chain_groups
+                .entry(event_id.chain_id)
+                .or_default()
+                .push((i, to_event_key(event_id)));
+        }
+        for (chain_id, entries) in chain_groups {
+            let root_key = RootKey::EventBlockHeight(chain_id).bytes();
+            let store = self.database.open_shared(&root_key)?;
+            let keys = entries
+                .iter()
+                .map(|(_, key)| key.clone())
+                .collect::<Vec<_>>();
+            let values = store.read_multi_values_bytes(&keys).await?;
+            #[cfg(with_metrics)]
+            {
+                let db_reads = entries.len() as u64;
+                metrics::READ_EVENT_BLOCK_HEIGHT_COUNTER
+                    .with_label_values(&[metrics::DB])
+                    .inc_by(db_reads);
+            }
+            for ((original_index, _), value) in entries.into_iter().zip(values) {
+                if let Some(bytes) = value {
+                    let height = bcs::from_bytes::<BlockHeight>(&bytes)?;
+                    self.caches
+                        .event_block_height
+                        .insert(&event_ids[original_index], height);
+                    results[original_index] = Some(height);
+                }
+            }
+        }
+        Ok(results)
     }
 
     #[instrument(skip_all)]
@@ -1505,7 +1880,7 @@ where
         &self,
         chain_id: ChainId,
         heights: &[BlockHeight],
-    ) -> Result<Vec<Option<(Vec<u8>, Vec<u8>)>>, ViewError> {
+    ) -> Result<Vec<Option<CacheArc<(Vec<u8>, Vec<u8>)>>>, ViewError> {
         let hashes: Vec<Option<CryptoHash>> = self
             .read_certificate_hashes_by_heights(chain_id, heights)
             .await?;
@@ -1550,20 +1925,13 @@ where
         &self,
         chain_id: ChainId,
         heights: &[BlockHeight],
-    ) -> Result<Vec<Option<ConfirmedBlockCertificate>>, ViewError> {
+    ) -> Result<Vec<Option<CacheArc<ConfirmedBlockCertificate>>>, ViewError> {
         self.read_certificates_by_heights_raw(chain_id, heights)
             .await?
             .into_iter()
             .map(|maybe_raw| match maybe_raw {
                 None => Ok(None),
-                Some((lite_cert_bytes, confirmed_block_bytes)) => {
-                    let cert = bcs::from_bytes::<LiteCertificate>(&lite_cert_bytes)?;
-                    let value = bcs::from_bytes::<ConfirmedBlock>(&confirmed_block_bytes)?;
-                    let certificate = cert
-                        .with_value(value)
-                        .ok_or(ViewError::InconsistentEntries)?;
-                    Ok(Some(certificate))
-                }
+                Some(raw) => self.deserialize_and_cache_certificate(&raw.0, &raw.1),
             })
             .collect()
     }
@@ -1593,24 +1961,45 @@ where
     }
 
     #[instrument(skip_all, fields(event_id = ?event_id))]
-    async fn read_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
+    async fn read_event(&self, event_id: EventId) -> Result<Option<CacheArc<Vec<u8>>>, ViewError> {
+        if let Some(event) = self.caches.event.get(&event_id) {
+            #[cfg(with_metrics)]
+            metrics::READ_EVENT_COUNTER
+                .with_label_values(&[metrics::CACHE])
+                .inc();
+            return Ok(Some(event));
+        }
         let event_key = to_event_key(&event_id);
         let root_key = RootKey::Event(event_id.chain_id).bytes();
         let store = self.database.open_shared(&root_key)?;
         let event = store.read_value_bytes(&event_key).await?;
         #[cfg(with_metrics)]
-        metrics::READ_EVENT_COUNTER.with_label_values(&[]).inc();
-        Ok(event)
+        metrics::READ_EVENT_COUNTER
+            .with_label_values(&[metrics::DB])
+            .inc();
+        match event {
+            Some(event_bytes) => Ok(Some(self.caches.event.insert(&event_id, event_bytes))),
+            None => Ok(None),
+        }
     }
 
     #[instrument(skip_all, fields(event_id = ?event_id))]
     async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
+        if self.caches.event.contains(&event_id) {
+            #[cfg(with_metrics)]
+            metrics::CONTAINS_EVENT_COUNTER
+                .with_label_values(&[metrics::CACHE])
+                .inc();
+            return Ok(true);
+        }
         let event_key = to_event_key(&event_id);
         let root_key = RootKey::Event(event_id.chain_id).bytes();
         let store = self.database.open_shared(&root_key)?;
         let exists = store.contains_key(&event_key).await?;
         #[cfg(with_metrics)]
-        metrics::CONTAINS_EVENT_COUNTER.with_label_values(&[]).inc();
+        metrics::CONTAINS_EVENT_COUNTER
+            .with_label_values(&[metrics::DB])
+            .inc();
         Ok(exists)
     }
 
@@ -1623,22 +2012,52 @@ where
     ) -> Result<Vec<IndexAndEvent>, ViewError> {
         let root_key = RootKey::Event(*chain_id).bytes();
         let store = self.database.open_shared(&root_key)?;
-        let mut keys = Vec::new();
-        let mut indices = Vec::new();
+        // Pair each index with its cached value, or `None` for a cache miss to be
+        // read from the database, so results keep the key-scan order.
+        let mut entries = Vec::new();
+        let mut db_keys = Vec::new();
         let prefix = bcs::to_bytes(stream_id).unwrap();
         for short_key in store.find_keys_by_prefix(&prefix).await? {
             let index = bcs::from_bytes::<u32>(&short_key)?;
             if index >= start_index {
-                let mut key = prefix.clone();
-                key.extend(short_key);
-                keys.push(key);
-                indices.push(index);
+                let event_id = EventId {
+                    chain_id: *chain_id,
+                    stream_id: stream_id.clone(),
+                    index,
+                };
+                let cached = self.caches.event.get(&event_id).map(|arc| (*arc).clone());
+                if cached.is_none() {
+                    let mut key = prefix.clone();
+                    key.extend(short_key);
+                    db_keys.push(key);
+                }
+                entries.push((index, cached));
             }
         }
-        let values = store.read_multi_values_bytes(&keys).await?;
-        let mut returned_values = Vec::new();
-        for (index, value) in indices.into_iter().zip(values) {
-            let event = value.unwrap();
+        let mut db_values = if db_keys.is_empty() {
+            Vec::new()
+        } else {
+            store.read_multi_values_bytes(&db_keys).await?
+        }
+        .into_iter();
+        let mut returned_values = Vec::with_capacity(entries.len());
+        for (index, cached) in entries {
+            let event = match cached {
+                Some(event) => event,
+                None => {
+                    let event_bytes = db_values
+                        .next()
+                        .expect("one database value per cache miss")
+                        .unwrap();
+                    let event_id = EventId {
+                        chain_id: *chain_id,
+                        stream_id: stream_id.clone(),
+                        index,
+                    };
+                    self.caches.event.insert(&event_id, event_bytes.clone());
+                    event_bytes
+                }
+            };
             returned_values.push(IndexAndEvent { index, event });
         }
         Ok(returned_values)
@@ -1651,20 +2070,33 @@ where
     ) -> Result<(), ViewError> {
         let mut batch = MultiPartitionBatch::new();
         for (event_id, value) in events {
-            batch.add_event(event_id, value)?;
+            batch.add_event(&event_id, value);
         }
         self.write_batch(batch).await
     }
 
     #[instrument(skip_all)]
     async fn read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
+        if let Some(desc) = self.caches.network_description.get() {
+            #[cfg(with_metrics)]
+            metrics::READ_NETWORK_DESCRIPTION
+                .with_label_values(&[metrics::CACHE])
+                .inc();
+            return Ok(Some(desc.clone()));
+        }
         let root_key = RootKey::NetworkDescription.bytes();
         let store = self.database.open_shared(&root_key)?;
-        let maybe_value = store.read_value(NETWORK_DESCRIPTION_KEY).await?;
+        let maybe_value: Option<NetworkDescription> =
+            store.read_value(NETWORK_DESCRIPTION_KEY).await?;
         #[cfg(with_metrics)]
         metrics::READ_NETWORK_DESCRIPTION
-            .with_label_values(&[])
+            .with_label_values(&[metrics::DB])
             .inc();
+        if let Some(ref desc) = maybe_value {
+            if self.caches.network_description.set(desc.clone()).is_err() {
+                debug!("network description cache was already populated concurrently");
+            }
+        }
         Ok(maybe_value)
     }
 
@@ -1677,6 +2109,10 @@ where
         batch.add_network_description(information)?;
         self.write_batch(batch).await?;
         Ok(())
+    }
+
+    fn shared_committees(&self) -> &SharedCommittees {
+        &self.shared_committees
     }
 
     fn wasm_runtime(&self) -> Option<WasmRuntime> {
@@ -1709,24 +2145,20 @@ where
             .collect()
     }
 
-    #[instrument(skip_all)]
-    fn deserialize_certificate(
-        pair: &[Option<Vec<u8>>],
-        hash: CryptoHash,
-    ) -> Result<Option<ConfirmedBlockCertificate>, ViewError> {
-        let Some(cert_bytes) = pair[0].as_ref() else {
-            return Ok(None);
-        };
-        let Some(value_bytes) = pair[1].as_ref() else {
-            return Ok(None);
-        };
-        let cert = bcs::from_bytes::<LiteCertificate>(cert_bytes)?;
-        let value = bcs::from_bytes::<ConfirmedBlock>(value_bytes)?;
-        assert_eq!(value.hash(), hash);
-        let certificate = cert
-            .with_value(value)
+    fn deserialize_and_cache_certificate(
+        &self,
+        lite_cert_bytes: &[u8],
+        confirmed_block_bytes: &[u8],
+    ) -> Result<Option<CacheArc<ConfirmedBlockCertificate>>, ViewError> {
+        let lite = bcs::from_bytes::<LiteCertificate>(lite_cert_bytes)?;
+        let block = bcs::from_bytes::<ConfirmedBlock>(confirmed_block_bytes)?;
+        let hash = block.hash();
+        self.caches.confirmed_block.insert(&hash, block.clone());
+        let certificate = lite
+            .with_value(block)
             .ok_or(ViewError::InconsistentEntries)?;
-        Ok(Some(certificate))
+        let arc = self.caches.certificate.insert(&hash, certificate);
+        Ok(Some(arc))
     }
 
     #[instrument(skip_all)]
@@ -1764,7 +2196,12 @@ where
     Database::Store: KeyValueStore + Clone + 'static,
     C: Clock + Clone + Send + Sync + 'static,
 {
-    pub(crate) fn new(database: Database, wasm_runtime: Option<WasmRuntime>, clock: C) -> Self {
+    pub(crate) fn new(
+        database: Database,
+        wasm_runtime: Option<WasmRuntime>,
+        cache_sizes: StorageCacheConfig,
+        clock: C,
+    ) -> Self {
         Self {
             database: Arc::new(database),
             clock,
@@ -1774,6 +2211,8 @@ where
             wasm_runtime,
             user_contracts: Arc::new(papaya::HashMap::new()),
             user_services: Arc::new(papaya::HashMap::new()),
+            shared_committees: SharedCommittees::new(),
+            caches: StorageCaches::new(cache_sizes),
             execution_runtime_config: ExecutionRuntimeConfig::default(),
         }
     }
@@ -1791,23 +2230,27 @@ where
     Database::Error: Send + Sync,
     Database::Store: KeyValueStore + Clone + 'static,
 {
+    /// Connects to the database, creating the given namespace if it does not exist.
     pub async fn maybe_create_and_connect(
         config: &Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
+        cache_sizes: StorageCacheConfig,
     ) -> Result<Self, ViewError> {
         let database = Database::maybe_create_and_connect(config, namespace).await?;
-        let storage = Self::new(database, wasm_runtime, WallClock);
+        let storage = Self::new(database, wasm_runtime, cache_sizes, WallClock);
         Ok(storage)
     }
 
+    /// Connects to an existing namespace in the database.
     pub async fn connect(
         config: &Database::Config,
         namespace: &str,
         wasm_runtime: Option<WasmRuntime>,
+        cache_sizes: StorageCacheConfig,
     ) -> Result<Self, ViewError> {
         let database = Database::connect(config, namespace).await?;
-        let storage = Self::new(database, wasm_runtime, WallClock);
+        let storage = Self::new(database, wasm_runtime, cache_sizes, WallClock);
         Ok(storage)
     }
 
@@ -1861,6 +2304,7 @@ where
     Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
     Database::Error: Send + Sync,
 {
+    /// Creates a storage instance backed by a fresh test namespace and a [`TestClock`].
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
         let config = Database::new_test_config().await.unwrap();
         let namespace = generate_test_namespace();
@@ -1874,6 +2318,7 @@ where
         .unwrap()
     }
 
+    /// Recreates the given namespace and connects to it using the provided test clock.
     pub async fn new_for_testing(
         config: Database::Config,
         namespace: &str,
@@ -1881,7 +2326,7 @@ where
         clock: TestClock,
     ) -> Result<Self, ViewError> {
         let database = Database::recreate_and_connect(&config, namespace).await?;
-        let storage = Self::new(database, wasm_runtime, clock);
+        let storage = Self::new(database, wasm_runtime, DEFAULT_STORAGE_CACHE_CONFIG, clock);
         storage.assert_is_migrated_storage().await?;
         Ok(storage)
     }

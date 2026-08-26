@@ -14,8 +14,9 @@ use linera_base::{
 };
 use linera_core::{
     client::{
-        ChainClientOptions, DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
-        DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+        chain_client, DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+        DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE, DEFAULT_MAX_CONCURRENT_BATCH_DOWNLOADS,
+        DEFAULT_MAX_EVENT_STREAM_QUERIES, DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     },
     node::CrossChainMessageDelivery,
     DEFAULT_QUORUM_GRACE_PERIOD,
@@ -27,17 +28,19 @@ use crate::client_metrics::TimingConfig;
 use crate::util;
 
 #[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
 pub enum Error {
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
     #[error("there are {public_keys} public keys but {weights} weights")]
     MisalignedWeights { public_keys: usize, weights: usize },
     #[error("config error: {0}")]
-    Config(#[from] crate::config::Error),
+    Config(#[from] crate::config::GenesisConfigError),
 }
 
 util::impl_from_infallible!(Error);
 
+/// Command-line options controlling the behavior of the chain client.
 #[derive(Clone, clap::Parser, serde::Deserialize, tsify::Tsify)]
 #[tsify(from_wasm_abi)]
 #[group(skip)]
@@ -72,6 +75,14 @@ pub struct Options {
     #[arg(long = "staging-bundles-time-budget-ms", value_parser = util::parse_millis)]
     pub staging_bundles_time_budget: Option<Duration>,
 
+    /// Comma-separated list of chain IDs whose incoming bundles should be processed first.
+    #[arg(long, value_parser = util::parse_chain_set)]
+    pub prioritize_bundles_from: Option<HashSet<ChainId>>,
+
+    /// Comma-separated list of chain IDs whose incoming bundles should be ignored.
+    #[arg(long, value_parser = util::parse_chain_set)]
+    pub ignore_bundles_from: Option<HashSet<ChainId>>,
+
     /// The duration in milliseconds after which an idle chain worker will free its memory.
     #[arg(
         long = "chain-worker-ttl-ms",
@@ -90,6 +101,11 @@ pub struct Options {
         value_parser = util::parse_millis
     )]
     pub sender_chain_worker_ttl: Duration,
+
+    /// Maximum number of cross-chain requests coalesced into a single batch by the
+    /// per-chain driver. Bounds the worst-case write-lock hold time.
+    #[arg(long, default_value_t = 1000)]
+    pub cross_chain_batch_size_limit: usize,
 
     /// Delay increment for retrying to connect to a validator.
     #[arg(
@@ -111,6 +127,25 @@ pub struct Options {
     )]
     pub max_backoff: Duration,
 
+    /// Initial probe interval (ms) for the notification circuit breaker. When a validator's
+    /// notification stream exhausts retries, the circuit breaker waits this long before
+    /// probing again. Doubles on each failed probe.
+    #[arg(
+        long = "notification-circuit-breaker-initial-probe-interval-ms",
+        default_value = "300000",
+        value_parser = util::parse_millis
+    )]
+    pub notification_circuit_breaker_initial_probe_interval: Duration,
+
+    /// Maximum probe interval (ms) for the notification circuit breaker. The probe interval
+    /// doubles on each failure but is capped at this value.
+    #[arg(
+        long = "notification-circuit-breaker-max-probe-interval-ms",
+        default_value = "3600000",
+        value_parser = util::parse_millis
+    )]
+    pub notification_circuit_breaker_max_probe_interval: Duration,
+
     /// Whether to wait until a quorum of validators has confirmed that all sent cross-chain
     /// messages have been delivered.
     #[arg(long)]
@@ -129,9 +164,9 @@ pub struct Options {
     #[arg(long, default_value_t, value_enum)]
     pub blanket_message_policy: BlanketMessagePolicy,
 
-    /// A set of chains to restrict incoming messages from. By default, messages
-    /// from all chains are accepted. To reject messages from all chains, specify
-    /// an empty string.
+    /// A set of chains to restrict incoming messages and events from. By default, messages and
+    /// events from all chains are accepted. To reject all of them, specify an empty string. The
+    /// admin chain's event stream is always followed regardless of this setting.
     #[arg(long, value_parser = util::parse_chain_set)]
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
 
@@ -144,6 +179,20 @@ pub struct Options {
     /// these applications will be accepted.
     #[arg(long, value_parser = util::parse_app_set)]
     pub reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
+
+    /// A set of application IDs. If specified, only event streams created by applications from
+    /// this set are processed and followed. The admin chain's event stream is always followed.
+    #[arg(long, value_parser = util::parse_app_set)]
+    pub process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
+
+    /// A set of application IDs whose messages must never be rejected. Bundles whose messages
+    /// are all from one of these applications bypass the other rejection rules (except
+    /// `--restrict-chain-ids-to`), and on execution failure they (and subsequent bundles from
+    /// the same sender) are removed from the block for later retry instead of being rejected,
+    /// with a warning logged. Bundles that contain any message from an application not on this
+    /// list can be rejected.
+    #[arg(long, value_parser = util::parse_app_set)]
+    pub never_reject_application_ids: Option<HashSet<GenericApplicationId>>,
 
     /// Enable timing reports during operations
     #[cfg(not(web))]
@@ -162,20 +211,20 @@ pub struct Options {
 
     /// The delay when downloading a blob, after which we try a second validator, in milliseconds.
     #[arg(
-        long = "blob-download-timeout-ms",
+        long = "blob-download-hedge-delay-ms",
         default_value = "1000",
         value_parser = util::parse_millis,
     )]
-    pub blob_download_timeout: Duration,
+    pub blob_download_hedge_delay: Duration,
 
     /// The delay when downloading a batch of certificates, after which we try a second validator,
     /// in milliseconds.
     #[arg(
-        long = "cert-batch-download-timeout-ms",
+        long = "cert-batch-download-hedge-delay-ms",
         default_value = "1000",
         value_parser = util::parse_millis
     )]
-    pub certificate_batch_download_timeout: Duration,
+    pub certificate_batch_download_hedge_delay: Duration,
 
     /// Maximum number of certificates that we download at a time from one validator when
     /// synchronizing one of our chains.
@@ -185,6 +234,14 @@ pub struct Options {
     )]
     pub certificate_download_batch_size: u64,
 
+    /// Maximum number of certificates read from local storage and uploaded to a validator
+    /// at a time when synchronizing a chain.
+    #[arg(
+        long,
+        default_value_t = DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
+    )]
+    pub certificate_upload_batch_size: u64,
+
     /// Maximum number of sender certificates we try to download and receive in one go
     /// when syncing sender chains.
     #[arg(
@@ -193,9 +250,18 @@ pub struct Options {
     )]
     pub sender_certificate_download_batch_size: usize,
 
+    /// Maximum number of certificate batches downloaded concurrently during chain sync.
+    #[arg(long, default_value_t = DEFAULT_MAX_CONCURRENT_BATCH_DOWNLOADS)]
+    pub max_concurrent_batch_downloads: usize,
+
     /// Maximum number of tasks that can are joined concurrently in the client.
     #[arg(long, default_value = "100")]
     pub max_joined_tasks: usize,
+
+    /// Maximum number of event stream IDs to include in a single `PreviousEventBlocks`
+    /// request. Larger sets are split into multiple requests.
+    #[arg(long, default_value_t = DEFAULT_MAX_EVENT_STREAM_QUERIES)]
+    pub max_event_stream_queries: usize,
 
     /// Maximum expected latency in milliseconds for score normalization.
     #[arg(
@@ -250,6 +316,7 @@ pub struct Options {
     )]
     pub alternative_peers_retry_delay_ms: u64,
 
+    /// Configuration for the chain listener.
     #[serde(flatten)]
     #[clap(flatten)]
     pub chain_listener_config: crate::chain_listener::ChainListenerConfig,
@@ -272,31 +339,48 @@ impl Default for Options {
 }
 
 impl Options {
-    /// Creates [`ChainClientOptions`] with the corresponding values.
-    pub(crate) fn to_chain_client_options(&self) -> ChainClientOptions {
-        let message_policy = MessagePolicy::new(
-            self.blanket_message_policy,
-            self.restrict_chain_ids_to.clone(),
-            self.reject_message_bundles_without_application_ids.clone(),
-            self.reject_message_bundles_with_other_application_ids
+    /// Creates [`chain_client::Options`] with the corresponding values.
+    pub(crate) fn to_chain_client_options(&self) -> chain_client::Options {
+        let message_policy = MessagePolicy {
+            blanket: self.blanket_message_policy,
+            restrict_chain_ids_to: self.restrict_chain_ids_to.clone(),
+            ignore_chain_ids: self.ignore_bundles_from.clone().unwrap_or_default(),
+            reject_message_bundles_without_application_ids: self
+                .reject_message_bundles_without_application_ids
                 .clone(),
-        );
+            reject_message_bundles_with_other_application_ids: self
+                .reject_message_bundles_with_other_application_ids
+                .clone(),
+            process_events_from_application_ids: self.process_events_from_application_ids.clone(),
+            never_reject_application_ids: self
+                .never_reject_application_ids
+                .clone()
+                .unwrap_or_default(),
+        };
         let cross_chain_message_delivery =
             CrossChainMessageDelivery::new(self.wait_for_outgoing_messages);
-        ChainClientOptions {
+        chain_client::Options {
             max_pending_message_bundles: self.max_pending_message_bundles,
             max_block_limit_errors: self.max_block_limit_errors,
             max_new_events_per_block: self.max_new_events_per_block,
             staging_bundles_time_budget: self.staging_bundles_time_budget,
+            priority_bundle_origins: self.prioritize_bundles_from.clone().unwrap_or_default(),
             message_policy,
             cross_chain_message_delivery,
             quorum_grace_period: self.quorum_grace_period,
-            blob_download_timeout: self.blob_download_timeout,
-            certificate_batch_download_timeout: self.certificate_batch_download_timeout,
+            blob_download_hedge_delay: self.blob_download_hedge_delay,
+            certificate_batch_download_hedge_delay: self.certificate_batch_download_hedge_delay,
             certificate_download_batch_size: self.certificate_download_batch_size,
+            certificate_upload_batch_size: self.certificate_upload_batch_size,
             sender_certificate_download_batch_size: self.sender_certificate_download_batch_size,
+            max_concurrent_batch_downloads: self.max_concurrent_batch_downloads,
             max_joined_tasks: self.max_joined_tasks,
             allow_fast_blocks: self.allow_fast_blocks,
+            notification_circuit_breaker_initial_probe_interval: self
+                .notification_circuit_breaker_initial_probe_interval,
+            notification_circuit_breaker_max_probe_interval: self
+                .notification_circuit_breaker_max_probe_interval,
+            max_event_stream_queries: self.max_event_stream_queries,
         }
     }
 
@@ -324,6 +408,7 @@ impl Options {
     }
 }
 
+/// Command-line options for configuring the ownership of a chain.
 #[derive(Debug, Clone, clap::Args)]
 pub struct ChainOwnershipConfig {
     /// A JSON list of the new super owners. Absence of the option leaves the current
@@ -385,6 +470,7 @@ pub struct ChainOwnershipConfig {
 }
 
 impl ChainOwnershipConfig {
+    /// Applies the configured ownership overrides to the given chain ownership.
     pub fn update(self, chain_ownership: &mut ChainOwnership) -> Result<(), Error> {
         let ChainOwnershipConfig {
             super_owners,
@@ -438,6 +524,7 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
     }
 }
 
+/// Command-line options for configuring application permissions on a chain.
 #[derive(Debug, Clone, clap::Args)]
 pub struct ApplicationPermissionsConfig {
     /// A JSON list of applications allowed to execute operations on this chain. If set to null, all
@@ -477,6 +564,7 @@ pub struct ApplicationPermissionsConfig {
 }
 
 impl ApplicationPermissionsConfig {
+    /// Applies the configured permission overrides to the given application permissions.
     pub fn update(self, application_permissions: &mut ApplicationPermissions) {
         if let Some(execute_operations) = self.execute_operations {
             application_permissions.execute_operations = execute_operations;
@@ -499,17 +587,23 @@ impl ApplicationPermissionsConfig {
     }
 }
 
+/// A named preset selecting which resource control policy the chain should use.
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ResourceControlPolicyConfig {
+    /// Charges nothing for any resource, with no usage limits.
     NoFees,
+    /// Uses the fees and limits that match the public Testnet.
     Testnet,
+    /// Charges only for fuel, leaving all other resources free (for testing).
     #[cfg(with_testing)]
     OnlyFuel,
+    /// Charges a small non-zero amount in every fee category (for testing).
     #[cfg(with_testing)]
     AllCategories,
 }
 
 impl ResourceControlPolicyConfig {
+    /// Converts this config into the corresponding resource control policy.
     pub fn into_policy(self) -> ResourceControlPolicy {
         match self {
             ResourceControlPolicyConfig::NoFees => ResourceControlPolicy::no_fees(),
@@ -532,6 +626,6 @@ impl std::str::FromStr for ResourceControlPolicyConfig {
 
 impl fmt::Display for ResourceControlPolicyConfig {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }

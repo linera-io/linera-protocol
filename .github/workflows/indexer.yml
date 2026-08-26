@@ -7,6 +7,9 @@ on:
     paths-ignore:
       - 'docs/**'
       - 'mdbook/**'
+      - 'kubernetes/**'
+      - 'docker/dashboards/**'
+      - '.github/workflows/**'
   merge_group:
   workflow_dispatch:
 
@@ -30,15 +33,13 @@ permissions:
 jobs:
   indexer-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      uses: ./.github/actions/install-protoc
     - name: Check indexer library compiles
       run: |
         cargo check --locked -p linera-indexer
@@ -55,12 +56,10 @@ jobs:
     timeout-minutes: 20
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      uses: ./.github/actions/install-protoc
     - name: Run indexer integration tests
       run: |
         cargo test --locked -p linera-indexer --lib

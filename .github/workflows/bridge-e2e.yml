@@ -4,7 +4,7 @@ on:
   merge_group:
   workflow_dispatch:
   push:
-    branches: [ 'testnet_*', 'main']
+    branches: [ 'testnet_*', 'main' ]
 
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
@@ -26,20 +26,40 @@ permissions:
 
 jobs:
   bridge-e2e:
-    runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 60
+    runs-on: linera-io-self-hosted-ci
+    # 90, matching main. The old 60 was sized for the pull-the-image path that
+    # this workflow no longer takes: building linera-test locally costs ~23 min,
+    # which pushed a run to 60m50s and got it killed. main does the same work
+    # without a pull and lands at ~81 min.
+    timeout-minutes: 90
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
+          submodules: recursive
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+        uses: ./.github/actions/install-protoc
+
+      # Self-hosted runners occasionally expose an unhealthy
+      # docker socket at job start despite
+      # RUNNER_WAIT_FOR_DOCKER_IN_SECONDS. Probe + retry so
+      # we do not fail the whole run on a startup race.
+      - name: Wait for docker daemon
+        run: |
+          for i in $(seq 1 60); do
+            if docker info >/dev/null 2>&1; then
+              echo "Docker ready after ${i} attempt(s)"
+              exit 0
+            fi
+            echo "Waiting for docker daemon ($i/60)..."
+            sleep 2
+          done
+          echo "Docker daemon did not become ready in 120s"
+          exit 1
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -56,14 +76,28 @@ jobs:
       - name: Configure Docker for GCP
         run: gcloud auth configure-docker us-docker.pkg.dev
 
-      - name: Pull linera & exporter images
-        run: |
-          BRANCH="${{ github.base_ref || github.ref_name }}"
-          docker pull "${GCP_REGISTRY}/linera:${BRANCH}"
-          docker pull "${GCP_REGISTRY}/linera-exporter:${BRANCH}"
-          # Re-tag to names the compose file expects
-          docker tag "${GCP_REGISTRY}/linera:${BRANCH}" linera-test
-          docker tag "${GCP_REGISTRY}/linera-exporter:${BRANCH}" linera-exporter
+      - name: Build linera image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          target: tests
+          tags: linera-test
+          load: true
+          build-args: |
+            build_flag=
+            build_folder=debug
+
+      - name: Build exporter image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile.exporter
+          tags: linera-exporter
+          load: true
+          build-args: |
+            build_flag=
+            build_folder=debug
 
       - name: Build foundry-jq image
         run: docker build -t foundry-jq -f ./docker/Dockerfile.foundry ./docker
@@ -105,20 +139,63 @@ jobs:
           load: true
           tags: |
             linera-bridge:latest
-            ${{ env.GCP_REGISTRY }}/linera-bridge:${{ github.base_ref || github.ref_name }}
+            ${{ github.event_name != 'workflow_dispatch' && format('{0}/linera-bridge:{1}', env.GCP_REGISTRY, github.base_ref || github.ref_name) || '' }}
 
-      - name: Push bridge image to registry
-        if: steps.build-bridge.outcome == 'success'
-        run: |
-          BRANCH="${{ github.base_ref || github.ref_name }}"
-          docker push "${GCP_REGISTRY}/linera-bridge:${BRANCH}"
+      - name: Build evm-bridge Wasm module
+        run: cargo build --release --target wasm32-unknown-unknown
+        working-directory: linera-bridge/contracts/evm-bridge
 
-      - name: Build fungible example Wasm
-        run: cargo build --release --target wasm32-unknown-unknown -p fungible
+      - name: Build wrapped-fungible Wasm module
+        run: cargo build --release --target wasm32-unknown-unknown -p wrapped-fungible
         working-directory: examples
+
+      - name: Run evm-bridge contract integration tests
+        working-directory: linera-bridge/contracts/evm-bridge
+        env:
+          RUSTFLAGS: ""
+        run: cargo test
+
+      - name: Build linera-bridge binary for local relay tests
+        run: cargo build -p linera-bridge --features linera-bridge/relay
 
       - name: Run bridge E2E test
         working-directory: linera-bridge/tests/e2e
+        env:
+          RUSTFLAGS: ""
+        run: cargo test -- --ignored --nocapture
+
+      - name: Install Foundry (provides `anvil`)
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.7.0
+
+      - name: Ensure Solc Directory Exists
+        run: mkdir -p /home/runner/.solc
+      - name: Cache Solc
+        id: cache-solc
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/.solc
+          key: solc-v0.8.33
+          restore-keys: solc-
+      - name: Get Solc
+        if: steps.cache-solc.outputs.cache-hit != 'true'
+        uses: ./.github/actions/get-solc
+        with:
+          version: v0.8.33
+      - name: Add Solc to PATH
+        run: echo "/home/runner/.solc" >> $GITHUB_PATH
+      - name: Create a Solc symbolic link
+        run: ln -sf /home/runner/.solc/v0.8.33/solc-static-linux /home/runner/.solc/solc
+
+      - name: Run anvil deposit-proof test
+        working-directory: linera-bridge
+        env:
+          RUSTFLAGS: ""
+        run: cargo test -p linera-bridge --test anvil_deposit_proof -- --ignored --nocapture
+
+      - name: Run evm-bridge contract integration tests (anvil)
+        working-directory: linera-bridge/contracts/evm-bridge
         env:
           RUSTFLAGS: ""
         run: cargo test -- --ignored --nocapture

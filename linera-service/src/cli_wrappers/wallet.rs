@@ -59,7 +59,7 @@ use crate::{
         Network,
     },
     util::{self, ChildExt},
-    wallet::Wallet,
+    Wallet,
 };
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -81,6 +81,7 @@ pub struct ClientWrapper {
     wallet: String,
     keystore: String,
     network: Network,
+    /// Provides the working directory for the client and its files.
     pub path_provider: PathProvider,
     on_drop: OnClientDrop,
     extra_args: Vec<String>,
@@ -96,6 +97,7 @@ pub enum OnClientDrop {
 }
 
 impl ClientWrapper {
+    /// Creates a new [`ClientWrapper`], waiting for outgoing messages by default.
     pub fn new(
         path_provider: PathProvider,
         network: Network,
@@ -113,6 +115,7 @@ impl ClientWrapper {
         )
     }
 
+    /// Creates a new [`ClientWrapper`] with the given extra arguments passed to every command.
     pub fn new_with_extra_args(
         path_provider: PathProvider,
         network: Network,
@@ -121,13 +124,9 @@ impl ClientWrapper {
         on_drop: OnClientDrop,
         extra_args: Vec<String>,
     ) -> Self {
-        let storage = format!(
-            "rocksdb:{}/client_{}.db",
-            path_provider.path().display(),
-            id
-        );
-        let wallet = format!("wallet_{}.json", id);
-        let keystore = format!("keystore_{}.json", id);
+        let storage = format!("rocksdb:{}/client_{id}.db", path_provider.path().display(),);
+        let wallet = format!("wallet_{id}.json");
+        let keystore = format!("keystore_{id}.json");
         Self {
             binary_path: sync::Mutex::new(None),
             testing_prng_seed,
@@ -224,7 +223,7 @@ impl ClientWrapper {
         self.command_with_envs_and_arguments(
             &[(
                 "RUST_LOG",
-                &std::env::var("RUST_LOG").unwrap_or(String::from("linera=debug")),
+                &std::env::var("RUST_LOG").unwrap_or_else(|_| String::from("linera=debug")),
             )],
             arguments,
         )
@@ -234,7 +233,7 @@ impl ClientWrapper {
     async fn command(&self) -> Result<Command> {
         self.command_with_envs(&[(
             "RUST_LOG",
-            &std::env::var("RUST_LOG").unwrap_or(String::from("linera=debug")),
+            &std::env::var("RUST_LOG").unwrap_or_else(|_| String::from("linera=debug")),
         )])
         .await
     }
@@ -389,7 +388,7 @@ impl ClientWrapper {
         let json_parameters = serde_json::to_string(parameters)?;
         let json_argument = serde_json::to_string(argument)?;
         let mut command = self.command().await?;
-        let vm_runtime = format!("{}", vm_runtime);
+        let vm_runtime = format!("{vm_runtime}");
         command
             .arg("publish-and-create")
             .args([contract, service])
@@ -422,7 +421,32 @@ impl ClientWrapper {
             .await?
             .arg("publish-module")
             .args([contract, service])
-            .args(["--vm-runtime", &format!("{}", vm_runtime).to_lowercase()])
+            .args(["--vm-runtime", &format!("{vm_runtime}").to_lowercase()])
+            .args(publisher.into().iter().map(ChainId::to_string))
+            .spawn_and_wait_for_stdout()
+            .await?;
+        let module_id: ModuleId = stdout.trim().parse()?;
+        Ok(module_id.with_abi())
+    }
+
+    /// Runs `linera publish-module-with-formats`.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn publish_module_with_formats<Abi, Parameters, InstantiationArgument>(
+        &self,
+        contract: PathBuf,
+        service: PathBuf,
+        formats: PathBuf,
+        registry_application_id: ApplicationId,
+        vm_runtime: VmRuntime,
+        publisher: impl Into<Option<ChainId>>,
+    ) -> Result<ModuleId<Abi, Parameters, InstantiationArgument>> {
+        let stdout = self
+            .command()
+            .await?
+            .arg("publish-module-with-formats")
+            .args([contract, service, formats])
+            .arg(registry_application_id.to_string())
+            .args(["--vm-runtime", &format!("{vm_runtime}").to_lowercase()])
             .args(publisher.into().iter().map(ChainId::to_string))
             .spawn_and_wait_for_stdout()
             .await?;
@@ -483,6 +507,30 @@ impl ClientWrapper {
         operators: &[(String, PathBuf)],
         read_only: bool,
     ) -> Result<NodeService> {
+        self.run_node_service_with_all_options(
+            port,
+            process_inbox,
+            operator_application_ids,
+            operators,
+            read_only,
+            &[],
+            &[],
+        )
+        .await
+    }
+
+    /// Runs `linera service` with all available options.
+    #[expect(clippy::too_many_arguments)]
+    pub async fn run_node_service_with_all_options(
+        &self,
+        port: impl Into<Option<u16>>,
+        process_inbox: ProcessInbox,
+        operator_application_ids: &[ApplicationId],
+        operators: &[(String, PathBuf)],
+        read_only: bool,
+        allowed_subscriptions: &[String],
+        subscription_ttls: &[(String, u64)],
+    ) -> Result<NodeService> {
         let port = port.into().unwrap_or(8080);
         let mut command = self.command().await?;
         command.arg("service");
@@ -501,16 +549,19 @@ impl ClientWrapper {
         if read_only {
             command.arg("--read-only");
         }
+        for query in allowed_subscriptions {
+            command.args(["--allow-subscription", query]);
+        }
+        for (name, secs) in subscription_ttls {
+            command.args(["--subscription-ttl-secs", &format!("{name}={secs}")]);
+        }
         let child = command
             .args(["--port".to_string(), port.to_string()])
             .spawn_into()?;
         let client = reqwest_client();
         for i in 0..10 {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-            let request = client
-                .get(format!("http://localhost:{}/", port))
-                .send()
-                .await;
+            let request = client.get(format!("http://localhost:{port}/")).send().await;
             if request.is_ok() {
                 info!("Node service has started");
                 return Ok(NodeService::new(port, child));
@@ -548,10 +599,7 @@ impl ClientWrapper {
         let client = reqwest_client();
         for i in 0..10 {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-            let request = client
-                .get(format!("http://localhost:{}/", port))
-                .send()
-                .await;
+            let request = client.get(format!("http://localhost:{port}/")).send().await;
             if request.is_ok() {
                 tracing::info!("Node service has started");
                 return Ok(NodeService::new(port, child));
@@ -612,6 +660,25 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera validator benchmark` and returns its stdout.
+    pub async fn validator_benchmark(
+        &self,
+        address: impl Into<String>,
+        chains: impl IntoIterator<Item = &ChainId>,
+        extra_args: &[&str],
+    ) -> Result<String> {
+        let mut command = self.command().await?;
+        command
+            .arg("validator")
+            .arg("benchmark")
+            .arg(address.into());
+        for chain in chains {
+            command.args(["--chain", &chain.to_string()]);
+        }
+        command.args(extra_args);
+        command.spawn_and_wait_for_stdout().await
+    }
+
     /// Runs `linera faucet`.
     pub async fn run_faucet(
         &self,
@@ -637,10 +704,7 @@ impl ClientWrapper {
         let client = reqwest_client();
         for i in 0..10 {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-            let request = client
-                .get(format!("http://localhost:{}/", port))
-                .send()
-                .await;
+            let request = client.get(format!("http://localhost:{port}/")).send().await;
             if request.is_ok() {
                 info!("Faucet has started");
                 return Ok(FaucetService::new(port, child, temp_dir));
@@ -755,8 +819,8 @@ impl ClientWrapper {
         Ok(())
     }
 
-    fn benchmark_command_internal(command: &mut Command, args: BenchmarkCommand) -> Result<()> {
-        let mut formatted_args = to_args(&args)?;
+    fn benchmark_command_internal(command: &mut Command, args: &BenchmarkCommand) -> Result<()> {
+        let mut formatted_args = to_args(args)?;
         let subcommand = formatted_args.remove(0);
         // The subcommand is followed by the flattened options, which are preceded by "options".
         // So remove that as well.
@@ -791,7 +855,7 @@ impl ClientWrapper {
         let mut command = self
             .command_with_envs_and_arguments(envs, self.required_command_arguments())
             .await?;
-        Self::benchmark_command_internal(&mut command, args)?;
+        Self::benchmark_command_internal(&mut command, &args)?;
         Ok(command)
     }
 
@@ -799,7 +863,7 @@ impl ClientWrapper {
         let mut command = self
             .command_with_arguments(self.required_command_arguments())
             .await?;
-        Self::benchmark_command_internal(&mut command, args)?;
+        Self::benchmark_command_internal(&mut command, &args)?;
         Ok(command)
     }
 
@@ -924,6 +988,7 @@ impl ClientWrapper {
         Ok(new_chain)
     }
 
+    /// Runs `linera open-multi-owner-chain` and returns the new chain's ID.
     pub async fn open_multi_owner_chain(
         &self,
         from: ChainId,
@@ -950,6 +1015,7 @@ impl ClientWrapper {
         Ok(chain_id)
     }
 
+    /// Runs `linera change-ownership`.
     pub async fn change_ownership(
         &self,
         chain_id: ChainId,
@@ -973,6 +1039,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera change-application-permissions --chain-id CHAIN_ID`.
     pub async fn change_application_permissions(
         &self,
         chain_id: ChainId,
@@ -985,7 +1052,6 @@ impl ClientWrapper {
         command
             .arg("--close-chain")
             .arg(serde_json::to_string(&application_permissions.close_chain)?);
-        // TODO: add other fields
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
     }
@@ -1023,6 +1089,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera retry-pending-block` and returns the hash of the produced block, if any.
     pub async fn retry_pending_block(
         &self,
         chain_id: Option<ChainId>,
@@ -1068,26 +1135,32 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Loads the wallet from this client's wallet file.
     pub fn load_wallet(&self) -> Result<Wallet> {
         Ok(Wallet::read(&self.wallet_path())?)
     }
 
+    /// Loads the in-memory signer from this client's keystore file.
     pub fn load_keystore(&self) -> Result<InMemorySigner> {
         util::read_json(self.keystore_path())
     }
 
+    /// Returns the path to this client's wallet file.
     pub fn wallet_path(&self) -> PathBuf {
         self.path_provider.path().join(&self.wallet)
     }
 
+    /// Returns the path to this client's keystore file.
     pub fn keystore_path(&self) -> PathBuf {
         self.path_provider.path().join(&self.keystore)
     }
 
+    /// Returns the storage specification string used by this client.
     pub fn storage_path(&self) -> &str {
         &self.storage
     }
 
+    /// Returns the owner of the wallet's default chain, if any.
     pub fn get_owner(&self) -> Option<AccountOwner> {
         let wallet = self.load_wallet().ok()?;
         wallet
@@ -1096,12 +1169,14 @@ impl ClientWrapper {
             .owner
     }
 
+    /// Returns whether the given chain is present in the wallet.
     pub fn is_chain_present_in_wallet(&self, chain: ChainId) -> bool {
         self.load_wallet()
             .ok()
             .is_some_and(|wallet| wallet.get(chain).is_some())
     }
 
+    /// Runs `linera validator add`.
     pub async fn set_validator(
         &self,
         validator_key: &(String, String),
@@ -1122,6 +1197,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera validator remove`.
     pub async fn remove_validator(&self, validator_key: &str) -> Result<()> {
         self.command()
             .await?
@@ -1133,6 +1209,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera validator update` to add, modify, and remove validators in one call.
     pub async fn change_validators(
         &self,
         add_validators: &[(String, String, usize, usize)], // (public_key, account_key, port, votes)
@@ -1152,10 +1229,10 @@ impl ClientWrapper {
             add_validators.iter().chain(modify_validators.iter())
         {
             let public_key = ValidatorPublicKey::from_str(public_key_str)
-                .with_context(|| format!("Invalid validator public key: {}", public_key_str))?;
+                .with_context(|| format!("Invalid validator public key: {public_key_str}"))?;
 
             let account_key = AccountPublicKey::from_str(account_key_str)
-                .with_context(|| format!("Invalid account public key: {}", account_key_str))?;
+                .with_context(|| format!("Invalid account public key: {account_key_str}"))?;
 
             let address = format!("{}:127.0.0.1:{}", self.network.short(), port)
                 .parse()
@@ -1176,7 +1253,7 @@ impl ClientWrapper {
         // Remove validators (set to None)
         for validator_key_str in remove_validators {
             let public_key = ValidatorPublicKey::from_str(validator_key_str)
-                .with_context(|| format!("Invalid validator public key: {}", validator_key_str))?;
+                .with_context(|| format!("Invalid validator public key: {validator_key_str}"))?;
             changes.insert(public_key, None);
         }
 
@@ -1199,6 +1276,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera revoke-epochs`.
     pub async fn revoke_epochs(&self, epoch: Epoch) -> Result<()> {
         self.command()
             .await?
@@ -1209,6 +1287,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera resource-control-policy --http-request-allow-list`.
     pub async fn change_http_whitelist(&self, list: &[&str]) -> Result<()> {
         self.command()
             .await?
@@ -1269,6 +1348,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Builds the application at `path` with `cargo` and returns its contract and service paths.
     pub async fn build_application(
         &self,
         path: &Path,
@@ -1376,11 +1456,13 @@ impl Drop for ClientWrapper {
 
 #[cfg(with_testing)]
 impl ClientWrapper {
+    /// Builds the example application with the given name and returns its contract and service paths.
     pub async fn build_example(&self, name: &str) -> Result<(PathBuf, PathBuf)> {
         self.build_application(Self::example_path(name)?.as_path(), name, true)
             .await
     }
 
+    /// Returns the path to the example application with the given name.
     pub fn example_path(name: &str) -> Result<PathBuf> {
         Ok(env::current_dir()?.join("../examples/").join(name))
     }
@@ -1416,30 +1498,36 @@ impl NodeService {
         Self { port, child }
     }
 
+    /// Terminates the node service by killing its child process.
     pub async fn terminate(mut self) -> Result<()> {
         self.child.kill().await.context("terminating node service")
     }
 
+    /// Returns the port the node service is listening on.
     pub fn port(&self) -> u16 {
         self.port
     }
 
+    /// Checks that the node service child process is still running.
     pub fn ensure_is_running(&mut self) -> Result<()> {
         self.child.ensure_is_running()
     }
 
+    /// Issues a `processInbox` GraphQL mutation and returns the hashes of the created blocks.
     pub async fn process_inbox(&self, chain_id: &ChainId) -> Result<Vec<CryptoHash>> {
         let query = format!("mutation {{ processInbox(chainId: \"{chain_id}\") }}");
         let mut data = self.query_node(query).await?;
         Ok(serde_json::from_value(data["processInbox"].take())?)
     }
 
+    /// Issues a `sync` GraphQL mutation for the given chain and returns the new block height.
     pub async fn sync(&self, chain_id: &ChainId) -> Result<u64> {
         let query = format!("mutation {{ sync(chainId: \"{chain_id}\") }}");
         let mut data = self.query_node(query).await?;
         Ok(serde_json::from_value(data["sync"].take())?)
     }
 
+    /// Issues a `transfer` GraphQL mutation and returns the resulting block hash.
     pub async fn transfer(
         &self,
         chain_id: ChainId,
@@ -1462,6 +1550,7 @@ impl NodeService {
             .context("missing transfer field in response")
     }
 
+    /// Queries the balance of the given account via GraphQL.
     pub async fn balance(&self, account: &Account) -> Result<Amount> {
         let chain = account.chain_id;
         let owner = account.owner;
@@ -1493,6 +1582,7 @@ impl NodeService {
         }
     }
 
+    /// Returns an [`ApplicationWrapper`] for querying the given application on this node service.
     pub fn make_application<A: ContractAbi>(
         &self,
         chain_id: &ChainId,
@@ -1506,6 +1596,7 @@ impl NodeService {
         Ok(ApplicationWrapper::from(link))
     }
 
+    /// Issues a `publishDataBlob` GraphQL mutation and returns the blob's hash.
     pub async fn publish_data_blob(
         &self,
         chain_id: &ChainId,
@@ -1521,6 +1612,7 @@ impl NodeService {
             .context("missing publishDataBlob field in response")
     }
 
+    /// Issues a `publishModule` GraphQL mutation and returns the new module ID.
     pub async fn publish_module<Abi, Parameters, InstantiationArgument>(
         &self,
         chain_id: &ChainId,
@@ -1545,6 +1637,7 @@ impl NodeService {
         Ok(module_id.with_abi())
     }
 
+    /// Queries the committees of the given chain via GraphQL.
     pub async fn query_committees(&self, chain_id: &ChainId) -> Result<BTreeMap<Epoch, Committee>> {
         let query = format!(
             "query {{ chain(chainId:\"{chain_id}\") {{
@@ -1556,6 +1649,7 @@ impl NodeService {
         Ok(serde_json::from_value(committees)?)
     }
 
+    /// Issues an `eventsFromIndex` GraphQL query for events on the given chain and stream.
     pub async fn events_from_index(
         &self,
         chain_id: &ChainId,
@@ -1574,6 +1668,7 @@ impl NodeService {
         Ok(serde_json::from_value(response)?)
     }
 
+    /// Posts the given GraphQL query to the node service, retrying on timeouts and errors.
     pub async fn query_node(&self, query: impl AsRef<str>) -> Result<Value> {
         let n_try = 5;
         let query = query.as_ref();
@@ -1626,6 +1721,7 @@ impl NodeService {
         );
     }
 
+    /// Issues a `createApplication` GraphQL mutation and returns the new application ID.
     pub async fn create_application<
         Abi: ContractAbi,
         Parameters: Serialize,
@@ -1745,6 +1841,59 @@ impl NodeService {
             },
         )))
     }
+
+    /// Subscribes to query results via the `queryResult` GraphQL subscription.
+    pub async fn query_result(
+        &self,
+        name: &str,
+        chain_id: ChainId,
+        application_id: &ApplicationId,
+    ) -> Result<Pin<Box<impl Stream<Item = Result<Value>>>>> {
+        let query = format!(
+            r#"subscription {{ queryResult(name: "{name}", chainId: "{chain_id}", applicationId: "{application_id}") }}"#,
+        );
+        let url = format!("ws://localhost:{}/ws", self.port);
+        let mut request = url.into_client_request()?;
+        request.headers_mut().insert(
+            "Sec-WebSocket-Protocol",
+            HeaderValue::from_str("graphql-transport-ws")?,
+        );
+        let (mut websocket, _) = async_tungstenite::tokio::connect_async(request).await?;
+        let init_json = json!({
+          "type": "connection_init",
+          "payload": {}
+        });
+        websocket.send(init_json.to_string().into()).await?;
+        let text = websocket
+            .next()
+            .await
+            .context("Failed to establish connection")??
+            .into_text()?;
+        ensure!(
+            text == "{\"type\":\"connection_ack\"}",
+            "Unexpected response: {text}"
+        );
+        let query_json = json!({
+          "id": "1",
+          "type": "start",
+          "payload": {
+            "query": query,
+            "variables": {},
+            "operationName": null
+          }
+        });
+        websocket.send(query_json.to_string().into()).await?;
+        Ok(Box::pin(websocket.map_err(anyhow::Error::from).and_then(
+            |message| async {
+                let text = message.into_text()?;
+                let value: Value = serde_json::from_str(&text).context("invalid JSON")?;
+                if let Some(errors) = value["payload"].get("errors") {
+                    bail!("Query result subscription failed: {errors:?}");
+                }
+                Ok(value["payload"]["data"]["queryResult"].clone())
+            },
+        )))
+    }
 }
 
 /// A running faucet service.
@@ -1763,6 +1912,7 @@ impl FaucetService {
         }
     }
 
+    /// Terminates the faucet service by killing its child process.
     pub async fn terminate(mut self) -> Result<()> {
         self.child
             .kill()
@@ -1770,10 +1920,12 @@ impl FaucetService {
             .context("terminating faucet service")
     }
 
+    /// Checks that the faucet service child process is still running.
     pub fn ensure_is_running(&mut self) -> Result<()> {
         self.child.ensure_is_running()
     }
 
+    /// Returns a [`Faucet`] client connected to this running faucet service.
     pub fn instance(&self) -> Faucet {
         Faucet::new(format!("http://localhost:{}/", self.port))
     }
@@ -1786,12 +1938,14 @@ pub struct ApplicationWrapper<A> {
 }
 
 impl<A> ApplicationWrapper<A> {
+    /// Runs the given GraphQL query against the application and returns the response data.
     pub async fn run_graphql_query(&self, query: impl AsRef<str>) -> Result<Value> {
         let query = query.as_ref();
         let value = self.run_json_query(json!({ "query": query })).await?;
         Ok(value["data"].clone())
     }
 
+    /// Posts the given serializable JSON query to the application endpoint, retrying on failure.
     pub async fn run_json_query<T: Serialize>(&self, query: T) -> Result<Value> {
         const MAX_RETRIES: usize = 5;
 
@@ -1835,12 +1989,14 @@ impl<A> ApplicationWrapper<A> {
         unreachable!()
     }
 
+    /// Runs the given string as a GraphQL `query` and returns the response data.
     pub async fn query(&self, query: impl AsRef<str>) -> Result<Value> {
         let query = query.as_ref();
         self.run_graphql_query(&format!("query {{ {query} }}"))
             .await
     }
 
+    /// Runs the given string as a GraphQL `query` and deserializes the named field's value.
     pub async fn query_json<T: DeserializeOwned>(&self, query: impl AsRef<str>) -> Result<T> {
         let query = query.as_ref().trim();
         let name = query
@@ -1851,16 +2007,18 @@ impl<A> ApplicationWrapper<A> {
             .with_context(|| format!("{name} field missing in response"))
     }
 
+    /// Runs the given string as a GraphQL `mutation` and returns the response data.
     pub async fn mutate(&self, mutation: impl AsRef<str>) -> Result<Value> {
         let mutation = mutation.as_ref();
         self.run_graphql_query(&format!("mutation {{ {mutation} }}"))
             .await
     }
 
+    /// Runs several GraphQL mutations in a single aliased `mutation` request.
     pub async fn multiple_mutate(&self, mutations: &[String]) -> Result<Value> {
         let mut out = String::from("mutation {\n");
         for (index, mutation) in mutations.iter().enumerate() {
-            out = format!("{}  u{}: {}\n", out, index, mutation);
+            out = format!("{out}  u{index}: {mutation}\n");
         }
         out.push_str("}\n");
         self.run_graphql_query(&out).await
@@ -1895,6 +2053,7 @@ fn notification_timeout() -> Duration {
 }
 
 #[cfg(with_testing)]
+/// Extension trait for streams of [`Notification`]s, providing helpers to wait for events.
 pub trait NotificationsExt {
     /// Waits for a notification for which `f` returns `Some(t)`, and returns `t`.
     fn wait_for<T>(
@@ -1910,7 +2069,7 @@ pub trait NotificationsExt {
     ) -> impl Future<Output = Result<BTreeSet<StreamId>>> {
         let expected_height = expected_height.into();
         self.wait_for(move |notification| {
-            if let Reason::NewBlock {
+            if let Reason::NewEvents {
                 height,
                 event_streams,
                 ..

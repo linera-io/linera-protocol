@@ -1,6 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Common types and helpers shared across the crate, including error types and
+//! Ethereum event parsing.
+
 use std::num::ParseIntError;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -12,6 +15,7 @@ use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+/// An error that occurs when validating a JSON-RPC response.
 #[derive(Error, Debug)]
 pub enum EthereumQueryError {
     /// The ID should be matching
@@ -23,6 +27,7 @@ pub enum EthereumQueryError {
     WrongJsonRpcVersion,
 }
 
+/// An error that occurs while accessing or parsing data from an Ethereum node.
 #[derive(Debug, Error)]
 pub enum EthereumServiceError {
     /// The database is not coherent
@@ -33,9 +38,11 @@ pub enum EthereumServiceError {
     #[error(transparent)]
     ParseIntError(#[from] ParseIntError),
 
+    /// Unsupported Ethereum type
     #[error("Unsupported Ethereum type")]
     UnsupportedEthereumTypeError,
 
+    /// Event parsing error
     #[error("Event parsing error")]
     EventParsingError,
 
@@ -54,6 +61,10 @@ pub enum EthereumServiceError {
     /// Hex parsing error
     #[error(transparent)]
     FromHexError(#[from] alloy_primitives::hex::FromHexError),
+
+    /// Block not found on chain
+    #[error("Block not found on chain")]
+    BlockNotFound,
 
     /// `serde_json` error
     #[error(transparent)]
@@ -79,16 +90,27 @@ pub enum EthereumServiceError {
 /// entries of Ethereum events.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EthereumDataType {
+    /// An Ethereum address, rendered as a hexadecimal string.
     Address(String),
+    /// A 256-bit unsigned integer.
     Uint256(U256),
+    /// A 64-bit unsigned integer.
     Uint64(u64),
+    /// A 64-bit signed integer.
     Int64(i64),
+    /// A 32-bit unsigned integer.
     Uint32(u32),
+    /// A 32-bit signed integer.
     Int32(i32),
+    /// A 16-bit unsigned integer.
     Uint16(u16),
+    /// A 16-bit signed integer.
     Int16(i16),
+    /// An 8-bit unsigned integer.
     Uint8(u8),
+    /// An 8-bit signed integer.
     Int8(i8),
+    /// A boolean.
     Bool(bool),
 }
 
@@ -102,7 +124,7 @@ pub fn event_name_from_expanded(event_name_expanded: &str) -> String {
 fn parse_entry(entry: B256, ethereum_type: &str) -> Result<EthereumDataType, EthereumServiceError> {
     if ethereum_type == "address" {
         let address = Address::from_word(entry);
-        let address = format!("{:?}", address);
+        let address = format!("{address:?}");
         return Ok(EthereumDataType::Address(address));
     }
     if ethereum_type == "uint256" {
@@ -167,7 +189,9 @@ fn parse_entry(entry: B256, ethereum_type: &str) -> Result<EthereumDataType, Eth
 /// The data type for an Ethereum event emitted by a smart contract
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EthereumEvent {
+    /// The decoded values of the event's parameters.
     pub values: Vec<EthereumDataType>,
+    /// The number of the block in which the event was emitted.
     pub block_number: u64,
 }
 
@@ -182,9 +206,11 @@ fn get_inner_event_type(event_name_expanded: &str) -> Result<String, EthereumSer
     Err(EthereumServiceError::EventParsingError)
 }
 
+/// Parses a `log` into an [`EthereumEvent`] using the expanded event signature
+/// `event_name_expanded` (e.g. `MyEvent(type1 indexed,type2)`).
 pub fn parse_log(
     event_name_expanded: &str,
-    log: Log,
+    log: &Log,
 ) -> Result<EthereumEvent, EthereumServiceError> {
     let inner_types = get_inner_event_type(event_name_expanded)?;
     let ethereum_types = inner_types

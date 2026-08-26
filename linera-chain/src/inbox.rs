@@ -27,29 +27,27 @@ use crate::{data_types::MessageBundle, ChainError};
 mod inbox_tests;
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{exponential_bucket_interval, register_histogram_vec};
     use prometheus::HistogramVec;
 
-    pub static INBOX_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "inbox_size",
-            "Inbox size",
-            &[],
-            exponential_bucket_interval(1.0, 2_000_000.0),
-        )
-    });
+    linera_base::declare_metrics! {
+        pub static INBOX_SIZE: HistogramVec =
+            register_histogram_vec(
+                "inbox_size",
+                "Inbox size",
+                &[],
+                exponential_bucket_interval(1.0, 2_000_000.0),
+            );
 
-    pub static REMOVED_BUNDLES: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "removed_bundles",
-            "Number of bundles removed by anticipation",
-            &[],
-            exponential_bucket_interval(1.0, 10_000.0),
-        )
-    });
+        pub static REMOVED_BUNDLES: HistogramVec =
+            register_histogram_vec(
+                "removed_bundles",
+                "Number of bundles removed by anticipation",
+                &[],
+                exponential_bucket_interval(1.0, 10_000.0),
+            );
+    }
 }
 
 /// The state of an inbox.
@@ -194,6 +192,14 @@ where
         }
     }
 
+    /// Observes the current inbox size in the metrics histogram.
+    pub fn observe_size_metric(&self) {
+        #[cfg(with_metrics)]
+        metrics::INBOX_SIZE
+            .with_label_values(&[])
+            .observe(self.added_bundles.count() as f64);
+    }
+
     /// Consumes a bundle from the inbox.
     ///
     /// Returns `true` if the bundle was already known, i.e. it was present in `added_bundles`.
@@ -222,10 +228,6 @@ where
                 }
             );
             self.added_bundles.delete_front();
-            #[cfg(with_metrics)]
-            metrics::INBOX_SIZE
-                .with_label_values(&[])
-                .observe(self.added_bundles.count() as f64);
             tracing::trace!("Skipping previously received bundle {:?}", previous_bundle);
         }
         // Reconcile the bundle with the next added bundle, or mark it as removed.
@@ -244,10 +246,6 @@ where
                     }
                 );
                 self.added_bundles.delete_front();
-                #[cfg(with_metrics)]
-                metrics::INBOX_SIZE
-                    .with_label_values(&[])
-                    .observe(self.added_bundles.count() as f64);
                 tracing::trace!("Consuming bundle {:?}", bundle);
                 true
             }
@@ -313,10 +311,6 @@ where
             None => {
                 // Otherwise, schedule the messages for execution.
                 self.added_bundles.push_back(bundle);
-                #[cfg(with_metrics)]
-                metrics::INBOX_SIZE
-                    .with_label_values(&[])
-                    .observe(self.added_bundles.count() as f64);
                 true
             }
         };

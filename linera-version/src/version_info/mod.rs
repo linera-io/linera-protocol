@@ -4,6 +4,7 @@
 mod r#type;
 pub use r#type::*;
 
+/// The version info baked into this build of Linera.
 pub static VERSION_INFO: VersionInfo = include!(env!("LINERA_VERSION_STATIC_PATH"));
 
 use crate::serde_pretty::Pretty;

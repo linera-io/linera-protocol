@@ -14,11 +14,11 @@ use std::{
 };
 
 use async_graphql::InputType as _;
-use futures::{future, stream::StreamExt, FutureExt};
+use futures::{stream::StreamExt, FutureExt};
 use linera_base::{
     data_types::{TimeDelta, Timestamp},
     identifiers::{ApplicationId, ChainId},
-    task_processor::{ProcessorActions, TaskOutcome},
+    task_processor::{ProcessorActions, Task, TaskOutcome},
 };
 use linera_core::{
     client::ChainClient, data_types::ClientOutcome, node::NotificationStream, worker::Reason,
@@ -119,14 +119,18 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 }
                 Some(result) = self.batch_receiver.recv() => {
                     self.in_flight_apps.remove(&result.application_id);
-                    if let Some(retry_at) = result.retry_at {
-                        self.deadlines.push(Reverse((
-                            retry_at,
-                            Some(result.application_id),
-                        )));
-                    } else {
-                        // Re-process immediately to pick up new tasks.
-                        self.process_actions(vec![result.application_id]).await;
+                    // The application could have been unassigned from this processor
+                    // in the meantime - do not retry if that is the case.
+                    if self.application_ids.contains(&result.application_id) {
+                        if let Some(retry_at) = result.retry_at {
+                            self.deadlines.push(Reverse((
+                                retry_at,
+                                Some(result.application_id),
+                            )));
+                        } else {
+                            // Re-process immediately to pick up new tasks.
+                            self.process_actions(vec![result.application_id]).await;
+                        }
                     }
                 }
                 Some(update) = self.update_receiver.recv() => {
@@ -196,6 +200,10 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
 
     async fn process_actions(&mut self, application_ids: Vec<ApplicationId>) {
         for application_id in application_ids {
+            if !self.application_ids.contains(&application_id) {
+                debug!("Skipping {application_id}: it's no longer assigned to this processor");
+                continue;
+            }
             if self.in_flight_apps.contains(&application_id) {
                 debug!("Skipping {application_id}: tasks already in flight");
                 continue;
@@ -206,7 +214,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             let actions = match self.query_actions(application_id, app_cursor, now).await {
                 Ok(actions) => actions,
                 Err(error) => {
-                    error!("Error reading application actions: {error}");
+                    error!(%application_id, %error, "Error reading application actions");
                     // Retry in at most 1 minute.
                     self.deadlines.push(Reverse((
                         now.saturating_add(TimeDelta::from_secs(60)),
@@ -229,53 +237,31 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 let retry_delay = self.retry_delay;
                 let operators = self.operators.clone();
                 tokio::spawn(async move {
-                    // Spawn all tasks concurrently and join them.
-                    let handles: Vec<_> = actions
-                        .execute_tasks
-                        .into_iter()
-                        .map(|task| {
-                            let operators = operators.clone();
-                            tokio::spawn(Self::execute_task(
+                    // Run each group concurrently, so that a slow or failing group never
+                    // delays the outcomes of the others.
+                    let mut handles = Vec::new();
+                    for (group, tasks) in group_tasks(actions.execute_tasks) {
+                        handles.push((
+                            group.clone(),
+                            tokio::spawn(Self::process_group(
                                 application_id,
-                                task.operator,
-                                task.input,
-                                operators,
-                            ))
-                        })
-                        .collect();
-                    let results = future::join_all(handles).await;
-                    // Submit outcomes in the original order. Stop on any failure to
-                    // preserve ordering: the on-chain queue is FIFO, so skipping a
-                    // failed task and submitting a later one would pop the wrong entry.
-                    // Tasks are assumed idempotent, so on failure the whole batch is
-                    // retried from scratch.
+                                group,
+                                tasks,
+                                chain_client.clone(),
+                                operators.clone(),
+                                retry_delay,
+                            )),
+                        ));
+                    }
+                    // `None` sorts before any timestamp, so the maximum is the latest retry
+                    // any group asked for: a task failing on every attempt cannot shorten the
+                    // delay protecting the operator.
                     let mut retry_at = None;
-                    for result in results {
-                        match result {
-                            Ok(Ok(outcome)) => {
-                                if let Err(timestamp) = Self::submit_task_outcome(
-                                    &chain_client,
-                                    application_id,
-                                    &outcome,
-                                    retry_delay,
-                                )
-                                .await
-                                {
-                                    retry_at = Some(timestamp);
-                                    break;
-                                }
-                            }
-                            Ok(Err(error)) => {
-                                error!(%application_id, %error, "Error executing task");
-                                retry_at = Some(Timestamp::now().saturating_add(retry_delay));
-                                break;
-                            }
-                            Err(error) => {
-                                error!(%application_id, %error, "Task panicked");
-                                retry_at = Some(Timestamp::now().saturating_add(retry_delay));
-                                break;
-                            }
-                        }
+                    for (group, handle) in handles {
+                        retry_at = retry_at.max(handle.await.unwrap_or_else(|error| {
+                            error!(%application_id, ?group, %error, "Task group panicked");
+                            Some(Timestamp::now().saturating_add(retry_delay))
+                        }));
                     }
                     if batch_sender
                         .send(BatchResult {
@@ -284,22 +270,74 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                         })
                         .is_err()
                     {
-                        error!("Batch receiver dropped for {application_id}");
+                        error!(%application_id, "Batch receiver dropped");
                     }
                 });
             }
         }
     }
 
+    /// Runs the tasks of one group, submitting their outcomes in order and stopping at the
+    /// first failure: the outcomes of a group are matched by position, so the application must
+    /// never see a gap in the sequence.
+    ///
+    /// Only the submissions are ordered. They contend for the chain's proposal lock, so
+    /// running a task only once its predecessor is committed would make every query wait
+    /// behind the block production of unrelated groups.
+    ///
+    /// Tasks are assumed idempotent, so whatever is left unsubmitted is recomputed by the next
+    /// call to `nextActions`. Returns the timestamp at which to retry the group, if it failed.
+    async fn process_group(
+        application_id: ApplicationId,
+        group: Option<String>,
+        tasks: Vec<Task>,
+        chain_client: ChainClient<Env>,
+        operators: OperatorMap,
+        retry_delay: TimeDelta,
+    ) -> Option<Timestamp> {
+        let mut handles = Vec::with_capacity(tasks.len());
+        for task in tasks {
+            handles.push(tokio::spawn(Self::execute_task(
+                application_id,
+                task,
+                operators.clone(),
+            )));
+        }
+        for handle in handles {
+            let outcome = match handle.await {
+                Ok(Ok(outcome)) => outcome,
+                Ok(Err(error)) => {
+                    error!(%application_id, ?group, %error, "Error executing task");
+                    return Some(Timestamp::now().saturating_add(retry_delay));
+                }
+                Err(error) => {
+                    error!(%application_id, ?group, %error, "Task panicked");
+                    return Some(Timestamp::now().saturating_add(retry_delay));
+                }
+            };
+            if let Err(timestamp) =
+                Self::submit_task_outcome(&chain_client, application_id, &outcome, retry_delay)
+                    .await
+            {
+                return Some(timestamp);
+            }
+        }
+        None
+    }
+
     async fn execute_task(
         application_id: ApplicationId,
-        operator: String,
-        input: String,
+        task: Task,
         operators: OperatorMap,
     ) -> Result<TaskOutcome, anyhow::Error> {
+        let Task {
+            id,
+            operator,
+            input,
+        } = task;
         let binary_path = operators
             .get(&operator)
-            .ok_or_else(|| anyhow::anyhow!("unsupported operator: {}", operator))?;
+            .ok_or_else(|| anyhow::anyhow!("unsupported operator: {operator}"))?;
         debug!("Executing task {operator} ({binary_path:?}) for {application_id}");
         let mut child = Command::new(binary_path)
             .stdin(std::process::Stdio::piped())
@@ -318,6 +356,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             output.status
         );
         let outcome = TaskOutcome {
+            id,
             operator,
             output: String::from_utf8_lossy(&output.stdout).into(),
         };
@@ -325,6 +364,9 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         Ok(outcome)
     }
 
+    // Keeping `&mut self` avoids borrowing `TaskProcessor` through `&self` across `.await`,
+    // which would make the spawned future require `TaskProcessor: Sync`.
+    #[expect(clippy::needless_pass_by_ref_mut)]
     async fn query_actions(
         &mut self,
         application_id: ApplicationId,
@@ -341,10 +383,13 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
             application_id,
             bytes,
         };
-        let linera_execution::QueryOutcome {
-            response,
-            operations: _,
-        } = self.chain_client.query_application(query, None).await?;
+        let (
+            linera_execution::QueryOutcome {
+                response,
+                operations: _,
+            },
+            _,
+        ) = self.chain_client.query_application(query, None).await?;
         let linera_execution::QueryResponse::User(response) = response else {
             anyhow::bail!("cannot get a system response for a user query");
         };
@@ -363,28 +408,29 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
         retry_delay: TimeDelta,
     ) -> Result<(), Timestamp> {
         info!("Submitting task outcome for {application_id}: {task_outcome:?}");
+        // An outcome's id is the group it belongs to.
+        let group = &task_outcome.id;
         let retry_with_delay = || Timestamp::now().saturating_add(retry_delay);
-        let query = format!(
-            "query {{ processTaskOutcome(outcome: {{ operator: {}, output: {} }}) }}",
-            task_outcome.operator.to_value(),
-            task_outcome.output.to_value(),
-        );
+        let query = task_outcome_query(task_outcome);
         let bytes = serde_json::to_vec(&json!({"query": query})).map_err(|error| {
-            error!(%application_id, %error, "Error serializing task outcome query");
+            error!(%application_id, ?group, %error, "Error serializing task outcome query");
             retry_with_delay()
         })?;
         let query = linera_execution::Query::User {
             application_id,
             bytes,
         };
-        let linera_execution::QueryOutcome {
-            response: _,
-            operations,
-        } = chain_client
+        let (
+            linera_execution::QueryOutcome {
+                response: _,
+                operations,
+            },
+            _,
+        ) = chain_client
             .query_application(query, None)
             .await
             .map_err(|error| {
-                error!(%application_id, %error, "Error querying application");
+                error!(%application_id, ?group, %error, "Error querying application");
                 retry_with_delay()
             })?;
         if !operations.is_empty() {
@@ -392,20 +438,129 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
                 .execute_operations(operations, vec![])
                 .await
                 .map_err(|error| {
-                    error!(%application_id, %error, "Error executing operations");
+                    error!(%application_id, ?group, %error, "Error executing operations");
                     retry_with_delay()
                 })? {
                 ClientOutcome::Committed(_) => {}
                 ClientOutcome::WaitForTimeout(timeout) => {
-                    error!(%application_id, "Not the round leader, retrying after {}", timeout.timestamp);
+                    error!(%application_id, ?group, "Not the round leader, retrying after {}", timeout.timestamp);
                     return Err(timeout.timestamp);
                 }
                 ClientOutcome::Conflict(_) => {
-                    debug!(%application_id, "Block conflict, retrying immediately");
+                    debug!(%application_id, ?group, "Block conflict, retrying immediately");
                     return Err(Timestamp::now());
                 }
             }
         }
         Ok(())
+    }
+}
+
+/// Groups the tasks of a batch by id, keeping their relative order.
+///
+/// Tasks sharing an id, and all the tasks without one, can only be told apart by position, so
+/// they belong to the same group. A distinctly identified task is a group of its own.
+fn group_tasks(tasks: Vec<Task>) -> Vec<(Option<String>, Vec<Task>)> {
+    let mut groups = BTreeMap::<Option<String>, Vec<Task>>::new();
+    for task in tasks {
+        groups.entry(task.id.clone()).or_default().push(task);
+    }
+    groups.into_iter().collect()
+}
+
+/// Builds the GraphQL query submitting `task_outcome` to its application.
+fn task_outcome_query(task_outcome: &TaskOutcome) -> String {
+    format!(
+        "query {{ processTaskOutcome(outcome: {}) }}",
+        task_outcome.to_value()
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn outcome(id: Option<&str>, output: &str) -> TaskOutcome {
+        TaskOutcome {
+            id: id.map(str::to_string),
+            operator: "echo".to_string(),
+            output: output.to_string(),
+        }
+    }
+
+    fn task(id: Option<&str>, input: &str) -> Task {
+        Task {
+            id: id.map(str::to_string),
+            operator: "echo".to_string(),
+            input: input.to_string(),
+        }
+    }
+
+    /// The inputs of each group, keyed by the group's id.
+    fn inputs(groups: Vec<(Option<String>, Vec<Task>)>) -> Vec<(Option<String>, Vec<String>)> {
+        groups
+            .into_iter()
+            .map(|(group, tasks)| (group, tasks.into_iter().map(|task| task.input).collect()))
+            .collect()
+    }
+
+    fn group(id: Option<&str>, inputs: &[&str]) -> (Option<String>, Vec<String>) {
+        (
+            id.map(str::to_string),
+            inputs.iter().copied().map(str::to_string).collect(),
+        )
+    }
+
+    #[test]
+    fn test_group_tasks_keeps_distinctly_identified_tasks_apart() {
+        let tasks = vec![task(Some("1"), "first"), task(Some("2"), "second")];
+        assert_eq!(
+            inputs(group_tasks(tasks)),
+            vec![group(Some("1"), &["first"]), group(Some("2"), &["second"])]
+        );
+    }
+
+    #[test]
+    fn test_group_tasks_gathers_the_unidentified_ones() {
+        let tasks = vec![
+            task(None, "first"),
+            task(Some("1"), "second"),
+            task(None, "third"),
+        ];
+        assert_eq!(
+            inputs(group_tasks(tasks)),
+            vec![
+                group(None, &["first", "third"]),
+                group(Some("1"), &["second"])
+            ]
+        );
+    }
+
+    #[test]
+    fn test_group_tasks_gathers_the_ones_sharing_an_id() {
+        let tasks = vec![
+            task(Some("dup"), "first"),
+            task(Some("other"), "second"),
+            task(Some("dup"), "third"),
+        ];
+        assert_eq!(
+            inputs(group_tasks(tasks)),
+            vec![
+                group(Some("dup"), &["first", "third"]),
+                group(Some("other"), &["second"])
+            ]
+        );
+    }
+
+    #[test]
+    fn test_task_outcome_query() {
+        assert_eq!(
+            task_outcome_query(&outcome(None, "hello")),
+            r#"query { processTaskOutcome(outcome: {operator: "echo", output: "hello"}) }"#
+        );
+        assert_eq!(
+            task_outcome_query(&outcome(Some("42"), "hello")),
+            r#"query { processTaskOutcome(outcome: {id: "42", operator: "echo", output: "hello"}) }"#
+        );
     }
 }

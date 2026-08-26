@@ -21,11 +21,6 @@ rocksdb = [
     "linera-core/rocksdb",
     "linera-service/rocksdb",
 ]
-dynamodb = [
-    "linera-views/dynamodb",
-    "linera-core/dynamodb",
-    "linera-service/dynamodb",
-]
 scylladb = [
     "linera-views/scylladb",
     "linera-core/scylladb",

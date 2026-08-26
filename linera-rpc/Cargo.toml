@@ -78,11 +78,15 @@ tracing.workspace = true
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml"] }
-linera-rpc = { path = ".", default-features = false, features = ["test"] }
+linera-rpc = { path = ".", default-features = false, features = [
+    "server",
+    "test",
+] }
 opentelemetry_sdk.workspace = true
 proptest.workspace = true
 serde-reflection.workspace = true
 test-strategy.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 http.workspace = true

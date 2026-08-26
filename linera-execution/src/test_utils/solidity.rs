@@ -31,6 +31,7 @@ fn write_compilation_json(path: &Path, file_name: &str) -> anyhow::Result<()> {
   }},
   "settings": {{
     "viaIR": true,
+    "evmVersion": "cancun",
     "outputSelection": {{
       "*": {{
         "*": ["evm.bytecode"]
@@ -84,6 +85,7 @@ fn get_bytecode_path(path: &Path, file_name: &str, contract_name: &str) -> anyho
     Ok(hex::decode(&object)?)
 }
 
+/// Compiles the given Solidity source code and returns the bytecode of the named contract.
 pub fn get_bytecode(source_code: &str, contract_name: &str) -> anyhow::Result<Vec<u8>> {
     let dir = tempdir().unwrap();
     let path = dir.path();
@@ -95,7 +97,7 @@ pub fn get_bytecode(source_code: &str, contract_name: &str) -> anyhow::Result<Ve
         ] {
             let test_code_path = path.join(file_name);
             let mut test_code_file = File::create(&test_code_path)?;
-            writeln!(test_code_file, "{}", literal_path)?;
+            writeln!(test_code_file, "{literal_path}")?;
         }
     }
     if source_code.contains("@openzeppelin") {
@@ -111,10 +113,11 @@ pub fn get_bytecode(source_code: &str, contract_name: &str) -> anyhow::Result<Ve
     let file_name = "test_code.sol";
     let test_code_path = path.join(file_name);
     let mut test_code_file = File::create(&test_code_path)?;
-    writeln!(test_code_file, "{}", source_code)?;
+    writeln!(test_code_file, "{source_code}")?;
     get_bytecode_path(path, file_name, contract_name)
 }
 
+/// Reads a Solidity file, detects its contract name, and returns the compiled bytecode.
 pub fn load_solidity_example(path: &str) -> anyhow::Result<Vec<u8>> {
     let source_code = std::fs::read_to_string(path)?;
     let contract_name: &str = source_code
@@ -124,28 +127,31 @@ pub fn load_solidity_example(path: &str) -> anyhow::Result<Vec<u8>> {
     let contract_name: &str = contract_name
         .split_whitespace()
         .next()
-        .ok_or(anyhow::anyhow!("No space found after the contract name"))?;
+        .ok_or_else(|| anyhow::anyhow!("No space found after the contract name"))?;
     get_bytecode(&source_code, contract_name)
 }
 
-pub fn temporary_write_evm_module(module: Vec<u8>) -> anyhow::Result<(PathBuf, TempDir)> {
+/// Writes an EVM module to a temporary file, returning its path and the owning temporary directory.
+pub fn temporary_write_evm_module(module: &[u8]) -> anyhow::Result<(PathBuf, TempDir)> {
     let dir = tempfile::tempdir()?;
     let path = dir.path();
     let app_file = "app.json";
     let app_path = path.join(app_file);
     {
-        std::fs::write(app_path.clone(), &module)?;
+        std::fs::write(app_path.clone(), module)?;
     }
     let evm_contract = app_path.to_path_buf();
     Ok((evm_contract, dir))
 }
 
+/// Compiles a Solidity example and writes it to a temporary EVM module file, returning its path.
 pub fn get_evm_contract_path(path: &str) -> anyhow::Result<(PathBuf, TempDir)> {
     let module = load_solidity_example(path)?;
-    temporary_write_evm_module(module)
+    temporary_write_evm_module(&module)
 }
 
-pub fn value_to_vec_u8(value: Value) -> Vec<u8> {
+/// Converts a JSON array of byte values into a vector of bytes.
+pub fn value_to_vec_u8(value: &Value) -> Vec<u8> {
     let mut vec: Vec<u8> = Vec::new();
     for val in value.as_array().unwrap() {
         let val = val.as_u64().unwrap();
@@ -155,14 +161,16 @@ pub fn value_to_vec_u8(value: Value) -> Vec<u8> {
     vec
 }
 
-pub fn read_evm_u64_entry(value: Value) -> u64 {
+/// Reads a `u64` from the last 8 bytes of a 32-byte EVM word encoded as a JSON byte array.
+pub fn read_evm_u64_entry(value: &Value) -> u64 {
     let vec = value_to_vec_u8(value);
     let mut arr = [0_u8; 8];
     arr.copy_from_slice(&vec[24..]);
     u64::from_be_bytes(arr)
 }
 
-pub fn read_evm_u256_entry(value: Value) -> U256 {
+/// Reads a `U256` from a 32-byte EVM word encoded as a JSON byte array.
+pub fn read_evm_u256_entry(value: &Value) -> U256 {
     let result = value
         .as_array()
         .unwrap()

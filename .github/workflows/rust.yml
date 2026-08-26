@@ -41,9 +41,11 @@ jobs:
     outputs:
       should-run: ${{ steps.files-changed.outputs.paths }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
       - name: Filter paths
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4.0.1
         id: files-changed
         with:
           predicate-quantifier: 'every'
@@ -52,24 +54,22 @@ jobs:
               - '!docker/**'
               - '!docker_scylla/**'
               - '!configuration/**'
-              - '!kubernetes/**'
               - '!CONTRIBUTING.md'
               - '!INSTALL.md'
               - '!docs/**'
               - '!mdbook/**'
+              - '!.github/workflows/**'
   remote-net-test:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest-8-cores
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 40
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      uses: ./.github/actions/install-protoc
     - name: Run the storage-service instance
       run: |
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
@@ -103,21 +103,27 @@ jobs:
     timeout-minutes: 10
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Run some extra execution tests with wasmtime
       run: |
         cargo test --locked -p linera-execution --features wasmtime
 
-  bridge-format-test:
+  bridge-tests:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
+      with:
+        submodules: recursive
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Install Foundry
+      uses: foundry-rs/foundry-toolchain@v1
+      with:
+        version: v1.7.0
     - name: Ensure Solc Directory Exists
       run: mkdir -p /home/runner/.solc
     - name: Cache Solc
@@ -125,19 +131,19 @@ jobs:
       uses: actions/cache@v4
       with:
         path: /home/runner/.solc
-        key: solc-v0.8.25
+        key: solc-v0.8.33
         restore-keys: solc-
     - name: Get Solc
       if: ${{ steps.cache-solc.outputs.cache-hit != 'true' }}
       uses: ./.github/actions/get-solc
       with:
-        version: v0.8.25
+        version: v0.8.33
     - name: Add Solc to PATH
       run: echo "/home/runner/.solc" >> $GITHUB_PATH
     - name: List the content of the Solc cache
-      run: ls /home/runner/.solc/v0.8.25/solc-static-linux
+      run: ls /home/runner/.solc/v0.8.33/solc-static-linux
     - name: Create a Solc symbolic link
-      run: ln -sf /home/runner/.solc/v0.8.25/solc-static-linux /home/runner/.solc/solc
+      run: ln -sf /home/runner/.solc/v0.8.33/solc-static-linux /home/runner/.solc/solc
     - name: Check if Solc is in PATH
       id: check-solc
       run: |
@@ -171,7 +177,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Run metrics tests
       run: |
@@ -181,18 +187,16 @@ jobs:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
         cache-workspaces: |
           examples -> target
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      uses: ./.github/actions/install-protoc
     - name: Run Wasm application tests
       run: |
         cd examples
@@ -202,18 +206,16 @@ jobs:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
         cache-workspaces: |
           linera-sdk/tests/fixtures -> target
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      uses: ./.github/actions/install-protoc
     - name: Run linera-sdk fixtures
       run: |
         cd linera-sdk/tests/fixtures
@@ -227,40 +229,39 @@ jobs:
   default-features-and-witty-integration-test:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest-8-cores
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 40
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      uses: ./.github/actions/install-protoc
     - name: Compile Wasm test modules for Witty integration tests
       run: |
-        cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown
+        cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown --locked
+    - name: Build linera-exporter binary for integration tests
+      run: |
+        cargo build --bin linera-exporter --locked
     - name: Run all tests using the default features (except storage-service)
       run: |
         # TODO(#2764): Actually link this to the default features
         cargo test --no-default-features --features fs,macros,wasmer,rocksdb --locked
     - name: Run Witty integration tests
       run: |
-        cargo test -p linera-witty --features wasmer,wasmtime
+        cargo test -p linera-witty --features wasmer,wasmtime --locked
 
   check-outdated-cli-md:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      uses: ./.github/actions/install-protoc
     - name: Check for outdated CLI.md
       run: |
         if ! diff CLI.md <(cargo run --bin linera -- help-markdown)
@@ -277,12 +278,10 @@ jobs:
     timeout-minutes: 40
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      uses: ./.github/actions/install-protoc
     - name: Run the storage-service instance
       run: |
         cargo run --release -p linera-storage-service -- memory --endpoint $LINERA_STORAGE_SERVICE &
@@ -298,10 +297,10 @@ jobs:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - uses: foundry-rs/foundry-toolchain@v1.4.0
     - name: Ensure Solc Directory Exists
@@ -311,25 +310,23 @@ jobs:
       uses: actions/cache@v4
       with:
         path: /home/runner/.solc
-        key: solc-v0.8.25
+        key: solc-v0.8.33
         restore-keys: solc-
     - name: Get Solc
       if: ${{ steps.cache-solc.outputs.cache-hit != 'true' }}
       uses: ./.github/actions/get-solc
       with:
-        version: v0.8.25
+        version: v0.8.33
     - name: Add Solc to PATH
       run: echo "/home/runner/.solc" >> $GITHUB_PATH
     - name: List the content of the Solc cache
-      run: ls /home/runner/.solc/v0.8.25/solc-static-linux
+      run: ls /home/runner/.solc/v0.8.33/solc-static-linux
     - name: Create a Solc symbolic link
-      run: ln -sf /home/runner/.solc/v0.8.25/solc-static-linux /home/runner/.solc/solc
+      run: ln -sf /home/runner/.solc/v0.8.33/solc-static-linux /home/runner/.solc/solc
     - name: Check if Solc is in PATH
       run: which solc || echo "Solc not found in PATH"
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      uses: ./.github/actions/install-protoc
     - name: Install serde-generate-bin
       run: |
         cargo install serde-generate-bin@0.8.0 --locked
@@ -360,15 +357,13 @@ jobs:
   storage-service-tests:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: ubuntu-latest-16-cores
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 40
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      uses: ./.github/actions/install-protoc
     - name: Build example applications
       run: |
         cd examples
@@ -379,16 +374,25 @@ jobs:
     - name: Wait for storage service to be ready
       run: |
         until nc -z 127.0.0.1 1235; do sleep 1; done
+    - name: Build linera-exporter binary for integration tests
+      run: |
+        cargo build --bin linera-exporter --features storage-service --locked
     - name: Run the storage-service tests
       run: |
         cargo test --features storage-service,opentelemetry -- storage_service --nocapture
+    - name: Run the exporter integration test
+      run: |
+        cargo test -p linera-service --test exporter_tests --features storage-service -- --ignored --nocapture
+    - name: Run the block export integration test
+      run: |
+        cargo test -p linera-service --test block_export_tests --features storage-service,metrics -- --ignored --nocapture
 
   check-wit-files:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Check WIT files
       run: |
@@ -401,10 +405,36 @@ jobs:
     timeout-minutes: 2
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - name: Check for unexpected chain load operations
       run: |
         ./scripts/check_chain_loads.sh
+
+  lint-metrics-registration:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+    - uses: actions/checkout@v6.0.2
+    - name: Check that every metric is registered at startup
+      run: |
+        ./scripts/check_metrics_registration.sh
+
+  lint-metrics-features:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+    - uses: actions/checkout@v6.0.2
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - uses: ./.github/actions/install-protoc
+    - name: Check each crate builds with its own metrics feature
+      run: |
+        ./scripts/check_metrics_features.sh
 
   lint-check-copyright-headers:
     needs: changed-files
@@ -413,7 +443,7 @@ jobs:
     timeout-minutes: 2
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - name: Build check_copyright_header script
       run: |
         cd ./scripts/check_copyright_header
@@ -430,7 +460,7 @@ jobs:
     timeout-minutes: 2
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - name: Put lint toolchain file in place
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml
@@ -449,7 +479,7 @@ jobs:
     timeout-minutes: 2
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - name: Put lint toolchain file in place
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml
@@ -465,7 +495,7 @@ jobs:
     timeout-minutes: 5
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install `taplo-cli`
       run: RUSTFLAGS='' cargo install taplo-cli@0.9.3 --locked
@@ -479,14 +509,16 @@ jobs:
     timeout-minutes: 5
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - name: Put lint toolchain file in place
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install cargo-rdme
       run: |
-        cargo install cargo-rdme --locked
+        # Pinned: cargo-rdme 1.5.1's lockfile pulls zmij 1.0.21, which needs
+        # Rust >= 1.88 and does not build on this branch's pinned toolchain.
+        cargo install cargo-rdme --locked --version 1.5.0
     - name: Check for outdated README.md
       run: |
         set -e
@@ -508,15 +540,13 @@ jobs:
     timeout-minutes: 10
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - name: Put lint toolchain file in place
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      uses: ./.github/actions/install-protoc
     - name: Run Wasm application lints
       run: |
         cd examples
@@ -533,19 +563,16 @@ jobs:
     timeout-minutes: 20
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - name: Put lint toolchain file in place
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      uses: ./.github/actions/install-protoc
     - name: Run clippy
       run: |
-        cargo clippy --locked --all-targets --all-features
-        cargo clippy --locked --no-default-features --features kubernetes
+        cargo clippy --locked --all-targets --all-features --workspace --exclude linera-web
         cargo clippy --locked --no-default-features
         cargo clippy --locked --target wasm32-unknown-unknown --no-default-features --features web-default \
           -p linera-client \
@@ -559,15 +586,13 @@ jobs:
     timeout-minutes: 20
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - name: Put lint toolchain file in place
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      uses: ./.github/actions/install-protoc
     - name: Run cargo doc
       run: |
         cargo doc --locked --all-features
@@ -579,12 +604,10 @@ jobs:
     timeout-minutes: 15
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      uses: ./.github/actions/install-protoc
     - name: Check linera-service GraphQL schema
       run: |
         diff <(cargo run --locked --bin linera-schema-export) linera-service-graphql-client/gql/service_schema.graphql

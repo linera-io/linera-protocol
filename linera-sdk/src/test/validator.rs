@@ -21,7 +21,7 @@ use linera_base::{
     identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId},
     ownership::ChainOwnership,
 };
-use linera_core::worker::WorkerState;
+use linera_core::{worker::WorkerState, ChainWorkerConfig};
 use linera_execution::{
     committee::Committee,
     system::{AdminOperation, OpenChainConfig, SystemOperation},
@@ -88,11 +88,12 @@ impl TestValidator {
             .now_or_never()
             .expect("execution of DbStorage::new should not await anything");
         let clock = storage.clock().clone();
-        let worker = WorkerState::new(
-            "Single validator node".to_string(),
-            Some(validator_keypair.secret_key.copy()),
-            storage.clone(),
-        );
+        let config = ChainWorkerConfig {
+            nickname: "Single validator node".to_string(),
+            key_pair: Some(Arc::new(validator_keypair.secret_key.copy())),
+            ..ChainWorkerConfig::default()
+        };
+        let worker = WorkerState::new(storage.clone(), config, None);
 
         // Create an admin chain.
         let key_pair = AccountSecretKey::generate();
@@ -329,7 +330,13 @@ impl TestValidator {
             .chain_state_view(admin_chain_id)
             .await
             .expect("Failed to read admin chain state");
-        let committees = chain_state.execution_state.system.committees.get();
+        let committees = chain_state
+            .execution_state
+            .system
+            .committees
+            .get()
+            .await
+            .expect("Failed to read committees");
         let epoch = *chain_state.execution_state.system.epoch.get();
         let min_active_epoch = committees.keys().min().copied().unwrap_or(Epoch::ZERO);
         let max_active_epoch = committees.keys().max().copied().unwrap_or(Epoch::ZERO);

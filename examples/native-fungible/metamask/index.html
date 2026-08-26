@@ -242,6 +242,8 @@
           }
       });
 
+      await client.start();
+
       submitButton.disabled = false;
 
       document.querySelector('#account-id').textContent = `${owner}@${chainId}`;

@@ -2,6 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{collections::BTreeMap, sync::Arc};
+
 #[cfg(not(web))]
 use futures::stream::BoxStream;
 #[cfg(web)]
@@ -12,8 +14,10 @@ use linera_base::{
     data_types::{
         ArithmeticError, Blob, BlobContent, BlockHeight, NetworkDescription, Round, Timestamp,
     },
-    identifiers::{BlobId, ChainId, EventId},
+    identifiers::{BlobId, ChainId, EventId, StreamId},
+    task::{MaybeSend, MaybeSync},
 };
+use linera_cache::Arc as CacheArc;
 use linera_chain::{
     data_types::BlockProposal,
     types::{
@@ -36,8 +40,12 @@ use crate::{
 /// A pinned [`Stream`] of Notifications.
 pub type NotificationStream = BoxStream<'static, Notification>;
 
+/// A pinned [`Stream`] of blob contents returned by batch downloads.
+pub type BlobStream = BoxStream<'static, Result<BlobContent, NodeError>>;
+
 /// Whether to wait for the delivery of outgoing cross-chain messages.
 #[derive(Debug, Default, Clone, Copy)]
+#[allow(missing_docs)]
 pub enum CrossChainMessageDelivery {
     #[default]
     NonBlocking,
@@ -48,11 +56,10 @@ pub enum CrossChainMessageDelivery {
 #[allow(async_fn_in_trait)]
 #[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait ValidatorNode {
-    #[cfg(not(web))]
-    type NotificationStream: Stream<Item = Notification> + Unpin + Send;
-    #[cfg(web)]
-    type NotificationStream: Stream<Item = Notification> + Unpin;
+    /// The type of stream of notifications returned when subscribing.
+    type NotificationStream: Stream<Item = Notification> + Unpin + MaybeSend;
 
+    /// Returns the address of this validator node.
     fn address(&self) -> String;
 
     /// Proposes a new block.
@@ -71,7 +78,7 @@ pub trait ValidatorNode {
     /// Processes a confirmed certificate.
     async fn handle_confirmed_certificate(
         &self,
-        certificate: GenericCertificate<ConfirmedBlock>,
+        certificate: CacheArc<GenericCertificate<ConfirmedBlock>>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 
@@ -102,8 +109,8 @@ pub trait ValidatorNode {
     /// Subscribes to receiving notifications for a collection of chains.
     async fn subscribe(&self, chains: Vec<ChainId>) -> Result<Self::NotificationStream, NodeError>;
 
-    // Uploads a blob. Returns an error if the validator has not seen a
-    // certificate using this blob.
+    /// Uploads a blob. Returns an error if the validator has not seen a
+    /// certificate using this blob.
     async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError>;
 
     /// Uploads the blobs to the validator.
@@ -112,7 +119,7 @@ pub trait ValidatorNode {
     // See also https://github.com/rust-lang/impl-trait-utils/issues/17
     fn upload_blobs(
         &self,
-        blobs: Vec<Blob>,
+        blobs: Vec<Arc<Blob>>,
     ) -> impl futures::Future<Output = Result<Vec<BlobId>, NodeError>> {
         let tasks: Vec<_> = blobs
             .into_iter()
@@ -123,6 +130,11 @@ pub trait ValidatorNode {
 
     /// Downloads a blob. Returns an error if the validator does not have the blob.
     async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError>;
+
+    /// Downloads a batch of blobs as a stream. The stream yields one blob per
+    /// requested id, in order. On mid-stream errors, the caller can retry the
+    /// remaining blob ids against another validator.
+    async fn download_blobs(&self, blob_ids: Vec<BlobId>) -> Result<BlobStream, NodeError>;
 
     /// Downloads a blob that belongs to a pending proposal or the locking block on a chain.
     async fn download_pending_blob(
@@ -138,6 +150,7 @@ pub trait ValidatorNode {
         blob: BlobContent,
     ) -> Result<ChainInfoResponse, NodeError>;
 
+    /// Downloads the confirmed block certificate with the given hash.
     async fn download_certificate(
         &self,
         hash: CryptoHash,
@@ -171,18 +184,32 @@ pub trait ValidatorNode {
         &self,
         blob_id: BlobId,
     ) -> Result<ConfirmedBlockCertificate, NodeError>;
+
+    /// Looks up the block heights where the given events were published.
+    /// Returns `None` for events not found in the index.
+    async fn event_block_heights(
+        &self,
+        event_ids: Vec<EventId>,
+    ) -> Result<Vec<Option<BlockHeight>>, NodeError>;
+
+    /// Returns the previous event blocks for a chain's streams.
+    async fn previous_event_blocks(
+        &self,
+        chain_id: ChainId,
+        stream_ids: Vec<StreamId>,
+    ) -> Result<BTreeMap<StreamId, (BlockHeight, CryptoHash)>, NodeError>;
 }
 
 /// Turn an address into a validator node.
 #[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait ValidatorNodeProvider: 'static {
-    #[cfg(not(web))]
-    type Node: ValidatorNode + Send + Sync + Clone + 'static;
-    #[cfg(web)]
-    type Node: ValidatorNode + Clone + 'static;
+    /// The type of validator node produced by this provider.
+    type Node: ValidatorNode + MaybeSend + MaybeSync + Clone + 'static;
 
+    /// Creates a node from a validator's address.
     fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
 
+    /// Creates a node for each validator in the committee.
     fn make_nodes(
         &self,
         committee: &Committee,
@@ -194,6 +221,7 @@ pub trait ValidatorNodeProvider: 'static {
         self.make_nodes_from_list(validator_addresses)
     }
 
+    /// Creates a node for each validator in the given list of public keys and addresses.
     fn make_nodes_from_list<A>(
         &self,
         validators: impl IntoIterator<Item = (ValidatorPublicKey, A)>,
@@ -214,6 +242,7 @@ pub trait ValidatorNodeProvider: 'static {
 /// This error is meant to be serialized over the network and aggregated by clients (i.e.
 /// clients will track validator votes on each error value).
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
+#[allow(missing_docs)]
 pub enum NodeError {
     #[error("Cryptographic error: {error}")]
     CryptoError { error: String },
@@ -322,6 +351,16 @@ pub enum NodeError {
         chain_id: ChainId,
         remote_node: Box<ValidatorPublicKey>,
     },
+
+    #[error(
+        "Validator is missing {} cross-chain message bundle(s) to validate the block for \
+         chain {chain_id}",
+        bundles.len()
+    )]
+    MissingCrossChainUpdates {
+        chain_id: ChainId,
+        bundles: Vec<(ChainId, BlockHeight)>,
+    },
 }
 
 /// Parsed data from an `InvalidTimestamp` error.
@@ -372,6 +411,7 @@ impl NodeError {
             NodeError::BlobsNotFound(_)
             | NodeError::EventsNotFound(_)
             | NodeError::MissingCrossChainUpdate { .. }
+            | NodeError::MissingCrossChainUpdates { .. }
             | NodeError::WrongRound(_)
             | NodeError::UnexpectedBlockHeight { .. }
             | NodeError::InactiveChain(_)
@@ -415,6 +455,7 @@ impl From<tonic::Status> for NodeError {
 }
 
 impl CrossChainMessageDelivery {
+    /// Creates a new value, blocking on outgoing message delivery if requested.
     pub fn new(wait_for_outgoing_messages: bool) -> Self {
         if wait_for_outgoing_messages {
             CrossChainMessageDelivery::Blocking
@@ -423,6 +464,7 @@ impl CrossChainMessageDelivery {
         }
     }
 
+    /// Returns whether to wait for the delivery of outgoing cross-chain messages.
     pub fn wait_for_outgoing_messages(self) -> bool {
         match self {
             CrossChainMessageDelivery::NonBlocking => false,
@@ -458,15 +500,9 @@ impl From<CryptoError> for NodeError {
 impl From<ChainError> for NodeError {
     fn from(error: ChainError) -> Self {
         match error {
-            ChainError::MissingCrossChainUpdate {
-                chain_id,
-                origin,
-                height,
-            } => Self::MissingCrossChainUpdate {
-                chain_id,
-                origin,
-                height,
-            },
+            ChainError::MissingCrossChainUpdates { chain_id, bundles } => {
+                Self::MissingCrossChainUpdates { chain_id, bundles }
+            }
             ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
             ChainError::ExecutionError(execution_error, context) => match *execution_error {
                 ExecutionError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),

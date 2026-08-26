@@ -1,13 +1,16 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use custom_debug_derive::Debug;
 use linera_base::{
     data_types::{Blob, BlobContent, BlockHeight},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 
-use crate::client::requests_scheduler::cache::SubsumingKey;
+use crate::{
+    client::requests_scheduler::cache::SubsumingKey, data_types::debug_compressed_heights,
+};
 
 /// Unique identifier for different types of download requests.
 ///
@@ -17,6 +20,7 @@ pub enum RequestKey {
     /// Download certificates by specific heights
     Certificates {
         chain_id: ChainId,
+        #[debug(with = "debug_compressed_heights")]
         heights: Vec<BlockHeight>,
     },
     /// Download a blob by ID
@@ -179,13 +183,13 @@ impl SubsumingKey<RequestResult> for super::request::RequestKey {
         let mut certificates_iter = certificates.iter();
         let mut collected = vec![];
         while let Some(height) = requested_heights.first() {
-            // Remove certs below the requested height.
-            if let Some(cert) = certificates_iter.find(|cert| &cert.value().height() == height) {
-                collected.push(cert.clone());
-                requested_heights.remove(0);
-            } else {
-                return None; // Missing a requested height
-            }
+            // Remove certs below the requested height, if present.
+            collected.push(
+                certificates_iter
+                    .find(|cert| &cert.value().height() == height)?
+                    .clone(),
+            );
+            requested_heights.remove(0);
         }
 
         Some(RequestResult::Certificates(collected))

@@ -3,23 +3,30 @@
 
 //! The procedural macros for the crate `linera-sdk`.
 
+#![deny(missing_docs)]
+
 mod utils;
 
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span};
 use syn::{
-    parse_macro_input, Fields, ItemEnum,
     __private::{quote::quote, TokenStream2},
+    parse_macro_input, Fields, ItemEnum,
 };
 
 use crate::utils::{concat, snakify};
 
+/// Derives `GraphQLMutationRoot` for an operation enum, generating a GraphQL mutation root
+/// whose mutations each schedule the corresponding operation. SDK paths in the generated code
+/// are resolved against the `linera_sdk` crate.
 #[proc_macro_derive(GraphQLMutationRoot)]
 pub fn derive_mutation_root(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemEnum);
     generate_mutation_root_code(input, "linera_sdk").into()
 }
 
+/// Like the `GraphQLMutationRoot` derive, but resolves SDK paths against `crate` instead of
+/// `linera_sdk`. Used within the `linera-sdk` crate itself.
 #[proc_macro_derive(GraphQLMutationRootInCrate)]
 pub fn derive_mutation_root_in_crate(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemEnum);
@@ -128,14 +135,14 @@ fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream
 }
 
 #[cfg(test)]
-pub mod tests {
-    use syn::{parse_quote, ItemEnum, __private::quote::quote};
+mod tests {
+    use syn::{__private::quote::quote, parse_quote, ItemEnum};
 
     use crate::generate_mutation_root_code;
 
     fn assert_eq_no_whitespace(mut actual: String, mut expected: String) {
         // Intentionally left here for debugging purposes
-        println!("{}", actual);
+        println!("{actual}");
 
         actual.retain(|c| !c.is_whitespace());
         expected.retain(|c| !c.is_whitespace());

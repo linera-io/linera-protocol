@@ -3,6 +3,8 @@
 
 //! A GraphQL client for the node service.
 
+#![deny(missing_docs)]
+
 mod service;
 pub mod utils;
 

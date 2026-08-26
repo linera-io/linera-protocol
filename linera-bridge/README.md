@@ -39,20 +39,20 @@ YAML snapshot (tests/snapshots/format__format.yaml.snap)
 BridgeTypes.sol (src/solidity/BridgeTypes.sol)
 ```
 
-Application-specific types follow the same pipeline. For example, `FungibleOperation` from the fungible token application:
+Application-specific types follow the same pipeline. For example, `WrappedFungibleOperation` from the wrapped-fungible token application:
 
 ```
-Rust types (linera-sdk::abis::fungible)
+Rust types (wrapped-fungible)
     │
-    ▼  serde-reflection (tests/format_fungible.rs)
-YAML snapshot (tests/snapshots/format_fungible__format_fungible.yaml.snap)
+    ▼  serde-reflection (tests/format_wrapped_fungible.rs)
+YAML snapshot (tests/snapshots/format_wrapped_fungible__format_wrapped_fungible.yaml.snap)
     │
     ▼  serde-generate via build.rs (shared types declared as external_definitions)
-FungibleTypes.sol (src/solidity/FungibleTypes.sol)
+WrappedFungibleTypes.sol (src/solidity/WrappedFungibleTypes.sol)
     imports BridgeTypes.sol for shared types
 ```
 
-`FungibleTypes.sol` only contains types and deserializers unique to the fungible application (`FungibleOperation` and its variants). Shared types like `Account`, `AccountOwner`, and `Amount` are reused from `BridgeTypes.sol` via import — `build.rs` passes them as `external_definitions` to `serde-generate`, which emits qualified `BridgeTypes.` references and `import` statements instead of duplicate definitions.
+`WrappedFungibleTypes.sol` only contains types and deserializers unique to the wrapped-fungible application (`WrappedFungibleOperation` and its variants). Shared types like `Account`, `AccountOwner`, and `Amount` are reused from `BridgeTypes.sol` via import — `build.rs` passes them as `external_definitions` to `serde-generate`, which emits qualified `BridgeTypes.` references and `import` statements instead of duplicate definitions.
 
 All snapshots are checked in and tested via `insta`. This means the generated Solidity stays in sync with the Rust types — if a struct field is added or an enum variant reordered, the snapshot test fails and the developer must update it explicitly.
 
@@ -90,7 +90,7 @@ Advances the committee to the next epoch. This is the only state-modifying opera
 2. Require the block is from the admin chain and the current epoch.
 3. Scan the block's transactions for an `AdminOperation::CreateCommittee { epoch, blob_hash }`.
 4. Verify that `keccak256("BlobContent::" || BCS(BlobContent { Committee, committeeBlob }))` matches `blob_hash`. This proves the caller's `committeeBlob` is the one referenced by the certified block.
-5. Parse the committee blob on-chain. For each validator, verify the caller's uncompressed public key matches the blob's compressed key (x-coordinate, y-parity, and secp256k1 curve membership), then derive the Ethereum address via `keccak256(uncompressed_key)`.
+5. Parse the committee blob on-chain. For each validator, verify the caller's uncompressed public key matches the blob's compressed key at the same index (x-coordinate, y-parity, and secp256k1 curve membership), then derive the Ethereum address via `keccak256(uncompressed_key)`. The caller must supply `validators` in the same order as the blob's compressed keys (BCS canonical map order, i.e. sorted by serialized key bytes); the production helper `extract_validator_keys` does this automatically.
 6. Store derived addresses and blob-extracted weights as the committee for the new epoch.
 
 The `committeeBlob` is the BCS-serialized `Committee` from Linera. The `validators` parameter is an array of 64-byte uncompressed secp256k1 public keys (without the `0x04` prefix). The caller must provide these separately because the blob only contains compressed keys (33 bytes: x-coordinate + y-parity prefix), and Ethereum addresses are derived from the uncompressed form (`keccak256(x || y)[12:]`). Decompressing a key on-chain would require computing a modular square root on the secp256k1 field — expensive in the EVM. Instead, the caller provides the uncompressed keys and the contract verifies them against the blob's compressed keys: it checks that the x-coordinate matches, the y-parity matches, and the point satisfies y² ≡ x³ + 7 (mod p). This curve membership check uses Solidity's `mulmod`/`addmod` builtins and is cheap. Addresses and weights are extracted from the blob rather than caller-provided, preventing substitution attacks. The authenticity chain is: validator signatures → certified block → `CreateCommittee` operation → `blob_hash` → `committeeBlob` → parsed validators/weights.
@@ -99,36 +99,40 @@ The constructor takes `(address[], uint64[], bytes32, uint32)` — the genesis c
 
 ### Microchain (abstract)
 
-#### `constructor(address _lightClient, bytes32 _chainId, uint64 _latestHeight)`
+#### `constructor(address _lightClient, bytes32 _chainId)`
 
-Binds the contract to a specific `LightClient` instance, a Linera chain ID (a 32-byte `CryptoHash`), and an initial block height.
+Binds the contract to a specific `LightClient` instance and a Linera chain ID (a 32-byte `CryptoHash`).
 
 #### `addBlock(bytes calldata data)`
 
 Verifies a certificate via `lightClient.verifyBlock(data)`, then enforces:
+- **No duplicate blocks**: rejects certificates already processed via the `verifiedBlocks` mapping.
 - **Chain ID match**: the block's `header.chain_id` must equal this contract's `chainId`.
-- **Sequential heights**: the block's height must equal `nextExpectedHeight`.
 
-On success, calls the virtual `_onBlock(BridgeTypes.Block)` hook. Subcontracts override this to extract and store application-specific data from the verified block.
+Blocks can be submitted in any order; sequential height enforcement is not required because BFT-finalized certificates guarantee canonicality. On success, calls the virtual `_onBlock(BridgeTypes.Block)` hook. Subcontracts override this to extract and store application-specific data from the verified block.
 
 ### FungibleBridge (concrete Microchain)
 
-A `Microchain` subcontract that bridges ERC-20 tokens from Linera to Ethereum. When a fungible `Credit` message targeting an Ethereum address (`Address20`) is received, the contract transfers tokens from its own balance to the recipient.
+A `Microchain` subcontract that bridges ERC-20 tokens from Linera to Ethereum. When the bridge application emits a `BurnEvent` on its `"burns"` stream (after burning wrapped tokens on the bridge chain), the contract releases the corresponding ERC-20 tokens to the target Ethereum address.
 
-#### `constructor(address _lightClient, bytes32 _chainId, uint64 _latestHeight, bytes32 _applicationId, address _token)`
+#### `constructor(address _lightClient, bytes32 _chainId, address _token, bytes32 _fungibleApplicationId, bytes32 _bridgeApplicationId)`
 
-Binds to a specific `LightClient`, chain, initial block height, Linera application ID, and ERC-20 token contract. Only messages targeting this `applicationId` are processed; all others are silently skipped.
+Binds to a specific `LightClient`, chain, and ERC-20 token contract. `_fungibleApplicationId` is the wrapped-fungible application (the deposit/mint target); `_bridgeApplicationId` is the bridge application whose `"burns"` stream releases are matched against.
+
+#### `registerFungibleApplicationId(bytes32 _fungibleApplicationId)`
+
+Registers the wrapped-fungible application ID. Can only be called once. Only events from this application are processed; all others are silently skipped.
 
 #### `_onBlock(BridgeTypes.Block)`
 
-Scans the block's `ReceiveMessages` transactions for `Message::User` entries matching `applicationId`. For each match, the opaque `bytes` payload is deserialized as a `FungibleTypes.Message`. Only `Credit` messages with an `Address20` target (Ethereum address) trigger an ERC-20 `transfer` from the bridge's balance to the target.
+Scans the block's `events` for entries on the `"burns"` stream matching `bridgeApplicationId`. For each match, the event value is deserialized as a `WrappedFungibleTypes.BurnEvent`. The `target` (Ethereum address) receives an ERC-20 `transfer` from the bridge's balance.
 
 ## Rust API
 
 The crate exposes typed bindings for each contract, plus the generated Solidity source as a constant:
 
 ```rust
-use linera_bridge::{light_client, microchain, BRIDGE_TYPES_SOURCE};
+use linera_bridge::evm::{light_client, microchain, BRIDGE_TYPES_SOURCE};
 
 // Encode a contract call (validators are 64-byte uncompressed public keys)
 let call = light_client::addCommitteeCall {
@@ -140,10 +144,10 @@ let calldata: Vec<u8> = call.abi_encode();
 
 // Available call types:
 // light_client: addCommitteeCall, verifyBlockCall, currentEpochCall
-// microchain:   addBlockCall, nextExpectedHeightCall, lightClientCall, chainIdCall
+// microchain:   addBlockCall, lightClientCall, chainIdCall
 
 // Solidity sources (for compilation or deployment tooling):
-// BRIDGE_TYPES_SOURCE, FUNGIBLE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE
+// BRIDGE_TYPES_SOURCE, WRAPPED_FUNGIBLE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE
 // light_client::SOURCE, microchain::SOURCE
 ```
 
@@ -173,9 +177,23 @@ The constructor takes `(address[], uint64[], bytes32, uint32)` — the genesis c
 
 - **Separation of concerns between LightClient and Microchain**: The `LightClient` is a singleton that only manages committees and certificate verification. It has no knowledge of individual chains or their blocks. Each `Microchain` instance tracks a single chain's block sequence and delegates verification to the `LightClient`. This means one `LightClient` deployment can serve any number of `Microchain` contracts, each following a different Linera microchain.
 
-- **Application-specific type generation with shared type reuse**: `FungibleTypes.sol` is generated from a separate serde-reflection snapshot of `FungibleOperation`. Since `FungibleOperation` references types already in `BridgeTypes.sol` (e.g., `Account`, `AccountOwner`, `Amount`), `build.rs` declares them as `external_definitions` so `serde-generate` emits qualified `BridgeTypes.` references and import statements instead of duplicate definitions. This ensures type compatibility — a `BridgeTypes.Account` from block deserialization can be directly compared with an `Account` from a deserialized `FungibleOperation`.
+- **Application-specific type generation with shared type reuse**: `WrappedFungibleTypes.sol` is generated from a separate serde-reflection snapshot of `WrappedFungibleOperation`. Since `WrappedFungibleOperation` references types already in `BridgeTypes.sol` (e.g., `Account`, `AccountOwner`, `Amount`), `build.rs` declares them as `external_definitions` so `serde-generate` emits qualified `BridgeTypes.` references and import statements instead of duplicate definitions. This ensures type compatibility — a `BridgeTypes.Account` from block deserialization can be directly compared with an `Account` from a deserialized `WrappedFungibleOperation`.
 
 - **No `previous_block_hash` chain-linking in Microchain**: The `Microchain` contract enforces chain ID and sequential heights but does not verify `previous_block_hash` to link blocks into a hash chain. This is safe because a `ConfirmedBlockCertificate` implies BFT-finalized canonicality — a quorum of validators signed this specific block at this height, so no conflicting block can exist for the same chain and height. The contract relies on this protocol-layer guarantee rather than redundantly re-checking hash linking. If the finality semantics of `ConfirmedBlockCertificate` ever change (e.g., to allow rollbacks or forks), a `previous_block_hash` check should be added.
+
+## Deployment
+
+A bridge spans both chains and its pieces must be created in a specific order
+(committee → `LightClient` → token → Linera chain/apps → `FungibleBridge` →
+cross-registration). Two paths exist:
+
+- **Local demo** (Docker + Anvil + a local validator + frontend):
+  `make demo` from this directory — see [`examples/bridge-demo/README.md`](../examples/bridge-demo/README.md).
+- **Real networks** (Base, Ethereum, … against a real Linera network):
+  the Docker-based deployment runbook in [`deploy/`](deploy/README.md) — a
+  sequence of copy-pasteable commands run inside the project's pre-built images.
+  It provisions both sides and emits a relayer env file. Operating the relayer
+  afterwards is covered by the [testnet runbook](../docker/README.testnet.md).
 
 ## Testing
 
@@ -194,12 +212,54 @@ Tests use [revm](https://github.com/bluealloy/revm) (Rust EVM) to execute the So
 - Microchain block tracking with chain ID enforcement
 - Microchain rejection of wrong chain ID and non-sequential heights
 - Microchain rejection of duplicate block submissions
-- FungibleBridge ERC-20 transfer on Credit message
-- FungibleBridge accumulated transfers across blocks
-- FungibleBridge skips non-EVM targets (Address32)
-- FungibleBridge ignores messages for other application IDs
+- FungibleBridge ERC-20 release on BurnEvent
+- FungibleBridge accumulated releases across blocks
+- FungibleBridge ignores events for other application IDs
 
 ### Prerequisites
 
 - `solc` (Solidity compiler) must be on `$PATH`
 - Run tests: `cargo test -p linera-bridge`
+
+## Security analysis
+
+### Can tokens be minted on Linera without a corresponding EVM deposit?
+
+**No.** The `wrapped-fungible` contract's `Mint` operation requires that the caller is the registered `evm-bridge` application (`authenticated_caller_id` must match `bridge_app_id` in parameters). Direct `Mint` operations — even from the bridge chain owner — are rejected. The `evm-bridge` app only calls `Mint` after verifying an MPT inclusion proof for a `DepositInitiated` event on EVM, and replay protection (`processed_deposits`) prevents double-minting from the same deposit.
+
+### Can tokens be unlocked on EVM without burning on Linera?
+
+**No.** `FungibleBridge._onBlock()` only processes `BurnEvent` events embedded in Linera block certificates. Certificates require a quorum of validator signatures (verified by `LightClient`). A `BurnEvent` can only appear in a block if the wrapped-fungible contract emitted it during execution. The `Microchain` contract rejects duplicate block submissions, preventing replay.
+
+### What if the bridge chain owner's key leaks?
+
+**Limited impact.** The owner cannot:
+- Mint tokens directly (requires `evm-bridge` as caller, not the owner)
+- Register a different fungible app in the `evm-bridge` (set-once, already locked after deployment)
+- Forge BurnEvents (events are part of validated block execution, not proposer-controlled)
+
+The owner can:
+- Submit `ProcessDeposit` operations with valid proofs (but these correspond to real EVM deposits — not harmful)
+- Censor transactions on the bridge chain (delay processing, but not steal funds)
+- Propose blocks, but block content is validated by validators before signing
+
+### What if a quorum of Linera validators is compromised?
+
+**Full compromise.** A colluding quorum (2/3+ by weight) can forge certificates containing arbitrary `BurnEvent` data, which `FungibleBridge` would accept. This is a fundamental trust assumption of the BFT protocol — the bridge's security is bounded by the validator set's integrity. This risk is shared with all Linera applications, not specific to the bridge.
+
+### Registration front-running
+
+Both registration functions are set-once and access-controlled:
+- **Linera side** (`RegisterFungibleApp`): requires an authenticated signer (chain owner)
+- **EVM side** (`registerFungibleApplicationId`): restricted to the contract deployer
+
+An attacker cannot front-run registration on either side without the owner's key (Linera) or the deployer's key (EVM).
+
+### Trust assumptions summary
+
+| Component | Trusted to | Not trusted to |
+|-----------|-----------|----------------|
+| Bridge chain owner | Propose blocks, not censor indefinitely | Mint, burn, or steal tokens |
+| Linera validators (quorum) | Finalize valid blocks only | N/A — if compromised, all bets are off |
+| Relayer | Forward certificates and proofs | Cannot forge — only relays signed data |
+| EVM contract deployer | Register correct application ID once | N/A after registration is locked |

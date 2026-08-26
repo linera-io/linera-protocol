@@ -19,7 +19,7 @@ use super::wit_import;
 /// interface.
 pub fn generate<'input, Functions>(
     wit_package: &LitStr,
-    wit_name: LitStr,
+    wit_name: &LitStr,
     functions: Functions,
 ) -> TokenStream
 where

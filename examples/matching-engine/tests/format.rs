@@ -10,5 +10,8 @@ use matching_engine::formats::MatchingEngineApplication;
 
 #[test]
 fn test_format() {
-    insta::assert_yaml_snapshot!("format", MatchingEngineApplication::formats().unwrap());
+    insta::assert_yaml_snapshot!(
+        "format",
+        MatchingEngineApplication::pruned_formats().unwrap()
+    );
 }

@@ -169,29 +169,27 @@ fn has_selector(module: &[u8], selector: &[u8]) -> bool {
 }
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
     use prometheus::HistogramVec;
 
-    pub static CONTRACT_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "evm_contract_instantiation_latency",
-            "EVM contract instantiation latency",
-            &[],
-            exponential_bucket_latencies(1.0),
-        )
-    });
+    linera_base::declare_metrics! {
+        pub static CONTRACT_INSTANTIATION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "evm_contract_instantiation_latency",
+                "EVM contract instantiation latency",
+                &[],
+                exponential_bucket_latencies(100.0),
+            );
 
-    pub static SERVICE_INSTANTIATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "evm_service_instantiation_latency",
-            "EVM service instantiation latency",
-            &[],
-            exponential_bucket_latencies(1.0),
-        )
-    });
+        pub static SERVICE_INSTANTIATION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "evm_service_instantiation_latency",
+                "EVM service instantiation latency",
+                &[],
+                exponential_bucket_latencies(100.0),
+            );
+    }
 }
 
 fn get_revm_instantiation_bytes(value: Vec<u8>) -> Vec<u8> {
@@ -332,7 +330,9 @@ fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
     fct_call.abi_encode()
 }
 
+/// A user contract in a compiled EVM module.
 #[derive(Clone)]
+#[allow(missing_docs)]
 pub enum EvmContractModule {
     #[cfg(with_revm)]
     Revm { module: Vec<u8> },
@@ -392,6 +392,7 @@ impl UserContractModule for EvmContractModule {
 
 /// A user service in a compiled EVM module.
 #[derive(Clone)]
+#[allow(missing_docs)]
 pub enum EvmServiceModule {
     #[cfg(with_revm)]
     Revm { module: Vec<u8> },
@@ -586,7 +587,7 @@ fn get_precompile_argument<Ctx: ContextTr>(context: &mut Ctx, input: &CallInput)
 }
 
 fn base_runtime_call<Runtime: BaseRuntime>(
-    request: BaseRuntimePrecompile,
+    request: &BaseRuntimePrecompile,
     context: &mut Ctx<'_, Runtime>,
 ) -> Result<Vec<u8>, ExecutionError> {
     let mut runtime = context
@@ -618,7 +619,7 @@ fn base_runtime_call<Runtime: BaseRuntime>(
             Ok(bcs::to_bytes(&balance)?)
         }
         BaseRuntimePrecompile::ReadOwnerBalance(account_owner) => {
-            let balance = runtime.read_owner_balance(account_owner)?;
+            let balance = runtime.read_owner_balance(*account_owner)?;
             let balance = Into::<U256>::into(balance);
             Ok(bcs::to_bytes(&balance)?)
         }
@@ -638,9 +639,9 @@ fn base_runtime_call<Runtime: BaseRuntime>(
             let chain_ownership = runtime.chain_ownership()?;
             Ok(bcs::to_bytes(&chain_ownership)?)
         }
-        BaseRuntimePrecompile::ReadDataBlob(hash) => runtime.read_data_blob(hash),
+        BaseRuntimePrecompile::ReadDataBlob(hash) => runtime.read_data_blob(*hash),
         BaseRuntimePrecompile::AssertDataBlobExists(hash) => {
-            runtime.assert_data_blob_exists(hash)?;
+            runtime.assert_data_blob_exists(*hash)?;
             Ok(Vec::new())
         }
     }
@@ -686,9 +687,11 @@ impl<'a, Runtime: ContractRuntime> PrecompileProvider<Ctx<'a, Runtime>> for Cont
     }
 
     fn warm_addresses(&self) -> Box<impl Iterator<Item = Address>> {
-        let mut addresses = self.inner.warm_addresses().collect::<Vec<Address>>();
-        addresses.push(PRECOMPILE_ADDRESS);
-        Box::new(addresses.into_iter())
+        Box::new(
+            self.inner
+                .warm_addresses()
+                .chain(std::iter::once(PRECOMPILE_ADDRESS)),
+        )
     }
 
     fn contains(&self, address: &Address) -> bool {
@@ -788,7 +791,7 @@ impl<'a> ContractPrecompile {
         context: &mut Ctx<'a, Runtime>,
     ) -> Result<Vec<u8>, ExecutionError> {
         match bcs::from_bytes(input)? {
-            RuntimePrecompile::Base(base_tag) => base_runtime_call(base_tag, context),
+            RuntimePrecompile::Base(base_tag) => base_runtime_call(&base_tag, context),
             RuntimePrecompile::Contract(contract_tag) => {
                 Self::contract_runtime_call(contract_tag, context)
             }
@@ -828,7 +831,7 @@ impl<'a> ServicePrecompile {
         context: &mut Ctx<'a, Runtime>,
     ) -> Result<Vec<u8>, ExecutionError> {
         match bcs::from_bytes(input)? {
-            RuntimePrecompile::Base(base_tag) => base_runtime_call(base_tag, context),
+            RuntimePrecompile::Base(base_tag) => base_runtime_call(&base_tag, context),
             RuntimePrecompile::Contract(_) => Err(EvmExecutionError::PrecompileError(
                 "Contract calls are not available in GeneralServiceCall".to_string(),
             )
@@ -866,9 +869,11 @@ impl<'a, Runtime: ServiceRuntime> PrecompileProvider<Ctx<'a, Runtime>> for Servi
     }
 
     fn warm_addresses(&self) -> Box<impl Iterator<Item = Address>> {
-        let mut addresses = self.inner.warm_addresses().collect::<Vec<Address>>();
-        addresses.push(PRECOMPILE_ADDRESS);
-        Box::new(addresses.into_iter())
+        Box::new(
+            self.inner
+                .warm_addresses()
+                .chain(std::iter::once(PRECOMPILE_ADDRESS)),
+        )
     }
 
     fn contains(&self, address: &Address) -> bool {
@@ -904,7 +909,7 @@ fn map_result_call_outcome(
 
 fn get_interpreter_result(
     result: &[u8],
-    inputs: &mut CallInputs,
+    inputs: &CallInputs,
 ) -> Result<InterpreterResult, ExecutionError> {
     let mut result = bcs::from_bytes::<InterpreterResult>(result)?;
     // This effectively means that no cost is incurred by the call to another contract.
@@ -975,9 +980,9 @@ impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
 
 impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
     fn call_or_fail(
-        &mut self,
+        &self,
         context: &mut Ctx<'_, Runtime>,
-        inputs: &mut CallInputs,
+        inputs: &CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
         // Every call to a contract passes by this function.
         // Three kinds:
@@ -1048,9 +1053,9 @@ impl<'a, Runtime: ServiceRuntime> Inspector<Ctx<'a, Runtime>> for CallIntercepto
 
 impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
     fn call_or_fail(
-        &mut self,
+        &self,
         context: &mut Ctx<'_, Runtime>,
-        inputs: &mut CallInputs,
+        inputs: &CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
         // Every call to a contract passes by this function.
         // Three kinds:
@@ -1081,6 +1086,7 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
     }
 }
 
+/// An instance of a user contract running on the Revm EVM.
 pub struct RevmContractInstance<Runtime> {
     module: Vec<u8>,
     db: DatabaseRuntime<Runtime>,
@@ -1152,8 +1158,8 @@ where
         if has_selector(&self.module, INSTANTIATE_SELECTOR) {
             let instantiation_argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
             let argument = get_revm_instantiation_bytes(instantiation_argument);
-            let result = self.transact_commit(EvmTxKind::Call, argument, caller)?;
-            self.write_logs(result.logs, "instantiate")?;
+            let result = self.transact_commit(&EvmTxKind::Call, argument, caller)?;
+            self.write_logs(&result.logs, "instantiate")?;
         }
         Ok(())
     }
@@ -1174,7 +1180,7 @@ where
             result.output_and_logs()
         };
         self.consume_fuel(gas_final)?;
-        self.write_logs(logs, "operation")?;
+        self.write_logs(&logs, "operation")?;
         Ok(output)
     }
 
@@ -1209,7 +1215,7 @@ where
 }
 
 fn process_execution_result(
-    storage_stats: StorageStats,
+    storage_stats: &StorageStats,
     result: ExecutionResult,
 ) -> Result<ExecutionResultSuccess, EvmExecutionError> {
     match result {
@@ -1253,6 +1259,7 @@ impl<Runtime> RevmContractInstance<Runtime>
 where
     Runtime: ContractRuntime,
 {
+    /// Prepares a contract instance from its EVM module and the given runtime.
     pub fn prepare(module: Vec<u8>, runtime: Runtime) -> Self {
         let db = DatabaseRuntime::new(runtime);
         Self { module, db }
@@ -1267,7 +1274,7 @@ where
         let result = self.init_transact_commit(operation, caller)?;
         let (gas_final, output, logs) = result.output_and_logs();
         self.consume_fuel(gas_final)?;
-        self.write_logs(logs, origin)?;
+        self.write_logs(&logs, origin)?;
         assert_eq!(output.len(), 0);
         Ok(())
     }
@@ -1284,7 +1291,7 @@ where
         if !self.db.is_initialized()? {
             self.initialize_contract(caller)?;
         }
-        self.transact_commit(EvmTxKind::Call, vec, caller)
+        self.transact_commit(&EvmTxKind::Call, vec, caller)
     }
 
     /// Initializes the contract.
@@ -1292,11 +1299,11 @@ where
         let mut vec_init = self.module.clone();
         let constructor_argument = self.db.constructor_argument()?;
         vec_init.extend_from_slice(&constructor_argument);
-        let result = self.transact_commit(EvmTxKind::Create, vec_init, caller)?;
+        let result = self.transact_commit(&EvmTxKind::Create, vec_init, caller)?;
         result
             .check_contract_initialization(self.db.contract_address)
             .map_err(EvmExecutionError::IncorrectContractCreation)?;
-        self.write_logs(result.logs, "deploy")
+        self.write_logs(&result.logs, "deploy")
     }
 
     /// Computes the address used in the `msg.sender` variable.
@@ -1330,7 +1337,7 @@ where
 
     fn transact_commit(
         &mut self,
-        ch: EvmTxKind,
+        ch: &EvmTxKind,
         input: Vec<u8>,
         caller: Address,
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
@@ -1382,29 +1389,29 @@ where
                 inspector,
             )
             .map_err(|error| {
-                let error = format!("{:?}", error);
+                let error = format!("{error:?}");
                 EvmExecutionError::TransactCommitError(error)
             })
         }?;
         let storage_stats = self.db.take_storage_stats();
         self.db.commit_changes()?;
-        let result = process_execution_result(storage_stats, result)?;
+        let result = process_execution_result(&storage_stats, result)?;
         Ok(result)
     }
 
-    fn consume_fuel(&mut self, gas_final: u64) -> Result<(), ExecutionError> {
+    fn consume_fuel(&self, gas_final: u64) -> Result<(), ExecutionError> {
         let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
         runtime.consume_fuel(gas_final, VmRuntime::Evm)
     }
 
-    fn write_logs(&mut self, logs: Vec<Log>, origin: &str) -> Result<(), ExecutionError> {
+    fn write_logs(&self, logs: &[Log], origin: &str) -> Result<(), ExecutionError> {
         // TODO(#3758): Extracting Ethereum events from the Linera events.
         if !logs.is_empty() {
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
             let block_height = runtime.block_height()?;
             let stream_name = bcs::to_bytes("ethereum_event")?;
             let stream_name = StreamName(stream_name);
-            for log in &logs {
+            for log in logs {
                 let value = bcs::to_bytes(&(origin, block_height.0, log))?;
                 runtime.emit(stream_name.clone(), value)?;
             }
@@ -1413,6 +1420,7 @@ where
     }
 }
 
+/// An instance of a user service running on the Revm EVM.
 pub struct RevmServiceInstance<Runtime> {
     module: Vec<u8>,
     db: DatabaseRuntime<Runtime>,
@@ -1422,6 +1430,7 @@ impl<Runtime> RevmServiceInstance<Runtime>
 where
     Runtime: ServiceRuntime,
 {
+    /// Prepares a service instance from its EVM module and the given runtime.
     pub fn prepare(module: Vec<u8>, runtime: Runtime) -> Self {
         let db = DatabaseRuntime::new(runtime);
         Self { module, db }
@@ -1535,13 +1544,13 @@ where
                 inspector,
             )
             .map_err(|error| {
-                let error = format!("{:?}", error);
+                let error = format!("{error:?}");
                 EvmExecutionError::TransactCommitError(error)
             })
         }?;
         let storage_stats = self.db.take_storage_stats();
         Ok((
-            process_execution_result(storage_stats, result_state.result)?,
+            process_execution_result(&storage_stats, result_state.result)?,
             result_state.state,
         ))
     }

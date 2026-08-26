@@ -79,6 +79,10 @@ where
     ) -> Result<Option<<Self::Runtime as Runtime>::Memory>, RuntimeError> {
         I::memory_from_export(&**self, export)
     }
+
+    fn load_memory(&mut self) -> Result<<Self::Runtime as Runtime>::Memory, RuntimeError> {
+        I::load_memory(*self)
+    }
 }
 
 impl<M, I> RuntimeMemory<&mut I> for M

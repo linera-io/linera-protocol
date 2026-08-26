@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use linera_base::{
     crypto::{
         AccountPublicKey, AccountSignature, CryptoError, CryptoHash, ValidatorPublicKey,
@@ -8,7 +10,7 @@ use linera_base::{
     },
     data_types::{BlobContent, BlockHeight, NetworkDescription},
     ensure,
-    identifiers::{AccountOwner, BlobId, ChainId},
+    identifiers::{AccountOwner, BlobId, ChainId, EventId, StreamId},
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteValue, ProposalContent},
@@ -34,6 +36,7 @@ use crate::{
 };
 
 #[derive(Error, Debug)]
+#[allow(missing_docs)]
 pub enum GrpcProtoConversionError {
     #[error(transparent)]
     BincodeError(#[from] bincode::Error),
@@ -47,6 +50,11 @@ pub enum GrpcProtoConversionError {
     InconsistentChainId,
     #[error("Unrecognized certificate type")]
     InvalidCertificateType,
+    #[error(
+        "Chain info queries asking for committees are reserved for local clients; \
+         validators serve committees via the event stream and the committee blob store"
+    )]
+    UnsupportedRequestCommittees,
 }
 
 impl From<ed25519_dalek::SignatureError> for GrpcProtoConversionError {
@@ -247,6 +255,8 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
                 .original_proposal
                 .map(|cert| bincode::serialize(&cert))
                 .transpose()?,
+            // This binary understands the aggregated `MissingCrossChainUpdates` error.
+            supports_aggregated_missing: true,
         })
     }
 }
@@ -285,10 +295,12 @@ impl TryFrom<api::CrossChainRequest> for CrossChainRequest {
                 sender,
                 recipient,
                 bundles,
+                previous_height,
             }) => CrossChainRequest::UpdateRecipient {
                 sender: try_proto_convert(sender)?,
                 recipient: try_proto_convert(recipient)?,
                 bundles: bincode::deserialize(&bundles)?,
+                previous_height: previous_height.map(Into::into),
             },
             Inner::ConfirmUpdatedRecipient(api::ConfirmUpdatedRecipient {
                 sender,
@@ -298,6 +310,17 @@ impl TryFrom<api::CrossChainRequest> for CrossChainRequest {
                 sender: try_proto_convert(sender)?,
                 recipient: try_proto_convert(recipient)?,
                 latest_height: latest_height
+                    .ok_or(GrpcProtoConversionError::MissingField)?
+                    .into(),
+            },
+            Inner::RevertConfirm(api::RevertConfirm {
+                sender,
+                recipient,
+                retransmit_from,
+            }) => CrossChainRequest::RevertConfirm {
+                sender: try_proto_convert(sender)?,
+                recipient: try_proto_convert(recipient)?,
+                retransmit_from: retransmit_from
                     .ok_or(GrpcProtoConversionError::MissingField)?
                     .into(),
             },
@@ -317,10 +340,12 @@ impl TryFrom<CrossChainRequest> for api::CrossChainRequest {
                 sender,
                 recipient,
                 bundles,
+                previous_height,
             } => Inner::UpdateRecipient(api::UpdateRecipient {
                 sender: Some(sender.into()),
                 recipient: Some(recipient.into()),
                 bundles: bincode::serialize(&bundles)?,
+                previous_height: previous_height.map(Into::into),
             }),
             CrossChainRequest::ConfirmUpdatedRecipient {
                 sender,
@@ -330,6 +355,15 @@ impl TryFrom<CrossChainRequest> for api::CrossChainRequest {
                 sender: Some(sender.into()),
                 recipient: Some(recipient.into()),
                 latest_height: Some(latest_height.into()),
+            }),
+            CrossChainRequest::RevertConfirm {
+                sender,
+                recipient,
+                retransmit_from,
+            } => Inner::RevertConfirm(api::RevertConfirm {
+                sender: Some(sender.into()),
+                recipient: Some(recipient.into()),
+                retransmit_from: Some(retransmit_from.into()),
             }),
         };
         Ok(Self { inner: Some(inner) })
@@ -456,6 +490,8 @@ impl TryFrom<HandleConfirmedCertificateRequest> for api::HandleConfirmedCertific
             chain_id: Some(request.certificate.inner().chain_id().into()),
             certificate: Some(request.certificate.try_into()?),
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
+            // This binary understands the aggregated `MissingCrossChainUpdates` error.
+            supports_aggregated_missing: true,
         })
     }
 }
@@ -591,6 +627,14 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
     type Error = GrpcProtoConversionError;
 
     fn try_from(chain_info_query: api::ChainInfoQuery) -> Result<Self, Self::Error> {
+        // Defense in depth: every in-process caller has been moved off of
+        // `request_committees`, so a gRPC query that still asks for them is either a
+        // stale client or an attempt to force the validator to load the chain-local
+        // committees view. Reject before we hand the query to the worker.
+        ensure!(
+            !chain_info_query.request_committees,
+            GrpcProtoConversionError::UnsupportedRequestCommittees
+        );
         let request_sent_certificate_hashes_by_heights = chain_info_query
             .request_sent_certificate_hashes_by_heights
             .map(|heights| bincode::deserialize(&heights))
@@ -1035,8 +1079,136 @@ impl TryFrom<api::DownloadCertificatesByHeightsRequest> for CertificatesByHeight
     }
 }
 
+impl From<Vec<EventId>> for api::EventBlockHeightsRequest {
+    fn from(event_ids: Vec<EventId>) -> Self {
+        Self {
+            event_ids: bincode::serialize(&event_ids).expect("serialize event_ids"),
+        }
+    }
+}
+
+impl TryFrom<api::EventBlockHeightsRequest> for Vec<EventId> {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(request: api::EventBlockHeightsRequest) -> Result<Self, Self::Error> {
+        Ok(bincode::deserialize(&request.event_ids)?)
+    }
+}
+
+impl From<Vec<Option<BlockHeight>>> for api::EventBlockHeightsResponse {
+    fn from(heights: Vec<Option<BlockHeight>>) -> Self {
+        Self {
+            heights: bincode::serialize(&heights).expect("serialize heights"),
+        }
+    }
+}
+
+impl TryFrom<api::EventBlockHeightsResponse> for Vec<Option<BlockHeight>> {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(response: api::EventBlockHeightsResponse) -> Result<Self, Self::Error> {
+        Ok(bincode::deserialize(&response.heights)?)
+    }
+}
+
+impl TryFrom<StreamId> for api::StreamId {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(stream_id: StreamId) -> Result<Self, Self::Error> {
+        Ok(Self {
+            bytes: bincode::serialize(&stream_id)?,
+        })
+    }
+}
+
+impl TryFrom<api::StreamId> for StreamId {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(stream_id: api::StreamId) -> Result<Self, Self::Error> {
+        Ok(bincode::deserialize(&stream_id.bytes)?)
+    }
+}
+
+impl TryFrom<(ChainId, Vec<StreamId>)> for api::PreviousEventBlocksRequest {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from((chain_id, stream_ids): (ChainId, Vec<StreamId>)) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id: Some(chain_id.into()),
+            stream_ids: stream_ids
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
+
+impl TryFrom<api::PreviousEventBlocksRequest> for (ChainId, Vec<StreamId>) {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(request: api::PreviousEventBlocksRequest) -> Result<Self, Self::Error> {
+        Ok((
+            try_proto_convert(request.chain_id)?,
+            request
+                .stream_ids
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
+        ))
+    }
+}
+
+impl TryFrom<BTreeMap<StreamId, (BlockHeight, CryptoHash)>> for api::PreviousEventBlocksResponse {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(map: BTreeMap<StreamId, (BlockHeight, CryptoHash)>) -> Result<Self, Self::Error> {
+        Ok(Self {
+            previous_event_blocks: map
+                .into_iter()
+                .map(|(stream_id, (block_height, crypto_hash))| {
+                    Ok(api::PreviousEventBlock {
+                        stream_id: Some(stream_id.try_into()?),
+                        block_height: Some(block_height.into()),
+                        crypto_hash: Some(crypto_hash.into()),
+                    })
+                })
+                .collect::<Result<_, GrpcProtoConversionError>>()?,
+        })
+    }
+}
+
+impl TryFrom<api::PreviousEventBlocksResponse> for BTreeMap<StreamId, (BlockHeight, CryptoHash)> {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(response: api::PreviousEventBlocksResponse) -> Result<Self, Self::Error> {
+        response
+            .previous_event_blocks
+            .into_iter()
+            .map(|entry| {
+                let stream_id: StreamId = entry
+                    .stream_id
+                    .ok_or(GrpcProtoConversionError::MissingField)?
+                    .try_into()?;
+                let block_height: BlockHeight = entry
+                    .block_height
+                    .ok_or(GrpcProtoConversionError::MissingField)?
+                    .into();
+                let crypto_hash: CryptoHash = entry
+                    .crypto_hash
+                    .ok_or(GrpcProtoConversionError::MissingField)?
+                    .try_into()?;
+                Ok((stream_id, (block_height, crypto_hash)))
+            })
+            .collect()
+    }
+}
+
 #[cfg(test)]
+/// Tests for the gRPC protobuf conversions.
 pub mod tests {
+    // Test helpers in this module don't need individual documentation.
+    #![allow(missing_docs)]
+
     use std::{borrow::Cow, fmt::Debug};
 
     use linera_base::{
@@ -1059,7 +1231,7 @@ pub mod tests {
     impl BcsSignable<'_> for Foo {}
 
     fn dummy_chain_id(index: u32) -> ChainId {
-        ChainId(CryptoHash::test_hash(format!("chain{}", index)))
+        ChainId(CryptoHash::test_hash(format!("chain{index}")))
     }
 
     fn get_block() -> ProposedBlock {
@@ -1068,7 +1240,7 @@ pub mod tests {
 
     /// A convenience function for testing. It converts a type into its
     /// RPC equivalent and back - asserting that the two are equal.
-    fn round_trip_check<T, M>(value: T)
+    fn round_trip_check<T, M>(value: &T)
     where
         T: TryFrom<M> + Clone + Debug + Eq,
         M: TryFrom<T>,
@@ -1076,16 +1248,17 @@ pub mod tests {
         M::Error: Debug,
     {
         let message = M::try_from(value.clone()).unwrap();
-        assert_eq!(value, message.try_into().unwrap());
+        let round_trip_value: T = message.try_into().unwrap();
+        assert_eq!(value, &round_trip_value);
     }
 
     #[test]
     pub fn test_public_key() {
         let account_key = AccountSecretKey::generate().public();
-        round_trip_check::<_, api::AccountPublicKey>(account_key);
+        round_trip_check::<_, api::AccountPublicKey>(&account_key);
 
         let validator_key = ValidatorKeypair::generate().public_key;
-        round_trip_check::<_, api::ValidatorPublicKey>(validator_key);
+        round_trip_check::<_, api::ValidatorPublicKey>(&validator_key);
     }
 
     #[test]
@@ -1093,30 +1266,67 @@ pub mod tests {
         let validator_key_pair = ValidatorKeypair::generate();
         let validator_signature =
             ValidatorSignature::new(&Foo("test".into()), &validator_key_pair.secret_key);
-        round_trip_check::<_, api::ValidatorSignature>(validator_signature);
+        round_trip_check::<_, api::ValidatorSignature>(&validator_signature);
 
         let account_key_pair = AccountSecretKey::generate();
         let account_signature = account_key_pair.sign(&Foo("test".into()));
-        round_trip_check::<_, api::AccountSignature>(account_signature);
+        round_trip_check::<_, api::AccountSignature>(&account_signature);
     }
 
     #[test]
     pub fn test_owner() {
         let key_pair = AccountSecretKey::generate();
         let owner = AccountOwner::from(key_pair.public());
-        round_trip_check::<_, api::AccountOwner>(owner);
+        round_trip_check::<_, api::AccountOwner>(&owner);
     }
 
     #[test]
     pub fn test_block_height() {
         let block_height = BlockHeight::from(10);
-        round_trip_check::<_, api::BlockHeight>(block_height);
+        round_trip_check::<_, api::BlockHeight>(&block_height);
     }
 
     #[test]
     pub fn test_chain_id() {
         let chain_id = dummy_chain_id(0);
-        round_trip_check::<_, api::ChainId>(chain_id);
+        round_trip_check::<_, api::ChainId>(&chain_id);
+    }
+
+    /// `NodeError` is bincode-encoded into the gRPC error field (see `TryFrom<NodeError> for
+    /// api::ChainInfoResult`), so an upgraded peer must be able to decode the aggregated
+    /// `MissingCrossChainUpdates` variant. This also guards against accidentally reordering the
+    /// enum (the variant must stay appended for wire compatibility with older peers).
+    #[test]
+    fn test_node_error_missing_cross_chain_updates_round_trip() {
+        let error = NodeError::MissingCrossChainUpdates {
+            chain_id: dummy_chain_id(0),
+            bundles: vec![
+                (dummy_chain_id(1), BlockHeight::from(7)),
+                (dummy_chain_id(2), BlockHeight::from(0)),
+            ],
+        };
+        let encoded = bincode::serialize(&error).unwrap();
+        let decoded: NodeError = bincode::deserialize(&encoded).unwrap();
+        assert_eq!(error, decoded);
+    }
+
+    /// The chain-level error must map to the node-level error preserving every reported sender,
+    /// so the client receives the full missing set.
+    #[test]
+    fn test_chain_error_missing_cross_chain_updates_maps_to_node_error() {
+        let chain_id = dummy_chain_id(0);
+        let bundles = vec![
+            (dummy_chain_id(1), BlockHeight::from(3)),
+            (dummy_chain_id(2), BlockHeight::from(8)),
+        ];
+        let node_error = NodeError::from(linera_chain::ChainError::MissingCrossChainUpdates {
+            chain_id,
+            bundles: bundles.clone(),
+        });
+        assert_eq!(
+            node_error,
+            NodeError::MissingCrossChainUpdates { chain_id, bundles }
+        );
     }
 
     #[test]
@@ -1144,7 +1354,7 @@ pub mod tests {
             info: chain_info.clone(),
             signature: None,
         };
-        round_trip_check::<_, api::ChainInfoResponse>(chain_info_response_none);
+        round_trip_check::<_, api::ChainInfoResponse>(&chain_info_response_none);
 
         let chain_info_response_some = ChainInfoResponse {
             // `info` is bincode so no need to test conversions extensively
@@ -1154,13 +1364,13 @@ pub mod tests {
                 &ValidatorKeypair::generate().secret_key,
             )),
         };
-        round_trip_check::<_, api::ChainInfoResponse>(chain_info_response_some);
+        round_trip_check::<_, api::ChainInfoResponse>(&chain_info_response_some);
     }
 
     #[test]
     pub fn test_chain_info_query() {
         let chain_info_query_none = ChainInfoQuery::new(dummy_chain_id(0));
-        round_trip_check::<_, api::ChainInfoQuery>(chain_info_query_none);
+        round_trip_check::<_, api::ChainInfoQuery>(&chain_info_query_none);
 
         let chain_info_query_some = ChainInfoQuery {
             chain_id: dummy_chain_id(0),
@@ -1176,7 +1386,22 @@ pub mod tests {
             request_sent_certificate_hashes_in_range: None,
             create_network_actions: true,
         };
-        round_trip_check::<_, api::ChainInfoQuery>(chain_info_query_some);
+        round_trip_check::<_, api::ChainInfoQuery>(&chain_info_query_some);
+    }
+
+    #[test]
+    pub fn reject_chain_info_query_with_request_committees() {
+        let proto = api::ChainInfoQuery {
+            chain_id: Some(dummy_chain_id(0).into()),
+            request_committees: true,
+            request_owner_balance: Some(AccountOwner::CHAIN.try_into().unwrap()),
+            ..api::ChainInfoQuery::default()
+        };
+        let error = ChainInfoQuery::try_from(proto).unwrap_err();
+        assert!(matches!(
+            error,
+            GrpcProtoConversionError::UnsupportedRequestCommittees
+        ));
     }
 
     #[test]
@@ -1184,13 +1409,13 @@ pub mod tests {
         let chain_id = dummy_chain_id(2);
         let blob_id = Blob::new(BlobContent::new_data(*b"foo")).id();
         let pending_blob_request = (chain_id, blob_id);
-        round_trip_check::<_, api::PendingBlobRequest>(pending_blob_request);
+        round_trip_check::<_, api::PendingBlobRequest>(&pending_blob_request);
     }
 
     #[test]
     pub fn test_pending_blob_result() {
         let blob = BlobContent::new_data(*b"foo");
-        round_trip_check::<_, api::PendingBlobResult>(blob);
+        round_trip_check::<_, api::PendingBlobResult>(&blob);
     }
 
     #[test]
@@ -1198,7 +1423,7 @@ pub mod tests {
         let chain_id = dummy_chain_id(2);
         let blob_content = BlobContent::new_data(*b"foo");
         let pending_blob_request = (chain_id, blob_content);
-        round_trip_check::<_, api::HandlePendingBlobRequest>(pending_blob_request);
+        round_trip_check::<_, api::HandlePendingBlobRequest>(&pending_blob_request);
     }
 
     #[test]
@@ -1221,7 +1446,7 @@ pub mod tests {
             wait_for_outgoing_messages: true,
         };
 
-        round_trip_check::<_, api::LiteCertificate>(request);
+        round_trip_check::<_, api::LiteCertificate>(&request);
     }
 
     #[test]
@@ -1243,7 +1468,7 @@ pub mod tests {
         );
         let request = HandleValidatedCertificateRequest { certificate };
 
-        round_trip_check::<_, api::HandleValidatedCertificateRequest>(request);
+        round_trip_check::<_, api::HandleValidatedCertificateRequest>(&request);
     }
 
     #[test]
@@ -1252,8 +1477,9 @@ pub mod tests {
             sender: dummy_chain_id(0),
             recipient: dummy_chain_id(0),
             bundles: vec![],
+            previous_height: Some(BlockHeight::from(42)),
         };
-        round_trip_check::<_, api::CrossChainRequest>(cross_chain_request_update_recipient);
+        round_trip_check::<_, api::CrossChainRequest>(&cross_chain_request_update_recipient);
 
         let cross_chain_request_confirm_updated_recipient =
             CrossChainRequest::ConfirmUpdatedRecipient {
@@ -1262,7 +1488,7 @@ pub mod tests {
                 latest_height: BlockHeight(1),
             };
         round_trip_check::<_, api::CrossChainRequest>(
-            cross_chain_request_confirm_updated_recipient,
+            &cross_chain_request_confirm_updated_recipient,
         );
     }
 
@@ -1294,7 +1520,7 @@ pub mod tests {
             original_proposal: Some(OriginalProposal::Regular { certificate }),
         };
 
-        round_trip_check::<_, api::BlockProposal>(block_proposal);
+        round_trip_check::<_, api::BlockProposal>(&block_proposal);
     }
 
     #[test]

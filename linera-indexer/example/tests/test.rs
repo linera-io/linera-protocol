@@ -1,11 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(any(
-    feature = "storage-service",
-    feature = "dynamodb",
-    feature = "scylladb"
-))]
+#![cfg(any(feature = "storage-service", feature = "scylladb"))]
 
 use std::{str::FromStr, sync::LazyLock, time::Duration};
 
@@ -51,10 +47,7 @@ async fn run_indexer(path_provider: &PathProvider) -> anyhow::Result<Child> {
     let client = reqwest_client();
     for i in 0..10 {
         linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-        let request = client
-            .get(format!("http://localhost:{}/", port))
-            .send()
-            .await;
+        let request = client.get(format!("http://localhost:{port}/")).send().await;
         if request.is_ok() {
             info!("Indexer has started");
             return Ok(child);
@@ -96,7 +89,6 @@ const TRANSFER_DELAY_MILLIS: u64 = 100;
 
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc); "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) -> anyhow::Result<()> {
     // launching network, service and indexer

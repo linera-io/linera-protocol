@@ -8,7 +8,7 @@ fn main() {
 
 #[cfg(feature = "codegen")]
 mod codegen {
-    use std::{collections::BTreeMap, path::PathBuf};
+    use std::{collections::BTreeMap, path::PathBuf, process::Command};
 
     use serde_generate::{solidity, CodeGeneratorConfig, SourceInstaller};
     use serde_reflection::Registry;
@@ -16,6 +16,32 @@ mod codegen {
     pub fn generate() {
         generate_bridge_types();
         generate_fungible_types();
+        forge_fmt(&PathBuf::from("src/solidity/BridgeTypes.sol"));
+        forge_fmt(&PathBuf::from("src/solidity/WrappedFungibleTypesV1.sol"));
+    }
+
+    /// Reformats a freshly generated Solidity file with `forge fmt` so the
+    /// generator's output matches the rest of the codebase. Falls back to
+    /// a warning (non-fatal) if `forge` is not on PATH — codegen is a
+    /// best-effort developer convenience and shouldn't break a build that
+    /// otherwise wouldn't have run forge.
+    fn forge_fmt(path: &PathBuf) {
+        if !path.exists() {
+            return;
+        }
+        let status = Command::new("forge").arg("fmt").arg(path).status();
+        match status {
+            Ok(s) if s.success() => {}
+            Ok(s) => {
+                println!("cargo:warning=forge fmt {} exited with {s}", path.display());
+            }
+            Err(e) => {
+                println!(
+                    "cargo:warning=forge fmt {} could not be invoked: {e}",
+                    path.display()
+                );
+            }
+        }
     }
 
     /// Generates BridgeTypes.sol from the bridge snapshot.
@@ -33,13 +59,17 @@ mod codegen {
             .expect("failed to generate Solidity code");
     }
 
-    /// Generates FungibleTypes.sol from the fungible snapshot.
-    /// Primitive types shared with BridgeTypes are declared as external so the generated
-    /// code imports them from BridgeTypes.sol instead of redefining them.
+    /// Generates WrappedFungibleTypesV1.sol from the wrapped-fungible snapshot.
+    /// The `V1` suffix is versioned in lockstep with `FungibleBurnEventDecoderV1`:
+    /// a future BurnEvent schema change generates a new `WrappedFungibleTypesV2`
+    /// consumed by a new decoder. Primitive types shared with BridgeTypes are
+    /// declared as external so the generated code imports them from
+    /// BridgeTypes.sol instead of redefining them.
     fn generate_fungible_types() {
         let bridge_snap = PathBuf::from("tests/snapshots/format__format.yaml.snap");
-        let fungible_snap =
-            PathBuf::from("tests/snapshots/format_fungible__format_fungible.yaml.snap");
+        let fungible_snap = PathBuf::from(
+            "tests/snapshots/format_wrapped_fungible__format_wrapped_fungible.yaml.snap",
+        );
 
         let Some(bridge_registry) = read_snapshot_registry(&bridge_snap) else {
             return;
@@ -52,11 +82,11 @@ mod codegen {
 
         let out_dir = PathBuf::from("src/solidity");
         let installer = solidity::Installer::new(out_dir);
-        let config = CodeGeneratorConfig::new("FungibleTypes".to_string())
+        let config = CodeGeneratorConfig::new("WrappedFungibleTypesV1".to_string())
             .with_external_definitions(BTreeMap::from([("BridgeTypes".to_string(), shared_types)]));
         installer
             .install_module(&config, &fungible_registry)
-            .expect("failed to generate FungibleTypes Solidity code");
+            .expect("failed to generate WrappedFungibleTypesV1 Solidity code");
     }
 
     /// Returns the names from `fungible_registry` that are primitive/structural types also
@@ -64,7 +94,7 @@ mod codegen {
     ///
     /// We can't simply use all names that appear in both registries because serde-reflection
     /// uses short type names (no module path), so unrelated types with the same name (e.g.
-    /// `linera_execution::Message` vs `fungible::Message`) would collide.
+    /// `linera_execution::Message` vs `wrapped_fungible::Message`) would collide.
     fn bridge_type_names(fungible_registry: &Registry, bridge_registry: &Registry) -> Vec<String> {
         // Primitive/structural types shared by both registries. These are the leaf types that
         // the fungible application's Operation and Message types are built from.
@@ -75,7 +105,7 @@ mod codegen {
             .filter(|name| {
                 fungible_registry.contains_key(**name) && bridge_registry.contains_key(**name)
             })
-            .map(|name| name.to_string())
+            .map(|name| (*name).to_string())
             .collect()
     }
 

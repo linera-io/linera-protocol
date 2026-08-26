@@ -14,11 +14,6 @@ use linera_storage_service::{
 };
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-#[cfg(feature = "kubernetes")]
-use {
-    crate::cli_wrappers::local_kubernetes_net::{BuildMode, LocalKubernetesNetConfig},
-    std::path::PathBuf,
-};
 
 use crate::{
     cli_wrappers::{
@@ -45,8 +40,7 @@ impl StorageConfigProvider {
                 let service_endpoint = linera_base::port::get_free_endpoint().await?;
                 let binary = get_service_storage_binary().await?.display().to_string();
                 let service = StorageService::new(&service_endpoint, binary);
-                let _service_guard = service.run().await?;
-                let _service_guard = Some(_service_guard);
+                let service_guard = Some(service.run().await?);
                 let inner_storage_config = InnerStorageConfig::Service {
                     endpoint: service_endpoint,
                 };
@@ -57,7 +51,7 @@ impl StorageConfigProvider {
                 };
                 Ok(StorageConfigProvider {
                     config,
-                    _service_guard,
+                    _service_guard: service_guard,
                 })
             }
             #[cfg(not(feature = "storage-service"))]
@@ -97,8 +91,6 @@ impl StorageConfigProvider {
             }
             #[cfg(feature = "storage-service")]
             InnerStorageConfig::Service { .. } => Ok(Database::Service),
-            #[cfg(feature = "dynamodb")]
-            InnerStorageConfig::DynamoDb { .. } => Ok(Database::DynamoDb),
             #[cfg(feature = "scylladb")]
             InnerStorageConfig::ScyllaDb { .. } => Ok(Database::ScyllaDb),
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
@@ -107,87 +99,7 @@ impl StorageConfigProvider {
     }
 }
 
-#[expect(clippy::too_many_arguments)]
-#[cfg(feature = "kubernetes")]
-pub async fn handle_net_up_kubernetes(
-    num_other_initial_chains: u32,
-    initial_amount: u128,
-    num_initial_validators: usize,
-    num_shards: usize,
-    testing_prng_seed: Option<u64>,
-    binaries: &Option<Option<PathBuf>>,
-    no_build: bool,
-    docker_image_name: String,
-    build_mode: BuildMode,
-    policy_config: ResourceControlPolicyConfig,
-    with_faucet: bool,
-    faucet_chain: Option<u32>,
-    faucet_port: NonZeroU16,
-    faucet_amount: Amount,
-    with_block_exporter: bool,
-    num_block_exporters: usize,
-    indexer_image_name: String,
-    explorer_image_name: String,
-    dual_store: bool,
-) -> anyhow::Result<()> {
-    assert!(
-        num_initial_validators >= 1,
-        "The local test network must have at least one validator."
-    );
-    assert!(
-        num_shards >= 1,
-        "The local test network must have at least one shard per validator."
-    );
-    if faucet_chain.is_some() {
-        assert!(
-            with_faucet,
-            "--faucet-chain must be provided only with --with-faucet"
-        );
-    }
-
-    let shutdown_notifier = CancellationToken::new();
-    tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
-
-    let num_block_exporters = if with_block_exporter {
-        assert!(
-            num_block_exporters > 0,
-            "If --with-block-exporter is provided, --num-block-exporters must be greater than 0"
-        );
-        num_block_exporters
-    } else {
-        0
-    };
-
-    let config = LocalKubernetesNetConfig {
-        network: Network::Grpc,
-        testing_prng_seed,
-        num_other_initial_chains,
-        initial_amount: Amount::from_tokens(initial_amount),
-        num_initial_validators,
-        num_shards,
-        binaries: binaries.clone().into(),
-        no_build,
-        docker_image_name,
-        build_mode,
-        policy_config,
-        num_block_exporters,
-        indexer_image_name,
-        explorer_image_name,
-        dual_store,
-    };
-    let (mut net, client) = config.instantiate().await?;
-    let faucet_service = print_messages_and_create_faucet(
-        client,
-        with_faucet,
-        faucet_chain,
-        faucet_port,
-        faucet_amount,
-        num_other_initial_chains,
-    )
-    .await?;
-    wait_for_shutdown(shutdown_notifier, &mut net, faucet_service).await
-}
-
+/// Starts a local test network using native processes and, optionally, a faucet and block exporter.
 #[expect(clippy::too_many_arguments)]
 pub async fn handle_net_up_service(
     num_other_initial_chains: u32,
@@ -207,6 +119,7 @@ pub async fn handle_net_up_service(
     faucet_chain: Option<u32>,
     faucet_port: NonZeroU16,
     faucet_amount: Amount,
+    http_request_allow_list: Option<Vec<String>>,
 ) -> anyhow::Result<()> {
     assert!(
         num_initial_validators >= 1,
@@ -240,6 +153,8 @@ pub async fn handle_net_up_service(
         block_exporter_port,
     );
     let config = LocalNetConfig {
+        block_export_transport: crate::config::BlockExportTransport::Relay,
+        export_blocks_to_committee: false,
         network,
         database,
         testing_prng_seed,
@@ -250,7 +165,7 @@ pub async fn handle_net_up_service(
         num_shards,
         num_proxies,
         policy_config,
-        http_request_allow_list: None,
+        http_request_allow_list,
         cross_chain_config,
         storage_config_builder,
         path_provider,
@@ -328,7 +243,7 @@ async fn print_messages_and_create_faucet(
         format!("export LINERA_STORAGE=\"{}\"\n", client.storage_path()).bold()
     );
 
-    let wallet: crate::wallet::Wallet = client.load_wallet()?;
+    let wallet: crate::Wallet = client.load_wallet()?;
     let chains: Vec<_> = wallet.chain_ids();
 
     // Run the faucet,

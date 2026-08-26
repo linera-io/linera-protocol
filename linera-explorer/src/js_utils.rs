@@ -6,17 +6,18 @@ use serde_wasm_bindgen::Serializer;
 use wasm_bindgen::prelude::*;
 
 /// JS special serializer
-pub(crate) const SER: Serializer =
-    serde_wasm_bindgen::Serializer::new().serialize_large_number_types_as_bigints(true);
+pub(crate) const SER: Serializer = serde_wasm_bindgen::Serializer::new()
+    .serialize_large_number_types_as_bigints(true)
+    .serialize_maps_as_objects(true);
 
 pub fn setf(target: &JsValue, field: &str, value: &JsValue) {
     js_sys::Reflect::set(target, &JsValue::from_str(field), value)
-        .unwrap_or_else(|_| panic!("failed to set JS field '{}'", field));
+        .unwrap_or_else(|_| panic!("failed to set JS field '{field}'"));
 }
 
 pub fn getf(target: &JsValue, field: &str) -> JsValue {
     js_sys::Reflect::get(target, &JsValue::from_str(field))
-        .unwrap_or_else(|_| panic!("failed to get JS field '{}'", field))
+        .unwrap_or_else(|_| panic!("failed to get JS field '{field}'"))
 }
 
 pub fn log(x: &JsValue) {

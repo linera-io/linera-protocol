@@ -2,11 +2,13 @@
 members = [
     "linera-base",
     "linera-bridge",
+    "linera-cache",
     "linera-chain",
     "linera-client",
     "linera-core",
     "linera-ethereum",
     "linera-execution",
+    "linera-exporter",
     "linera-explorer",
     "linera-faucet/client",
     "linera-faucet/server",
@@ -22,10 +24,12 @@ members = [
     "linera-service",
     "linera-service-graphql-client",
     "linera-storage",
+    "linera-storage-runtime",
     "linera-storage-service",
     "linera-summary",
     "linera-views",
     "linera-views-derive",
+    "linera-wallet-json",
     "linera-witty",
     "linera-witty-macros",
     "linera-witty/test-modules",
@@ -35,11 +39,13 @@ members = [
 default-members = [
     "linera-base",
     # "linera-bridge", # tested separately in CI (requires solc)
+    "linera-cache",
     "linera-chain",
     "linera-client",
     "linera-core",
     "linera-ethereum",
     "linera-execution",
+    "linera-exporter",
     "linera-explorer",
     "linera-faucet/client",
     "linera-faucet/server",
@@ -54,20 +60,27 @@ default-members = [
     "linera-service",
     "linera-service-graphql-client",
     "linera-storage",
+    "linera-storage-runtime",
     "linera-storage-service",
     "linera-summary",
     "linera-views",
     "linera-views-derive",
+    "linera-wallet-json",
     # "linera-web", # not this one
     "linera-witty",
     "linera-witty-macros",
     "linera-witty/test-modules",
 ]
-exclude = ["examples", "scripts", "linera-bridge/tests/e2e"]
+exclude = [
+    "examples",
+    "scripts",
+    "linera-bridge/contracts/evm-bridge",
+    "linera-bridge/tests/e2e",
+]
 resolver = "2"
 
 [workspace.package]
-version = "0.15.13"
+version = "0.15.21"
 authors = ["Linera <contact@linera.io>"]
 repository = "https://github.com/linera-io/linera-protocol"
 homepage = "https://linera.dev"
@@ -76,21 +89,23 @@ edition = "2021"
 
 [workspace.dependencies]
 allocative = "0.3.4"
-alloy = { git = "https://github.com/alloy-rs/alloy", tag = "v1.0.42", default-features = false }
+alloy = { version = "1.0.42", default-features = false }
 alloy-primitives = { version = "1.4.1", default-features = false, features = [
     "serde",
     "k256",
 ] }
+alloy-rlp = "0.3.12"
 alloy-sol-types = "1.4.1"
+alloy-trie = { version = "0.9.0", default-features = false }
 anyhow = "1.0.80"
 assert_matches = "1.5.0"
-async-graphql = "=7.0.17"
+async-graphql = { version = "=7.0.17", features = ["raw_value"] }
 async-graphql-axum = "=7.0.17"
 async-graphql-derive = "=7.0.17"
+async-graphql-value = { version = "=7.0.17", features = ["raw_value"] }
 async-lock = "3.3.0"
 async-trait = "0.1.77"
 async-tungstenite = { version = "0.22", features = ["tokio-runtime"] }
-aws-smithy-types = "1.3.1"
 axum = "0.8.4"
 base64 = "0.22.0"
 bcs = "0.1.6"
@@ -125,7 +140,6 @@ flarch = "0.7.0"
 frunk = "0.4.2"
 fs-err = "2.11.0"
 fs4 = "0.8.2"
-fs_extra = "1.3.0"
 futures = "0.3.30"
 generic-array = { version = "0.14.7", features = ["serde"] }
 getrandom = "0.2.12"
@@ -138,10 +152,10 @@ hex = "0.4.3"
 http = "1.1.0"
 humantime = "2.1.0"
 indexed-db = "0.4.2"
+indicatif = "0.18.4"
 insta = "1.36.1"
 is-terminal = "0.4.12"
 itertools = "0.14.0"
-jemalloc_pprof = "0.8.1"
 js-sys = "0.3.70"
 k256 = { version = "0.13.4", default-features = false, features = [
     "ecdsa",
@@ -150,12 +164,13 @@ k256 = { version = "0.13.4", default-features = false, features = [
     "serde",
     "arithmetic",
 ] }
-k8s-openapi = { version = "0.21.1", features = ["v1_28"] }
-kube = "0.88.1"
+linera-jemalloc-ctl = { version = "0.6.1", features = ["use_std"] }
+linera-jemallocator = "0.6.1"
 linera-kywasmtime = "0.1.0"
 linked-hash-map = "0.5.6"
 log = "0.4.21"
 lru = "0.15.0"
+mappings = "0.7.1"
 mini-moka = "0.10.3"
 nonzero_lit = "0.1.2"
 num-bigint = "0.4.3"
@@ -163,6 +178,7 @@ num-format = "0.4.4"
 num-traits = "0.2.18"
 octocrab = "0.42.1"
 oneshot = "0.1.6"
+op-alloy-network = { version = "0.22.0", default-features = false }
 opentelemetry = { version = "0.30.0", features = ["trace"] }
 opentelemetry-http = "0.30.0"
 opentelemetry-otlp = { version = "0.30.0", features = [
@@ -171,9 +187,9 @@ opentelemetry-otlp = { version = "0.30.0", features = [
     "tls-roots",
 ] }
 opentelemetry_sdk = { version = "0.30.0", features = ["trace", "rt-tokio"] }
-papaya = "0.1.5"
-pathdiff = "0.2.1"
+papaya = "0.2.3"
 port-selector = "0.1.6"
+pprof_util = { version = "0.8.0", features = ["flamegraph", "symbolize"] }
 prettyplease = "0.2.16"
 proc-macro-error = "1.0.4"
 proc-macro2 = "1.0"
@@ -181,7 +197,9 @@ prometheus = "0.13.3"
 prometheus-parse = "0.2.5"
 proptest = { version = "1.6.0", default-features = false, features = ["alloc"] }
 prost = "^0.14"
-quick_cache = "0.6.13"
+quick_cache = { version = "0.6.20", default-features = false, features = [
+    "parking_lot",
+] }
 quote = "1.0"
 rand = { version = "0.8.5", default-features = false, features = ["std_rng"] }
 rand_chacha = { version = "0.3.1", default-features = false }
@@ -218,7 +236,7 @@ revm-primitives = { version = "19.1.0", default-features = false, features = [
 revm-state = { version = "4.0.1", default-features = false, features = [
     "serde",
 ] }
-rocksdb = "0.21.0"
+rocksdb = "0.24.0"
 # 0.8.2 doesn't build with Rust 1.87. Remove `=` once
 # https://github.com/linera-io/linera-protocol/issues/4742 is resolved.
 ruzstd = "=0.8.1"
@@ -252,8 +270,6 @@ test-log = { version = "0.2.15", default-features = false, features = [
 ] }
 test-strategy = "0.3.1"
 thiserror = "1.0.65"
-thiserror-context = "0.1.1"
-tikv-jemallocator = "0.6.0"
 tokio = "1.36.0"
 tokio-stream = "0.1.14"
 tokio-test = "0.4.3"
@@ -284,8 +300,8 @@ wasm-bindgen = "0.2.100"
 wasm-bindgen-futures = "=0.4.50"
 wasm-bindgen-test = "0.3.42"
 wasm-instrument = { package = "linera-wasm-instrument", version = "0.4.0-linera.1" }
-wasmer = { package = "linera-wasmer", version = "4.4.0-linera.7", default-features = false }
-wasmer-compiler-singlepass = { package = "linera-wasmer-compiler-singlepass", version = "4.4.0-linera.7", default-features = false, features = [
+wasmer = { package = "linera-wasmer", version = "4.4.0-linera.8", default-features = false }
+wasmer-compiler-singlepass = { package = "linera-wasmer-compiler-singlepass", version = "4.4.0-linera.8", default-features = false, features = [
     "std",
     "unwind",
     "avx",
@@ -302,32 +318,36 @@ web-time = "1.1.0"
 wit-bindgen = "0.24.0"
 zstd = "0.13.2"
 
-linera-base = { version = "0.15.13", path = "./linera-base" }
-linera-bridge = { version = "0.15.13", path = "./linera-bridge" }
-linera-chain = { version = "0.15.13", path = "./linera-chain" }
-linera-client = { version = "0.15.13", path = "./linera-client", default-features = false }
-linera-core = { version = "0.15.13", path = "./linera-core", default-features = false }
-linera-ethereum = { version = "0.15.13", path = "./linera-ethereum", default-features = false }
-linera-execution = { version = "0.15.13", path = "./linera-execution", default-features = false }
-linera-faucet-client = { version = "0.15.13", path = "linera-faucet/client" }
-linera-faucet-server = { version = "0.15.13", path = "linera-faucet/server" }
-linera-indexer = { version = "0.15.13", path = "./linera-indexer/lib" }
-linera-indexer-graphql-client = { version = "0.15.13", path = "./linera-indexer/graphql-client" }
-linera-indexer-plugins = { version = "0.15.13", path = "./linera-indexer/plugins" }
-linera-metrics = { version = "0.15.13", path = "./linera-metrics" }
-linera-persistent = { version = "0.15.13", path = "./linera-persistent" }
-linera-rpc = { version = "0.15.13", path = "./linera-rpc" }
-linera-sdk = { version = "0.15.13", path = "./linera-sdk" }
-linera-sdk-derive = { version = "0.15.13", path = "./linera-sdk-derive" }
-linera-service = { version = "0.15.13", path = "./linera-service", default-features = false }
-linera-service-graphql-client = { version = "0.15.13", path = "./linera-service-graphql-client" }
-linera-storage = { version = "0.15.13", path = "./linera-storage", default-features = false }
-linera-storage-service = { version = "0.15.13", path = "./linera-storage-service", default-features = false }
-linera-version = { version = "0.15.13", path = "./linera-version" }
-linera-views = { version = "0.15.13", path = "./linera-views", default-features = false }
-linera-views-derive = { version = "0.15.13", path = "./linera-views-derive" }
-linera-witty = { version = "0.15.13", path = "./linera-witty" }
-linera-witty-macros = { version = "0.15.13", path = "./linera-witty-macros" }
+linera-base = { version = "0.15.21", path = "./linera-base" }
+linera-bridge = { version = "0.15.21", path = "./linera-bridge" }
+linera-cache = { version = "0.15.21", path = "./linera-cache" }
+linera-chain = { version = "0.15.21", path = "./linera-chain" }
+linera-client = { version = "0.15.21", path = "./linera-client", default-features = false }
+linera-core = { version = "0.15.21", path = "./linera-core", default-features = false }
+linera-ethereum = { version = "0.15.21", path = "./linera-ethereum", default-features = false }
+linera-execution = { version = "0.15.21", path = "./linera-execution", default-features = false }
+linera-exporter = { version = "0.15.21", path = "./linera-exporter", default-features = false }
+linera-faucet-client = { version = "0.15.21", path = "linera-faucet/client" }
+linera-faucet-server = { version = "0.15.21", path = "linera-faucet/server" }
+linera-indexer = { version = "0.15.21", path = "./linera-indexer/lib" }
+linera-indexer-graphql-client = { version = "0.15.21", path = "./linera-indexer/graphql-client" }
+linera-indexer-plugins = { version = "0.15.21", path = "./linera-indexer/plugins" }
+linera-metrics = { version = "0.15.21", path = "./linera-metrics" }
+linera-persistent = { version = "0.15.21", path = "./linera-persistent" }
+linera-rpc = { version = "0.15.21", path = "./linera-rpc" }
+linera-sdk = { version = "0.15.21", path = "./linera-sdk" }
+linera-sdk-derive = { version = "0.15.21", path = "./linera-sdk-derive" }
+linera-service = { version = "0.15.21", path = "./linera-service", default-features = false }
+linera-service-graphql-client = { version = "0.15.21", path = "./linera-service-graphql-client" }
+linera-storage = { version = "0.15.21", path = "./linera-storage", default-features = false }
+linera-storage-runtime = { version = "0.15.21", path = "./linera-storage-runtime", default-features = false }
+linera-storage-service = { version = "0.15.21", path = "./linera-storage-service", default-features = false }
+linera-version = { version = "0.15.21", path = "./linera-version" }
+linera-views = { version = "0.15.21", path = "./linera-views", default-features = false }
+linera-views-derive = { version = "0.15.21", path = "./linera-views-derive" }
+linera-wallet-json = { version = "0.15.21", path = "./linera-wallet-json" }
+linera-witty = { version = "0.15.21", path = "./linera-witty" }
+linera-witty-macros = { version = "0.15.21", path = "./linera-witty-macros" }
 
 amm = { path = "./examples/amm" }
 call-evm-counter = { path = "./examples/call-evm-counter" }
@@ -345,15 +365,7 @@ publish-read-data-blob = { path = "./linera-sdk/tests/fixtures/publish-read-data
 social = { path = "./examples/social" }
 task-processor = { path = "./examples/task-processor" }
 time-expiry = { path = "./examples/time-expiry" }
-
-[workspace.dependencies.aws-config]
-default-features = false
-version = "1.6.3"
-
-[workspace.dependencies.aws-sdk-dynamodb]
-default-features = false
-features = ["rt-tokio", "rustls"]
-version = "1.76.0"
+wrapped-fungible = { path = "./examples/wrapped-fungible" }
 
 [profile.release]
 lto = "thin"
@@ -379,21 +391,34 @@ opt-level = 3
 config = "spellcheck-cfg.toml"
 
 [workspace.lints.clippy]
+checked_conversions = "deny"
 doc_link_with_quotes = "deny"
 filter_map_next = "deny"
+flat_map_option = "deny"
+from_iter_instead_of_collect = "deny"
+inefficient_to_string = "deny"
 iter_filter_is_some = "deny"
+iter_not_returning_iterator = "deny"
 large_futures = "deny"
 large_stack_arrays = "deny"
 large_types_passed_by_value = "deny"
+let_underscore_untyped = "deny"
+let_underscore_must_use = "deny"
 macro_use_imports = "deny"
 manual_instant_elapsed = "deny"
 manual_is_power_of_two = "deny"
 manual_is_variant_and = "deny"
+map_flatten = "deny"
 map_unwrap_or = "deny"
 mismatching_type_param_order = "deny"
 naive_bytecount = "deny"
+needless_collect = "deny"
 non_std_lazy_statics = "deny"
+or_fun_call = "deny"
+unnecessary_wraps = "deny"
+used_underscore_binding = "deny"
 range_minus_one = "deny"
 range_plus_one = "deny"
 ref_option_ref = "deny"
 str_split_at_newline = "deny"
+uninlined_format_args = "deny"

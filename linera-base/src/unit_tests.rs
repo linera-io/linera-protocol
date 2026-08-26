@@ -17,28 +17,28 @@ use crate::{
 };
 
 /// Test roundtrip of types used in the WIT interface.
-#[test_case(CryptoHash::test_hash("hash"); "of_crypto_hash")]
-#[test_case(AccountPublicKey::test_key(255); "of_public_key")]
-#[test_case(Amount::from_tokens(500); "of_amount")]
-#[test_case(BlockHeight(1095); "of_block_height")]
-#[test_case(Timestamp::from(6_400_003); "of_timestamp")]
-#[test_case(resources_test_case(); "of_resources")]
-#[test_case(send_message_request_test_case(); "of_send_message_request")]
-#[test_case(AccountOwner::from(CryptoHash::test_hash("owner")); "of_owner")]
-#[test_case(account_test_case(); "of_account")]
-#[test_case(ChainId(CryptoHash::test_hash("chain_id")); "of_chain_id")]
-#[test_case(application_id_test_case(); "of_application_id")]
-#[test_case(module_id_test_case(); "of_module_id")]
-#[test_case(timeout_config_test_case(); "of_timeout_config")]
-#[test_case(chain_ownership_test_case(); "of_chain_ownership")]
-#[test_case([5u8; 20]; "array20")]
-fn test_wit_roundtrip<T>(input: T)
+#[test_case(&CryptoHash::test_hash("hash"); "of_crypto_hash")]
+#[test_case(&AccountPublicKey::test_key(255); "of_public_key")]
+#[test_case(&Amount::from_tokens(500); "of_amount")]
+#[test_case(&BlockHeight(1095); "of_block_height")]
+#[test_case(&Timestamp::from(6_400_003); "of_timestamp")]
+#[test_case(&resources_test_case(); "of_resources")]
+#[test_case(&send_message_request_test_case(); "of_send_message_request")]
+#[test_case(&AccountOwner::from(CryptoHash::test_hash("owner")); "of_owner")]
+#[test_case(&account_test_case(); "of_account")]
+#[test_case(&ChainId(CryptoHash::test_hash("chain_id")); "of_chain_id")]
+#[test_case(&application_id_test_case(); "of_application_id")]
+#[test_case(&module_id_test_case(); "of_module_id")]
+#[test_case(&timeout_config_test_case(); "of_timeout_config")]
+#[test_case(&chain_ownership_test_case(); "of_chain_ownership")]
+#[test_case(&[5u8; 20]; "array20")]
+fn test_wit_roundtrip<T>(input: &T)
 where
     T: Debug + Eq + WitLoad + WitStore,
     <T::Layout as Layout>::Flat: Copy + Debug + Eq,
 {
-    linera_witty::test::test_memory_roundtrip(&input).expect("Memory WIT roundtrip test failed");
-    linera_witty::test::test_flattening_roundtrip(&input)
+    linera_witty::test::test_memory_roundtrip(input).expect("Memory WIT roundtrip test failed");
+    linera_witty::test::test_flattening_roundtrip(input)
         .expect("Flattening WIT roundtrip test failed");
 }
 

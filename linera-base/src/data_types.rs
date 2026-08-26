@@ -7,13 +7,12 @@
 #[cfg(with_testing)]
 use std::ops;
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, BTreeSet, HashSet},
     fmt::{self, Display},
     fs,
     hash::Hash,
     io, iter,
     num::ParseIntError,
-    path::Path,
     str::FromStr,
     sync::Arc,
 };
@@ -41,6 +40,257 @@ use crate::{
     time::{Duration, SystemTime},
     vm::VmRuntime,
 };
+
+/// A [`BTreeMap`] that serializes like a `Vec<(K, V)>` instead of using BCS's canonical
+/// map encoding.
+///
+/// BCS serializes a [`BTreeMap`] in *canonical* form: on every `serialize` call it re-sorts the
+/// entries by their serialized-key bytes (an `O(n log n)` sort) and verifies that ordering again
+/// on `deserialize`. Since a [`BTreeMap`] already keeps its entries ordered, this is wasted work.
+/// `NonCanonicalBTreeMap` instead (de)serializes the entries as a plain sequence of pairs, exactly
+/// like `Vec<(K, V)>`, trading the canonical wire format for speed.
+///
+/// Use it in *value* position — the value of a `RegisterView<Value>` or `MapView<_, Value>` — so
+/// that `save()` does not pay the canonical sort. Never use it in *key* position
+/// (`MapView<Key, _>`): keys rely on the canonical encoding that this type skips, so use
+/// [`CanonicalBTreeMap`] there instead.
+///
+/// It otherwise behaves like a [`BTreeMap`]: it derefs to one, so all the usual methods are
+/// available.
+#[derive(Debug, Clone, PartialEq, Eq, Allocative)]
+pub struct NonCanonicalBTreeMap<K, V>(BTreeMap<K, V>);
+
+impl<K, V> Default for NonCanonicalBTreeMap<K, V> {
+    fn default() -> Self {
+        Self(BTreeMap::new())
+    }
+}
+
+impl<K, V> std::ops::Deref for NonCanonicalBTreeMap<K, V> {
+    type Target = BTreeMap<K, V>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<K, V> std::ops::DerefMut for NonCanonicalBTreeMap<K, V> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<K, V> From<BTreeMap<K, V>> for NonCanonicalBTreeMap<K, V> {
+    fn from(map: BTreeMap<K, V>) -> Self {
+        Self(map)
+    }
+}
+
+impl<K, V> From<NonCanonicalBTreeMap<K, V>> for BTreeMap<K, V> {
+    fn from(map: NonCanonicalBTreeMap<K, V>) -> Self {
+        map.0
+    }
+}
+
+impl<K: Ord, V> FromIterator<(K, V)> for NonCanonicalBTreeMap<K, V> {
+    fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
+        Self(BTreeMap::from_iter(iter))
+    }
+}
+
+impl<K, V> IntoIterator for NonCanonicalBTreeMap<K, V> {
+    type Item = (K, V);
+    type IntoIter = std::collections::btree_map::IntoIter<K, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a, K, V> IntoIterator for &'a NonCanonicalBTreeMap<K, V> {
+    type Item = (&'a K, &'a V);
+    type IntoIter = std::collections::btree_map::Iter<'a, K, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl<K, V> Serialize for NonCanonicalBTreeMap<K, V>
+where
+    K: Serialize,
+    V: Serialize,
+{
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Serialize as a sequence of pairs, exactly like `Vec<(K, V)>`. The entries are already
+        // in key order, so this avoids the canonical re-sorting that BCS does for maps.
+        serializer.collect_seq(self.0.iter())
+    }
+}
+
+impl<'de, K, V> Deserialize<'de> for NonCanonicalBTreeMap<K, V>
+where
+    K: Deserialize<'de> + Ord,
+    V: Deserialize<'de>,
+{
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let entries = Vec::<(K, V)>::deserialize(deserializer)?;
+        Ok(Self(entries.into_iter().collect()))
+    }
+}
+
+impl<K, V> async_graphql::OutputType for NonCanonicalBTreeMap<K, V>
+where
+    BTreeMap<K, V>: async_graphql::OutputType,
+{
+    fn type_name() -> std::borrow::Cow<'static, str> {
+        <BTreeMap<K, V> as async_graphql::OutputType>::type_name()
+    }
+
+    fn create_type_info(registry: &mut async_graphql::registry::Registry) -> String {
+        <BTreeMap<K, V> as async_graphql::OutputType>::create_type_info(registry)
+    }
+
+    async fn resolve(
+        &self,
+        ctx: &async_graphql::ContextSelectionSet<'_>,
+        field: &async_graphql::Positioned<async_graphql::parser::types::Field>,
+    ) -> async_graphql::ServerResult<async_graphql::Value> {
+        self.0.resolve(ctx, field).await
+    }
+}
+
+/// A [`BTreeSet`] used in value position; the counterpart to [`NonCanonicalBTreeMap`].
+///
+/// Unlike maps, serde already serializes a [`BTreeSet`] as a plain sequence (it never goes through
+/// `serialize_map`), so BCS does not re-sort it. A type alias is therefore enough; no wrapper is
+/// needed.
+///
+/// Use it in *value* position (`RegisterView<Value>` or `MapView<_, Value>`). In *key* position
+/// (`MapView<Key, _>`) use [`CanonicalBTreeSet`] instead, which enforces the canonical ordering
+/// that keys require.
+pub type NonCanonicalBTreeSet<T> = BTreeSet<T>;
+
+/// A [`BTreeMap`] suitable for *key* position; an alias for [`BTreeMap`] itself.
+///
+/// In key position the canonical BCS encoding is exactly what is wanted — keys are ordered and
+/// compared by their serialized bytes — so no wrapper is needed. Use it for the key type of a
+/// `MapView<Key, _>`. In *value* position prefer [`NonCanonicalBTreeMap`], which skips the
+/// per-`save()` canonical sort. This alias exists to make that intent explicit and to pair with
+/// [`NonCanonicalBTreeMap`].
+pub type CanonicalBTreeMap<K, V> = BTreeMap<K, V>;
+
+/// A [`BTreeSet`] that serializes canonically, like a `BTreeMap<T, ()>`.
+///
+/// A plain [`BTreeSet`] serializes as a serde *sequence*, so BCS keeps the in-memory (Rust `Ord`)
+/// order without enforcing canonical ordering of the serialized elements. That is fine in value
+/// position, but in *key* position the canonical encoding matters. `CanonicalBTreeSet` therefore
+/// (de)serializes through a map of `T -> ()`, so that BCS sorts the elements by their serialized
+/// bytes, exactly as it does for [`BTreeMap`] keys.
+///
+/// Use it for the key type of a `MapView<Key, _>`. In *value* position use
+/// [`NonCanonicalBTreeSet`] instead. It otherwise behaves like a [`BTreeSet`]: it derefs to one,
+/// so all the usual methods are available.
+#[derive(Debug, Clone, PartialEq, Eq, Allocative)]
+pub struct CanonicalBTreeSet<T>(BTreeSet<T>);
+
+impl<T> Default for CanonicalBTreeSet<T> {
+    fn default() -> Self {
+        Self(BTreeSet::new())
+    }
+}
+
+impl<T> std::ops::Deref for CanonicalBTreeSet<T> {
+    type Target = BTreeSet<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> std::ops::DerefMut for CanonicalBTreeSet<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<T> From<BTreeSet<T>> for CanonicalBTreeSet<T> {
+    fn from(set: BTreeSet<T>) -> Self {
+        Self(set)
+    }
+}
+
+impl<T> From<CanonicalBTreeSet<T>> for BTreeSet<T> {
+    fn from(set: CanonicalBTreeSet<T>) -> Self {
+        set.0
+    }
+}
+
+impl<T: Ord> FromIterator<T> for CanonicalBTreeSet<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        Self(BTreeSet::from_iter(iter))
+    }
+}
+
+impl<T> IntoIterator for CanonicalBTreeSet<T> {
+    type Item = T;
+    type IntoIter = std::collections::btree_set::IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a CanonicalBTreeSet<T> {
+    type Item = &'a T;
+    type IntoIter = std::collections::btree_set::Iter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl<T> Serialize for CanonicalBTreeSet<T>
+where
+    T: Serialize,
+{
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Serialize as a `BTreeMap<T, ()>`: going through `serialize_map` lets BCS sort the
+        // elements canonically by their serialized bytes, as required in key position.
+        serializer.collect_map(self.0.iter().map(|element| (element, ())))
+    }
+}
+
+impl<'de, T> Deserialize<'de> for CanonicalBTreeSet<T>
+where
+    T: Deserialize<'de> + Ord,
+{
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let map = BTreeMap::<T, ()>::deserialize(deserializer)?;
+        Ok(Self(map.into_keys().collect()))
+    }
+}
+
+impl<T> async_graphql::OutputType for CanonicalBTreeSet<T>
+where
+    BTreeSet<T>: async_graphql::OutputType,
+{
+    fn type_name() -> std::borrow::Cow<'static, str> {
+        <BTreeSet<T> as async_graphql::OutputType>::type_name()
+    }
+
+    fn create_type_info(registry: &mut async_graphql::registry::Registry) -> String {
+        <BTreeSet<T> as async_graphql::OutputType>::create_type_info(registry)
+    }
+
+    async fn resolve(
+        &self,
+        ctx: &async_graphql::ContextSelectionSet<'_>,
+        field: &async_graphql::Positioned<async_graphql::parser::types::Field>,
+    ) -> async_graphql::ServerResult<async_graphql::Value> {
+        self.0.resolve(ctx, field).await
+    }
+}
 
 /// A non-negative amount of tokens.
 ///
@@ -93,6 +343,70 @@ impl<'de> Deserialize<'de> for Amount {
 impl From<Amount> for U256 {
     fn from(amount: Amount) -> U256 {
         U256::from(amount.0)
+    }
+}
+
+impl From<Amount> for f64 {
+    /// Returns the amount as a floating-point number of whole tokens. This is
+    /// lossy for large or high-precision amounts; intended for telemetry, not
+    /// for arithmetic.
+    fn from(amount: Amount) -> f64 {
+        amount.0 as f64 / Amount::ONE.0 as f64
+    }
+}
+
+impl TryFrom<U256> for Amount {
+    type Error = ArithmeticError;
+
+    fn try_from(value: U256) -> Result<Amount, ArithmeticError> {
+        let value: u128 = value.try_into().map_err(|_| ArithmeticError::Overflow)?;
+        Ok(Amount::from_attos(value))
+    }
+}
+
+/// A `u128` newtype that serializes as a decimal string in human-readable
+/// formats (JSON / GraphQL) and as a bare `u128` in binary (BCS).
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Hash,
+    derive_more::Display,
+    derive_more::Deref,
+    derive_more::DerefMut,
+    derive_more::FromStr,
+)]
+pub struct U128(pub u128);
+
+impl Serialize for U128 {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&self.0.to_string())
+        } else {
+            self.0.serialize(serializer)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for U128 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            s.parse().map(U128).map_err(serde::de::Error::custom)
+        } else {
+            u128::deserialize(deserializer).map(U128)
+        }
     }
 }
 
@@ -181,10 +495,9 @@ impl TimeDelta {
         TimeDelta(secs.saturating_mul(1_000_000))
     }
 
-    /// Returns the given duration, rounded to the nearest microsecond and capped to the maximum
-    /// [`TimeDelta`] value.
+    /// Returns the given [`Duration`] as a [`TimeDelta`], saturating at the maximum on overflow.
     pub fn from_duration(duration: Duration) -> Self {
-        TimeDelta::from_micros(u64::try_from(duration.as_micros()).unwrap_or(u64::MAX))
+        TimeDelta(u64::try_from(duration.as_micros()).unwrap_or(u64::MAX))
     }
 
     /// Returns this [`TimeDelta`] as a number of microseconds.
@@ -283,6 +596,21 @@ impl Display for Timestamp {
     }
 }
 
+impl FromStr for Timestamp {
+    type Err = chrono::ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let naive = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S")
+            .or_else(|_| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S"))?;
+        let micros = naive
+            .and_utc()
+            .timestamp_micros()
+            .try_into()
+            .unwrap_or(u64::MAX);
+        Ok(Timestamp(micros))
+    }
+}
+
 /// Resources that an application may spend during the execution of transaction or an
 /// application call.
 #[derive(
@@ -341,24 +669,6 @@ pub struct SendMessageRequest<Message> {
     pub grant: Resources,
     /// The message itself.
     pub message: Message,
-}
-
-impl<Message> SendMessageRequest<Message>
-where
-    Message: Serialize,
-{
-    /// Serializes the internal `Message` type into raw bytes.
-    pub fn into_raw(self) -> SendMessageRequest<Vec<u8>> {
-        let message = bcs::to_bytes(&self.message).expect("Failed to serialize message");
-
-        SendMessageRequest {
-            destination: self.destination,
-            authenticated: self.authenticated,
-            is_tracked: self.is_tracked,
-            grant: self.grant,
-            message,
-        }
-    }
 }
 
 /// An error type for arithmetic errors.
@@ -531,6 +841,7 @@ impl TryFrom<BlockHeight> for usize {
 }
 
 impl_wrapped_number!(Amount, u128);
+impl_wrapped_number!(U128, u128);
 impl_wrapped_number!(BlockHeight, u64);
 impl_wrapped_number!(TimeDelta, u64);
 
@@ -631,9 +942,9 @@ impl Display for Round {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Round::Fast => write!(f, "fast round"),
-            Round::MultiLeader(r) => write!(f, "multi-leader round {}", r),
-            Round::SingleLeader(r) => write!(f, "single-leader round {}", r),
-            Round::Validator(r) => write!(f, "validator round {}", r),
+            Round::MultiLeader(r) => write!(f, "multi-leader round {r}"),
+            Round::SingleLeader(r) => write!(f, "single-leader round {r}"),
+            Round::Validator(r) => write!(f, "validator round {r}"),
         }
     }
 }
@@ -760,11 +1071,6 @@ pub enum ChainOrigin {
 }
 
 impl ChainOrigin {
-    /// Whether the chain was created by another chain.
-    pub fn is_child(&self) -> bool {
-        matches!(self, ChainOrigin::Child { .. })
-    }
-
     /// Returns the root chain number, if this is a root chain.
     pub fn root(&self) -> Option<u32> {
         match self {
@@ -913,11 +1219,6 @@ impl ChainDescription {
     pub fn timestamp(&self) -> Timestamp {
         self.timestamp
     }
-
-    /// Whether the chain was created by another chain.
-    pub fn is_child(&self) -> bool {
-        self.origin.is_child()
-    }
 }
 
 impl BcsHashable<'_> for ChainDescription {}
@@ -1000,6 +1301,7 @@ impl ApplicationPermissions {
 
     /// Creates new `ApplicationPermissions` where the given applications are the only ones
     /// whose operations are allowed and mandatory, and they can also close the chain.
+    #[cfg(with_testing)]
     pub fn new_multiple(app_ids: Vec<ApplicationId>) -> Self {
         Self {
             execute_operations: Some(app_ids.clone()),
@@ -1141,7 +1443,10 @@ impl Bytecode {
 
     /// Load bytecode from a Wasm module file.
     pub fn load_from_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Self> {
-        let bytes = fs::read(path)?;
+        let path = path.as_ref();
+        let bytes = fs::read(path).map_err(|error| {
+            std::io::Error::new(error.kind(), format!("{}: {error}", path.display()))
+        })?;
         Ok(Bytecode { bytes })
     }
 
@@ -1228,6 +1533,11 @@ impl CompressedBytecode {
         let _decompression_latency = metrics::BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
         let bytes = zstd::stream::decode_all(&**self.compressed_bytes)?;
 
+        #[cfg(with_metrics)]
+        metrics::BYTECODE_DECOMPRESSED_SIZE_BYTES
+            .with_label_values(&[])
+            .observe(bytes.len() as f64);
+
         Ok(Bytecode { bytes })
     }
 }
@@ -1271,6 +1581,11 @@ impl CompressedBytecode {
                 .read_to_end(&mut bytes)
                 .expect("Reading from a slice in memory should not result in I/O errors");
         }
+
+        #[cfg(with_metrics)]
+        BYTECODE_DECOMPRESSED_SIZE_BYTES
+            .with_label_values(&[])
+            .observe(bytes.len() as f64);
 
         Ok(Bytecode { bytes })
     }
@@ -1372,6 +1687,12 @@ impl BlobContent {
 impl From<Blob> for BlobContent {
     fn from(blob: Blob) -> BlobContent {
         blob.content
+    }
+}
+
+impl From<Arc<Blob>> for BlobContent {
+    fn from(blob: Arc<Blob>) -> BlobContent {
+        blob.content().clone()
     }
 }
 
@@ -1478,11 +1799,6 @@ impl Blob {
         self.content.bytes()
     }
 
-    /// Loads data blob from a file.
-    pub fn load_data_blob_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
-        Ok(Self::new_data(fs::read(path)?))
-    }
-
     /// Returns whether the blob is of [`BlobType::Committee`] variant.
     pub fn is_committee_blob(&self) -> bool {
         self.content().blob_type().is_committee_blob()
@@ -1583,16 +1899,28 @@ impl BcsHashable<'_> for Event {}
 pub struct MessagePolicy {
     /// The blanket policy applied to all messages.
     pub blanket: BlanketMessagePolicy,
-    /// A collection of chains which restrict the origin of messages to be
-    /// accepted. `Option::None` means that messages from all chains are accepted. An empty
-    /// `HashSet` denotes that messages from no chains are accepted.
+    /// A collection of chains which restrict the origin of messages and events to be
+    /// accepted. `Option::None` means that messages and events from all chains are accepted. An
+    /// empty `HashSet` denotes that none are accepted. The admin chain's event stream is always
+    /// followed regardless of this setting.
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
+    /// A collection of chains whose incoming messages should be ignored.
+    pub ignore_chain_ids: HashSet<ChainId>,
     /// A collection of applications: If `Some`, only bundles with at least one message by any
     /// of these applications will be accepted.
     pub reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
     /// A collection of applications: If `Some`, only bundles all of whose messages are by these
     /// applications will be accepted.
     pub reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
+    /// A collection of applications: If `Some`, only event streams from those
+    /// applications are processed and followed. The admin chain's event stream is always followed.
+    pub process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
+    /// A collection of applications whose messages must never be rejected. Bundles whose
+    /// messages are all from one of these applications bypass the other rejection rules
+    /// (except `restrict_chain_ids_to`), and on execution failure they are discarded for
+    /// later retry instead of being rejected. A bundle that contains any message from an
+    /// application not on this list can be rejected. An empty set disables this feature.
+    pub never_reject_application_ids: HashSet<GenericApplicationId>,
 }
 
 /// A blanket policy to apply to all messages by default.
@@ -1622,32 +1950,6 @@ pub enum BlanketMessagePolicy {
 }
 
 impl MessagePolicy {
-    /// Constructs a new `MessagePolicy`.
-    pub fn new(
-        blanket: BlanketMessagePolicy,
-        restrict_chain_ids_to: Option<HashSet<ChainId>>,
-        reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
-        reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
-    ) -> Self {
-        Self {
-            blanket,
-            restrict_chain_ids_to,
-            reject_message_bundles_without_application_ids,
-            reject_message_bundles_with_other_application_ids,
-        }
-    }
-
-    /// Constructs a new `MessagePolicy` that accepts all messages.
-    #[cfg(with_testing)]
-    pub fn new_accept_all() -> Self {
-        Self {
-            blanket: BlanketMessagePolicy::Accept,
-            restrict_chain_ids_to: None,
-            reject_message_bundles_without_application_ids: None,
-            reject_message_bundles_with_other_application_ids: None,
-        }
-    }
-
     /// Returns `true` if the blanket policy is to ignore messages.
     #[instrument(level = "trace", skip(self))]
     pub fn is_ignore(&self) -> bool {
@@ -1659,10 +1961,39 @@ impl MessagePolicy {
     pub fn is_reject(&self) -> bool {
         matches!(self.blanket, BlanketMessagePolicy::Reject)
     }
+
+    /// Returns `true` if every message from `origin` would be unconditionally dropped:
+    /// blanket policy is `Ignore`, the origin is in `ignore_chain_ids`, or
+    /// `restrict_chain_ids_to` is `Some` and does not contain the origin.
+    #[instrument(level = "trace", skip(self))]
+    pub fn ignores_origin(&self, origin: &ChainId) -> bool {
+        self.is_ignore()
+            || self.ignore_chain_ids.contains(origin)
+            || self
+                .restrict_chain_ids_to
+                .as_ref()
+                .is_some_and(|set| !set.contains(origin))
+    }
+
+    /// Returns `true` if events from `stream_id`, published by `chain_id`, should be followed
+    /// and processed: `restrict_chain_ids_to` (if set) must contain `chain_id`, and
+    /// `process_events_from_application_ids` (if set) must contain the stream's application. The
+    /// admin chain is exempt; callers always follow it.
+    #[instrument(level = "trace", skip(self))]
+    pub fn accepts_event_stream(&self, chain_id: &ChainId, stream_id: &StreamId) -> bool {
+        self.restrict_chain_ids_to
+            .as_ref()
+            .is_none_or(|chain_ids| chain_ids.contains(chain_id))
+            && self
+                .process_events_from_application_ids
+                .as_ref()
+                .is_none_or(|app_ids| app_ids.contains(&stream_id.application_id))
+    }
 }
 
 doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
 doc_scalar!(Amount, "A non-negative amount of tokens.");
+doc_scalar!(U128, "A 128-bit unsigned integer.");
 doc_scalar!(
     Epoch,
     "A number identifying the configuration of the chain (aka the committee)"
@@ -1690,40 +2021,118 @@ doc_scalar!(
 doc_scalar!(ApplicationDescription, "Description of a user application");
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use prometheus::HistogramVec;
 
-    use crate::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
+    use crate::prometheus_util::{
+        exponential_bucket_interval, exponential_bucket_latencies, register_histogram_vec,
+    };
 
-    /// The time it takes to compress a bytecode.
-    pub static BYTECODE_COMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "bytecode_compression_latency",
-            "Bytecode compression latency",
-            &[],
-            exponential_bucket_latencies(10.0),
-        )
-    });
+    crate::declare_metrics! {
+        /// The time it takes to compress a bytecode.
+        pub static BYTECODE_COMPRESSION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "bytecode_compression_latency",
+                "Bytecode compression latency",
+                &[],
+                exponential_bucket_latencies(10.0),
+            );
 
-    /// The time it takes to decompress a bytecode.
-    pub static BYTECODE_DECOMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "bytecode_decompression_latency",
-            "Bytecode decompression latency",
-            &[],
-            exponential_bucket_latencies(10.0),
-        )
-    });
+        /// The time it takes to decompress a bytecode.
+        pub static BYTECODE_DECOMPRESSION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "bytecode_decompression_latency",
+                "Bytecode decompression latency",
+                &[],
+                exponential_bucket_latencies(10.0),
+            );
+
+        pub static BYTECODE_DECOMPRESSED_SIZE_BYTES: HistogramVec =
+            register_histogram_vec(
+                "wasm_bytecode_decompressed_size_bytes",
+                "Decompressed size in bytes of WASM bytecodes stored on-chain",
+                &[],
+                exponential_bucket_interval(10_000.0, 100_000_000.0),
+            );
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
 
-    use super::{Amount, BlobContent};
-    use crate::identifiers::BlobType;
+    use super::{Amount, ApplicationDescription, BlobContent};
+    use crate::{
+        crypto::CryptoHash,
+        data_types::BlockHeight,
+        identifiers::{BlobType, ChainId, ModuleId},
+        vm::VmRuntime,
+    };
+
+    #[test]
+    fn non_canonical_btree_map_serializes_like_vec() {
+        use std::collections::BTreeMap;
+
+        use super::NonCanonicalBTreeMap;
+
+        // `256u32` is chosen so that its little-endian BCS bytes sort *before* `1u32`'s,
+        // i.e. the canonical (serialized-byte) order differs from the numeric `Ord` order.
+        let map = NonCanonicalBTreeMap::from(BTreeMap::from([
+            (1u32, 10u8),
+            (256u32, 20u8),
+            (2u32, 30u8),
+        ]));
+
+        // It serializes as a plain `Vec<(K, V)>` in the map's `Ord` key order, with no canonical
+        // re-sorting.
+        let entries = map
+            .iter()
+            .map(|(k, v)| (*k, *v))
+            .collect::<Vec<(u32, u8)>>();
+        assert_eq!(
+            bcs::to_bytes(&map).unwrap(),
+            bcs::to_bytes(&entries).unwrap()
+        );
+
+        // ... which differs from the canonical `BTreeMap` encoding that re-sorts by serialized key.
+        let canonical = map
+            .iter()
+            .map(|(k, v)| (*k, *v))
+            .collect::<BTreeMap<u32, u8>>();
+        assert_ne!(
+            bcs::to_bytes(&map).unwrap(),
+            bcs::to_bytes(&canonical).unwrap()
+        );
+
+        // It round-trips.
+        let deserialized: NonCanonicalBTreeMap<u32, u8> =
+            bcs::from_bytes(&bcs::to_bytes(&map).unwrap()).unwrap();
+        assert_eq!(map, deserialized);
+    }
+
+    #[test]
+    fn canonical_btree_set_serializes_like_map() {
+        use std::collections::{BTreeMap, BTreeSet};
+
+        use super::CanonicalBTreeSet;
+
+        let set = CanonicalBTreeSet::from(BTreeSet::from([1u32, 256u32, 2u32]));
+
+        // It serializes exactly like a `BTreeMap<T, ()>`, i.e. canonically sorted by serialized
+        // bytes.
+        let map = set.iter().map(|t| (*t, ())).collect::<BTreeMap<u32, ()>>();
+        assert_eq!(bcs::to_bytes(&set).unwrap(), bcs::to_bytes(&map).unwrap());
+
+        // That canonical order differs from a plain `BTreeSet`'s sequence encoding, which keeps
+        // the numeric `Ord` order.
+        let plain = set.iter().copied().collect::<BTreeSet<u32>>();
+        assert_ne!(bcs::to_bytes(&set).unwrap(), bcs::to_bytes(&plain).unwrap());
+
+        // It round-trips.
+        let deserialized: CanonicalBTreeSet<u32> =
+            bcs::from_bytes(&bcs::to_bytes(&set).unwrap()).unwrap();
+        assert_eq!(set, deserialized);
+    }
 
     #[test]
     fn display_amount() {
@@ -1780,5 +2189,41 @@ mod tests {
 
         assert_eq!(hash1, hash2, "Hashes should be equal for same content");
         assert_eq!(blob1.bytes(), blob2.bytes(), "Byte content should be equal");
+    }
+
+    /// `linera-explorer` running on `wasm32` does not have access to the
+    /// strongly-typed `ApplicationDescription`: the GraphQL client substitutes
+    /// it for `serde_json::Value`. The explorer therefore fetches the module ID
+    /// for an application by indexing into the JSON object as
+    /// `description["module_id"]`. This test pins that field name and the
+    /// hex-string shape of the serialized `ModuleId` so a future rename or
+    /// representation change immediately breaks here instead of silently in the
+    /// browser.
+    #[test]
+    fn application_description_serializes_module_id_as_hex_string() {
+        let module_id = ModuleId::new(
+            CryptoHash::test_hash("contract-bytecode"),
+            CryptoHash::test_hash("service-bytecode"),
+            VmRuntime::Wasm,
+        );
+        let description = ApplicationDescription {
+            module_id,
+            creator_chain_id: ChainId(CryptoHash::test_hash("chain")),
+            block_height: BlockHeight(0),
+            application_index: 0,
+            parameters: Vec::new(),
+            required_application_ids: Vec::new(),
+        };
+
+        let value = serde_json::to_value(&description).unwrap();
+        let module_id_value = value
+            .get("module_id")
+            .expect("`module_id` is the field name the explorer indexes into");
+        let hex = module_id_value
+            .as_str()
+            .expect("`module_id` must serialize as a hex string in human-readable form");
+        let roundtrip: ModuleId =
+            serde_json::from_value(serde_json::Value::String(hex.to_owned())).unwrap();
+        assert_eq!(roundtrip, module_id);
     }
 }

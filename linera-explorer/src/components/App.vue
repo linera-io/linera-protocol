@@ -1,5 +1,5 @@
 <script lang="ts">
-import { data, save_config, route } from '../../pkg/linera_explorer'
+import { data, save_config, route, decode_user_operation, decode_user_message, decode_user_response, decode_user_event_value, fetch_user_app_formats_js } from '../../pkg/linera_explorer'
 import Block from './Block.vue'
 import Blocks from './Blocks.vue'
 import Chain from './Chain.vue'
@@ -8,12 +8,62 @@ import Application from './Application.vue'
 import Operations from './Operations.vue'
 import Operation from './Operation.vue'
 import Plugin from './Plugin.vue'
+import Transfer from './Transfer.vue'
 
 export default {
   data() { return data() },
+  created() {
+    this.resolve_formats_registry()
+  },
+  computed: {
+    // True when both formats-registry values are pinned via Vite env vars (e.g.
+    // a `.env.local`). In that case the env values are authoritative and the
+    // navbar inputs are hidden; otherwise the inputs are shown and the values are
+    // entered manually and persisted to localStorage.
+    formats_registry_from_env(): boolean {
+      return Boolean(import.meta.env.VITE_FORMATS_REGISTRY_CHAIN && import.meta.env.VITE_FORMATS_REGISTRY_APP_ID)
+    }
+  },
   methods: {
     save_config() { save_config(this) },
-    route(name?: string, args?: [string, string][]) { route(this, name, args) }
+    // Compute the effective formats-registry values used for decoding: the Vite
+    // env vars when set, otherwise the manual values persisted in `config`. The
+    // env vars win, so a stale stored value can never shadow the registry for the
+    // wallet the explorer was launched with. The result lives in runtime-only
+    // root fields (never persisted), which is what the wasm decoders read.
+    resolve_formats_registry() {
+      const envChain = import.meta.env.VITE_FORMATS_REGISTRY_CHAIN as string | undefined
+      const envApp = import.meta.env.VITE_FORMATS_REGISTRY_APP_ID as string | undefined
+      this.formats_registry_chain = (envChain || this.config.formats_registry_chain) || null
+      this.formats_registry_app_id = (envApp || this.config.formats_registry_app_id) || null
+    },
+    on_formats_registry_change() {
+      // Treat empty/whitespace as "unset" so the optional fields round-trip to
+      // None instead of failing to parse, then persist and re-resolve.
+      for (const k of ['formats_registry_chain', 'formats_registry_app_id']) {
+        if (typeof this.config[k] === 'string' && this.config[k].trim() === '') {
+          this.config[k] = null
+        }
+      }
+      save_config(this)
+      this.resolve_formats_registry()
+    },
+    route(name?: string, args?: [string, string][]) { route(this, name, args) },
+    decode_user_operation(application_id: string, bytes_hex: string) {
+      return decode_user_operation(this, application_id, bytes_hex)
+    },
+    decode_user_message(application_id: string, bytes_hex: string) {
+      return decode_user_message(this, application_id, bytes_hex)
+    },
+    decode_user_response(application_id: string, bytes_hex: string) {
+      return decode_user_response(this, application_id, bytes_hex)
+    },
+    decode_user_event_value(application_id: string, bytes_hex: string) {
+      return decode_user_event_value(this, application_id, bytes_hex)
+    },
+    fetch_user_app_formats(application_id: string) {
+      return fetch_user_app_formats_js(this, application_id)
+    }
   },
   components: {
     Block,
@@ -23,7 +73,8 @@ export default {
     Application,
     Operations,
     Operation,
-    Plugin
+    Plugin,
+    Transfer
   },
 }
 </script>
@@ -43,6 +94,9 @@ export default {
             </li>
             <li class="nav-item">
               <a class="nav-link" :class="page.applications ? 'active' : ''" @click="route('applications')" role="button">Applications</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" :class="page.transfer ? 'active' : ''" @click="route('transfer')" role="button">Transfer</a>
             </li>
             <li class="nav-item" v-if="plugins.includes('operations')">
               <a class="nav-link" :class="page.operations ? 'active' : ''" @click="route('operations')" role="button">Operations</a>
@@ -70,6 +124,13 @@ export default {
                 <input v-model="config.indexer" class="form-control" @change="save_config" style="width:190px">
               </div>
             </li>
+            <li class="nav-item mx-2" v-if="!formats_registry_from_env">
+              <div class="input-group">
+                <span class="input-group-text">formats registry</span>
+                <input v-model="config.formats_registry_chain" class="form-control font-monospace" placeholder="chain id" @change="on_formats_registry_change" style="width:200px">
+                <input v-model="config.formats_registry_app_id" class="form-control font-monospace" placeholder="application id" @change="on_formats_registry_change" style="width:200px">
+              </div>
+            </li>
             <li class="nav-item mx-2">
               <div class="form-control form-check form-switch">
                 <input class="form-check-input" type="checkbox" v-model="config.tls" id="tls-check" @change="save_config">
@@ -85,7 +146,7 @@ export default {
         </div>
       </div>
     </nav>
-    <div class="container pb-5">
+    <div class="container-fluid pb-5">
       <div v-if="page=='unloaded'">
         <div class="text-center m-5 p-5">
           <span class="spinner-border">
@@ -111,7 +172,31 @@ export default {
       </div>
 
       <div v-else-if="page.blocks">
-        <Blocks :blocks="page.blocks"/>
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Blocks</span>
+            <form class="d-flex align-items-center gap-2" @submit.prevent="route('blocks', [
+              ['limit', ($refs.blocksLimit as HTMLSelectElement).value],
+              ...( ($refs.blocksFrom as HTMLInputElement).value ? [['from', ($refs.blocksFrom as HTMLInputElement).value] as [string, string]] : [])
+            ])">
+              <label class="form-label mb-0 small text-nowrap">Show</label>
+              <select ref="blocksLimit" class="form-select form-select-sm" style="width:80px">
+                <option v-for="n in [10, 20, 50, 100]" :key="n" :value="n" :selected="n == page.blocks.limit">{{ n }}</option>
+              </select>
+              <label class="form-label mb-0 small text-nowrap">from hash</label>
+              <input ref="blocksFrom" type="text" class="form-control form-control-sm font-monospace" placeholder="block hash..." style="width:200px">
+              <button type="submit" class="btn btn-sm btn-outline-primary text-nowrap">Load</button>
+            </form>
+          </div>
+          <div class="card-body">
+            <Blocks :blocks="page.blocks.blocks"/>
+            <div v-if="page.blocks.blocks.length > 0 && page.blocks.blocks[page.blocks.blocks.length - 1].block.header.height != 0" class="mt-2 text-center">
+              <button class="btn btn-sm btn-outline-secondary" @click="route('blocks', [['from', page.blocks.blocks[page.blocks.blocks.length - 1].hash], ['limit', String(page.blocks.limit)]])">
+                Load older blocks
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div v-else-if="page.block">
@@ -132,6 +217,10 @@ export default {
 
       <div v-else-if="page.operation">
         <Operation :op="page.operation" :id="operation_id(page.operation.key)" :index="page.operation.index"/>
+      </div>
+
+      <div v-else-if="page.transfer">
+        <Transfer :transfer="page.transfer"/>
       </div>
 
       <div v-else-if="page.plugin">

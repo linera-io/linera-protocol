@@ -7,21 +7,140 @@ Abstractions over tasks that can be used natively or on the Web.
 
 use futures::{future, Future, FutureExt as _};
 
-/// The type of a future awaiting another task.
-pub type NonBlockingFuture<R> = future::RemoteHandle<R>;
-
-/// Spawns a new task, potentially on the current thread.
+/// `Send` on native targets; no bound on web (where there's only one thread).
+///
+/// Use this in generic bounds that need `Send` on native but should compile on
+/// web without the bound. Combined with [`run_detached`], this lets a single
+/// function body support both targets.
 #[cfg(not(web))]
-pub fn spawn<F: Future<Output: Send> + Send + 'static>(future: F) -> NonBlockingFuture<F::Output> {
-    let (future, remote_handle) = future.remote_handle();
-    tokio::task::spawn(future);
-    remote_handle
+pub trait MaybeSend: Send {}
+#[cfg(not(web))]
+impl<T: Send> MaybeSend for T {}
+
+/// `Sync` on native targets; no bound on web (where there's only one thread).
+///
+/// Use this in generic bounds that need `Sync` on native but should compile on
+/// web without the bound.
+#[cfg(not(web))]
+pub trait MaybeSync: Sync {}
+#[cfg(not(web))]
+impl<T: Sync> MaybeSync for T {}
+
+/// `Send` on native targets; no bound on web (where there's only one thread).
+#[cfg(web)]
+pub trait MaybeSend {}
+#[cfg(web)]
+impl<T> MaybeSend for T {}
+
+/// `Sync` on native targets; no bound on web (where there's only one thread).
+#[cfg(web)]
+pub trait MaybeSync {}
+#[cfg(web)]
+impl<T> MaybeSync for T {}
+
+/// Spawns `future` on the runtime and awaits its completion.
+///
+/// Dropping the returned future does *not* cancel the spawned task — it runs
+/// to completion in the background. Use this when the spawned work (e.g. a
+/// storage write paired with its in-memory finalization) must not be torn
+/// apart mid-flight by caller cancellation.
+pub async fn run_detached<F, R>(future: F) -> R
+where
+    F: Future<Output = R> + MaybeSend + 'static,
+    R: MaybeSend + 'static,
+{
+    // On native, `tokio::task::spawn` returns a `JoinHandle` that already
+    // detaches on drop. On web, `wasm_bindgen_futures::spawn_local` is
+    // fire-and-forget, so we deliver the output through a oneshot channel.
+    #[cfg(not(web))]
+    {
+        tokio::task::spawn(future)
+            .await
+            .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
+    }
+    #[cfg(web)]
+    {
+        let (tx, rx) = futures::channel::oneshot::channel();
+        wasm_bindgen_futures::spawn_local(async move {
+            if tx.send(future.await).is_err() {
+                tracing::debug!("run_detached: receiver dropped before result was delivered");
+            }
+        });
+        rx.await
+            .expect("spawned task dropped without sending its result")
+    }
 }
 
-/// Spawns a new task on the current thread.
-#[cfg(web)]
-pub fn spawn<F: Future + 'static>(future: F) -> NonBlockingFuture<F::Output> {
-    let (future, remote_handle) = future.remote_handle();
-    wasm_bindgen_futures::spawn_local(future);
-    remote_handle
+/// The type of a future awaiting another task.
+///
+/// On drop, the remote task will be asynchronously cancelled, but will remain
+/// alive until it reaches a yield point.
+///
+/// To wait for the task to be fully cancelled, use [`Task::cancel`].
+pub struct Task<R> {
+    abort_handle: future::AbortHandle,
+    output: future::RemoteHandle<Result<R, future::Aborted>>,
+}
+
+impl<R: 'static> Task<R> {
+    fn spawn_<F: Future<Output = R>, T>(
+        future: F,
+        spawn: impl FnOnce(future::Remote<future::Abortable<F>>) -> T,
+    ) -> Self {
+        let (abortable_future, abort_handle) = future::abortable(future);
+        let (task, output) = abortable_future.remote_handle();
+        spawn(task);
+        Self {
+            abort_handle,
+            output,
+        }
+    }
+
+    /// Spawns a new task, potentially on the current thread.
+    #[cfg(not(web))]
+    pub fn spawn<F: Future<Output = R> + Send + 'static>(future: F) -> Self
+    where
+        R: Send,
+    {
+        Self::spawn_(future, tokio::task::spawn)
+    }
+
+    /// Spawns a new task on the current thread.
+    #[cfg(web)]
+    pub fn spawn<F: Future<Output = R> + 'static>(future: F) -> Self {
+        Self::spawn_(future, wasm_bindgen_futures::spawn_local)
+    }
+
+    /// Creates a [`Task`] that is immediately ready.
+    pub fn ready(value: R) -> Self {
+        Self::spawn_(async { value }, |fut| {
+            fut.now_or_never().expect("the future is ready")
+        })
+    }
+
+    /// Cancels the task, resolving only when the wrapped future is completely dropped.
+    pub async fn cancel(self) {
+        self.abort_handle.abort();
+        // We just want to wait for the task to finish unwinding; an `Aborted` error is the expected outcome.
+        self.output.await.ok();
+    }
+
+    /// Forgets the task. The task will continue to run to completion in the
+    /// background, but will no longer be joinable or cancelable.
+    pub fn forget(self) {
+        self.output.forget();
+    }
+}
+
+impl<R: 'static> std::future::IntoFuture for Task<R> {
+    type Output = R;
+    type IntoFuture = future::Map<
+        future::RemoteHandle<Result<R, future::Aborted>>,
+        fn(Result<R, future::Aborted>) -> R,
+    >;
+
+    fn into_future(self) -> Self::IntoFuture {
+        self.output
+            .map(|result| result.expect("we have the only AbortHandle"))
+    }
 }

@@ -24,6 +24,8 @@
 //! The [`examples`](https://github.com/linera-io/linera-protocol/tree/main/examples)
 //! directory contains some example applications.
 
+#![deny(missing_docs)]
+
 #[macro_use]
 pub mod util;
 
@@ -33,7 +35,6 @@ pub mod contract;
 #[cfg(feature = "ethereum")]
 pub mod ethereum;
 mod extensions;
-#[cfg(not(target_arch = "wasm32"))]
 pub mod formats;
 pub mod graphql;
 pub mod linera_base_types;
@@ -48,7 +49,10 @@ use std::fmt::Debug;
 pub use bcs;
 pub use linera_base::{
     abi,
-    data_types::{Resources, SendMessageRequest},
+    data_types::{
+        CanonicalBTreeMap, CanonicalBTreeSet, NonCanonicalBTreeMap, NonCanonicalBTreeSet,
+        Resources, SendMessageRequest,
+    },
     ensure, http, task_processor,
 };
 use linera_base::{

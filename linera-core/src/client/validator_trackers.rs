@@ -53,9 +53,9 @@ impl ValidatorTrackers {
     pub(super) fn filter_out_already_known(
         &mut self,
         received_logs: &mut ReceivedLogs,
-        local_next_heights: BTreeMap<ChainId, BlockHeight>,
+        local_next_heights: &BTreeMap<ChainId, BlockHeight>,
     ) {
-        for (sender_chain_id, local_highest) in &local_next_heights {
+        for (sender_chain_id, local_highest) in local_next_heights {
             if let Some(remote_heights) = received_logs.get_chain_mut(sender_chain_id) {
                 remote_heights.retain(|height, _| {
                     if height < local_highest {
@@ -207,7 +207,7 @@ mod test {
             .into_iter()
             .collect();
 
-        tracker.filter_out_already_known(&mut received_log, local_heights);
+        tracker.filter_out_already_known(&mut received_log, &local_heights);
 
         assert_eq!(received_log.num_chains(), 2); // we do not remove empty chains
         assert_eq!(received_log.num_certs(), 1);

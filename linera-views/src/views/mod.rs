@@ -18,6 +18,9 @@ mod tests;
 /// The `RegisterView` implements a register for a single value.
 pub mod register_view;
 
+/// The `LazyRegisterView` implements a register for a single value with lazy loading.
+pub mod lazy_register_view;
+
 /// The `LogView` implements a log list that can be pushed.
 pub mod log_view;
 
@@ -176,6 +179,9 @@ impl Hasher for sha3::Sha3_256 {
 pub trait RootView: View {
     /// Saves the root view to the database context
     async fn save(&mut self) -> Result<(), ViewError>;
+
+    /// Saves the root view to the database context and drops it without calling `post_save`.
+    async fn save_and_drop(self) -> Result<(), ViewError>;
 }
 
 /// A [`View`] that also supports crypto hash

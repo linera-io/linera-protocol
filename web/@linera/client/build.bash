@@ -34,11 +34,21 @@ wasm-bindgen \
     --out-name index \
     --typescript \
     --target web \
+    --keep-debug \
     --split-linked-modules
 
-# wasm-bindgen generates a `package.json` with the requisite dependencies, which is missing its `module: true` attribute.  This confuses `tsc`, and isn't necessary since we're embedding the output in a larger package with its own `package.json`.
-rm src/wasm/package.json
+if command -v wasm-split >/dev/null; then
+    wasm-split \
+        src/wasm/index_bg.wasm \
+        --strip \
+        --debug-out src/wasm/index_bg.debug.wasm
+else
+    echo "wasm-split not found, skipping (debug wasm and stripping disabled)" >&2
+fi
 
+# Start from a clean dist so stale artifacts from a previous build can never be
+# published (dist/ is gitignored and rebuilt fresh on `prepare`/publish).
+rm -rf dist
 mkdir -p dist
 cp -r src/wasm dist/
 

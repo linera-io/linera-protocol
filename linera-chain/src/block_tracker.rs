@@ -23,7 +23,7 @@ use tracing::instrument;
 #[cfg(with_metrics)]
 use crate::chain::metrics;
 use crate::{
-    chain::EMPTY_BLOCK_SIZE,
+    chain::{BlockExecutionPhase, EMPTY_BLOCK_SIZE},
     data_types::{
         IncomingBundle, MessageAction, OperationResult, PostedMessage, ProposedBlock, Transaction,
     },
@@ -35,6 +35,10 @@ use crate::{
 #[derive(Debug)]
 pub struct BlockExecutionTracker<'resources, 'blobs> {
     chain_id: ChainId,
+    /// The protocol phase this block is executed in (staging a proposal, validating a
+    /// received proposal, or executing a confirmed certificate). Recorded on execution
+    /// spans and used to label execution metrics.
+    phase: BlockExecutionPhase,
     block_height: BlockHeight,
     timestamp: Timestamp,
     authenticated_signer: Option<AccountOwner>,
@@ -72,6 +76,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         local_time: Timestamp,
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         proposal: &ProposedBlock,
+        phase: BlockExecutionPhase,
     ) -> Result<Self, ChainError> {
         resource_controller
             .track_block_size(EMPTY_BLOCK_SIZE)
@@ -79,6 +84,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
 
         Ok(Self {
             chain_id: proposal.chain_id,
+            phase,
             block_height: proposal.height,
             timestamp: proposal.timestamp,
             authenticated_signer: proposal.authenticated_signer,
@@ -101,6 +107,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id,
         block_height = %self.block_height,
+        phase = <&str>::from(self.phase),
         transaction_index = %self.transaction_index,
         transaction_type = %transaction.as_ref(),
     ))]
@@ -140,7 +147,10 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     .track_block_size_of(&operation)
                     .with_execution_context(chain_execution_context)?;
                 #[cfg(with_metrics)]
-                let _operation_latency = metrics::OPERATION_EXECUTION_LATENCY.measure_latency_us();
+                let operation_latency =
+                    metrics::OPERATION_EXECUTION_LATENCY.with_label_values(&[self.phase.into()]);
+                #[cfg(with_metrics)]
+                let _operation_latency = operation_latency.measure_latency_us();
                 let context = OperationContext {
                     chain_id: self.chain_id,
                     height: self.block_height,
@@ -170,7 +180,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     }
 
     /// Returns a new TransactionTracker for the current transaction.
-    fn new_transaction_tracker(&mut self) -> Result<TransactionTracker, ChainError> {
+    fn new_transaction_tracker(&self) -> Result<TransactionTracker, ChainError> {
         Ok(TransactionTracker::new(
             self.local_time,
             self.transaction_index,
@@ -202,7 +212,10 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         C::Extra: ExecutionRuntimeContext,
     {
         #[cfg(with_metrics)]
-        let _message_latency = metrics::MESSAGE_EXECUTION_LATENCY.measure_latency_us();
+        let message_latency =
+            metrics::MESSAGE_EXECUTION_LATENCY.with_label_values(&[self.phase.into()]);
+        #[cfg(with_metrics)]
+        let _message_latency = message_latency.measure_latency_us();
         let context = MessageContext {
             chain_id: self.chain_id,
             origin: incoming_bundle.origin,
@@ -428,7 +441,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     ///
     /// This reverts all state to what it was when the checkpoint was saved,
     /// as if the failed transaction execution never happened.
-    pub fn restore_checkpoint(&mut self, checkpoint: TrackerCheckpoint) {
+    pub fn restore_checkpoint(&mut self, checkpoint: &TrackerCheckpoint) {
         // Destructure to ensure all fields are handled (compiler will warn on new fields).
         let TrackerCheckpoint {
             resource_tracker,
@@ -442,15 +455,15 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             operation_results_len,
         } = checkpoint;
 
-        self.resource_controller.tracker = resource_tracker;
-        self.next_application_index = next_application_index;
-        self.next_chain_index = next_chain_index;
-        self.transaction_index = transaction_index;
-        self.oracle_responses.truncate(oracle_responses_len);
-        self.events.truncate(events_len);
-        self.blobs.truncate(blobs_len);
-        self.messages.truncate(messages_len);
-        self.operation_results.truncate(operation_results_len);
+        self.resource_controller.tracker = *resource_tracker;
+        self.next_application_index = *next_application_index;
+        self.next_chain_index = *next_chain_index;
+        self.transaction_index = *transaction_index;
+        self.oracle_responses.truncate(*oracle_responses_len);
+        self.events.truncate(*events_len);
+        self.blobs.truncate(*blobs_len);
+        self.messages.truncate(*messages_len);
+        self.operation_results.truncate(*operation_results_len);
     }
 
     /// Finalizes the execution and returns the collected results.
@@ -467,7 +480,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         assert_eq!(self.blobs.len(), expected_outcomes_count);
 
         #[cfg(with_metrics)]
-        crate::chain::metrics::track_block_metrics(&self.resource_controller.tracker);
+        crate::chain::metrics::track_block_metrics(&self.resource_controller.tracker, self.phase);
 
         let resource_tracker = self.resource_controller.tracker;
 

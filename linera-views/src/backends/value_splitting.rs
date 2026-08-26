@@ -6,6 +6,21 @@
 use linera_base::ensure;
 use thiserror::Error;
 
+#[cfg(with_metrics)]
+pub(crate) mod metrics {
+    use linera_base::prometheus_util::register_int_counter;
+    use prometheus::IntCounter;
+
+    linera_base::declare_metrics! {
+        /// Number of values that were split across multiple keys.
+        pub static VALUE_SPLIT_COUNT: IntCounter =
+            register_int_counter(
+                "value_split_count",
+                "Number of values split across multiple keys due to size limits",
+            );
+    }
+}
+
 use crate::{
     batch::{Batch, WriteOperation},
     store::{
@@ -67,6 +82,13 @@ impl<E: KeyValueStoreError> From<bcs::Error> for ValueSplittingError<E> {
 
 impl<E: KeyValueStoreError + 'static> KeyValueStoreError for ValueSplittingError<E> {
     const BACKEND: &'static str = "value splitting";
+
+    fn must_reload_view(&self) -> bool {
+        match self {
+            ValueSplittingError::InnerStoreError(e) => e.must_reload_view(),
+            _ => false,
+        }
+    }
 }
 
 impl<S> WithError for ValueSplittingDatabase<S>
@@ -187,14 +209,11 @@ where
                 .read_multi_values_bytes(&keys_add)
                 .await?
                 .into_iter();
-            for (idx, count) in n_blocks.iter().enumerate() {
-                if count > &1 {
-                    let value = big_values.get_mut(idx).unwrap();
-                    if let Some(ref mut value) = value {
-                        for _ in 1..*count {
-                            let segment = segments.next().unwrap().unwrap();
-                            value.extend(segment);
-                        }
+            for (big_value, count) in big_values.iter_mut().zip(&n_blocks) {
+                if let Some(value) = big_value {
+                    for _ in 1..*count {
+                        let segment = segments.next().unwrap().unwrap();
+                        value.extend(segment);
                     }
                 }
             }
@@ -269,6 +288,13 @@ where
                     let value_ext = if value.len() <= K::MAX_VALUE_SIZE - 4 {
                         Self::get_initial_count_first_chunk(count, &value)?
                     } else {
+                        tracing::warn!(
+                            value_len = value.len(),
+                            max_value_size = K::MAX_VALUE_SIZE,
+                            "Splitting large value across multiple keys"
+                        );
+                        #[cfg(with_metrics)]
+                        metrics::VALUE_SPLIT_COUNT.inc();
                         let remainder = value.split_off(K::MAX_VALUE_SIZE - 4);
                         for value_chunk in remainder.chunks(K::MAX_VALUE_SIZE) {
                             let big_key_segment = Self::get_segment_key(&key, count)?;
@@ -516,11 +542,10 @@ mod tests {
     // The key splitting means that when a key is overwritten
     // some previous segments may still be present.
     #[tokio::test]
-    #[expect(clippy::assertions_on_constants)]
     async fn test_value_splitting1_testing_leftovers() {
         let store = LimitedTestMemoryStore::new();
         const MAX_LEN: usize = LimitedTestMemoryStore::MAX_VALUE_SIZE;
-        assert!(MAX_LEN > 10);
+        const _: () = assert!(MAX_LEN > 10);
         let big_store = ValueSplittingStore::new(store.clone());
         let key = vec![0, 0];
         // Write a key with a long value

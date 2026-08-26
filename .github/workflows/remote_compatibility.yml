@@ -16,6 +16,8 @@ on:
       - 'docker_scylla/**'
       - 'configuration/**'
       - 'kubernetes/**'
+      - 'docker/dashboards/**'
+      - '.github/workflows/**'
       - 'scripts/**'
 
   workflow_dispatch:
@@ -37,22 +39,22 @@ env:
   RUST_LOG_FORMAT: plain
   # The remote faucet for this branch
   LINERA_FAUCET_URL: https://faucet.testnet-conway.linera.net
+  # Remote testnet notifications can be slow due to validator latency
+  LINERA_TEST_NOTIFICATION_TIMEOUT_MS: 60000
 
 permissions:
   contents: read
 
 jobs:
   remote-net-test:
-    runs-on: ubuntu-latest-8-cores
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 60
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      uses: ./.github/actions/install-protoc
     - name: Run the remote-net tests
       run: |
         cargo test -p linera-service remote_net_grpc --features remote-net

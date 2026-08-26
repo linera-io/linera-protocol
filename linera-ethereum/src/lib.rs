@@ -8,8 +8,13 @@
 //! [FOUNDRY]: https://book.getfoundry.sh/
 //! [SOLC]: https://soliditylang.org/
 
+#![deny(missing_docs)]
+
 pub mod client;
 pub mod common;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod light_client;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod provider;

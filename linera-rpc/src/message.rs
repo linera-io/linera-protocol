@@ -2,10 +2,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlobContent, BlockHeight, NetworkDescription},
-    identifiers::{BlobId, ChainId},
+    identifiers::{BlobId, ChainId, EventId, StreamId},
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
@@ -23,8 +25,10 @@ use crate::{
     HandleValidatedCertificateRequest,
 };
 
+/// An RPC message exchanged between clients, proxies and validators.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
+#[allow(missing_docs)]
 pub enum RpcMessage {
     // Inbound
     BlockProposal(Box<BlockProposal>),
@@ -65,6 +69,15 @@ pub enum RpcMessage {
 
     BlobLastUsedByCertificate(Box<BlobId>),
     BlobLastUsedByCertificateResponse(Box<ConfirmedBlockCertificate>),
+
+    PreviousEventBlocks(Box<(ChainId, Vec<StreamId>)>),
+    PreviousEventBlocksResponse(Box<BTreeMap<StreamId, (BlockHeight, CryptoHash)>>),
+
+    DownloadBlobs(Vec<BlobId>),
+
+    // Appended at the end to preserve the wire encoding of earlier variants.
+    EventBlockHeights(Vec<EventId>),
+    EventBlockHeightsResponse(Vec<Option<BlockHeight>>),
 }
 
 impl RpcMessage {
@@ -85,6 +98,7 @@ impl RpcMessage {
             DownloadPendingBlob(request) => request.0,
             DownloadCertificatesByHeights(chain_id, _) => *chain_id,
             HandlePendingBlob(request) => request.0,
+            PreviousEventBlocks(request) => request.0,
             Vote(_)
             | Error(_)
             | ChainInfoResponse(_)
@@ -95,6 +109,7 @@ impl RpcMessage {
             | UploadBlob(_)
             | UploadBlobResponse(_)
             | DownloadBlob(_)
+            | DownloadBlobs(_)
             | DownloadBlobResponse(_)
             | DownloadPendingBlobResponse(_)
             | DownloadConfirmedBlock(_)
@@ -107,7 +122,10 @@ impl RpcMessage {
             | BlobLastUsedByCertificateResponse(_)
             | MissingBlobIds(_)
             | MissingBlobIdsResponse(_)
-            | DownloadCertificatesResponse(_) => {
+            | EventBlockHeights(_)
+            | EventBlockHeightsResponse(_)
+            | DownloadCertificatesResponse(_)
+            | PreviousEventBlocksResponse(_) => {
                 return None;
             }
         };
@@ -125,10 +143,12 @@ impl RpcMessage {
             | NetworkDescriptionQuery
             | UploadBlob(_)
             | DownloadBlob(_)
+            | DownloadBlobs(_)
             | DownloadConfirmedBlock(_)
             | BlobLastUsedBy(_)
             | BlobLastUsedByCertificate(_)
             | MissingBlobIds(_)
+            | EventBlockHeights(_)
             | DownloadCertificates(_)
             | DownloadCertificatesByHeights(_, _) => true,
             BlockProposal(_)
@@ -153,7 +173,21 @@ impl RpcMessage {
             | BlobLastUsedByCertificateResponse(_)
             | MissingBlobIdsResponse(_)
             | DownloadCertificatesResponse(_)
-            | DownloadCertificatesByHeightsResponse(_) => false,
+            | DownloadCertificatesByHeightsResponse(_)
+            | PreviousEventBlocks(_)
+            | PreviousEventBlocksResponse(_)
+            | EventBlockHeightsResponse(_) => false,
+        }
+    }
+}
+
+impl TryFrom<RpcMessage> for Vec<Option<BlockHeight>> {
+    type Error = NodeError;
+    fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
+        match message {
+            RpcMessage::EventBlockHeightsResponse(heights) => Ok(heights),
+            RpcMessage::Error(error) => Err(*error),
+            _ => Err(NodeError::UnexpectedMessage),
         }
     }
 }
@@ -263,6 +297,17 @@ impl TryFrom<RpcMessage> for BlobId {
     fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
         match message {
             RpcMessage::UploadBlobResponse(blob_id) => Ok(*blob_id),
+            RpcMessage::Error(error) => Err(*error),
+            _ => Err(NodeError::UnexpectedMessage),
+        }
+    }
+}
+
+impl TryFrom<RpcMessage> for BTreeMap<StreamId, (BlockHeight, CryptoHash)> {
+    type Error = NodeError;
+    fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
+        match message {
+            RpcMessage::PreviousEventBlocksResponse(map) => Ok(*map),
             RpcMessage::Error(error) => Err(*error),
             _ => Err(NodeError::UnexpectedMessage),
         }

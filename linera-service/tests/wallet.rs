@@ -8,12 +8,13 @@ use linera_base::{
     data_types::{Amount, Blob, BlockHeight, Epoch},
 };
 use linera_chain::data_types::ProposedBlock;
-use linera_client::{client_context::ClientContext, config::GenesisConfig};
+use linera_client::client_context::ClientContext;
 use linera_core::{
     client::{Client, ListeningMode, PendingProposal},
     join_set_ext::JoinSet,
     test_utils::{MemoryStorageBuilder, StorageBuilder, TestBuilder},
     wallet,
+    worker::{DEFAULT_BLOCK_CACHE_SIZE, DEFAULT_EXECUTION_STATE_CACHE_SIZE},
 };
 use linera_rpc::{NodeOptions, NodeProvider};
 use linera_service::Wallet;
@@ -25,13 +26,13 @@ pub async fn new_test_client_context(
     _block_cache_size: usize,
     _execution_state_cache_size: usize,
 ) -> anyhow::Result<ClientContext<impl linera_core::Environment>> {
-    use linera_core::{client::ChainClientOptions, node::CrossChainMessageDelivery};
+    use linera_core::{client::chain_client, node::CrossChainMessageDelivery};
 
     let send_recv_timeout = Duration::from_millis(4000);
     let retry_delay = Duration::from_millis(1000);
     let max_retries = 10;
-    let chain_worker_ttl = Duration::from_secs(30);
-    let sender_chain_worker_ttl = Duration::from_secs(1);
+    let chain_worker_ttl = Some(Duration::from_secs(30));
+    let sender_chain_worker_ttl = Some(Duration::from_secs(1));
 
     let node_options = NodeOptions {
         send_timeout: send_recv_timeout,
@@ -64,11 +65,14 @@ pub async fn new_test_client_context(
             name,
             chain_worker_ttl,
             sender_chain_worker_ttl,
-            ChainClientOptions {
+            1000,
+            chain_client::Options {
                 cross_chain_message_delivery: CrossChainMessageDelivery::Blocking,
-                ..ChainClientOptions::test_default()
+                ..chain_client::Options::test_default()
             },
-            linera_core::client::RequestsSchedulerConfig::default(),
+            &linera_core::client::RequestsSchedulerConfig::default(),
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
         )
         .into(),
         genesis_config,
@@ -93,7 +97,7 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
     builder.add_root_chain(0, Amount::ONE).await?;
     let chain_id = builder.admin_chain_id();
 
-    let genesis_config = GenesisConfig::new_testing(&builder);
+    let genesis_config = linera_core::GenesisConfig::new_for_testing(&builder);
 
     let tmp_dir = tempfile::tempdir()?;
     let mut config_dir = tmp_dir.keep();
@@ -112,7 +116,7 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
     wallet
         .insert(
             admin_description.id(),
-            wallet::Chain {
+            &wallet::Chain {
                 owner: Some(new_pubkey.into()),
                 timestamp: clock.current_time(),
                 pending_proposal: Some(PendingProposal {
@@ -126,6 +130,7 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
                         previous_block_hash: None,
                     },
                     blobs: vec![Blob::new_data(b"blob".to_vec())],
+                    round: None,
                 }),
                 ..admin_description.into()
             },

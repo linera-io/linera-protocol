@@ -3,7 +3,10 @@
 
 //! Handle requests from the synchronous execution thread of user applications.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use custom_debug_derive::Debug;
 use futures::{channel::mpsc, StreamExt as _};
@@ -43,31 +46,29 @@ pub struct ExecutionStateActor<'a, C> {
 }
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
     use prometheus::HistogramVec;
 
-    /// Histogram of the latency to load a contract bytecode.
-    pub static LOAD_CONTRACT_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "load_contract_latency",
-            "Load contract latency",
-            &[],
-            exponential_bucket_latencies(250.0),
-        )
-    });
+    linera_base::declare_metrics! {
+        /// Histogram of the latency to load a contract bytecode.
+        pub static LOAD_CONTRACT_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "load_contract_latency",
+                "Load contract latency",
+                &[],
+                exponential_bucket_latencies(250.0),
+            );
 
-    /// Histogram of the latency to load a service bytecode.
-    pub static LOAD_SERVICE_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "load_service_latency",
-            "Load service latency",
-            &[],
-            exponential_bucket_latencies(250.0),
-        )
-    });
+        /// Histogram of the latency to load a service bytecode.
+        pub static LOAD_SERVICE_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "load_service_latency",
+                "Load service latency",
+                &[],
+                exponential_bucket_latencies(250.0),
+            );
+    }
 }
 
 pub(crate) type ExecutionStateSender = mpsc::UnboundedSender<ExecutionRequest>;
@@ -236,12 +237,18 @@ where
             }
 
             ChainOwnership { callback } => {
-                let ownership = self.state.system.ownership.get().clone();
+                let ownership = self.state.system.ownership.get().await?.clone();
                 callback.respond(ownership);
             }
 
             ApplicationPermissions { callback } => {
-                let permissions = self.state.system.application_permissions.get().clone();
+                let permissions = self
+                    .state
+                    .system
+                    .application_permissions
+                    .get()
+                    .await?
+                    .clone();
                 callback.respond(permissions);
             }
 
@@ -332,7 +339,7 @@ where
                 callback,
             } => {
                 let mut view = self.state.users.try_load_entry_mut(&id).await?;
-                view.write_batch(batch).await?;
+                view.write_batch(batch)?;
                 callback.respond(());
             }
 
@@ -362,11 +369,11 @@ where
                 application_id,
                 callback,
             } => {
-                let app_permissions = self.state.system.application_permissions.get();
+                let app_permissions = self.state.system.application_permissions.get().await?;
                 if !app_permissions.can_close_chain(&application_id) {
                     callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
                 } else {
-                    self.state.system.close_chain().await?;
+                    self.state.system.close_chain()?;
                     callback.respond(Ok(()));
                 }
             }
@@ -376,7 +383,7 @@ where
                 ownership,
                 callback,
             } => {
-                let app_permissions = self.state.system.application_permissions.get();
+                let app_permissions = self.state.system.application_permissions.get().await?;
                 if !app_permissions.can_close_chain(&application_id) {
                     callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
                 } else {
@@ -390,7 +397,7 @@ where
                 application_permissions,
                 callback,
             } => {
-                let app_permissions = self.state.system.application_permissions.get();
+                let app_permissions = self.state.system.application_permissions.get().await?;
                 if !app_permissions.can_change_application_permissions(&application_id) {
                     callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
                 } else {
@@ -449,6 +456,7 @@ where
 
                         let (_epoch, committee) = system
                             .current_committee()
+                            .await?
                             .ok_or_else(|| ExecutionError::UnauthorizedHttpRequest(url.clone()))?;
                         let allowed_hosts = &committee.policy().http_request_allow_list;
 
@@ -550,7 +558,10 @@ where
                             .get_event(event_id.clone())
                             .await?
                             .ok_or(ExecutionError::EventsNotFound(vec![event_id.clone()]))?;
-                        Ok(OracleResponse::Event(event_id.clone(), event))
+                        Ok(OracleResponse::Event(
+                            event_id.clone(),
+                            Arc::unwrap_or_clone(event),
+                        ))
                     })
                     .await?
                     .to_event(&event_id)?;
@@ -609,7 +620,7 @@ where
             }
 
             GetApplicationPermissions { callback } => {
-                let app_permissions = self.state.system.application_permissions.get();
+                let app_permissions = self.state.system.application_permissions.get().await?;
                 callback.respond(app_permissions.clone());
             }
 
@@ -905,11 +916,7 @@ where
                 );
 
                 for (code, description) in codes.0.into_iter().zip(descriptions) {
-                    runtime.preload_contract(
-                        ApplicationId::from(&description),
-                        code,
-                        description,
-                    )?;
+                    runtime.preload_contract(ApplicationId::from(&description), code, description);
                 }
 
                 runtime.run_action(application_id, chain_id, action)
@@ -945,6 +952,7 @@ where
         block_height = %context.height,
         operation_type = %operation.as_ref(),
     ))]
+    /// Executes an operation, dispatching to the system or to a user application.
     pub async fn execute_operation(
         &mut self,
         context: OperationContext,
@@ -993,6 +1001,7 @@ where
         is_bouncing = %context.is_bouncing,
         message_type = %message.as_ref(),
     ))]
+    /// Executes an incoming message, dispatching to the system or to a user application.
     pub async fn execute_message(
         &mut self,
         context: MessageContext,
@@ -1022,6 +1031,7 @@ where
         Ok(())
     }
 
+    /// Bounces a message back to its sender, returning any attached grant.
     pub fn bounce_message(
         &mut self,
         context: MessageContext,
@@ -1040,6 +1050,7 @@ where
         Ok(())
     }
 
+    /// Sends a refund of the given amount to the account designated to receive grant refunds.
     pub fn send_refund(
         &mut self,
         context: MessageContext,
@@ -1126,6 +1137,7 @@ where
 
 /// Requests to the execution state.
 #[derive(Debug, strum::AsRefStr)]
+#[allow(missing_docs)]
 pub enum ExecutionRequest {
     #[cfg(not(web))]
     LoadContract {

@@ -6,17 +6,16 @@ use std::{collections::VecDeque, fmt::Debug, marker::PhantomData};
 use serde::{de::DeserializeOwned, Serialize};
 use test_case::test_case;
 
-#[cfg(with_dynamodb)]
-use crate::dynamo_db::DynamoDbDatabase;
 #[cfg(with_rocksdb)]
 use crate::rocks_db::RocksDbDatabase;
 #[cfg(with_scylladb)]
 use crate::scylla_db::ScyllaDbDatabase;
-#[cfg(any(with_scylladb, with_dynamodb, with_rocksdb))]
+#[cfg(any(with_scylladb, with_rocksdb))]
 use crate::store::{KeyValueDatabase, TestKeyValueDatabase};
 use crate::{
     batch::Batch,
     context::{Context, MemoryContext},
+    lazy_register_view::LazyRegisterView,
     queue_view::QueueView,
     reentrant_collection_view::ReentrantCollectionView,
     register_view::{HashedRegisterView, RegisterView},
@@ -27,7 +26,7 @@ use crate::{
     },
     views::{HashableView, View},
 };
-#[cfg(any(with_rocksdb, with_scylladb, with_dynamodb))]
+#[cfg(any(with_rocksdb, with_scylladb))]
 use crate::{context::ViewContext, random::generate_test_namespace};
 
 #[tokio::test]
@@ -39,12 +38,6 @@ async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error
 #[tokio::test]
 async fn test_queue_operations_with_rocks_db_context() -> Result<(), anyhow::Error> {
     run_test_queue_operations_test_cases(RocksDbContextFactory).await
-}
-
-#[cfg(with_dynamodb)]
-#[tokio::test]
-async fn test_queue_operations_with_dynamo_db_context() -> Result<(), anyhow::Error> {
-    run_test_queue_operations_test_cases(DynamoDbContextFactory).await
 }
 
 #[cfg(with_scylladb)]
@@ -137,7 +130,7 @@ where
     let mut expected_state = VecDeque::new();
     let mut queue = QueueView::load(context.clone()).await?;
 
-    check_queue_state(&mut queue, &expected_state).await?;
+    check_queue_state(&queue, &expected_state).await?;
 
     for operation in operations {
         match operation {
@@ -155,14 +148,14 @@ where
             }
         }
 
-        check_queue_state(&mut queue, &expected_state).await?;
+        check_queue_state(&queue, &expected_state).await?;
     }
 
     Ok(())
 }
 
 async fn check_queue_state<C>(
-    queue: &mut QueueView<C, usize>,
+    queue: &QueueView<C, usize>,
     expected_state: &VecDeque<usize>,
 ) -> Result<(), anyhow::Error>
 where
@@ -215,22 +208,6 @@ impl TestContextFactory for RocksDbContextFactory {
         let context = ViewContext::create_root_context(store, ()).await?;
 
         Ok(context)
-    }
-}
-
-#[cfg(with_dynamodb)]
-struct DynamoDbContextFactory;
-
-#[cfg(with_dynamodb)]
-impl TestContextFactory for DynamoDbContextFactory {
-    type Context = ViewContext<(), <DynamoDbDatabase as KeyValueDatabase>::Store>;
-
-    async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
-        let config = DynamoDbDatabase::new_test_config().await?;
-        let namespace = generate_test_namespace();
-        let database = DynamoDbDatabase::recreate_and_connect(&config, &namespace).await?;
-        let store = database.open_shared(&[])?;
-        Ok(ViewContext::create_root_context(store, ()).await?)
     }
 }
 
@@ -525,6 +502,99 @@ where
         let mut entry = collection.try_load_entry_mut(&key).await?;
         entry.set(value);
     }
+
+    Ok(())
+}
+
+/// Saves a value using a `RegisterView`, then reopens it as a `LazyRegisterView`
+/// and checks that the value is correctly read back.
+#[tokio::test]
+async fn test_register_view_to_lazy_register_view() -> anyhow::Result<()> {
+    let context = MemoryContext::new_for_testing(());
+
+    // Write a value with RegisterView and persist it.
+    let mut register = RegisterView::<_, String>::load(context.clone()).await?;
+    register.set("hello".to_owned());
+    save_view(&context, &mut register).await?;
+    drop(register);
+
+    // Reopen the same storage location as a LazyRegisterView.
+    let lazy = LazyRegisterView::<_, String>::load(context.clone()).await?;
+
+    // The value should not have been loaded yet.
+    assert!(!lazy.has_pending_changes().await);
+
+    // Reading should lazily fetch the persisted value.
+    let value = lazy.get().await?;
+    assert_eq!(value, "hello");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_lazy_register_view() -> anyhow::Result<()> {
+    let context = MemoryContext::new_for_testing(());
+
+    // A freshly loaded LazyRegisterView returns the default value.
+    let lazy = LazyRegisterView::<_, u32>::load(context.clone()).await?;
+    assert_eq!(*lazy.get().await?, 0);
+    assert!(!lazy.has_pending_changes().await);
+    drop(lazy);
+
+    // Set a value, verify it reads back, and persist.
+    let mut lazy = LazyRegisterView::<_, u32>::load(context.clone()).await?;
+    lazy.set(42);
+    assert!(lazy.has_pending_changes().await);
+    assert_eq!(*lazy.get().await?, 42);
+    save_view(&context, &mut lazy).await?;
+    assert!(!lazy.has_pending_changes().await);
+    drop(lazy);
+
+    // Reload and verify the persisted value is lazily fetched.
+    let lazy = LazyRegisterView::<_, u32>::load(context.clone()).await?;
+    assert!(!lazy.has_pending_changes().await);
+    assert_eq!(*lazy.get().await?, 42);
+    drop(lazy);
+
+    // Test get_mut: modify via mutable reference and persist.
+    let mut lazy = LazyRegisterView::<_, u32>::load(context.clone()).await?;
+    *lazy.get_mut().await? = 100;
+    assert!(lazy.has_pending_changes().await);
+    assert_eq!(*lazy.get().await?, 100);
+    save_view(&context, &mut lazy).await?;
+    drop(lazy);
+
+    // Verify the mutation was persisted.
+    let lazy = LazyRegisterView::<_, u32>::load(context.clone()).await?;
+    assert_eq!(*lazy.get().await?, 100);
+    drop(lazy);
+
+    // Test rollback: set a value then rollback, should read the stored value.
+    let mut lazy = LazyRegisterView::<_, u32>::load(context.clone()).await?;
+    lazy.set(999);
+    assert_eq!(*lazy.get().await?, 999);
+    lazy.rollback();
+    assert!(!lazy.has_pending_changes().await);
+    assert_eq!(*lazy.get().await?, 100);
+    drop(lazy);
+
+    // Test clear: clears to default and persists.
+    let mut lazy = LazyRegisterView::<_, u32>::load(context.clone()).await?;
+    lazy.clear();
+    assert!(lazy.has_pending_changes().await);
+    assert_eq!(*lazy.get().await?, 0);
+    save_view(&context, &mut lazy).await?;
+    drop(lazy);
+
+    // Verify cleared value was persisted as default.
+    let lazy = LazyRegisterView::<_, u32>::load(context.clone()).await?;
+    assert_eq!(*lazy.get().await?, 0);
+
+    // Test hashing: two views with the same value produce the same hash.
+    let hash1 = lazy.hash().await?;
+    let mut lazy2 = LazyRegisterView::<_, u32>::load(context.clone()).await?;
+    let hash2 = lazy2.hash_mut().await?;
+    assert_eq!(hash1, hash2);
 
     Ok(())
 }

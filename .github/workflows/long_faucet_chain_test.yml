@@ -6,10 +6,16 @@ on:
     paths-ignore:
       - 'docs/**'
       - 'mdbook/**'
+      - 'kubernetes/**'
+      - 'docker/dashboards/**'
+      - '.github/workflows/**'
   pull_request:
     paths-ignore:
       - 'docs/**'
       - 'mdbook/**'
+      - 'kubernetes/**'
+      - 'docker/dashboards/**'
+      - '.github/workflows/**'
   merge_group:
   workflow_dispatch:
 
@@ -25,11 +31,11 @@ env:
 jobs:
   long-faucet-chain-test:
     if: ${{ github.event_name == 'merge_group' }}
-    runs-on: ubuntu-latest-16-cores
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 40
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Clear up some space
       run: |
@@ -38,9 +44,7 @@ jobs:
         sudo rm -rf "/usr/local/share/boost"
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      uses: ./.github/actions/install-protoc
     - name: Build
       run: |
         cargo build --release -p linera-service

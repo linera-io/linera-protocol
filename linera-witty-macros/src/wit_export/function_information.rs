@@ -183,9 +183,9 @@ impl<'input> FunctionInformation<'input> {
             namespace,
             type_name,
             caller,
-            input_to_guest_parameters,
-            guest_results_to_output,
-            output_results_trait,
+            &input_to_guest_parameters,
+            &guest_results_to_output,
+            &output_results_trait,
         )
     }
 
@@ -209,9 +209,9 @@ impl<'input> FunctionInformation<'input> {
             namespace,
             type_name,
             caller,
-            input_to_guest_parameters,
-            guest_results_to_output,
-            output_results_trait,
+            &input_to_guest_parameters,
+            &guest_results_to_output,
+            &output_results_trait,
         )
     }
 
@@ -231,9 +231,9 @@ impl<'input> FunctionInformation<'input> {
             namespace,
             type_name,
             caller,
-            input_to_guest_parameters,
-            guest_results_to_output,
-            output_results_trait,
+            &input_to_guest_parameters,
+            &guest_results_to_output,
+            &output_results_trait,
         )
     }
 
@@ -243,9 +243,9 @@ impl<'input> FunctionInformation<'input> {
         namespace: &LitStr,
         type_name: &Ident,
         caller: &Type,
-        input_to_guest_parameters: TokenStream,
-        guest_results_to_output: TokenStream,
-        output_results_trait: TokenStream,
+        input_to_guest_parameters: &TokenStream,
+        guest_results_to_output: &TokenStream,
+        output_results_trait: &TokenStream,
     ) -> TokenStream {
         let wit_name = &self.wit_name;
         let interface_type = &self.interface_type;

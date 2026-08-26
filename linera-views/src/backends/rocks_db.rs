@@ -14,9 +14,9 @@ use std::{
 };
 
 use linera_base::ensure;
-use rocksdb::{BlockBasedOptions, Cache, DBCompactionStyle, SliceTransform};
+use rocksdb::{BlockBasedOptions, Cache, DBCompactionStyle, SliceTransform, WriteBufferManager};
 use serde::{Deserialize, Serialize};
-use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
+use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 use tempfile::TempDir;
 use thiserror::Error;
 
@@ -51,8 +51,22 @@ const MAX_VALUE_SIZE: usize = 3 * 1024 * 1024 * 1024 - 400;
 // For offset reasons we decrease by 400
 const MAX_KEY_SIZE: usize = 8 * 1024 * 1024 - 400;
 
-const WRITE_BUFFER_SIZE: usize = 256 * 1024 * 1024; // 256 MiB
+// A small write buffer keeps the memtable flushing even on low-write workloads. A large buffer
+// (e.g. 256 MiB) lets a slowly-filling memtable grow huge and accumulate range tombstones, so every
+// point read has to scan it — which severely amplifies reads during e.g. a long chain
+// synchronization, where blocks are re-executed with little net data written.
+const WRITE_BUFFER_SIZE: usize = 16 * 1024 * 1024; // 16 MiB
 const MAX_WRITE_BUFFER_NUMBER: i32 = 6;
+
+fn get_available_memory(sys: &System) -> usize {
+    sys.cgroup_limits()
+        .map_or_else(|| sys.total_memory() as usize, |c| c.total_memory as usize)
+}
+
+fn get_available_cpus() -> i32 {
+    std::thread::available_parallelism().map_or(1, |p| p.get() as i32)
+}
+
 const HYPER_CLOCK_CACHE_BLOCK_SIZE: usize = 8 * 1024; // 8 KiB
 
 /// The RocksDB client that we use.
@@ -166,7 +180,10 @@ impl RocksDbStoreExecutor {
         Ok(entries.into_iter().collect::<Result<_, _>>()?)
     }
 
-    fn get_find_prefix_iterator(&self, prefix: &[u8]) -> rocksdb::DBRawIteratorWithThreadMode<DB> {
+    fn get_find_prefix_iterator(
+        &self,
+        prefix: &[u8],
+    ) -> rocksdb::DBRawIteratorWithThreadMode<'_, DB> {
         // Configure ReadOptions optimized for SSDs and iterator performance
         let mut read_opts = rocksdb::ReadOptions::default();
         // Enable async I/O for better concurrency
@@ -266,7 +283,7 @@ impl RocksDbStoreExecutor {
 #[derive(Clone)]
 pub struct RocksDbStoreInternal {
     executor: RocksDbStoreExecutor,
-    _path_with_guard: PathWithGuard,
+    path_with_guard: PathWithGuard,
     max_stream_queries: usize,
     spawn_mode: RocksDbSpawnMode,
     root_key_written: Arc<AtomicBool>,
@@ -276,13 +293,82 @@ pub struct RocksDbStoreInternal {
 #[derive(Clone)]
 pub struct RocksDbDatabaseInternal {
     executor: RocksDbStoreExecutor,
-    _path_with_guard: PathWithGuard,
+    path_with_guard: PathWithGuard,
     max_stream_queries: usize,
     spawn_mode: RocksDbSpawnMode,
 }
 
 impl WithError for RocksDbDatabaseInternal {
     type Error = RocksDbStoreInternalError;
+}
+
+/// The level of detail collected by RocksDB's internal statistics.
+///
+/// This mirrors [`rocksdb::statistics::StatsLevel`]. The levels are nested: each one
+/// collects a superset of the data collected by the previous one, at increasing cost.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize, strum::EnumString)]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
+pub enum RocksDbStatisticsLevel {
+    /// Collect nothing.
+    DisableAll,
+    /// Collect tickers (counters) only; skip all histograms and timers.
+    #[default]
+    ExceptHistogramOrTimers,
+    /// Collect tickers and histograms, but skip timer statistics.
+    ExceptTimers,
+    /// Collect everything except time spent inside the mutex lock and on compression.
+    ExceptDetailedTimers,
+    /// Collect everything except the counters that require taking time inside the mutex lock.
+    ExceptTimeForMutex,
+    /// Collect everything, including the duration of mutex operations.
+    All,
+}
+
+impl RocksDbStatisticsLevel {
+    fn to_rocksdb(self) -> rocksdb::statistics::StatsLevel {
+        use rocksdb::statistics::StatsLevel;
+        match self {
+            Self::DisableAll => StatsLevel::DisableAll,
+            Self::ExceptHistogramOrTimers => StatsLevel::ExceptHistogramOrTimers,
+            Self::ExceptTimers => StatsLevel::ExceptTimers,
+            Self::ExceptDetailedTimers => StatsLevel::ExceptDetailedTimers,
+            Self::ExceptTimeForMutex => StatsLevel::ExceptTimeForMutex,
+            Self::All => StatsLevel::All,
+        }
+    }
+}
+
+#[cfg(test)]
+mod statistics_level_tests {
+    use std::str::FromStr as _;
+
+    use super::RocksDbStatisticsLevel;
+
+    #[test]
+    fn parses_kebab_case_names() {
+        let cases = [
+            ("disable-all", RocksDbStatisticsLevel::DisableAll),
+            (
+                "except-histogram-or-timers",
+                RocksDbStatisticsLevel::ExceptHistogramOrTimers,
+            ),
+            ("except-timers", RocksDbStatisticsLevel::ExceptTimers),
+            (
+                "except-detailed-timers",
+                RocksDbStatisticsLevel::ExceptDetailedTimers,
+            ),
+            (
+                "except-time-for-mutex",
+                RocksDbStatisticsLevel::ExceptTimeForMutex,
+            ),
+            ("all", RocksDbStatisticsLevel::All),
+        ];
+        for (name, expected) in cases {
+            assert_eq!(RocksDbStatisticsLevel::from_str(name), Ok(expected));
+        }
+        assert!(RocksDbStatisticsLevel::from_str("not-a-level").is_err());
+    }
 }
 
 /// The initial configuration of the system
@@ -294,6 +380,14 @@ pub struct RocksDbStoreInternalConfig {
     pub spawn_mode: RocksDbSpawnMode,
     /// Preferred buffer size for async streams.
     pub max_stream_queries: usize,
+    /// Whether to enable RocksDB's internal statistics collection and export it as
+    /// Prometheus metrics. Disabled by default to avoid overhead in clients that do not
+    /// scrape metrics; enabled explicitly for the workers.
+    #[serde(default)]
+    pub enable_statistics: bool,
+    /// The level of detail collected when `enable_statistics` is set.
+    #[serde(default)]
+    pub statistics_level: RocksDbStatisticsLevel,
 }
 
 impl RocksDbDatabaseInternal {
@@ -316,7 +410,7 @@ impl RocksDbDatabaseInternal {
         let temp_store = RocksDbStoreInternal::build(config, namespace, start_key)?;
         Ok(RocksDbDatabaseInternal {
             executor: temp_store.executor,
-            _path_with_guard: temp_store._path_with_guard,
+            path_with_guard: temp_store.path_with_guard,
             max_stream_queries: temp_store.max_stream_queries,
             spawn_mode: temp_store.spawn_mode,
         })
@@ -340,15 +434,15 @@ impl RocksDbStoreInternal {
             std::fs::create_dir(path_buf.clone())?;
         }
         let sys = System::new_with_specifics(
-            RefreshKind::nothing()
-                .with_cpu(CpuRefreshKind::everything())
-                .with_memory(MemoryRefreshKind::nothing().with_ram()),
+            RefreshKind::nothing().with_memory(MemoryRefreshKind::nothing().with_ram()),
         );
-        let num_cpus = sys.cpus().len() as i32;
-        let total_ram = sys.total_memory() as usize;
+        let num_cpus = get_available_cpus();
+        let total_ram = get_available_memory(&sys);
+
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
         options.create_missing_column_families(true);
+
         // Flush in-memory buffer to disk more often
         options.set_write_buffer_size(WRITE_BUFFER_SIZE);
         options.set_max_write_buffer_number(MAX_WRITE_BUFFER_NUMBER);
@@ -380,6 +474,12 @@ impl RocksDbStoreInternal {
             HYPER_CLOCK_CACHE_BLOCK_SIZE,
         ));
 
+        // Cap total memtable memory to prevent unbounded growth when multiple column
+        // families are used or many memtables accumulate before flushing.
+        let write_buffer_manager =
+            WriteBufferManager::new_write_buffer_manager(total_ram / 4, true);
+        options.set_write_buffer_manager(&write_buffer_manager);
+
         // Configure bloom filters for prefix iteration optimization
         block_options.set_bloom_filter(10.0, false);
         block_options.set_whole_key_filtering(false);
@@ -405,18 +505,274 @@ impl RocksDbStoreInternal {
         // Don't use random access pattern since we do prefix scans
         options.set_advise_random_on_open(false);
 
-        let db = DB::open(&options, path_buf)?;
-        let executor = RocksDbStoreExecutor {
-            db: Arc::new(db),
-            start_key,
-        };
+        if config.enable_statistics {
+            options.enable_statistics();
+            options.set_statistics_level(config.statistics_level.to_rocksdb());
+        }
+
+        let db = Arc::new(DB::open(&options, path_buf)?);
+        #[cfg(with_metrics)]
+        if config.enable_statistics {
+            statistics_metrics::register(Arc::new(options), db.clone());
+        }
+        let executor = RocksDbStoreExecutor { db, start_key };
         Ok(RocksDbStoreInternal {
             executor,
-            _path_with_guard: path_with_guard,
+            path_with_guard,
             max_stream_queries,
             spawn_mode,
             root_key_written: Arc::new(AtomicBool::new(false)),
         })
+    }
+}
+
+/// Exports RocksDB's internal statistics as Prometheus metrics.
+///
+/// The collector reads the values lazily at scrape time: cumulative tickers via
+/// `get_ticker_count` and instantaneous LSM state via `GetIntProperty`. Neither requires
+/// the (more expensive) histogram/timer statistics levels.
+#[cfg(with_metrics)]
+mod statistics_metrics {
+    use std::sync::{Arc, OnceLock};
+
+    use prometheus::{
+        core::{Collector, Desc},
+        proto::MetricFamily,
+        IntGauge,
+    };
+    use rocksdb::{statistics::Ticker, Options};
+
+    use super::DB;
+
+    enum Source {
+        Ticker(Ticker),
+        Property(&'static str),
+    }
+
+    struct Entry {
+        source: Source,
+        gauge: IntGauge,
+    }
+
+    fn definitions() -> Vec<(&'static str, &'static str, Source)> {
+        vec![
+            (
+                "linera_rocksdb_block_cache_hit",
+                "Cumulative RocksDB block cache hits since open",
+                Source::Ticker(Ticker::BlockCacheHit),
+            ),
+            (
+                "linera_rocksdb_block_cache_miss",
+                "Cumulative RocksDB block cache misses since open",
+                Source::Ticker(Ticker::BlockCacheMiss),
+            ),
+            (
+                "linera_rocksdb_compact_read_bytes",
+                "Cumulative bytes read during compaction since open",
+                Source::Ticker(Ticker::CompactReadBytes),
+            ),
+            (
+                "linera_rocksdb_compact_write_bytes",
+                "Cumulative bytes written during compaction since open",
+                Source::Ticker(Ticker::CompactWriteBytes),
+            ),
+            (
+                "linera_rocksdb_flush_write_bytes",
+                "Cumulative bytes written during flushes since open",
+                Source::Ticker(Ticker::FlushWriteBytes),
+            ),
+            (
+                "linera_rocksdb_stall_micros",
+                "Cumulative write-stall time in microseconds since open",
+                Source::Ticker(Ticker::StallMicros),
+            ),
+            (
+                "linera_rocksdb_bytes_written",
+                "Cumulative user bytes written since open",
+                Source::Ticker(Ticker::BytesWritten),
+            ),
+            (
+                "linera_rocksdb_bytes_read",
+                "Cumulative user bytes read since open",
+                Source::Ticker(Ticker::BytesRead),
+            ),
+            (
+                "linera_rocksdb_wal_bytes",
+                "Cumulative bytes written to the write-ahead log since open",
+                Source::Ticker(Ticker::WalFileBytes),
+            ),
+            (
+                "linera_rocksdb_bloom_filter_useful",
+                "Cumulative count of reads avoided by the bloom filter since open",
+                Source::Ticker(Ticker::BloomFilterUseful),
+            ),
+            (
+                "linera_rocksdb_memtable_hit",
+                "Cumulative memtable hits since open",
+                Source::Ticker(Ticker::MemtableHit),
+            ),
+            (
+                "linera_rocksdb_memtable_miss",
+                "Cumulative memtable misses since open",
+                Source::Ticker(Ticker::MemtableMiss),
+            ),
+            (
+                "linera_rocksdb_number_keys_written",
+                "Cumulative number of keys written since open",
+                Source::Ticker(Ticker::NumberKeysWritten),
+            ),
+            (
+                "linera_rocksdb_num_files_at_level0",
+                "Number of files at level 0",
+                Source::Property("rocksdb.num-files-at-level0"),
+            ),
+            (
+                "linera_rocksdb_estimate_pending_compaction_bytes",
+                "Estimated bytes pending compaction",
+                Source::Property("rocksdb.estimate-pending-compaction-bytes"),
+            ),
+            (
+                "linera_rocksdb_num_running_compactions",
+                "Number of currently running compactions",
+                Source::Property("rocksdb.num-running-compactions"),
+            ),
+            (
+                "linera_rocksdb_num_running_flushes",
+                "Number of currently running flushes",
+                Source::Property("rocksdb.num-running-flushes"),
+            ),
+            (
+                "linera_rocksdb_is_write_stopped",
+                "Whether writes are currently stopped (1) or not (0)",
+                Source::Property("rocksdb.is-write-stopped"),
+            ),
+            (
+                "linera_rocksdb_actual_delayed_write_rate",
+                "Current delayed write rate in bytes/s (0 when not delayed)",
+                Source::Property("rocksdb.actual-delayed-write-rate"),
+            ),
+            (
+                "linera_rocksdb_cur_size_all_mem_tables",
+                "Approximate size in bytes of all active and unflushed memtables",
+                Source::Property("rocksdb.cur-size-all-mem-tables"),
+            ),
+            (
+                "linera_rocksdb_num_immutable_mem_table",
+                "Number of immutable memtables not yet flushed",
+                Source::Property("rocksdb.num-immutable-mem-table"),
+            ),
+            (
+                "linera_rocksdb_live_sst_files_size",
+                "Total size in bytes of all live SST files",
+                Source::Property("rocksdb.live-sst-files-size"),
+            ),
+            (
+                "linera_rocksdb_total_sst_files_size",
+                "Total size in bytes of all SST files including obsolete ones",
+                Source::Property("rocksdb.total-sst-files-size"),
+            ),
+            (
+                "linera_rocksdb_estimate_num_keys",
+                "Estimated number of keys in the database",
+                Source::Property("rocksdb.estimate-num-keys"),
+            ),
+            (
+                "linera_rocksdb_block_cache_usage",
+                "Memory in bytes used by the block cache",
+                Source::Property("rocksdb.block-cache-usage"),
+            ),
+            (
+                "linera_rocksdb_block_cache_capacity",
+                "Capacity in bytes of the block cache",
+                Source::Property("rocksdb.block-cache-capacity"),
+            ),
+        ]
+    }
+
+    struct RocksDbStatisticsCollector {
+        options: Arc<Options>,
+        db: Arc<DB>,
+        entries: Vec<Entry>,
+    }
+
+    impl RocksDbStatisticsCollector {
+        fn new(options: Arc<Options>, db: Arc<DB>) -> Self {
+            let entries = definitions()
+                .into_iter()
+                .map(|(name, help, source)| Entry {
+                    source,
+                    gauge: IntGauge::new(name, help)
+                        .expect("RocksDB statistics metric name is valid"),
+                })
+                .collect();
+            Self {
+                options,
+                db,
+                entries,
+            }
+        }
+    }
+
+    impl Collector for RocksDbStatisticsCollector {
+        fn desc(&self) -> Vec<&Desc> {
+            self.entries
+                .iter()
+                .flat_map(|entry| entry.gauge.desc())
+                .collect()
+        }
+
+        fn collect(&self) -> Vec<MetricFamily> {
+            self.entries
+                .iter()
+                .flat_map(|entry| {
+                    let value = match &entry.source {
+                        Source::Ticker(ticker) => self.options.get_ticker_count(*ticker) as i64,
+                        Source::Property(property) => {
+                            self.db
+                                .property_int_value(*property)
+                                .ok()
+                                .flatten()
+                                .unwrap_or(0) as i64
+                        }
+                    };
+                    entry.gauge.set(value);
+                    entry.gauge.collect()
+                })
+                .collect()
+        }
+    }
+
+    pub(super) fn register(options: Arc<Options>, db: Arc<DB>) {
+        static REGISTERED: OnceLock<()> = OnceLock::new();
+        if REGISTERED.set(()).is_err() {
+            tracing::warn!(
+                "RocksDB statistics collector is already registered; skipping additional store"
+            );
+            return;
+        }
+        let collector = RocksDbStatisticsCollector::new(options, db);
+        if let Err(error) = prometheus::register(Box::new(collector)) {
+            tracing::warn!("failed to register the RocksDB statistics collector: {error}");
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use std::collections::HashSet;
+
+        use super::{definitions, IntGauge};
+
+        #[test]
+        fn definitions_build_unique_valid_gauges() {
+            let definitions = definitions();
+            assert!(!definitions.is_empty());
+            let mut names = HashSet::new();
+            for (name, help, _source) in &definitions {
+                assert!(!help.is_empty(), "metric {name} has empty help text");
+                assert!(names.insert(*name), "duplicate metric name: {name}");
+                IntGauge::new(*name, *help).expect("metric definition should be valid");
+            }
+        }
     }
 }
 
@@ -561,7 +917,7 @@ impl KeyValueDatabase for RocksDbDatabaseInternal {
         executor.start_key = start_key;
         Ok(RocksDbStoreInternal {
             executor,
-            _path_with_guard: self._path_with_guard.clone(),
+            path_with_guard: self.path_with_guard.clone(),
             max_stream_queries: self.max_stream_queries,
             spawn_mode: self.spawn_mode,
             root_key_written: Arc::new(AtomicBool::new(false)),
@@ -655,6 +1011,8 @@ impl TestKeyValueDatabase for RocksDbDatabaseInternal {
             path_with_guard,
             spawn_mode,
             max_stream_queries,
+            enable_statistics: false,
+            statistics_level: RocksDbStatisticsLevel::default(),
         })
     }
 }
@@ -723,8 +1081,11 @@ impl PathWithGuard {
     fn new_testing() -> PathWithGuard {
         let dir = TempDir::new().unwrap();
         let path_buf = dir.path().to_path_buf();
-        let _dir = Some(Arc::new(dir));
-        PathWithGuard { path_buf, _dir }
+        let dir_guard = Some(Arc::new(dir));
+        PathWithGuard {
+            path_buf,
+            _dir: dir_guard,
+        }
     }
 }
 

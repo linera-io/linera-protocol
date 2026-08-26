@@ -57,7 +57,7 @@ pub fn generate_test_namespace() -> String {
     // Define the characters that are allowed in the alphanumeric string
     let charset: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
     let entry = generate_random_alphanumeric_string(20, charset);
-    let namespace = format!("table_{}", entry);
+    let namespace = format!("table_{entry}");
     tracing::warn!("Generating namespace={}", namespace);
     namespace
 }

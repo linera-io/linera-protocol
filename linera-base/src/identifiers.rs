@@ -54,7 +54,7 @@ impl fmt::Debug for AccountOwner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Reserved(byte) => f.debug_tuple("Reserved").field(byte).finish(),
-            Self::Address32(hash) => write!(f, "Address32({:?})", hash),
+            Self::Address32(hash) => write!(f, "Address32({hash:?})"),
             Self::Address20(bytes) => write!(f, "Address20({})", hex::encode(bytes)),
         }
     }
@@ -84,6 +84,22 @@ impl AccountOwner {
         match self {
             AccountOwner::Address20(address) => Some(Address::from(address)),
             _ => None,
+        }
+    }
+}
+
+impl From<[u8; 32]> for AccountOwner {
+    /// Converts a 32-byte array to an `AccountOwner`.
+    ///
+    /// If the first 12 bytes are zero, the remaining 20 bytes are treated as an
+    /// EVM-compatible `Address20`. Otherwise, the full 32 bytes become an `Address32`.
+    fn from(bytes: [u8; 32]) -> Self {
+        if bytes[..12].iter().all(|&b| b == 0) {
+            let mut addr = [0u8; 20];
+            addr.copy_from_slice(&bytes[12..]);
+            AccountOwner::Address20(addr)
+        } else {
+            AccountOwner::Address32(CryptoHash::from(bytes))
         }
     }
 }
@@ -243,7 +259,7 @@ impl BlobType {
 
 impl fmt::Display for BlobType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -251,8 +267,7 @@ impl std::str::FromStr for BlobType {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        serde_json::from_str(&format!("\"{s}\""))
-            .with_context(|| format!("Invalid BlobType: {}", s))
+        serde_json::from_str(&format!("\"{s}\"")).with_context(|| format!("Invalid BlobType: {s}"))
     }
 }
 
@@ -294,7 +309,7 @@ impl std::str::FromStr for BlobId {
                 blob_type,
             })
         } else {
-            Err(anyhow!("Invalid blob ID: {}", s))
+            Err(anyhow!("Invalid blob ID: {s}"))
         }
     }
 }
@@ -364,7 +379,7 @@ pub struct ApplicationId<A = ()> {
     #[witty(skip)]
     #[debug(skip)]
     #[allocative(skip)]
-    _phantom: PhantomData<A>,
+    phantom: PhantomData<A>,
 }
 
 /// A unique identifier for an application.
@@ -416,17 +431,6 @@ impl std::str::FromStr for GenericApplicationId {
             return Ok(GenericApplicationId::User(application_id));
         }
         Err(anyhow!("Invalid parsing of GenericApplicationId"))
-    }
-}
-
-impl GenericApplicationId {
-    /// Returns the `ApplicationId`, or `None` if it is `System`.
-    pub fn user_application_id(&self) -> Option<&ApplicationId> {
-        if let GenericApplicationId::User(app_id) = self {
-            Some(app_id)
-        } else {
-            None
-        }
     }
 }
 
@@ -482,10 +486,11 @@ pub struct ModuleId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     pub vm_runtime: VmRuntime,
     #[witty(skip)]
     #[debug(skip)]
-    _phantom: PhantomData<(Abi, Parameters, InstantiationArgument)>,
+    phantom: PhantomData<(Abi, Parameters, InstantiationArgument)>,
 }
 
 /// The name of an event stream.
+// TODO(#5667): Enforce length limit for stream names.
 #[derive(
     Clone,
     Debug,
@@ -540,8 +545,6 @@ impl std::str::FromStr for StreamName {
     Ord,
     PartialEq,
     PartialOrd,
-    Serialize,
-    Deserialize,
     WitLoad,
     WitStore,
     WitType,
@@ -555,6 +558,47 @@ pub struct StreamId {
     pub application_id: GenericApplicationId,
     /// The name of this stream: an application can have multiple streams with different names.
     pub stream_name: StreamName,
+}
+
+impl serde::Serialize for StreamId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&self.to_string())
+        } else {
+            use serde::ser::SerializeStruct;
+            let mut state = serializer.serialize_struct("StreamId", 2)?;
+            state.serialize_field("application_id", &self.application_id)?;
+            state.serialize_field("stream_name", &self.stream_name)?;
+            state.end()
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for StreamId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            Self::from_str(&s).map_err(serde::de::Error::custom)
+        } else {
+            #[derive(serde::Deserialize)]
+            #[serde(rename = "StreamId")]
+            struct StreamIdHelper {
+                application_id: GenericApplicationId,
+                stream_name: StreamName,
+            }
+            let helper = StreamIdHelper::deserialize(deserializer)?;
+            Ok(StreamId {
+                application_id: helper.application_id,
+                stream_name: helper.stream_name,
+            })
+        }
+    }
 }
 
 impl StreamId {
@@ -612,7 +656,7 @@ impl std::str::FromStr for StreamId {
                 stream_name,
             })
         } else {
-            Err(anyhow!("Invalid blob ID: {}", s))
+            Err(anyhow!("Invalid stream ID: {s}"))
         }
     }
 }
@@ -670,7 +714,7 @@ impl<Abi, Parameters, InstantiationArgument> PartialEq
             contract_blob_hash,
             service_blob_hash,
             vm_runtime,
-            _phantom,
+            phantom: _,
         } = other;
         self.contract_blob_hash == *contract_blob_hash
             && self.service_blob_hash == *service_blob_hash
@@ -699,7 +743,7 @@ impl<Abi, Parameters, InstantiationArgument> Ord
             contract_blob_hash,
             service_blob_hash,
             vm_runtime,
-            _phantom,
+            phantom: _,
         } = other;
         (
             self.contract_blob_hash,
@@ -718,7 +762,7 @@ impl<Abi, Parameters, InstantiationArgument> Hash
             contract_blob_hash: contract_blob_id,
             service_blob_hash: service_blob_id,
             vm_runtime: vm_runtime_id,
-            _phantom,
+            phantom: _,
         } = self;
         contract_blob_id.hash(state);
         service_blob_id.hash(state);
@@ -772,7 +816,7 @@ impl<'de, Abi, Parameters, InstantiationArgument> Deserialize<'de>
                 contract_blob_hash: serializable_module_id.contract_blob_hash,
                 service_blob_hash: serializable_module_id.service_blob_hash,
                 vm_runtime: serializable_module_id.vm_runtime,
-                _phantom: PhantomData,
+                phantom: PhantomData,
             })
         } else {
             let serializable_module_id = SerializableModuleId::deserialize(deserializer)?;
@@ -780,7 +824,7 @@ impl<'de, Abi, Parameters, InstantiationArgument> Deserialize<'de>
                 contract_blob_hash: serializable_module_id.contract_blob_hash,
                 service_blob_hash: serializable_module_id.service_blob_hash,
                 vm_runtime: serializable_module_id.vm_runtime,
-                _phantom: PhantomData,
+                phantom: PhantomData,
             })
         }
     }
@@ -797,7 +841,7 @@ impl ModuleId {
             contract_blob_hash,
             service_blob_hash,
             vm_runtime,
-            _phantom: PhantomData,
+            phantom: PhantomData,
         }
     }
 
@@ -809,7 +853,7 @@ impl ModuleId {
             contract_blob_hash: self.contract_blob_hash,
             service_blob_hash: self.service_blob_hash,
             vm_runtime: self.vm_runtime,
-            _phantom: PhantomData,
+            phantom: PhantomData,
         }
     }
 
@@ -848,7 +892,7 @@ impl<Abi, Parameters, InstantiationArgument> ModuleId<Abi, Parameters, Instantia
             contract_blob_hash: self.contract_blob_hash,
             service_blob_hash: self.service_blob_hash,
             vm_runtime: self.vm_runtime,
-            _phantom: PhantomData,
+            phantom: PhantomData,
         }
     }
 }
@@ -930,13 +974,13 @@ impl<'de, A> Deserialize<'de> for ApplicationId<A> {
                 bcs::from_bytes(&application_id_bytes).map_err(serde::de::Error::custom)?;
             Ok(ApplicationId {
                 application_description_hash: application_id.application_description_hash,
-                _phantom: PhantomData,
+                phantom: PhantomData,
             })
         } else {
             let value = SerializableApplicationId::deserialize(deserializer)?;
             Ok(ApplicationId {
                 application_description_hash: value.application_description_hash,
-                _phantom: PhantomData,
+                phantom: PhantomData,
             })
         }
     }
@@ -947,7 +991,7 @@ impl ApplicationId {
     pub fn new(application_description_hash: CryptoHash) -> Self {
         ApplicationId {
             application_description_hash,
-            _phantom: PhantomData,
+            phantom: PhantomData,
         }
     }
 
@@ -964,7 +1008,7 @@ impl ApplicationId {
     pub fn with_abi<A>(self) -> ApplicationId<A> {
         ApplicationId {
             application_description_hash: self.application_description_hash,
-            _phantom: PhantomData,
+            phantom: PhantomData,
         }
     }
 }
@@ -974,7 +1018,7 @@ impl<A> ApplicationId<A> {
     pub fn forget_abi(self) -> ApplicationId {
         ApplicationId {
             application_description_hash: self.application_description_hash,
-            _phantom: PhantomData,
+            phantom: PhantomData,
         }
     }
 }
@@ -1052,7 +1096,7 @@ impl fmt::Display for AccountOwner {
             AccountOwner::Reserved(value) => {
                 write!(f, "0x{}", hex::encode(&value.to_be_bytes()[..]))?
             }
-            AccountOwner::Address32(value) => write!(f, "0x{}", value)?,
+            AccountOwner::Address32(value) => write!(f, "0x{value}")?,
             AccountOwner::Address20(value) => write!(f, "0x{}", hex::encode(&value[..]))?,
         };
 
@@ -1187,7 +1231,7 @@ mod tests {
         );
         assert_eq!(
             description.id().to_string(),
-            "fe947fddf2735224d01eb9d56580109f2d9d02397dc5ddd748ef9beeb38d9caa"
+            "0b87a7cba23cf0d634a1f8eace084acb8fa110b8017db71a7f1bb159e4c752dd"
         );
     }
 
@@ -1294,5 +1338,46 @@ mod tests {
         };
         let stream_id2 = StreamId::from_str(&format!("{stream_id1}")).unwrap();
         assert_eq!(stream_id1, stream_id2);
+    }
+
+    #[test]
+    fn ed25519_public_key_to_account_owner_known_vector() {
+        use crate::crypto::Ed25519PublicKey;
+        // Pins the entire derivation pipeline against silent drift, not just BCS.
+        // The chain executed:
+        //
+        //   [u8; 32]
+        //     -> Ed25519PublicKey                       (newtype wrap)
+        //     -> AccountOwner::from(public_key)         (impl From, this file)
+        //          -> CryptoHash::new(&public_key)
+        //               -> Hashable::write into a Keccak256 hasher
+        //                    -> BcsHashable blanket impl writes:
+        //                         * type-name discriminator prefix
+        //                         * BCS body (32 raw bytes for [u8; 32])
+        //               -> Keccak256 finalize -> 32-byte hash
+        //     -> AccountOwner::Address32(hash)
+        //     -> Display: "0x" + lowercase hex
+        //
+        // Any change in any link breaks this test: BCS format, the
+        // `BcsHashable` type-name discriminator, the hash function, the
+        // `From<Ed25519PublicKey>` impl, the `Address32` carrier, or the
+        // `Display` formatting.
+        //
+        // Fixed 32-byte public key (0x01..0x20).
+        let pubkey_bytes: [u8; 32] = [
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
+            0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c,
+            0x1d, 0x1e, 0x1f, 0x20,
+        ];
+        let pubkey = Ed25519PublicKey(pubkey_bytes);
+        let owner = AccountOwner::from(pubkey);
+        // The expected hex is the pinned output of `Keccak256(BCS(Ed25519PublicKey))`.
+        // Do not update it without understanding why the derivation changed — the JS
+        // test in `@linera/client` cross-checks this exact value.
+        assert_eq!(
+            owner.to_string(),
+            "0xeacee5344cbec9569e836f95029d476c700f4f5bc007c71c0752c73fba149043",
+            "Ed25519 owner derivation drifted; verify intentional before updating"
+        );
     }
 }

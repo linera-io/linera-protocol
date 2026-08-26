@@ -479,6 +479,9 @@ CrossChainRequest:
                 TUPLE:
                   - TYPENAME: Epoch
                   - TYPENAME: MessageBundle
+          - previous_height:
+              OPTION:
+                TYPENAME: BlockHeight
     1:
       ConfirmUpdatedRecipient:
         STRUCT:
@@ -487,6 +490,15 @@ CrossChainRequest:
           - recipient:
               TYPENAME: ChainId
           - latest_height:
+              TYPENAME: BlockHeight
+    2:
+      RevertConfirm:
+        STRUCT:
+          - sender:
+              TYPENAME: ChainId
+          - recipient:
+              TYPENAME: ChainId
+          - retransmit_from:
               TYPENAME: BlockHeight
 CryptoHash:
   NEWTYPESTRUCT:
@@ -808,6 +820,16 @@ NodeError:
               TYPENAME: ChainId
           - remote_node:
               TYPENAME: Secp256k1PublicKey
+    31:
+      MissingCrossChainUpdates:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - bundles:
+              SEQ:
+                TUPLE:
+                  - TYPENAME: ChainId
+                  - TYPENAME: BlockHeight
 OpenChainConfig:
   STRUCT:
     - ownership:
@@ -1142,6 +1164,39 @@ RpcMessage:
       BlobLastUsedByCertificateResponse:
         NEWTYPE:
           TYPENAME: ConfirmedBlockCertificate
+    33:
+      PreviousEventBlocks:
+        NEWTYPE:
+          TUPLE:
+            - TYPENAME: ChainId
+            - SEQ:
+                TYPENAME: StreamId
+    34:
+      PreviousEventBlocksResponse:
+        NEWTYPE:
+          MAP:
+            KEY:
+              TYPENAME: StreamId
+            VALUE:
+              TUPLE:
+                - TYPENAME: BlockHeight
+                - TYPENAME: CryptoHash
+    35:
+      DownloadBlobs:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: BlobId
+    36:
+      EventBlockHeights:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: EventId
+    37:
+      EventBlockHeightsResponse:
+        NEWTYPE:
+          SEQ:
+            OPTION:
+              TYPENAME: BlockHeight
 Secp256k1PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:

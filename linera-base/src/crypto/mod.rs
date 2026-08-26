@@ -36,17 +36,6 @@ pub type ValidatorSignature = secp256k1::Secp256k1Signature;
 /// The key pair of a validator.
 pub type ValidatorKeypair = secp256k1::Secp256k1KeyPair;
 
-/// Signature scheme used for the public key.
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq)]
-pub enum SignatureScheme {
-    /// Ed25519
-    Ed25519,
-    /// secp256k1
-    Secp256k1,
-    /// EVM secp256k1
-    EvmSecp256k1,
-}
-
 /// The public key of a chain owner.
 /// The corresponding private key is allowed to propose blocks
 /// on the chain and transfer account's tokens.
@@ -217,15 +206,6 @@ impl AccountSecretKey {
 }
 
 impl AccountPublicKey {
-    /// Returns the signature scheme of the public key.
-    pub fn scheme(&self) -> SignatureScheme {
-        match self {
-            AccountPublicKey::Ed25519(_) => SignatureScheme::Ed25519,
-            AccountPublicKey::Secp256k1(_) => SignatureScheme::Secp256k1,
-            AccountPublicKey::EvmSecp256k1(_) => SignatureScheme::EvmSecp256k1,
-        }
-    }
-
     /// Returns the byte representation of the public key.
     pub fn as_bytes(&self) -> Vec<u8> {
         bcs::to_bytes(&self).expect("serialization to bytes should not fail")
@@ -407,7 +387,7 @@ where
     fn write(&self, hasher: &mut Hasher) {
         let name = <Self as HasTypeName>::type_name();
         // Note: This assumes that names never contain the separator `::`.
-        write!(hasher, "{}::", name).expect("Hasher should not fail");
+        write!(hasher, "{name}::").expect("Hasher should not fail");
         bcs::serialize_into(hasher, &self).expect("Message serialization should not fail");
     }
 }
@@ -539,44 +519,44 @@ mod tests {
 
     #[test]
     fn roundtrip_account_pk_bytes_repr() {
-        fn roundtrip_test(secret: AccountSecretKey) {
+        fn roundtrip_test(secret: &AccountSecretKey) {
             let public = secret.public();
             let bytes = public.as_bytes();
             let parsed = AccountPublicKey::from_slice(&bytes).unwrap();
             assert_eq!(public, parsed);
         }
-        roundtrip_test(AccountSecretKey::Ed25519(Ed25519SecretKey::generate()));
-        roundtrip_test(AccountSecretKey::Secp256k1(
+        roundtrip_test(&AccountSecretKey::Ed25519(Ed25519SecretKey::generate()));
+        roundtrip_test(&AccountSecretKey::Secp256k1(
             Secp256k1KeyPair::generate().secret_key,
         ));
     }
 
     #[test]
     fn roundtrip_signature_bytes_repr() {
-        fn roundtrip_test(secret: AccountSecretKey) {
+        fn roundtrip_test(secret: &AccountSecretKey) {
             let test_string = TestString::new("test");
             let signature = secret.sign(&test_string);
             let bytes = signature.to_bytes();
             let parsed = AccountSignature::from_slice(&bytes).unwrap();
             assert_eq!(signature, parsed);
         }
-        roundtrip_test(AccountSecretKey::Ed25519(Ed25519SecretKey::generate()));
-        roundtrip_test(AccountSecretKey::Secp256k1(
+        roundtrip_test(&AccountSecretKey::Ed25519(Ed25519SecretKey::generate()));
+        roundtrip_test(&AccountSecretKey::Secp256k1(
             Secp256k1KeyPair::generate().secret_key,
         ));
-        roundtrip_test(AccountSecretKey::EvmSecp256k1(EvmSecretKey::generate()));
+        roundtrip_test(&AccountSecretKey::EvmSecp256k1(EvmSecretKey::generate()));
     }
 
     #[test]
     fn roundtrip_display_from_str_pk() {
-        fn test(secret: AccountSecretKey) {
+        fn test(secret: &AccountSecretKey) {
             let public = secret.public();
             let display = public.to_string();
             let parsed = AccountPublicKey::from_str(&display).unwrap();
             assert_eq!(public, parsed);
         }
-        test(AccountSecretKey::Ed25519(Ed25519SecretKey::generate()));
-        test(AccountSecretKey::Secp256k1(
+        test(&AccountSecretKey::Ed25519(Ed25519SecretKey::generate()));
+        test(&AccountSecretKey::Secp256k1(
             Secp256k1KeyPair::generate().secret_key,
         ));
     }

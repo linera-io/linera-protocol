@@ -6,16 +6,22 @@ use std::{sync::Arc, time::Duration};
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
     crypto::{AccountPublicKey, InMemorySigner},
-    data_types::{Amount, BlockHeight, Epoch, TimeDelta, Timestamp},
+    data_types::{Amount, BlockHeight, Bytecode, Epoch, TimeDelta, Timestamp},
     identifiers::{Account, AccountOwner, ChainId},
     ownership::{ChainOwnership, TimeoutConfig},
+    vm::VmRuntime,
 };
 use linera_core::{
-    client::{ChainClient, ChainClientOptions, Client, ListeningMode},
+    client::{chain_client, ChainClient, Client, ListeningMode},
     environment,
-    test_utils::{MemoryStorageBuilder, StorageBuilder as _, TestBuilder},
+    test_utils::{
+        ClientOutcomeResultExt as _, MemoryStorageBuilder, StorageBuilder as _, TestBuilder,
+    },
     wallet,
+    worker::{Reason, DEFAULT_BLOCK_CACHE_SIZE, DEFAULT_EXECUTION_STATE_CACHE_SIZE},
+    Environment,
 };
+use linera_execution::{wasm_test, Operation, ResourceControlPolicy, WasmRuntime};
 use linera_storage::Storage;
 use tokio_util::sync::CancellationToken;
 
@@ -69,7 +75,10 @@ impl chain_listener::ClientContext for ClientContext {
     ) -> Result<(), Error> {
         let info = client.chain_info().await?;
         let existing_owner = self.wallet().get(info.chain_id).and_then(|c| c.owner);
-        let pending_proposal = client.pending_proposal().clone();
+        let pending_proposal = client
+            .pending_proposal()
+            .await
+            .filter(|p| p.round.is_some_and(|r| r.is_fast()));
         self.wallet().insert(
             info.chain_id,
             wallet::Chain {
@@ -98,7 +107,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let chain_id0 = client0.chain_id();
     let client1 = builder.add_root_chain(1, Amount::ONE).await?;
     // Start a chain listener for chain 0 with a new key.
-    let genesis_config = GenesisConfig::new_testing(&builder);
+    let genesis_config = GenesisConfig::new_for_testing(&builder);
     let admin_chain_id = genesis_config.admin_chain_id();
     let storage = builder.make_storage().await?;
 
@@ -113,11 +122,14 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             admin_chain_id,
             false,
             [(chain_id0, ListeningMode::FullChain)],
-            format!("Client node for {:.8}", chain_id0),
-            Duration::from_secs(30),
-            Duration::from_secs(1),
-            ChainClientOptions::test_default(),
-            linera_core::client::RequestsSchedulerConfig::default(),
+            format!("Client node for {chain_id0:.8}"),
+            Some(Duration::from_secs(30)),
+            Some(Duration::from_secs(1)),
+            1000,
+            chain_client::Options::test_default(),
+            &linera_core::client::RequestsSchedulerConfig::default(),
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
         )),
     };
     context
@@ -159,7 +171,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     .await
     .unwrap();
 
-    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
+    let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
     // Transfer one token to chain 0. The listener should eventually become leader and receive
     // the message.
     let recipient0 = Account::chain(chain_id0);
@@ -174,7 +186,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
         }
         clock.add(TimeDelta::from_secs(1));
         if i == 30 {
-            panic!("Unexpected local balance: {}", balance);
+            panic!("Unexpected local balance: {balance}");
         }
     }
 
@@ -204,7 +216,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
     let chain_a_id = chain_a.chain_id();
     let chain_b_id = chain_b.chain_id();
 
-    let genesis_config = GenesisConfig::new_testing(&builder);
+    let genesis_config = GenesisConfig::new_for_testing(&builder);
     let admin_chain_id = genesis_config.admin_chain_id();
     let storage = builder.make_storage().await?;
     let chain_a_info = chain_a.chain_info().await?;
@@ -225,10 +237,13 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
                 (chain_b_id, ListeningMode::FullChain),
             ],
             "Client node with follow-only and owned chains".to_string(),
-            Duration::from_secs(30),
-            Duration::from_secs(1),
-            ChainClientOptions::test_default(),
-            linera_core::client::RequestsSchedulerConfig::default(),
+            Some(Duration::from_secs(30)),
+            Some(Duration::from_secs(1)),
+            1000,
+            chain_client::Options::test_default(),
+            &linera_core::client::RequestsSchedulerConfig::default(),
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
         )),
     };
 
@@ -274,7 +289,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
     .await
     .unwrap();
 
-    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
+    let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
 
     // Send a message to chain A first (follow-only). This notification should be ignored.
     sender
@@ -356,7 +371,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     let storage_builder = MemoryStorageBuilder::default();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
     let client0 = builder.add_root_chain(0, Amount::ONE).await?;
-    let genesis_config = GenesisConfig::new_testing(&builder);
+    let genesis_config = GenesisConfig::new_for_testing(&builder);
     let admin_chain_id = genesis_config.admin_chain_id();
     let storage = builder.make_storage().await?;
 
@@ -372,10 +387,13 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
             false,
             std::iter::empty::<(ChainId, ListeningMode)>(),
             "Client node with no chains".to_string(),
-            Duration::from_secs(30),
-            Duration::from_secs(1),
-            ChainClientOptions::test_default(),
-            linera_core::client::RequestsSchedulerConfig::default(),
+            Some(Duration::from_secs(30)),
+            Some(Duration::from_secs(1)),
+            1000,
+            chain_client::Options::test_default(),
+            &linera_core::client::RequestsSchedulerConfig::default(),
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
         )),
     };
     let context = Arc::new(Mutex::new(context));
@@ -393,7 +411,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     .await
     .unwrap();
 
-    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
+    let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
     // Burn one token.
     let certificate = client0
         .burn(AccountOwner::CHAIN, Amount::ONE)
@@ -402,7 +420,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     for i in 0.. {
         linera_base::time::timer::sleep(Duration::from_secs(i)).await;
         let result = storage.read_certificate(certificate.hash()).await?;
-        if result.as_ref() == Some(&certificate) {
+        if result.as_deref() == Some(&certificate) {
             break;
         }
         if i == 5 {
@@ -431,7 +449,7 @@ async fn test_chain_listener_listen_command_adds_chains_to_wallet() -> anyhow::R
     let client0 = builder.add_root_chain(0, Amount::ONE).await?;
     let chain_id0 = client0.chain_id();
 
-    let genesis_config = GenesisConfig::new_testing(&builder);
+    let genesis_config = GenesisConfig::new_for_testing(&builder);
     let admin_chain_id = genesis_config.admin_chain_id();
     let storage = builder.make_storage().await?;
 
@@ -447,10 +465,13 @@ async fn test_chain_listener_listen_command_adds_chains_to_wallet() -> anyhow::R
             false,
             std::iter::empty::<(ChainId, ListeningMode)>(),
             "Client node with no chains".to_string(),
-            Duration::from_secs(30),
-            Duration::from_secs(1),
-            ChainClientOptions::test_default(),
-            linera_core::client::RequestsSchedulerConfig::default(),
+            Some(Duration::from_secs(30)),
+            Some(Duration::from_secs(1)),
+            1000,
+            chain_client::Options::test_default(),
+            &linera_core::client::RequestsSchedulerConfig::default(),
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
         )),
     };
 
@@ -475,7 +496,7 @@ async fn test_chain_listener_listen_command_adds_chains_to_wallet() -> anyhow::R
     .await
     .unwrap();
 
-    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
+    let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
 
     let mut chains_to_listen = BTreeMap::new();
     chains_to_listen.insert(chain_id0, Some(client0.identity().await?));
@@ -546,7 +567,7 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
         ))
         .await?;
 
-    let genesis_config = GenesisConfig::new_testing(&builder);
+    let genesis_config = GenesisConfig::new_for_testing(&builder);
     let admin_chain_id = genesis_config.admin_chain_id();
     let storage = builder.make_storage().await?;
 
@@ -561,11 +582,14 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
             admin_chain_id,
             false,
             [(chain_id0, ListeningMode::FullChain)],
-            format!("Client node for {:.8}", chain_id0),
-            Duration::from_secs(30),
-            Duration::from_secs(1),
-            ChainClientOptions::test_default(),
-            linera_core::client::RequestsSchedulerConfig::default(),
+            format!("Client node for {chain_id0:.8}"),
+            Some(Duration::from_secs(30)),
+            Some(Duration::from_secs(1)),
+            1000,
+            chain_client::Options::test_default(),
+            &linera_core::client::RequestsSchedulerConfig::default(),
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
         )),
     };
 
@@ -615,7 +639,7 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
     .await
     .unwrap();
 
-    let handle = linera_base::task::spawn(async move { chain_listener.await.unwrap() });
+    let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
 
     // Send a message from chain 1 to chain 0. The listener should process the inbox.
     let recipient0 = Account::chain(chain_id0);
@@ -633,7 +657,7 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
         }
         clock.add(TimeDelta::from_secs(1));
         if i == 30 {
-            panic!("Listener did not process inbox. Balance: {}", balance);
+            panic!("Listener did not process inbox. Balance: {balance}");
         }
     }
 
@@ -679,6 +703,227 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
         Some(dynamic_owner),
         "User-initiated blocks should be signed by the dynamic signer"
     );
+
+    Ok(())
+}
+
+/// Helper to read Wasm bytecodes and publish them, returning the module ID.
+async fn publish_wasm_example<Env: Environment>(
+    client: &ChainClient<Env>,
+    name: &str,
+) -> anyhow::Result<linera_base::identifiers::ModuleId> {
+    let (contract_path, service_path) = wasm_test::get_example_bytecode_paths(name)?;
+    let contract_bytecode = Bytecode::load_from_file(contract_path)?;
+    let service_bytecode = Bytecode::load_from_file(service_path)?;
+    let (module_id, _cert) = client
+        .publish_module(contract_bytecode, service_bytecode, VmRuntime::Wasm)
+        .await
+        .unwrap_ok_committed();
+    Ok(module_id)
+}
+
+/// Tests that the chain listener, when subscribed to a publisher chain's events, downloads
+/// only event-bearing blocks (sparse download) via `NewEvents` notifications.
+///
+/// The test creates a sender/receiver pair with a social-app event subscription, starts
+/// the chain listener, waits for the initial sync, then has the sender create new blocks
+/// (post, burn, post). Only the post blocks should be downloaded via sparse download.
+#[cfg(feature = "wasmer")]
+#[test_log::test(tokio::test)]
+async fn test_chain_listener_sparse_event_download() -> anyhow::Result<()> {
+    let signer = InMemorySigner::new(Some(42));
+    let config = ChainListenerConfig::default();
+    let storage_builder = MemoryStorageBuilder::with_wasm_runtime(WasmRuntime::Wasmer);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone())
+        .await?
+        .with_policy(ResourceControlPolicy::no_fees());
+
+    // The receiver is at index 0, making it the admin chain. This ensures the sender
+    // chain is only discovered via event subscriptions and listened to in EventsOnly mode.
+    let receiver = builder.add_root_chain(0, Amount::ONE).await?;
+    let sender = builder.add_root_chain(1, Amount::ONE).await?;
+    let receiver_id = receiver.chain_id();
+
+    // Publish and create the social app on the receiver chain.
+    let module_id = publish_wasm_example(&receiver, "social").await?;
+    let module_id = module_id.with_abi::<social::SocialAbi, (), ()>();
+
+    let (application_id, _cert) = receiver
+        .create_application(module_id, &(), &(), vec![])
+        .await
+        .unwrap_ok_committed();
+
+    // Subscribe to the sender's events. This is a local runtime call
+    // (subscribe_to_events); no cross-chain message to the sender.
+    let subscribe_cert = receiver
+        .execute_operation(Operation::user(
+            application_id,
+            &social::Operation::Subscribe {
+                chain_id: sender.chain_id(),
+            },
+        )?)
+        .await
+        .unwrap_ok_committed();
+
+    // Set up a chain listener for the receiver chain.
+    // No sender posts yet — the sender chain has no blocks beyond genesis.
+    let genesis_config = GenesisConfig::new_for_testing(&builder);
+    let admin_chain_id = genesis_config.admin_chain_id();
+    let storage = builder.make_storage().await?;
+    let receiver_info = receiver.chain_info().await?;
+
+    let context = ClientContext {
+        client: Arc::new(Client::new(
+            environment::Impl {
+                storage: storage.clone(),
+                network: builder.make_node_provider(),
+                signer,
+                wallet: environment::TestWallet::default(),
+            },
+            admin_chain_id,
+            false,
+            [(receiver_id, ListeningMode::FullChain)],
+            format!("Client node for {:.8}", receiver_id),
+            Some(Duration::from_secs(30)),
+            Some(Duration::from_secs(1)),
+            1000,
+            chain_client::Options::test_default(),
+            &linera_core::client::RequestsSchedulerConfig::default(),
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
+        )),
+    };
+    context.wallet().insert(
+        receiver_id,
+        wallet::Chain {
+            owner: receiver.preferred_owner(),
+            block_hash: receiver_info.block_hash,
+            next_block_height: receiver_info.next_block_height,
+            timestamp: clock.current_time(),
+            pending_proposal: None,
+            epoch: Some(Epoch::ZERO),
+        },
+    );
+
+    // Subscribe to local node notifications for the receiver chain before starting
+    // the listener, so we don't miss any notifications.
+    let mut notifications = context.client.subscribe(vec![receiver_id]);
+
+    let context = Arc::new(Mutex::new(context));
+    let cancellation_token = CancellationToken::new();
+    let child_token = cancellation_token.child_token();
+    let chain_listener = ChainListener::new(
+        config,
+        context.clone(),
+        storage.clone(),
+        child_token,
+        tokio::sync::mpsc::unbounded_channel().1,
+        false,
+    )
+    .run()
+    .await?;
+
+    let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
+
+    // Wait for the chain listener to sync the receiver chain by waiting for a
+    // NewBlock notification at or after the subscribe cert's height.
+    let subscribe_height = subscribe_cert.block().header.height;
+    loop {
+        let notification = tokio::time::timeout(Duration::from_secs(10), notifications.recv())
+            .await
+            .expect("Timed out waiting for receiver chain sync")
+            .expect("Notification channel closed");
+        if let Reason::NewBlock { height, .. } = notification.reason {
+            if height >= subscribe_height {
+                break;
+            }
+        }
+    }
+
+    // Wait for the chain listener to discover event subscriptions and start
+    // the sender chain listener (happens during process_notification).
+    let sender_id = sender.chain_id();
+    loop {
+        if context
+            .lock()
+            .await
+            .client()
+            .chain_mode(sender_id)
+            .is_some()
+        {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+
+    // Now create sender blocks AFTER the listener has finished its initial sync.
+    // These will be handled via NewEvents → download_event_bearing_blocks (sparse path).
+
+    // Post 1 (has events).
+    let cert_post1 = sender
+        .execute_operation(Operation::user(
+            application_id,
+            &social::Operation::Post {
+                text: "First post".to_string(),
+                image_url: None,
+            },
+        )?)
+        .await
+        .unwrap_ok_committed();
+
+    // Burn (no events).
+    let cert_burn = sender
+        .burn(AccountOwner::CHAIN, Amount::from_millis(1))
+        .await
+        .unwrap_ok_committed();
+
+    // Post 2 (has events).
+    let cert_post2 = sender
+        .execute_operation(Operation::user(
+            application_id,
+            &social::Operation::Post {
+                text: "Second post".to_string(),
+                image_url: None,
+            },
+        )?)
+        .await
+        .unwrap_ok_committed();
+
+    // Wait for the chain listener to process the new events.
+    // The receiver should create at least one block via process_inbox_without_prepare,
+    // which emits a BlockExecuted notification.
+    loop {
+        let notification = tokio::time::timeout(Duration::from_secs(10), notifications.recv())
+            .await
+            .expect("Timed out waiting for event processing")
+            .expect("Notification channel closed");
+        if let Reason::BlockExecuted { height, .. } = notification.reason {
+            if height >= receiver_info.next_block_height {
+                break;
+            }
+        }
+    }
+
+    // Verify sparse download: only event-bearing blocks from the new sender blocks
+    // should be stored. The burn block should NOT be stored because the listener
+    // handles the sender chain in EventsOnly mode — NewBlock notifications are ignored,
+    // only NewEvents triggers download_event_bearing_blocks.
+    assert!(
+        storage.read_certificate(cert_post1.hash()).await?.is_some(),
+        "Event-bearing post block 1 should be stored"
+    );
+    assert!(
+        storage.read_certificate(cert_burn.hash()).await?.is_none(),
+        "Non-event burn block should NOT be stored (sparse download)"
+    );
+    assert!(
+        storage.read_certificate(cert_post2.hash()).await?.is_some(),
+        "Event-bearing post block 2 should be stored"
+    );
+
+    cancellation_token.cancel();
+    handle.await;
 
     Ok(())
 }

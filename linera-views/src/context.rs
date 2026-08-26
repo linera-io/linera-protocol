@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use custom_debug_derive::Debug;
+use linera_base::hex_debug;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -15,6 +17,7 @@ use crate::{
 pub struct BaseKey {
     /// The byte value of the key prefix.
     #[from]
+    #[debug(with = "hex_debug")]
     pub bytes: Vec<u8>,
 }
 

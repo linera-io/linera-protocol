@@ -120,9 +120,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(sum(rate(linera_proxy_request_error[1m])) / (sum(rate(linera_proxy_request_success[1m])) + sum(rate(linera_proxy_request_error[1m])))) * 100",
+          "expr": "(\n    sum(rate(linera_proxy_request_error{method_name!=\"non_grpc\", traffic_type=~\"$traffic_type\"}[1m])) by (method_name)\n) / (\n    sum(rate(linera_proxy_request_success{method_name!=\"non_grpc\", traffic_type=~\"$traffic_type\"}[1m])) by (method_name)\n    +\n    sum(rate(linera_proxy_request_error{method_name!=\"non_grpc\", traffic_type=~\"$traffic_type\"}[1m])) by (method_name)\n) * 100",
           "instant": false,
-          "legendFormat": "__auto",
+          "legendFormat": "{{method_name}}",
           "range": true,
           "refId": "A"
         }
@@ -216,7 +216,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_proxy_request_latency_bucket[1m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_proxy_request_latency_bucket{traffic_type=~\"$traffic_type\"}[1m])) by (le))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -312,7 +312,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_proxy_request_latency_bucket[1m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(rate(linera_proxy_request_latency_bucket{traffic_type=~\"$traffic_type\"}[1m])) by (le))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -408,7 +408,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_proxy_request_latency_bucket[1m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_proxy_request_latency_bucket{traffic_type=~\"$traffic_type\"}[1m])) by (le))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -518,11 +518,11 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "(sum(rate(linera_server_request_error[1m])) / (sum(rate(linera_server_request_success[1m])) + sum(rate(linera_server_request_error[1m])))) * 100",
+          "expr": "(\n    sum(rate(linera_server_request_error{traffic_type=~\"$traffic_type\"}[1m])) by (method_name)\n) / (\n    sum(rate(linera_server_request_success{traffic_type=~\"$traffic_type\"}[1m])) by (method_name)\n    +\n    sum(rate(linera_server_request_error{traffic_type=~\"$traffic_type\"}[1m])) by (method_name)\n) * 100",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
-          "legendFormat": "__auto",
+          "legendFormat": "{{method_name}}",
           "range": true,
           "refId": "A",
           "useBackend": false
@@ -618,7 +618,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_server_request_latency_bucket[1m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_server_request_latency_bucket{traffic_type=~\"$traffic_type\"}[1m])) by (le))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -717,7 +717,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_server_request_latency_bucket[1m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(rate(linera_server_request_latency_bucket{traffic_type=~\"$traffic_type\"}[1m])) by (le))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -813,7 +813,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_server_request_latency_bucket[1m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_server_request_latency_bucket{traffic_type=~\"$traffic_type\"}[1m])) by (le))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -925,7 +925,7 @@
           "disableTextWrap": false,
           "editorMode": "builder",
           "exemplar": false,
-          "expr": "rate(block_execution_latency_bucket{service=\"shards\"}[$__rate_interval])",
+          "expr": "rate(linera_block_execution_latency_bucket{job=\"linera-shard\"}[$__rate_interval])",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "instant": false,
@@ -940,8 +940,8 @@
     },
     {
       "datasource": {
-        "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -990,24 +990,22 @@
       "pluginVersion": "11.2.0",
       "targets": [
         {
+          "refId": "A",
           "datasource": {
-            "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
+            "type": "prometheus",
+            "uid": "prometheus"
           },
-          "editorMode": "code",
-          "expr": "sum by (pod) (count_over_time({app=\"shards\"} |= `OpenChain` [24h]))",
-          "legendFormat": "{{pod}}",
-          "queryType": "range",
-          "refId": "A"
+          "expr": "sum by (shard) (linera_open_chain_count{job=\"linera-shard\"})",
+          "legendFormat": "shard {{shard}}"
         }
       ],
-      "title": "Chains per Shard (24h)",
+      "title": "Open Chains per Shard",
       "type": "gauge"
     },
     {
       "datasource": {
-        "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "description": "Shard and proxy panics",
       "fieldConfig": {
@@ -1058,38 +1056,251 @@
       "pluginVersion": "11.2.0",
       "targets": [
         {
+          "refId": "A",
           "datasource": {
-            "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
+            "type": "prometheus",
+            "uid": "prometheus"
           },
-          "editorMode": "builder",
-          "expr": "{app=\"shards\"} |= `panic`",
-          "queryType": "range",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
-          },
-          "editorMode": "builder",
-          "expr": "{app=\"proxy\"} |= `panic`",
-          "hide": false,
-          "queryType": "range",
-          "refId": "B"
+          "expr": "up{job=~\"linera-.*\"}",
+          "legendFormat": "{{job}} {{instance}} {{shard}}"
         }
       ],
-      "title": "Panics",
+      "title": "Service Up (a panicking process flaps here)",
       "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 51
+      },
+      "id": 100,
+      "panels": [],
+      "title": "Errors by Type",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Proxy gRPC request errors split by error_type label (gRPC status code). Empty/missing label is bucketed as `_no_label`.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 52
+      },
+      "id": 101,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (error_type) (label_replace(rate(linera_proxy_request_error{traffic_type=~\"$traffic_type\"}[1m]), \"error_type\", \"_no_label\", \"error_type\", \"\"))",
+          "legendFormat": "{{error_type}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Proxy Errors by error_type",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Server request errors split by error_type label (qualified Rust error variant: WorkerError::, ChainError::, ExecutionError::). Empty/missing label is bucketed as `_no_label`.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 52
+      },
+      "id": 102,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (error_type) (label_replace(rate(linera_server_request_error{traffic_type=~\"$traffic_type\"}[1m]), \"error_type\", \"_no_label\", \"error_type\", \"\"))",
+          "legendFormat": "{{error_type}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Server Errors by error_type",
+      "type": "timeseries"
     }
   ],
-  "refresh": "5s",
+  "refresh": "10s",
   "schemaVersion": 39,
   "tags": [
     "linera"
   ],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(linera_proxy_request_count, traffic_type)",
+        "includeAll": true,
+        "label": "Traffic Type",
+        "multi": true,
+        "name": "traffic_type",
+        "options": [],
+        "query": "label_values(linera_proxy_request_count, traffic_type)",
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
+      }
+    ]
   },
   "time": {
     "from": "now-7d",

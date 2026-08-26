@@ -4,6 +4,9 @@
 //! This module manages the execution of the system application and the user applications in a
 //! Linera chain.
 
+#![deny(missing_docs)]
+
+/// The committee of validators and their voting weights for an epoch.
 pub mod committee;
 pub mod evm;
 mod execution;
@@ -13,7 +16,9 @@ mod graphql;
 mod policy;
 mod resources;
 mod runtime;
+/// The system application implementing core chain functionality.
 pub mod system;
+/// Helpers for writing tests that exercise the execution layer.
 #[cfg(with_testing)]
 pub mod test_utils;
 mod transaction_tracker;
@@ -37,7 +42,7 @@ use linera_base::{
         Bytecode, DecompressionError, Epoch, NetworkDescription, SendMessageRequest, StreamUpdate,
         Timestamp,
     },
-    doc_scalar, ensure, hex_debug, http,
+    doc_scalar, hex_debug, http,
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, DataBlobHash, EventId,
         GenericApplicationId, ModuleId, StreamId, StreamName,
@@ -65,7 +70,7 @@ pub use crate::wasm::{
     ServiceRuntimeApi, WasmContractModule, WasmExecutionError, WasmServiceModule,
 };
 pub use crate::{
-    committee::Committee,
+    committee::{Committee, SharedCommittees},
     execution::{ExecutionStateView, ServiceRuntimeEndpoint},
     execution_state_actor::{ExecutionRequest, ExecutionStateActor},
     policy::ResourceControlPolicy,
@@ -83,6 +88,8 @@ pub use crate::{
 /// The `Linera.sol` library code to be included in solidity smart
 /// contracts using Linera features.
 pub const LINERA_SOL: &str = include_str!("../solidity/Linera.sol");
+/// The `LineraTypes.sol` library code defining the Solidity types used to
+/// interface with Linera features.
 pub const LINERA_TYPES_SOL: &str = include_str!("../solidity/LineraTypes.sol");
 
 /// The maximum length of a stream name.
@@ -93,6 +100,19 @@ const MAX_STREAM_NAME_LEN: usize = 64;
 /// returned to be all zeros.
 // Note: testnet-only! This should not survive to mainnet.
 pub const FLAG_ZERO_HASH: &str = "FLAG_ZERO_HASH.linera.network";
+/// The flag that, if present in `http_request_allow_list` field of the content policy of the
+/// current committee, switches the execution-state hash to *historical hashing*: the first block
+/// after activation seeds the rolling hash from a full content hash (via `HashableView`), and
+/// every subsequent block extends it cheaply from the written batch. Takes effect only when
+/// `FLAG_ZERO_HASH` is absent. Enforced in consensus.
+// Note: testnet-only! This should not survive to mainnet.
+pub const FLAG_HISTORICAL_HASH: &str = "FLAG_HISTORICAL_HASH.linera.network";
+/// Like [`FLAG_HISTORICAL_HASH`], but in *shadow* mode: the rolling historical hash is computed,
+/// persisted and logged, yet the state hash reported to consensus stays all-zeros. This lets a
+/// network populate and cross-check historical hashes across validators (comparing the logged
+/// values) before enforcing them. Ignored if `FLAG_ZERO_HASH` or `FLAG_HISTORICAL_HASH` is present.
+// Note: testnet-only! This should not survive to mainnet.
+pub const FLAG_HISTORICAL_HASH_SHADOW: &str = "FLAG_HISTORICAL_HASH_SHADOW.linera.network";
 /// The flag that deactivates charging for bouncing messages. If this is present, outgoing
 /// messages are free of charge if they are bouncing, and operation outcomes are counted only
 /// by payload size, so that rejecting messages is free.
@@ -124,6 +144,7 @@ pub type UserServiceInstance = Box<dyn UserService>;
 
 /// A factory trait to obtain a [`UserContract`] from a [`UserContractModule`]
 pub trait UserContractModule: dyn_clone::DynClone + Any + web_thread::Post + Send + Sync {
+    /// Instantiates the contract with the given runtime handle.
     fn instantiate(
         &self,
         runtime: ContractSyncRuntimeHandle,
@@ -140,6 +161,7 @@ dyn_clone::clone_trait_object!(UserContractModule);
 
 /// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
 pub trait UserServiceModule: dyn_clone::DynClone + Any + web_thread::Post + Send + Sync {
+    /// Instantiates the service with the given runtime handle.
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntimeHandle,
@@ -172,6 +194,7 @@ impl UserContractCode {
     }
 }
 
+/// A wrapper around a `Vec` that can be converted to and from a JavaScript array.
 pub struct JsVec<T>(pub Vec<T>);
 
 #[cfg(web)]
@@ -249,7 +272,8 @@ const _: () = {
 };
 
 /// A type for errors happening during execution.
-#[derive(Error, Debug)]
+#[derive(Error, Debug, strum::IntoStaticStr)]
+#[allow(missing_docs)]
 pub enum ExecutionError {
     #[error(transparent)]
     ViewError(#[from] ViewError),
@@ -334,8 +358,6 @@ pub enum ExecutionError {
     InvalidUrlForHttpRequest(#[from] url::ParseError),
     #[error("Worker thread failure: {0:?}")]
     Thread(#[from] web_thread::Error),
-    #[error("The chain being queried is not active {0}")]
-    InactiveChain(ChainId),
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
     #[error("Events not found: {0:?}")]
@@ -414,7 +436,6 @@ impl ExecutionError {
             | ExecutionError::BytecodeTooLarge
             | ExecutionError::UnauthorizedHttpRequest(_)
             | ExecutionError::InvalidUrlForHttpRequest(_)
-            | ExecutionError::InactiveChain(_)
             | ExecutionError::BlobsNotFound(_)
             | ExecutionError::EventsNotFound(_)
             | ExecutionError::InvalidHeaderName(_)
@@ -445,6 +466,13 @@ impl ExecutionError {
             | ExecutionError::InternalError(_)
             | ExecutionError::IoError(_) => true,
         }
+    }
+
+    /// Returns the qualified error variant name for the `error_type` metric label,
+    /// e.g. `"ExecutionError::BlobsNotFound"`.
+    pub fn error_type(&self) -> String {
+        let variant: &'static str = self.into();
+        format!("ExecutionError::{variant}")
     }
 
     /// Returns whether this error is caused by a per-block limit being exceeded.
@@ -520,120 +548,111 @@ impl Default for ExecutionRuntimeConfig {
 #[cfg_attr(not(web), async_trait)]
 #[cfg_attr(web, async_trait(?Send))]
 pub trait ExecutionRuntimeContext {
+    /// Returns the ID of the chain this context belongs to.
     fn chain_id(&self) -> ChainId;
 
+    /// Returns the thread pool used to run blocking work.
     fn thread_pool(&self) -> &Arc<ThreadPool>;
 
+    /// Returns the configuration options for the execution runtime.
     fn execution_runtime_config(&self) -> ExecutionRuntimeConfig;
 
+    /// Returns the cache of loaded user contracts.
     fn user_contracts(&self) -> &Arc<papaya::HashMap<ApplicationId, UserContractCode>>;
 
+    /// Returns the cache of loaded user services.
     fn user_services(&self) -> &Arc<papaya::HashMap<ApplicationId, UserServiceCode>>;
 
+    /// Loads the contract for the given application, instantiating it if necessary.
     async fn get_user_contract(
         &self,
         description: &ApplicationDescription,
         txn_tracker: &TransactionTracker,
     ) -> Result<UserContractCode, ExecutionError>;
 
+    /// Loads the service for the given application, instantiating it if necessary.
     async fn get_user_service(
         &self,
         description: &ApplicationDescription,
         txn_tracker: &TransactionTracker,
     ) -> Result<UserServiceCode, ExecutionError>;
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError>;
+    /// Returns the blob with the given ID, if it is available.
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Arc<Blob>>, ViewError>;
 
-    async fn get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
+    /// Returns the event with the given ID, if it is available.
+    async fn get_event(&self, event_id: EventId) -> Result<Option<Arc<Vec<u8>>>, ViewError>;
 
+    /// Returns the network description, if it is available.
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
 
-    /// Returns the committees for the epochs in the given range.
+    /// Returns the committees for the epochs in the given range. Delegates per-epoch
+    /// look-ups to [`Self::get_or_load_committee`] so the process-global cache is hit,
+    /// and surfaces any missing epochs as a single [`ExecutionError::EventsNotFound`].
     async fn get_committees(
         &self,
         epoch_range: RangeInclusive<Epoch>,
     ) -> Result<BTreeMap<Epoch, Committee>, ExecutionError> {
-        let net_description = self
-            .get_network_description()
-            .await?
-            .ok_or(ExecutionError::NoNetworkDescriptionFound)?;
-        let committee_hashes = futures::future::join_all(
-            (epoch_range.start().0..=epoch_range.end().0).map(|epoch| async move {
-                if epoch == 0 {
-                    // Genesis epoch is stored in NetworkDescription.
-                    Ok((epoch, net_description.genesis_committee_blob_hash))
-                } else {
-                    let event_id = EventId {
-                        chain_id: net_description.admin_chain_id,
-                        stream_id: StreamId::system(EPOCH_STREAM_NAME),
-                        index: epoch,
-                    };
-                    let event = self
-                        .get_event(event_id.clone())
-                        .await?
-                        .ok_or_else(|| ExecutionError::EventsNotFound(vec![event_id]))?;
-                    Ok((epoch, bcs::from_bytes(&event)?))
+        let mut committees = BTreeMap::new();
+        let mut missing = Vec::new();
+        for index in epoch_range.start().0..=epoch_range.end().0 {
+            let epoch = Epoch(index);
+            match self.get_or_load_committee(epoch).await? {
+                Some(committee) => {
+                    committees.insert(epoch, (*committee).clone());
                 }
-            }),
-        )
-        .await;
-        let missing_events = committee_hashes
-            .iter()
-            .filter_map(|result| {
-                if let Err(ExecutionError::EventsNotFound(event_ids)) = result {
-                    return Some(event_ids);
-                }
-                None
-            })
-            .flatten()
-            .cloned()
-            .collect::<Vec<_>>();
-        ensure!(
-            missing_events.is_empty(),
-            ExecutionError::EventsNotFound(missing_events)
-        );
-        let committee_hashes = committee_hashes
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()?;
-        let committees = futures::future::join_all(committee_hashes.into_iter().map(
-            |(epoch, committee_hash)| async move {
-                let blob_id = BlobId::new(committee_hash, BlobType::Committee);
-                let committee_blob = self
-                    .get_blob(blob_id)
-                    .await?
-                    .ok_or_else(|| ExecutionError::BlobsNotFound(vec![blob_id]))?;
-                Ok((Epoch(epoch), bcs::from_bytes(committee_blob.bytes())?))
-            },
-        ))
-        .await;
-        let missing_blobs = committees
-            .iter()
-            .filter_map(|result| {
-                if let Err(ExecutionError::BlobsNotFound(blob_ids)) = result {
-                    return Some(blob_ids);
-                }
-                None
-            })
-            .flatten()
-            .cloned()
-            .collect::<Vec<_>>();
-        ensure!(
-            missing_blobs.is_empty(),
-            ExecutionError::BlobsNotFound(missing_blobs)
-        );
-        committees.into_iter().collect()
+                None => missing.push(epoch),
+            }
+        }
+        if !missing.is_empty() {
+            let net_description = self
+                .get_network_description()
+                .await?
+                .ok_or(ExecutionError::NoNetworkDescriptionFound)?;
+            let event_ids = missing
+                .into_iter()
+                .map(|epoch| EventId {
+                    chain_id: net_description.admin_chain_id,
+                    stream_id: StreamId::system(EPOCH_STREAM_NAME),
+                    index: epoch.0,
+                })
+                .collect();
+            return Err(ExecutionError::EventsNotFound(event_ids));
+        }
+        Ok(committees)
     }
 
+    /// Returns the committee for `epoch`, consulting the shared cache first. On a miss,
+    /// loads the `NewCommittee` event and the committee blob from storage and memoizes
+    /// the result. Returns `Ok(None)` if the network description, the event, or the
+    /// blob is not available locally.
+    ///
+    /// Determinism during block execution: call sites inside the runtime must only ask
+    /// for epochs up to and including the chain's current epoch (`self.epoch.get()`).
+    /// The chain-state invariant guarantees that every such committee is knowable (either
+    /// in the shared cache, in storage, or — for the chain's current epoch during a block
+    /// that just created it — in the pending update on the chain's own `committees`
+    /// view). Queries for strictly greater epochs read from a mutable process-wide cache
+    /// and are not deterministic.
+    async fn get_or_load_committee(
+        &self,
+        epoch: Epoch,
+    ) -> Result<Option<Arc<Committee>>, ViewError>;
+
+    /// Returns whether a blob with the given ID is available.
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
+    /// Returns whether an event with the given ID is available.
     async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError>;
 
+    /// Adds the given blobs to the context, for use in tests.
     #[cfg(with_testing)]
     async fn add_blobs(
         &self,
         blobs: impl IntoIterator<Item = Blob> + Send,
     ) -> Result<(), ViewError>;
 
+    /// Adds the given events to the context, for use in tests.
     #[cfg(with_testing)]
     async fn add_events(
         &self,
@@ -641,6 +660,7 @@ pub trait ExecutionRuntimeContext {
     ) -> Result<(), ViewError>;
 }
 
+/// The context in which an operation is executed.
 #[derive(Clone, Copy, Debug)]
 pub struct OperationContext {
     /// The current chain ID.
@@ -656,6 +676,7 @@ pub struct OperationContext {
     pub timestamp: Timestamp,
 }
 
+/// The context in which a message is executed.
 #[derive(Clone, Copy, Debug)]
 pub struct MessageContext {
     /// The current chain ID.
@@ -678,6 +699,7 @@ pub struct MessageContext {
     pub timestamp: Timestamp,
 }
 
+/// The context in which stream updates are processed.
 #[derive(Clone, Copy, Debug)]
 pub struct ProcessStreamsContext {
     /// The current chain ID.
@@ -712,6 +734,7 @@ impl From<OperationContext> for ProcessStreamsContext {
     }
 }
 
+/// The context in which a transaction is finalized.
 #[derive(Clone, Copy, Debug)]
 pub struct FinalizeContext {
     /// The current chain ID.
@@ -725,6 +748,7 @@ pub struct FinalizeContext {
     pub round: Option<u32>,
 }
 
+/// The context in which a query is executed.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct QueryContext {
     /// The current chain ID.
@@ -735,13 +759,21 @@ pub struct QueryContext {
     pub local_time: Timestamp,
 }
 
+/// The runtime API shared by the contract and service parts of an application.
 pub trait BaseRuntime {
+    /// The pending result of a generic read.
     type Read: fmt::Debug + Send + Sync;
+    /// The pending result of a key existence check.
     type ContainsKey: fmt::Debug + Send + Sync;
+    /// The pending result of a multi-key existence check.
     type ContainsKeys: fmt::Debug + Send + Sync;
+    /// The pending result of reading the values for multiple keys.
     type ReadMultiValuesBytes: fmt::Debug + Send + Sync;
+    /// The pending result of reading the value for a single key.
     type ReadValueBytes: fmt::Debug + Send + Sync;
+    /// The pending result of finding the keys with a given prefix.
     type FindKeysByPrefix: fmt::Debug + Send + Sync;
+    /// The pending result of finding the key-value pairs with a given prefix.
     type FindKeyValuesByPrefix: fmt::Debug + Send + Sync;
 
     /// The current chain ID.
@@ -924,6 +956,7 @@ pub trait BaseRuntime {
     fn send_log(&mut self, message: String, level: tracing::log::Level);
 }
 
+/// The runtime API available to the service part of an application.
 pub trait ServiceRuntime: BaseRuntime {
     /// Queries another application.
     fn try_query_application(
@@ -939,6 +972,7 @@ pub trait ServiceRuntime: BaseRuntime {
     fn check_execution_time(&mut self) -> Result<(), ExecutionError>;
 }
 
+/// The runtime API available to the contract part of an application.
 pub trait ContractRuntime: BaseRuntime {
     /// The authenticated signer for this execution, if there is one.
     fn authenticated_signer(&mut self) -> Result<Option<AccountOwner>, ExecutionError>;
@@ -1083,7 +1117,9 @@ pub enum Operation {
     System(Box<SystemOperation>),
     /// A user operation (in serialized form).
     User {
+        /// The ID of the application this operation targets.
         application_id: ApplicationId,
+        /// The serialized operation.
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -1101,7 +1137,9 @@ pub enum Message {
     System(SystemMessage),
     /// A user message (in serialized form).
     User {
+        /// The ID of the application this message targets.
         application_id: ApplicationId,
+        /// The serialized message.
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -1115,7 +1153,9 @@ pub enum Query {
     System(SystemQuery),
     /// A user query (in serialized form).
     User {
+        /// The ID of the application this query targets.
         application_id: ApplicationId,
+        /// The serialized query.
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -1125,7 +1165,9 @@ pub enum Query {
 /// The outcome of the execution of a query.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct QueryOutcome<Response = QueryResponse> {
+    /// The response returned by the query.
     pub response: Response,
+    /// The operations scheduled by the query, to be included in the next block.
     pub operations: Vec<Operation>,
 }
 
@@ -1255,6 +1297,7 @@ impl OperationContext {
     }
 }
 
+/// An in-memory [`ExecutionRuntimeContext`] implementation used in tests.
 #[cfg(with_testing)]
 #[derive(Clone)]
 pub struct TestExecutionRuntimeContext {
@@ -1269,6 +1312,7 @@ pub struct TestExecutionRuntimeContext {
 
 #[cfg(with_testing)]
 impl TestExecutionRuntimeContext {
+    /// Creates a new test execution runtime context for the given chain.
     pub fn new(chain_id: ChainId, execution_runtime_config: ExecutionRuntimeConfig) -> Self {
         Self {
             chain_id,
@@ -1336,12 +1380,12 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .clone())
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
-        Ok(self.blobs.pin().get(&blob_id).cloned())
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Arc<Blob>>, ViewError> {
+        Ok(self.blobs.pin().get(&blob_id).cloned().map(Arc::new))
     }
 
-    async fn get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
-        Ok(self.events.pin().get(&event_id).cloned())
+    async fn get_event(&self, event_id: EventId) -> Result<Option<Arc<Vec<u8>>>, ViewError> {
+        Ok(self.events.pin().get(&event_id).cloned().map(Arc::new))
     }
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
@@ -1360,6 +1404,37 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             genesis_committee_blob_hash,
             name: "dummy network description".to_string(),
         }))
+    }
+
+    async fn get_or_load_committee(
+        &self,
+        epoch: Epoch,
+    ) -> Result<Option<Arc<Committee>>, ViewError> {
+        // No caching here — tests rarely load the same committee twice, and they don't
+        // benefit from the process-wide deduplication that `SharedCommittees` provides
+        // in production.
+        let Some(net_description) = self.get_network_description().await? else {
+            return Ok(None);
+        };
+        let blob_hash = if epoch.0 == 0 {
+            net_description.genesis_committee_blob_hash
+        } else {
+            let event_id = EventId {
+                chain_id: net_description.admin_chain_id,
+                stream_id: StreamId::system(EPOCH_STREAM_NAME),
+                index: epoch.0,
+            };
+            match self.get_event(event_id).await? {
+                Some(bytes) => bcs::from_bytes(&bytes)?,
+                None => return Ok(None),
+            }
+        };
+        let blob_id = BlobId::new(blob_hash, BlobType::Committee);
+        let Some(blob) = self.get_blob(blob_id).await? else {
+            return Ok(None);
+        };
+        let committee: Committee = bcs::from_bytes(blob.bytes())?;
+        Ok(Some(Arc::new(committee)))
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
@@ -1404,6 +1479,7 @@ impl From<SystemOperation> for Operation {
 }
 
 impl Operation {
+    /// Creates a new system operation.
     pub fn system(operation: SystemOperation) -> Self {
         Operation::System(Box::new(operation))
     }
@@ -1439,6 +1515,7 @@ impl Operation {
         }
     }
 
+    /// Returns the ID of the application this operation targets.
     pub fn application_id(&self) -> GenericApplicationId {
         match self {
             Self::System(_) => GenericApplicationId::System,
@@ -1481,6 +1558,7 @@ impl From<SystemMessage> for Message {
 }
 
 impl Message {
+    /// Creates a new system message.
     pub fn system(message: SystemMessage) -> Self {
         Message::System(message)
     }
@@ -1499,6 +1577,7 @@ impl Message {
         })
     }
 
+    /// Returns the ID of the application this message targets.
     pub fn application_id(&self) -> GenericApplicationId {
         match self {
             Self::System(_) => GenericApplicationId::System,
@@ -1514,6 +1593,7 @@ impl From<SystemQuery> for Query {
 }
 
 impl Query {
+    /// Creates a new system query.
     pub fn system(query: SystemQuery) -> Self {
         Query::System(query)
     }
@@ -1538,6 +1618,7 @@ impl Query {
         })
     }
 
+    /// Returns the ID of the application this query targets.
     pub fn application_id(&self) -> GenericApplicationId {
         match self {
             Self::System(_) => GenericApplicationId::System,
@@ -1576,6 +1657,7 @@ pub struct BlobState {
 /// The runtime to use for running the application.
 #[derive(Clone, Copy, Display)]
 #[cfg_attr(with_wasm_runtime, derive(Debug, Default))]
+#[allow(missing_docs)]
 pub enum WasmRuntime {
     #[cfg(with_wasmer)]
     #[default]
@@ -1587,8 +1669,10 @@ pub enum WasmRuntime {
     Wasmtime,
 }
 
+/// The runtime to use for running EVM smart contracts.
 #[derive(Clone, Copy, Display)]
 #[cfg_attr(with_revm, derive(Debug, Default))]
+#[allow(missing_docs)]
 pub enum EvmRuntime {
     #[cfg(with_revm)]
     #[default]
@@ -1598,6 +1682,7 @@ pub enum EvmRuntime {
 
 /// Trait used to select a default `WasmRuntime`, if one is available.
 pub trait WithWasmDefault {
+    /// Returns the default `WasmRuntime` if one is available, otherwise leaves the value unchanged.
     fn with_wasm_default(self) -> Self;
 }
 
@@ -1639,3 +1724,20 @@ doc_scalar!(
     "A message to be sent and possibly executed in the receiver's block."
 );
 doc_scalar!(MessageKind, "The kind of outgoing message being sent");
+
+/// Registers every metric this crate declares.
+///
+/// Without this, a metric is only exported after the code path that observes it has run, so a
+/// rarely-taken path leaves its panels blank and makes a routine restart look like the metric
+/// was removed.
+#[cfg(with_metrics)]
+pub fn init_metrics() {
+    linera_base::init_metrics();
+    linera_views::init_metrics();
+    #[cfg(with_revm)]
+    evm::revm::metrics::init_metrics();
+    execution_state_actor::metrics::init_metrics();
+    system::metrics::init_metrics();
+    #[cfg(with_wasm_runtime)]
+    wasm::metrics::init_metrics();
+}

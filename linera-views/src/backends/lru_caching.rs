@@ -18,86 +18,75 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::register_int_counter_vec;
     use prometheus::IntCounterVec;
 
-    /// The total number of cache read value misses.
-    pub static READ_VALUE_CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "num_read_value_cache_miss",
-            "Number of read value cache misses",
-            &[],
-        )
-    });
+    linera_base::declare_metrics! {
+        /// The total number of cache read value misses.
+        pub static READ_VALUE_CACHE_MISS_COUNT: IntCounterVec =
+            register_int_counter_vec(
+                "num_read_value_cache_miss",
+                "Number of read value cache misses",
+                &[],
+            );
 
-    /// The total number of read value cache hits.
-    pub static READ_VALUE_CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "num_read_value_cache_hits",
-            "Number of read value cache hits",
-            &[],
-        )
-    });
+        /// The total number of read value cache hits.
+        pub static READ_VALUE_CACHE_HIT_COUNT: IntCounterVec =
+            register_int_counter_vec(
+                "num_read_value_cache_hits",
+                "Number of read value cache hits",
+                &[],
+            );
 
-    /// The total number of contains key cache misses.
-    pub static CONTAINS_KEY_CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "num_contains_key_cache_miss",
-            "Number of contains key cache misses",
-            &[],
-        )
-    });
+        /// The total number of contains key cache misses.
+        pub static CONTAINS_KEY_CACHE_MISS_COUNT: IntCounterVec =
+            register_int_counter_vec(
+                "num_contains_key_cache_miss",
+                "Number of contains key cache misses",
+                &[],
+            );
 
-    /// The total number of contains key cache hits.
-    pub static CONTAINS_KEY_CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "num_contains_key_cache_hit",
-            "Number of contains key cache hits",
-            &[],
-        )
-    });
+        /// The total number of contains key cache hits.
+        pub static CONTAINS_KEY_CACHE_HIT_COUNT: IntCounterVec =
+            register_int_counter_vec(
+                "num_contains_key_cache_hit",
+                "Number of contains key cache hits",
+                &[],
+            );
 
-    /// The total number of find_keys_by_prefix cache misses.
-    pub static FIND_KEYS_BY_PREFIX_CACHE_MISS_COUNT: LazyLock<IntCounterVec> =
-        LazyLock::new(|| {
+        /// The total number of find_keys_by_prefix cache misses.
+        pub static FIND_KEYS_BY_PREFIX_CACHE_MISS_COUNT: IntCounterVec =
             register_int_counter_vec(
                 "num_find_keys_by_prefix_cache_miss",
                 "Number of find keys by prefix cache misses",
                 &[],
-            )
-        });
+            );
 
-    /// The total number of find_keys_by_prefix cache hits.
-    pub static FIND_KEYS_BY_PREFIX_CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "num_find_keys_by_prefix_cache_hit",
-            "Number of find keys by prefix cache hits",
-            &[],
-        )
-    });
+        /// The total number of find_keys_by_prefix cache hits.
+        pub static FIND_KEYS_BY_PREFIX_CACHE_HIT_COUNT: IntCounterVec =
+            register_int_counter_vec(
+                "num_find_keys_by_prefix_cache_hit",
+                "Number of find keys by prefix cache hits",
+                &[],
+            );
 
-    /// The total number of find_key_values_by_prefix cache misses.
-    pub static FIND_KEY_VALUES_BY_PREFIX_CACHE_MISS_COUNT: LazyLock<IntCounterVec> =
-        LazyLock::new(|| {
+        /// The total number of find_key_values_by_prefix cache misses.
+        pub static FIND_KEY_VALUES_BY_PREFIX_CACHE_MISS_COUNT: IntCounterVec =
             register_int_counter_vec(
                 "num_find_key_values_by_prefix_cache_miss",
                 "Number of find key values by prefix cache misses",
                 &[],
-            )
-        });
+            );
 
-    /// The total number of find_key_values_by_prefix cache hits.
-    pub static FIND_KEY_VALUES_BY_PREFIX_CACHE_HIT_COUNT: LazyLock<IntCounterVec> =
-        LazyLock::new(|| {
+        /// The total number of find_key_values_by_prefix cache hits.
+        pub static FIND_KEY_VALUES_BY_PREFIX_CACHE_HIT_COUNT: IntCounterVec =
             register_int_counter_vec(
                 "num_find_key_values_by_prefix_cache_hit",
                 "Number of find key values by prefix cache hits",
                 &[],
-            )
-        });
+            );
+    }
 }
 
 /// The maximum number of entries in the cache.
@@ -409,12 +398,8 @@ where
 
     fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {
         let store = self.database.open_shared(root_key)?;
-        let store = LruCachingStore::new(
-            store,
-            self.config.clone(),
-            /* has_exclusive_access */ false,
-        );
-        Ok(store)
+        // Caching for immutable data is handled in DbStorage.
+        Ok(LruCachingStore { store, cache: None })
     }
 
     fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, Self::Error> {

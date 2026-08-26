@@ -1,0 +1,43 @@
+#!/bin/sh
+set -e
+
+# If the first argument is "serve" with no other args, build CLI from env vars.
+# Otherwise, pass everything through as-is (supports "sh -c ...", direct CLI usage, etc).
+if [ "$1" != "serve" ]; then
+    exec "$@"
+fi
+
+# Build the CLI invocation from environment variables.
+shift  # consume "serve"
+
+set -- linera-bridge serve \
+    --rpc-url="${RPC_URL:?RPC_URL is required}" \
+    --evm-bridge-address="${EVM_BRIDGE_ADDRESS:?EVM_BRIDGE_ADDRESS is required}" \
+    --linera-bridge-address="${LINERA_BRIDGE_APP:?LINERA_BRIDGE_APP is required}" \
+    --linera-fungible-address="${LINERA_FUNGIBLE_APP:?LINERA_FUNGIBLE_APP is required}" \
+    --evm-private-key="${EVM_PRIVATE_KEY:?EVM_PRIVATE_KEY is required}" \
+    --linera-bridge-chain-id="${LINERA_BRIDGE_CHAIN_ID:?LINERA_BRIDGE_CHAIN_ID is required}" \
+    --linera-bridge-chain-owner="${LINERA_BRIDGE_CHAIN_OWNER:?LINERA_BRIDGE_CHAIN_OWNER is required}" \
+    --port="${PORT:-3001}" \
+    --monitor-scan-interval="${MONITOR_SCAN_INTERVAL:-30}" \
+    --monitor-start-block="${MONITOR_START_BLOCK:-0}" \
+    --max-retries="${MAX_RETRIES:-10}" \
+    --max-log-block-range="${MAX_LOG_BLOCK_RANGE:-2000}" \
+    --blob-cache-size="${BLOB_CACHE_SIZE:-1000}" \
+    --confirmed-block-cache-size="${CONFIRMED_BLOCK_CACHE_SIZE:-1000}" \
+    --certificate-cache-size="${CERTIFICATE_CACHE_SIZE:-1000}" \
+    --certificate-raw-cache-size="${CERTIFICATE_RAW_CACHE_SIZE:-1000}" \
+    --event-cache-size="${EVENT_CACHE_SIZE:-1000}"
+
+# Optional: override the EVM receipt poll interval. Only pass the flag when set,
+# so an unset env keeps clap's default (alloy's host-based interval). Useful
+# against a local node reached by a non-loopback host (e.g. Docker `anvil`),
+# which alloy otherwise treats as remote and polls every 7s.
+if [ -n "${EVM_POLL_INTERVAL_MS:-}" ]; then
+    set -- "$@" --evm-poll-interval-ms="$EVM_POLL_INTERVAL_MS"
+fi
+
+# LINERA_WALLET, LINERA_KEYSTORE, LINERA_STORAGE are read directly by clap
+# via `env = "..."`, so they don't need explicit --flags here.
+
+exec "$@"

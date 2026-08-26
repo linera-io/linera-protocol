@@ -3,7 +3,9 @@
 
 use std::sync::Arc;
 
-use futures::{Future, StreamExt as _, TryStreamExt as _};
+#[cfg(not(web))]
+use futures::StreamExt as _;
+use futures::{Future, TryStreamExt as _};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{ChainDescription, Epoch, Timestamp},
@@ -14,7 +16,7 @@ use linera_base::{
 };
 use linera_chain::{manager::LockingBlock, types::ConfirmedBlockCertificate};
 use linera_core::{
-    client::{ChainClient, ChainClientError, Client, ListeningMode},
+    client::{chain_client, ChainClient, Client, ListeningMode},
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome},
     join_set_ext::JoinSet,
     node::ValidatorNode,
@@ -23,7 +25,6 @@ use linera_core::{
 use linera_rpc::node_provider::{NodeOptions, NodeProvider};
 use linera_storage::Storage as _;
 use linera_version::VersionInfo;
-use thiserror_context::Context;
 use tracing::{debug, info, warn};
 #[cfg(not(web))]
 use {
@@ -100,13 +101,13 @@ impl ValidatorQueryResults {
         reference: Option<&ValidatorQueryResults>,
     ) {
         if let Some(key) = public_key {
-            println!("Public key: {}", key);
+            println!("Public key: {key}");
         }
         if let Some(address) = address {
-            println!("Address: {}", address);
+            println!("Address: {address}");
         }
         if let Some(w) = weight {
-            println!("Weight: {}", w);
+            println!("Weight: {w}");
         }
 
         let ref_version = reference.and_then(|ref_results| ref_results.version_info.as_ref().ok());
@@ -157,7 +158,7 @@ impl ValidatorQueryResults {
             Ok(info) => {
                 if ref_info.is_none_or(|ref_info| info.block_hash != ref_info.block_hash) {
                     if let Some(hash) = info.block_hash {
-                        println!("Block hash: {}", hash);
+                        println!("Block hash: {hash}");
                     } else {
                         println!("Block hash: None");
                     }
@@ -177,6 +178,9 @@ impl ValidatorQueryResults {
                     info.manager.current_round != ref_info.manager.current_round
                 }) {
                     println!("Round: {}", info.manager.current_round);
+                }
+                if let Some(leader) = info.manager.leader {
+                    println!("Leader: {leader}");
                 }
                 if let Some(locking) = &info.manager.requested_locking {
                     match &**locking {
@@ -199,21 +203,34 @@ impl ValidatorQueryResults {
             }
             Err(err) => println!("Error getting chain info: {err}"),
         }
+        println!();
     }
 }
 
+/// The state shared by the client commands: the core client, wallet configuration, and
+/// network timeouts.
 pub struct ClientContext<Env: Environment> {
+    /// The core client used to interact with chains and validators.
     pub client: Arc<Client<Env>>,
+    /// The genesis configuration of the network.
     // TODO(#5083): this doesn't really need to be stored
     pub genesis_config: crate::config::GenesisConfig,
+    /// The timeout for sending requests to validators.
     pub send_timeout: Duration,
+    /// The timeout for receiving responses from validators.
     pub recv_timeout: Duration,
+    /// The delay before retrying a failed request to a validator.
     pub retry_delay: Duration,
+    /// The maximum number of times to retry a failed request to a validator.
     pub max_retries: u32,
+    /// The maximum backoff between retries of a failed request to a validator.
     pub max_backoff: Duration,
+    /// The set of background tasks listening for chain notifications.
     pub chain_listeners: JoinSet,
+    /// The default chain used when no chain is explicitly specified.
     // TODO(#5082): move this into the upstream UI layers (maybe just the CLI)
     pub default_chain: Option<ChainId>,
+    /// The metrics collector, if metrics collection is enabled.
     #[cfg(not(web))]
     pub client_metrics: Option<ClientMetrics>,
 }
@@ -254,8 +271,10 @@ impl<Env: Environment> chain_listener::ClientContext for ClientContext<Env> {
             .await
     }
 
-    async fn update_wallet(&mut self, client: &ChainClient<Env>) -> Result<(), Error> {
-        self.update_wallet_from_client(client).make_sync().await
+    async fn update_wallet(&mut self, chain_client: &ChainClient<Env>) -> Result<(), Error> {
+        self.update_wallet_from_client(chain_client)
+            .make_sync()
+            .await
     }
 }
 
@@ -268,7 +287,8 @@ where
     // not worth refactoring this because
     // https://github.com/linera-io/linera-protocol/issues/5082
     // https://github.com/linera-io/linera-protocol/issues/5083
-    #[allow(clippy::too_many_arguments)]
+    /// Creates a new client context from the given storage, wallet, signer, and options.
+    #[expect(clippy::too_many_arguments)]
     pub async fn new(
         storage: S,
         wallet: W,
@@ -276,6 +296,8 @@ where
         options: &Options,
         default_chain: Option<ChainId>,
         genesis_config: GenesisConfig,
+        block_cache_size: usize,
+        execution_state_cache_size: usize,
     ) -> Result<Self, Error> {
         #[cfg(not(web))]
         let timing_config = options.to_timing_config();
@@ -291,7 +313,7 @@ where
             .map_ok(|(id, _chain)| (id, ListeningMode::FullChain))
             .try_collect()
             .await
-            .map_err(error::Inner::wallet)?;
+            .map_err(error::Error::wallet)?;
         let name = match chain_modes.len() {
             0 => "Client node".to_string(),
             1 => format!("Client node for {:.8}", chain_modes[0].0),
@@ -313,10 +335,13 @@ where
             options.long_lived_services,
             chain_modes,
             name,
-            options.chain_worker_ttl,
-            options.sender_chain_worker_ttl,
+            util::non_zero_duration(options.chain_worker_ttl),
+            util::non_zero_duration(options.sender_chain_worker_ttl),
+            options.cross_chain_batch_size_limit,
             options.to_chain_client_options(),
-            options.to_requests_scheduler_config(),
+            &options.to_requests_scheduler_config(),
+            block_cache_size,
+            execution_state_cache_size,
         );
 
         #[cfg(not(web))]
@@ -367,18 +392,23 @@ impl<Env: Environment> ClientContext<Env> {
             .expect("default chain requested but none set")
     }
 
+    /// Returns the lowest non-admin chain ID in the wallet.
     pub async fn first_non_admin_chain(&self) -> Result<ChainId, Error> {
         let admin_chain_id = self.admin_chain_id();
-        std::pin::pin!(self
+        let chain_ids = self
             .wallet()
             .chain_ids()
-            .try_filter(|chain_id| futures::future::ready(*chain_id != admin_chain_id)))
-        .next()
-        .await
-        .expect("No non-admin chain specified in wallet with no non-admin chain")
-        .map_err(Error::wallet)
+            .try_filter(|chain_id| futures::future::ready(*chain_id != admin_chain_id))
+            .try_collect::<Vec<ChainId>>()
+            .await
+            .map_err(Error::wallet)?;
+        Ok(chain_ids
+            .into_iter()
+            .min()
+            .expect("No non-admin chain specified in wallet with no non-admin chain"))
     }
 
+    /// Creates a node provider configured with this context's network options.
     // TODO(#5084) this should match the `NodeProvider` from the `Environment`
     pub fn make_node_provider(&self) -> NodeProvider {
         NodeProvider::new(self.make_node_options())
@@ -394,34 +424,42 @@ impl<Env: Environment> ClientContext<Env> {
         }
     }
 
+    /// Returns the client metrics, if metrics collection is enabled.
     #[cfg(not(web))]
     pub fn client_metrics(&self) -> Option<&ClientMetrics> {
         self.client_metrics.as_ref()
     }
 
+    /// Updates the wallet entry for the client's chain from its current chain info.
     pub async fn update_wallet_from_client<Env_: Environment>(
         &self,
-        client: &ChainClient<Env_>,
+        chain_client: &ChainClient<Env_>,
     ) -> Result<(), Error> {
-        let info = client.chain_info().await?;
+        let info = chain_client.chain_info().await?;
         let existing_owner = self
             .wallet()
             .get(info.chain_id)
             .await
-            .map_err(error::Inner::wallet)?
+            .map_err(error::Error::wallet)?
             .and_then(|chain| chain.owner);
 
+        // Only persist proposals that were made in the fast round: they need to be
+        // remembered across sessions to make sure there are no conflicting fast proposals.
+        let pending_proposal = chain_client
+            .pending_proposal()
+            .await
+            .filter(|p| p.round.is_some_and(|r| r.is_fast()));
         self.wallet()
             .insert(
                 info.chain_id,
                 wallet::Chain {
-                    pending_proposal: client.pending_proposal().clone(),
+                    pending_proposal,
                     owner: existing_owner,
                     ..info.as_ref().into()
                 },
             )
             .await
-            .map_err(error::Inner::wallet)?;
+            .map_err(error::Error::wallet)?;
 
         Ok(())
     }
@@ -440,7 +478,7 @@ impl<Env: Environment> ClientContext<Env> {
                 linera_core::wallet::Chain::new(owner, epoch, timestamp),
             )
             .await
-            .map_err(error::Inner::wallet)?;
+            .map_err(error::Error::wallet)?;
         Ok(())
     }
 
@@ -466,12 +504,13 @@ impl<Env: Environment> ClientContext<Env> {
                 ),
             )
             .await
-            .map_err(error::Inner::wallet)?;
+            .map_err(error::Error::wallet)?;
         self.client
             .extend_chain_mode(chain_id, ListeningMode::FullChain);
         Ok(())
     }
 
+    /// Processes the chain's inbox, waiting for round timeouts, and updates the wallet.
     pub async fn process_inbox(
         &mut self,
         chain_client: &ChainClient<Env>,
@@ -508,6 +547,7 @@ impl<Env: Environment> ClientContext<Env> {
         }
     }
 
+    /// Assigns the given chain to the owner, tracking it and recording it in the wallet.
     pub async fn assign_new_chain_to_key(
         &mut self,
         chain_id: ChainId,
@@ -515,14 +555,14 @@ impl<Env: Environment> ClientContext<Env> {
     ) -> Result<(), Error> {
         self.client
             .extend_chain_mode(chain_id, ListeningMode::FullChain);
-        let client = self.make_chain_client(chain_id).await?;
+        let chain_client = self.make_chain_client(chain_id).await?;
 
         // Ensure we have the chain description blob.
-        client.get_chain_description().await?;
+        chain_client.get_chain_description().await?;
 
         // Synchronize and get chain info.
-        client.synchronize_from_validators().await?;
-        let info = client.chain_info().await?;
+        chain_client.synchronize_from_validators().await?;
+        let info = chain_client.chain_info().await?;
 
         // Validate that the owner can propose on this chain (either as owner or via
         // open_multi_leader_rounds).
@@ -532,7 +572,7 @@ impl<Env: Environment> ClientContext<Env> {
             .can_propose_in_multi_leader_round(&owner)
         {
             tracing::error!("Chain {chain_id} is not owned by {owner}.");
-            return Err(error::Inner::ChainOwnership.into());
+            return Err(error::Error::ChainOwnership);
         }
 
         // Try to modify existing chain entry, setting the owner.
@@ -540,7 +580,7 @@ impl<Env: Environment> ClientContext<Env> {
             .wallet()
             .modify(chain_id, |chain| chain.owner = Some(owner))
             .await
-            .map_err(error::Inner::wallet)?;
+            .map_err(error::Error::wallet)?;
         // If the chain didn't exist, insert a new entry.
         if modified.is_none() {
             self.wallet()
@@ -554,8 +594,7 @@ impl<Env: Environment> ClientContext<Env> {
                     },
                 )
                 .await
-                .map_err(error::Inner::wallet)
-                .context("assigning new chain")?;
+                .map_err(|error| Error::AssignChain(Box::new(error)))?;
         }
         Ok(())
     }
@@ -566,7 +605,7 @@ impl<Env: Environment> ClientContext<Env> {
     /// timeout, it will wait and retry.
     pub async fn apply_client_command<E, F, Fut, T>(
         &mut self,
-        client: &ChainClient<Env>,
+        chain_client: &ChainClient<Env>,
         mut f: F,
     ) -> Result<T, Error>
     where
@@ -574,30 +613,30 @@ impl<Env: Environment> ClientContext<Env> {
         Fut: Future<Output = Result<ClientOutcome<T>, E>>,
         Error: From<E>,
     {
-        client.prepare_chain().await?;
+        chain_client.prepare_chain().await?;
         // Try applying f optimistically without validator notifications. Return if committed.
-        let result = f(client).await;
-        self.update_wallet_from_client(client).await?;
+        let result = f(chain_client).await;
+        self.update_wallet_from_client(chain_client).await?;
         match result? {
             ClientOutcome::Committed(t) => return Ok(t),
             ClientOutcome::Conflict(certificate) => {
-                return Err(ChainClientError::Conflict(certificate.hash()).into());
+                return Err(chain_client::Error::Conflict(certificate.hash()).into());
             }
             ClientOutcome::WaitForTimeout(_) => {}
         }
 
         // Start listening for notifications, so we learn about new rounds and blocks.
-        let (listener, _listen_handle, mut notification_stream) = client.listen().await?;
+        let (listener, _listen_handle, mut notification_stream) = chain_client.listen().await?;
         self.chain_listeners.spawn_task(listener);
 
         loop {
             // Try applying f. Return if committed.
-            let result = f(client).await;
-            self.update_wallet_from_client(client).await?;
+            let result = f(chain_client).await;
+            self.update_wallet_from_client(chain_client).await?;
             let timeout = match result? {
                 ClientOutcome::Committed(t) => return Ok(t),
                 ClientOutcome::Conflict(certificate) => {
-                    return Err(ChainClientError::Conflict(certificate.hash()).into());
+                    return Err(chain_client::Error::Conflict(certificate.hash()).into());
                 }
                 ClientOutcome::WaitForTimeout(timeout) => timeout,
             };
@@ -606,13 +645,15 @@ impl<Env: Environment> ClientContext<Env> {
         }
     }
 
+    /// Returns the ownership configuration of the given chain.
     pub async fn ownership(&mut self, chain_id: Option<ChainId>) -> Result<ChainOwnership, Error> {
         let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
-        let client = self.make_chain_client(chain_id).await?;
-        let info = client.chain_info().await?;
+        let chain_client = self.make_chain_client(chain_id).await?;
+        let info = chain_client.chain_info().await?;
         Ok(info.manager.ownership)
     }
 
+    /// Changes the ownership configuration of the given chain.
     pub async fn change_ownership(
         &mut self,
         chain_id: Option<ChainId>,
@@ -630,7 +671,7 @@ impl<Env: Environment> ClientContext<Env> {
 
         if ownership.super_owners.is_empty() && ownership.owners.is_empty() {
             tracing::error!("At least one owner or super owner of the chain has to be set.");
-            return Err(error::Inner::ChainOwnership.into());
+            return Err(error::Error::ChainOwnership);
         }
 
         let certificate = self
@@ -641,8 +682,7 @@ impl<Env: Environment> ClientContext<Env> {
                     chain_client
                         .change_ownership(ownership)
                         .await
-                        .map_err(Error::from)
-                        .context("Failed to change ownership")
+                        .map_err(|error| Error::ChangeOwnership(Box::new(error)))
                 }
             })
             .await?;
@@ -652,6 +692,7 @@ impl<Env: Environment> ClientContext<Env> {
         Ok(())
     }
 
+    /// Sets the preferred owner used to propose blocks on the given chain.
     pub async fn set_preferred_owner(
         &mut self,
         chain_id: Option<ChainId>,
@@ -667,6 +708,7 @@ impl<Env: Environment> ClientContext<Env> {
         Ok(())
     }
 
+    /// Checks that the validator's version info is compatible with the local version.
     pub async fn check_compatible_version_info(
         &self,
         address: &str,
@@ -680,19 +722,18 @@ impl<Env: Environment> ClientContext<Env> {
                 );
                 Ok(version_info)
             }
-            Ok(version_info) => Err(error::Inner::UnexpectedVersionInfo {
+            Ok(version_info) => Err(error::Error::UnexpectedVersionInfo {
                 remote: Box::new(version_info),
                 local: Box::new(linera_version::VERSION_INFO.clone()),
-            }
-            .into()),
-            Err(error) => Err(error::Inner::UnavailableVersionInfo {
+            }),
+            Err(error) => Err(error::Error::UnavailableVersionInfo {
                 address: address.to_string(),
                 error: Box::new(error),
-            }
-            .into()),
+            }),
         }
     }
 
+    /// Checks that the validator's network description matches the local genesis config.
     pub async fn check_matching_network_description(
         &self,
         address: &str,
@@ -704,21 +745,20 @@ impl<Env: Environment> ClientContext<Env> {
                 if description == network_description {
                     Ok(description.genesis_config_hash)
                 } else {
-                    Err(error::Inner::UnexpectedNetworkDescription {
+                    Err(error::Error::UnexpectedNetworkDescription {
                         remote: Box::new(description),
                         local: Box::new(network_description),
-                    }
-                    .into())
+                    })
                 }
             }
-            Err(error) => Err(error::Inner::UnavailableNetworkDescription {
+            Err(error) => Err(error::Error::UnavailableNetworkDescription {
                 address: address.to_string(),
                 error: Box::new(error),
-            }
-            .into()),
+            }),
         }
     }
 
+    /// Queries a validator for the given chain's info and verifies its signature.
     pub async fn check_validator_chain_info_response(
         &self,
         public_key: Option<&ValidatorPublicKey>,
@@ -737,22 +777,20 @@ impl<Env: Environment> ClientContext<Env> {
                     if response.check(*public_key).is_ok() {
                         debug!("Signature for public key {public_key} is OK.");
                     } else {
-                        return Err(error::Inner::InvalidSignature {
+                        return Err(error::Error::InvalidSignature {
                             public_key: *public_key,
-                        }
-                        .into());
+                        });
                     }
                 } else {
                     warn!("Not checking signature as public key was not given");
                 }
                 Ok(*response.info)
             }
-            Err(error) => Err(error::Inner::UnavailableChainInfo {
+            Err(error) => Err(error::Error::UnavailableChainInfo {
                 address: address.to_string(),
                 chain_id,
                 error: Box::new(error),
-            }
-            .into()),
+            }),
         }
     }
 
@@ -809,6 +847,7 @@ impl<Env: Environment> ClientContext<Env> {
 
 #[cfg(feature = "fs")]
 impl<Env: Environment> ClientContext<Env> {
+    /// Publishes a module from its contract and service bytecode files.
     pub async fn publish_module(
         &mut self,
         chain_client: &ChainClient<Env>,
@@ -816,15 +855,9 @@ impl<Env: Environment> ClientContext<Env> {
         service: PathBuf,
         vm_runtime: VmRuntime,
     ) -> Result<ModuleId, Error> {
-        info!("Loading bytecode files");
-        let contract_bytecode = Bytecode::load_from_file(&contract)
-            .with_context(|| format!("failed to load contract bytecode from {:?}", &contract))?;
-        let service_bytecode = Bytecode::load_from_file(&service)
-            .with_context(|| format!("failed to load service bytecode from {:?}", &service))?;
+        let (blobs, module_id) = load_bytecode_blobs(&contract, &service, vm_runtime).await?;
 
         info!("Publishing module");
-        let (blobs, module_id) =
-            create_bytecode_blobs(contract_bytecode, service_bytecode, vm_runtime).await;
         let (module_id, _) = self
             .apply_client_command(chain_client, |chain_client| {
                 let blobs = blobs.clone();
@@ -833,7 +866,7 @@ impl<Env: Environment> ClientContext<Env> {
                     chain_client
                         .publish_module_blobs(blobs, module_id)
                         .await
-                        .context("Failed to publish module")
+                        .map_err(|error| Error::PublishModule(Box::new(error)))
                 }
             })
             .await?;
@@ -845,16 +878,19 @@ impl<Env: Environment> ClientContext<Env> {
         Ok(module_id)
     }
 
+    /// Publishes a data blob loaded from the given file.
     pub async fn publish_data_blob(
         &mut self,
         chain_client: &ChainClient<Env>,
         blob_path: PathBuf,
     ) -> Result<CryptoHash, Error> {
         info!("Loading data blob file");
-        let blob_bytes = fs::read(&blob_path).context(format!(
-            "failed to load data blob bytes from {:?}",
-            &blob_path
-        ))?;
+        let blob_bytes = fs::read(&blob_path).map_err(|e| {
+            std::io::Error::new(
+                e.kind(),
+                format!("failed to load data blob bytes from {blob_path:?}: {e}"),
+            )
+        })?;
 
         info!("Publishing data blob");
         self.apply_client_command(chain_client, |chain_client| {
@@ -864,7 +900,7 @@ impl<Env: Environment> ClientContext<Env> {
                 chain_client
                     .publish_data_blob(blob_bytes)
                     .await
-                    .context("Failed to publish data blob")
+                    .map_err(|error| Error::PublishDataBlob(Box::new(error)))
             }
         })
         .await?;
@@ -874,6 +910,7 @@ impl<Env: Environment> ClientContext<Env> {
     }
 
     // TODO(#2490): Consider removing or renaming this.
+    /// Verifies that a data blob with the given hash is available.
     pub async fn read_data_blob(
         &mut self,
         chain_client: &ChainClient<Env>,
@@ -886,7 +923,7 @@ impl<Env: Environment> ClientContext<Env> {
                 chain_client
                     .read_data_blob(hash)
                     .await
-                    .context("Failed to verify data blob")
+                    .map_err(|error| Error::VerifyDataBlob(Box::new(error)))
             }
         })
         .await?;
@@ -896,8 +933,291 @@ impl<Env: Environment> ClientContext<Env> {
     }
 }
 
+#[cfg(all(feature = "fs", not(web)))]
+impl<Env: Environment> ClientContext<Env> {
+    /// Publishes a module along with the JSON-encoded `Formats` description loaded
+    /// from `formats`. The module publication and the formats-registry write
+    /// happen atomically in a single block.
+    pub async fn publish_module_with_formats(
+        &mut self,
+        chain_client: &ChainClient<Env>,
+        contract: PathBuf,
+        service: PathBuf,
+        vm_runtime: VmRuntime,
+        formats: PathBuf,
+        registry_application_id: ApplicationId,
+    ) -> Result<ModuleId, Error> {
+        let owner = chain_client
+            .preferred_owner()
+            .ok_or(error::Error::ChainOwnership)?;
+        let (blobs, formats_blob_bytes, module_id, registry_op_bytes) = self
+            .prepare_bcs_publication(owner, &contract, &service, vm_runtime, &formats)
+            .await?;
+
+        // Publish the formats data blob in its own block first, so it is committed
+        // before the registry `Write` operation asserts its existence.
+        info!("Publishing the formats data blob");
+        self.apply_client_command(chain_client, |chain_client| {
+            let formats_blob_bytes = formats_blob_bytes.clone();
+            let chain_client = chain_client.clone();
+            async move {
+                chain_client
+                    .publish_data_blob(formats_blob_bytes)
+                    .await
+                    .map_err(|error| Error::PublishFormatsBlob(Box::new(error)))
+            }
+        })
+        .await?;
+
+        info!("Publishing module and registering its formats");
+        self.apply_client_command(chain_client, |chain_client| {
+            let blobs = blobs.clone();
+            let registry_op_bytes = registry_op_bytes.clone();
+            let chain_client = chain_client.clone();
+            async move {
+                chain_client
+                    .execute_operations(
+                        vec![
+                            Operation::system(SystemOperation::PublishModule { module_id }),
+                            Operation::User {
+                                application_id: registry_application_id,
+                                bytes: registry_op_bytes,
+                            },
+                        ],
+                        blobs,
+                    )
+                    .await
+                    .map_err(|error| Error::PublishModuleAndRegisterFormats(Box::new(error)))
+            }
+        })
+        .await?;
+
+        info!(
+            "{}",
+            "Module published and formats registered successfully!"
+        );
+        info!("Synchronizing client and processing inbox");
+        self.process_inbox(chain_client).await?;
+        Ok(module_id)
+    }
+
+    /// Publishes a module, registers its `Formats` description in the formats
+    /// registry, and creates an application from that module — all atomically in
+    /// a single block.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn publish_bcs_application(
+        &mut self,
+        chain_client: &ChainClient<Env>,
+        contract: PathBuf,
+        service: PathBuf,
+        vm_runtime: VmRuntime,
+        formats: PathBuf,
+        registry_application_id: ApplicationId,
+        parameters: Vec<u8>,
+        instantiation_argument: Vec<u8>,
+        required_application_ids: Vec<ApplicationId>,
+    ) -> Result<(ApplicationId, ModuleId), Error> {
+        let owner = chain_client
+            .preferred_owner()
+            .ok_or(error::Error::ChainOwnership)?;
+        let (blobs, formats_blob_bytes, module_id, registry_op_bytes) = self
+            .prepare_bcs_publication(owner, &contract, &service, vm_runtime, &formats)
+            .await?;
+
+        // Publish the formats data blob in its own block first, so it is committed
+        // before the registry `Write` operation asserts its existence.
+        info!("Publishing the formats data blob");
+        self.apply_client_command(chain_client, |chain_client| {
+            let formats_blob_bytes = formats_blob_bytes.clone();
+            let chain_client = chain_client.clone();
+            async move {
+                chain_client
+                    .publish_data_blob(formats_blob_bytes)
+                    .await
+                    .map_err(|error| Error::PublishFormatsBlob(Box::new(error)))
+            }
+        })
+        .await?;
+
+        info!("Publishing module, registering its formats and creating the application");
+        let application_id = self
+            .apply_client_command(chain_client, |chain_client| {
+                let blobs = blobs.clone();
+                let registry_op_bytes = registry_op_bytes.clone();
+                let parameters = parameters.clone();
+                let instantiation_argument = instantiation_argument.clone();
+                let required_application_ids = required_application_ids.clone();
+                let chain_client = chain_client.clone();
+                async move {
+                    let outcome: ClientOutcome<ConfirmedBlockCertificate> = chain_client
+                        .execute_operations(
+                            vec![
+                                Operation::system(SystemOperation::PublishModule { module_id }),
+                                Operation::User {
+                                    application_id: registry_application_id,
+                                    bytes: registry_op_bytes,
+                                },
+                                Operation::system(SystemOperation::CreateApplication {
+                                    module_id,
+                                    parameters,
+                                    instantiation_argument,
+                                    required_application_ids,
+                                }),
+                            ],
+                            blobs,
+                        )
+                        .await?;
+                    outcome.try_map(|certificate| {
+                        let mut creation: Vec<_> = certificate
+                            .block()
+                            .created_blob_ids()
+                            .into_iter()
+                            .filter(|blob_id| blob_id.blob_type == BlobType::ApplicationDescription)
+                            .collect();
+                        if creation.len() != 1 {
+                            return Err(chain_client::Error::InternalError(
+                                "Unexpected number of application descriptions published",
+                            ));
+                        }
+                        let blob_id = creation.pop().expect("checked length");
+                        Ok(ApplicationId::new(blob_id.hash))
+                    })
+                }
+            })
+            .await?;
+
+        info!(
+            "{}",
+            "Module published, formats registered and application created successfully!"
+        );
+        info!("Synchronizing client and processing inbox");
+        self.process_inbox(chain_client).await?;
+        Ok((application_id, module_id))
+    }
+
+    /// Loads the bytecode files and the SNAP file, building the bytecode blobs, the
+    /// BCS-encoded formats data blob, and the formats-registry write operation
+    /// authorized by `owner`. The formats blob is returned separately from the
+    /// bytecode blobs because the caller publishes it in its own block first (so it
+    /// is committed before the registry `Write` operation asserts its existence).
+    async fn prepare_bcs_publication(
+        &self,
+        owner: AccountOwner,
+        contract: &Path,
+        service: &Path,
+        vm_runtime: VmRuntime,
+        formats: &Path,
+    ) -> Result<
+        (
+            Vec<linera_base::data_types::Blob>,
+            Vec<u8>,
+            ModuleId,
+            Vec<u8>,
+        ),
+        Error,
+    > {
+        let (blobs, module_id) = load_bytecode_blobs(contract, service, vm_runtime).await?;
+
+        info!("Loading formats from {formats:?}");
+        let parsed = read_formats_from_snap(formats)?;
+        let formats_blob_bytes = bcs::to_bytes(&parsed)?;
+        let formats_blob_hash = CryptoHash::new(&BlobContent::new_data(formats_blob_bytes.clone()));
+        let registry_op = linera_sdk::abis::formats_registry::Operation::Write {
+            owner,
+            module_id,
+            blob_hash: linera_base::identifiers::DataBlobHash(formats_blob_hash),
+        };
+        let registry_op_bytes = bcs::to_bytes(&registry_op)?;
+        Ok((blobs, formats_blob_bytes, module_id, registry_op_bytes))
+    }
+}
+
+/// Reads the contract and service Wasm bytecode files from disk and turns them
+/// into the blobs needed for module publication. Shared between
+/// [`ClientContext::publish_module`] and the formats-aware variants so the two
+/// code paths can't drift on error messages or blob construction.
+#[cfg(feature = "fs")]
+async fn load_bytecode_blobs(
+    contract: &Path,
+    service: &Path,
+    vm_runtime: VmRuntime,
+) -> Result<(Vec<linera_base::data_types::Blob>, ModuleId), Error> {
+    info!("Loading bytecode files");
+    let contract_bytecode = Bytecode::load_from_file(contract).map_err(|e| {
+        std::io::Error::new(
+            e.kind(),
+            format!("failed to load contract bytecode from {contract:?}: {e}"),
+        )
+    })?;
+    let service_bytecode = Bytecode::load_from_file(service).map_err(|e| {
+        std::io::Error::new(
+            e.kind(),
+            format!("failed to load service bytecode from {service:?}: {e}"),
+        )
+    })?;
+    Ok(create_bytecode_blobs(contract_bytecode, service_bytecode, vm_runtime).await)
+}
+
+/// Parses the `Formats` description of an application from a SNAP file (the YAML
+/// snapshot produced by the `format` test of the example applications). The body
+/// between the `---` frontmatter delimiters is deserialized as
+/// [`linera_sdk::formats::Formats`]. BCS-serializing the result yields the data-blob
+/// payload the formats registry expects, so external tooling can produce a blob file
+/// ready for `linera publish-data-blob` (see the `extract-formats` binary in the
+/// `formats-registry` example).
+#[cfg(all(feature = "fs", not(web)))]
+pub fn read_formats_from_snap(path: &Path) -> Result<linera_sdk::formats::Formats, Error> {
+    let content = fs::read_to_string(path).map_err(|e| {
+        std::io::Error::new(e.kind(), format!("failed to read SNAP file {path:?}: {e}"))
+    })?;
+    let body = strip_snap_frontmatter(&content).ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("SNAP file {path:?} is missing the `---` frontmatter delimiters"),
+        )
+    })?;
+    serde_yaml_08::from_str(body).map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("failed to parse SNAP body in {path:?} as Formats: {e}"),
+        )
+        .into()
+    })
+}
+
+#[cfg(all(feature = "fs", not(web)))]
+fn strip_snap_frontmatter(content: &str) -> Option<&str> {
+    let rest = content.strip_prefix("---\n")?;
+    let end = rest.find("\n---\n")?;
+    Some(&rest[end + "\n---\n".len()..])
+}
+
+#[cfg(all(test, feature = "fs", not(web)))]
+mod snap_loader_tests {
+    use super::read_formats_from_snap;
+
+    #[test]
+    fn parses_fungible_snap() {
+        let path = std::path::Path::new("../examples/fungible/tests/snapshots/format__format.snap");
+        read_formats_from_snap(path).expect("fungible snap should parse");
+    }
+
+    #[test]
+    fn parses_social_snap() {
+        let path = std::path::Path::new("../examples/social/tests/snapshots/format__format.snap");
+        read_formats_from_snap(path).expect("social snap should parse");
+    }
+
+    #[test]
+    fn parses_counter_snap() {
+        let path = std::path::Path::new("../examples/counter/tests/snapshots/format__format.snap");
+        read_formats_from_snap(path).expect("counter snap should parse");
+    }
+}
+
 #[cfg(not(web))]
 impl<Env: Environment> ClientContext<Env> {
+    /// Prepares the chains and fungible tokens needed to run a benchmark.
     pub async fn prepare_for_benchmark(
         &mut self,
         num_chains: usize,
@@ -970,6 +1290,7 @@ impl<Env: Environment> ClientContext<Env> {
         Ok(chain_clients)
     }
 
+    /// Closes the benchmark chains, or processes their inboxes and updates the wallet.
     pub async fn wrap_up_benchmark(
         &mut self,
         chain_clients: Vec<ChainClient<Env>>,
@@ -989,7 +1310,9 @@ impl<Env: Environment> ClientContext<Env> {
             stream.try_collect::<Vec<_>>().await?;
             // Remove closed chains from wallet (the chain listener may have added them).
             for chain_id in chain_ids {
-                let _ = self.wallet().remove(chain_id).await;
+                if let Err(error) = self.wallet().remove(chain_id).await {
+                    warn!(%chain_id, %error, "Failed to remove closed chain from wallet");
+                }
             }
         } else {
             info!("Processing inbox for all chains...");
@@ -997,7 +1320,7 @@ impl<Env: Environment> ClientContext<Env> {
                 .map(|chain_client| async move {
                     chain_client.process_inbox().await?;
                     info!("Processed inbox for chain {:?}", chain_client.chain_id());
-                    Ok::<(), ChainClientError>(())
+                    Ok::<(), chain_client::Error>(())
                 })
                 .buffer_unordered(wrap_up_max_in_flight);
             stream.try_collect::<Vec<_>>().await?;
@@ -1006,7 +1329,10 @@ impl<Env: Environment> ClientContext<Env> {
             for chain_client in chain_clients {
                 let info = chain_client.chain_info().await?;
                 let client_owner = chain_client.preferred_owner();
-                let pending_proposal = chain_client.pending_proposal().clone();
+                let pending_proposal = chain_client
+                    .pending_proposal()
+                    .await
+                    .filter(|p| p.round.is_some_and(|r| r.is_fast()));
                 self.wallet()
                     .insert(
                         info.chain_id,
@@ -1017,7 +1343,7 @@ impl<Env: Environment> ClientContext<Env> {
                         },
                     )
                     .await
-                    .map_err(error::Inner::wallet)?;
+                    .map_err(error::Error::wallet)?;
             }
         }
 
@@ -1030,7 +1356,7 @@ impl<Env: Environment> ClientContext<Env> {
         let chain_clients: Vec<_> = self
             .wallet()
             .owned_chain_ids()
-            .map_err(|e| error::Inner::wallet(e).into())
+            .map_err(error::Error::wallet)
             .and_then(|id| self.make_chain_client(id))
             .try_collect()
             .await
@@ -1089,7 +1415,7 @@ impl<Env: Environment> ClientContext<Env> {
         if !close_chains || wallet_only {
             let mut owned_chain_ids = std::pin::pin!(self.wallet().owned_chain_ids());
             while let Some(chain_id) = owned_chain_ids.next().await {
-                let chain_id = chain_id.map_err(error::Inner::wallet)?;
+                let chain_id = chain_id.map_err(error::Error::wallet)?;
                 if chains_found_in_wallet == num_chains {
                     break;
                 }
@@ -1117,13 +1443,9 @@ impl<Env: Environment> ClientContext<Env> {
 
         if num_chains_to_create > 0 {
             if wallet_only {
-                return Err(
-                    error::Inner::Benchmark(BenchmarkError::NotEnoughChainsInWallet(
-                        num_chains,
-                        chains_found_in_wallet,
-                    ))
-                    .into(),
-                );
+                return Err(error::Error::Benchmark(
+                    BenchmarkError::NotEnoughChainsInWallet(num_chains, chains_found_in_wallet),
+                ));
             }
             let mut pub_keys_iter = pub_keys.into_iter().take(num_chains_to_create);
             let operations_per_block = 900; // Over this we seem to hit the block size limits.
@@ -1158,7 +1480,7 @@ impl<Env: Environment> ClientContext<Env> {
                         chain_id,
                         None,
                         BlockHeight::ZERO,
-                        None,
+                        &None,
                         Some(owner),
                         self.timing_sender(),
                     );
@@ -1186,7 +1508,7 @@ impl<Env: Environment> ClientContext<Env> {
         default_chain_client
             .retry_pending_outgoing_messages()
             .await
-            .context("outgoing messages to create the new chains should be delivered")?;
+            .map_err(|error| Error::DeliverNewChainMessages(Box::new(error)))?;
         info!("Processing default chain inbox");
         default_chain_client.process_inbox().await?;
 

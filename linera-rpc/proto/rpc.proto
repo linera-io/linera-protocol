@@ -10,6 +10,54 @@ service NotifierService {
   rpc NotifyBatch(NotificationBatch) returns (google.protobuf.Empty);
 }
 
+// A service run by the proxy which forwards a shard's requests to another validator.
+//
+// Shards hold the validator's secret key, so the proxy is the only component that opens outbound
+// connections. A shard names the validator its request is meant for and the proxy performs it.
+// Limited to the operations block export needs, so reaching this service does not confer the
+// ability to make the proxy issue arbitrary requests.
+service ValidatorRelay {
+  // Forward a lite certificate to another validator.
+  rpc RelayLiteCertificate(RelayLiteCertificateRequest) returns (ChainInfoResult);
+
+  // Forward a confirmed certificate to another validator.
+  rpc RelayConfirmedCertificate(RelayConfirmedCertificateRequest) returns (ChainInfoResult);
+
+  // Ask another validator for the state of a chain.
+  rpc RelayChainInfoQuery(RelayChainInfoQueryRequest) returns (ChainInfoResult);
+
+  // Upload a blob to another validator.
+  rpc RelayUploadBlob(RelayUploadBlobRequest) returns (BlobId);
+}
+
+// A lite certificate, and the validator it is for.
+message RelayLiteCertificateRequest {
+  // The public network address of the destination validator.
+  string destination = 1;
+  LiteCertificate inner = 2;
+}
+
+// A confirmed certificate, and the validator it is for.
+message RelayConfirmedCertificateRequest {
+  // The public network address of the destination validator.
+  string destination = 1;
+  HandleConfirmedCertificateRequest inner = 2;
+}
+
+// A chain info query, and the validator it is for.
+message RelayChainInfoQueryRequest {
+  // The public network address of the destination validator.
+  string destination = 1;
+  ChainInfoQuery inner = 2;
+}
+
+// A blob, and the validator it is for.
+message RelayUploadBlobRequest {
+  // The public network address of the destination validator.
+  string destination = 1;
+  BlobContent inner = 2;
+}
+
 // Interface provided by each physical shard (aka "worker") of a validator or a local node.
 // * All commands return either the current chain info or an error.
 // * Repeating commands produces no changes and returns no error.
@@ -38,6 +86,9 @@ service ValidatorWorker {
 
   // Handle a (trusted!) cross-chain request.
   rpc HandleCrossChainRequest(CrossChainRequest) returns (google.protobuf.Empty);
+
+  // Returns the previous event blocks for a chain's streams.
+  rpc PreviousEventBlocks(PreviousEventBlocksRequest) returns (PreviousEventBlocksResponse);
 }
 
 // How to communicate with a validator or a local node.
@@ -69,6 +120,9 @@ service ValidatorNode {
   // Download a blob.
   rpc DownloadBlob(BlobId) returns (BlobContent);
 
+  // Download a batch of blobs as a stream.
+  rpc DownloadBlobs(BlobIds) returns (stream BlobContent);
+
   // Download a blob that belongs to a pending block on the given chain.
   rpc DownloadPendingBlob(PendingBlobRequest) returns (PendingBlobResult);
 
@@ -99,6 +153,12 @@ service ValidatorNode {
 
   // Returns the certificate that last used the blob.
   rpc BlobLastUsedByCertificate(BlobId) returns (Certificate);
+
+  // Returns the previous event blocks for a chain's streams.
+  rpc PreviousEventBlocks(PreviousEventBlocksRequest) returns (PreviousEventBlocksResponse);
+
+  // Look up the block heights where the given events were published.
+  rpc EventBlockHeights(EventBlockHeightsRequest) returns (EventBlockHeightsResponse);
 }
 
 // Batch of raw certificates.
@@ -185,6 +245,7 @@ message CrossChainRequest {
   oneof inner {
     UpdateRecipient update_recipient = 1;
     ConfirmUpdatedRecipient confirm_updated_recipient = 2;
+    RevertConfirm revert_confirm = 3;
   }
 }
 
@@ -194,6 +255,9 @@ message UpdateRecipient {
   ChainId sender = 1;
   ChainId recipient = 2;
   bytes bundles = 3;
+  // The height of the sender's previous block that sent messages to this recipient
+  // (before the first bundle). Absent if this is the first message ever.
+  optional BlockHeight previous_height = 4;
 }
 
 // Acknowledge the height of the highest confirmed blocks communicated with `UpdateRecipient`.
@@ -201,6 +265,13 @@ message ConfirmUpdatedRecipient {
   ChainId sender = 1;
   ChainId recipient = 2;
   BlockHeight latest_height = 3;
+}
+
+// Request the sender to revert a previous confirmation and resend bundles.
+message RevertConfirm {
+  ChainId sender = 1;
+  ChainId recipient = 2;
+  BlockHeight retransmit_from = 3;
 }
 
 // Request information on a chain.
@@ -258,6 +329,12 @@ message BlockProposal {
   // A lite certificate for a validated block, or a fast block proposal, that
   // justifies the proposal in this round.
   optional bytes original_proposal = 6;
+
+  // Whether the sender understands the aggregated `MissingCrossChainUpdates` error. When
+  // false (e.g. an older client that predates it), the validator downgrades that error
+  // to the legacy per-sender `MissingCrossChainUpdate` before replying, for backward
+  // compatibility.
+  bool supports_aggregated_missing = 7;
 }
 
 // A certified statement from the committee, without the value.
@@ -313,6 +390,9 @@ message HandleConfirmedCertificateRequest {
   // Wait until all outgoing cross-chain messages from this certificate have
   // been received by the target chains.
   bool wait_for_outgoing_messages = 3;
+
+  // Whether the sender understands the aggregated `MissingCrossChainUpdates` error.
+  bool supports_aggregated_missing = 4;
 }
 
 // A request for a pending blob.
@@ -419,4 +499,39 @@ message ChainInfoResponse {
 
 message BlockHeight {
   uint64 height = 1;
+}
+
+// A stream identifier.
+message StreamId {
+  bytes bytes = 1;
+}
+
+// Request for previous event blocks.
+message PreviousEventBlocksRequest {
+  ChainId chain_id = 1;
+  repeated StreamId stream_ids = 2;
+}
+
+// An entry mapping a stream to its previous event block.
+message PreviousEventBlock {
+  StreamId stream_id = 1;
+  BlockHeight block_height = 2;
+  CryptoHash crypto_hash = 3;
+}
+
+// Response for previous event blocks.
+message PreviousEventBlocksResponse {
+  repeated PreviousEventBlock previous_event_blocks = 1;
+}
+
+// A request for looking up block heights where events were published.
+message EventBlockHeightsRequest {
+  // BCS-serialized `Vec<EventId>`.
+  bytes event_ids = 1;
+}
+
+// Response with block heights for each requested event.
+message EventBlockHeightsResponse {
+  // BCS-serialized `Vec<Option<BlockHeight>>`.
+  bytes heights = 1;
 }

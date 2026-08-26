@@ -158,6 +158,7 @@ impl BlockTestExt for ProposedBlock {
     }
 }
 
+/// Helper trait to simplify creating certificates from votes in tests.
 pub trait VoteTestExt<T: CertificateValue>: Sized {
     /// Returns a certificate for a committee consisting only of this validator.
     fn into_certificate(self, public_key: ValidatorPublicKey) -> GenericCertificate<T>;
@@ -183,6 +184,7 @@ impl<T: CertificateValue> VoteTestExt<T> for Vote<T> {
 
 /// Helper trait to simplify constructing messages for tests.
 pub trait MessageTestExt: Sized {
+    /// Wraps the message into a [`PostedMessage`] with the given index and kind.
     fn to_posted(self, index: u32, kind: MessageKind) -> PostedMessage;
 }
 

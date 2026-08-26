@@ -93,6 +93,7 @@ pub struct ExtractedOtelContext(pub Context);
 /// This trait abstracts over `http::Request` and `tonic::Request` to allow
 /// generic functions that work with either request type.
 pub trait HasOtelContext {
+    /// Returns the extracted OpenTelemetry context, if present.
     fn get_otel_context(&self) -> Option<&ExtractedOtelContext>;
 }
 
@@ -155,10 +156,7 @@ pub fn get_context_with_traffic_type() -> Context {
 
     let cx = Context::current();
 
-    if std::env::var(TRAFFIC_TYPE_ENV_VAR)
-        .map(|v| v == TRAFFIC_TYPE_SYNTHETIC)
-        .unwrap_or(false)
-    {
+    if std::env::var(TRAFFIC_TYPE_ENV_VAR).is_ok_and(|v| v == TRAFFIC_TYPE_SYNTHETIC) {
         cx.with_baggage(vec![KeyValue::new(
             Key::new(TRAFFIC_TYPE_KEY),
             TRAFFIC_TYPE_SYNTHETIC,

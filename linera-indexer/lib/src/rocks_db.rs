@@ -4,9 +4,9 @@
 use std::path::PathBuf;
 
 use clap::Parser as _;
-use linera_service::storage::{StorageMigration, StoreConfig};
+use linera_service::storage::{StorageCacheConfig, StorageMigration, StoreConfig};
 use linera_views::{
-    lru_prefix_cache::StorageCacheConfig,
+    lru_prefix_cache::StorageCacheConfig as ViewsStorageCacheConfig,
     rocks_db::{
         PathWithGuard, RocksDbDatabase, RocksDbSpawnMode, RocksDbStoreConfig,
         RocksDbStoreInternalConfig,
@@ -68,6 +68,34 @@ pub struct RocksDbConfig {
     /// The maximal memory used in the find_key_values_by_prefix cache in bytes.
     #[arg(long, default_value = "10000000")]
     pub max_cache_find_key_values_size: usize,
+
+    /// The maximal number of entries in the blob cache.
+    #[arg(long, default_value = "1000")]
+    pub blob_cache_size: usize,
+
+    /// The maximal number of entries in the confirmed block cache.
+    #[arg(long, default_value = "1000")]
+    pub confirmed_block_cache_size: usize,
+
+    /// The maximal number of entries in the assembled certificate cache.
+    #[arg(long, default_value = "1000")]
+    pub certificate_cache_size: usize,
+
+    /// The maximal number of entries in the raw certificate cache.
+    #[arg(long, default_value = "1000")]
+    pub certificate_raw_cache_size: usize,
+
+    /// The maximal number of entries in the event cache.
+    #[arg(long, default_value = "1000")]
+    pub event_cache_size: usize,
+
+    /// The maximal number of entries in the block-hash-by-height cache.
+    #[arg(long, default_value = "1000")]
+    pub block_hash_by_height_cache_size: usize,
+
+    /// The maximal number of entries in the event-block-height cache.
+    #[arg(long, default_value = "1000")]
+    pub event_block_height_cache_size: usize,
 }
 
 pub type RocksDbRunner = Runner<RocksDbDatabase, RocksDbConfig>;
@@ -75,7 +103,7 @@ pub type RocksDbRunner = Runner<RocksDbDatabase, RocksDbConfig>;
 impl RocksDbRunner {
     pub async fn load() -> Result<Self, IndexerError> {
         let config = IndexerConfig::<RocksDbConfig>::parse();
-        let storage_cache_config = StorageCacheConfig {
+        let storage_cache_config = ViewsStorageCacheConfig {
             max_cache_size: config.client.max_cache_size,
             max_value_entry_size: config.client.max_value_entry_size,
             max_find_keys_entry_size: config.client.max_find_keys_entry_size,
@@ -94,6 +122,8 @@ impl RocksDbRunner {
             spawn_mode,
             path_with_guard,
             max_stream_queries: config.client.max_stream_queries,
+            enable_statistics: false,
+            statistics_level: Default::default(),
         };
         let rocksdb_store_config = RocksDbStoreConfig {
             inner_config,
@@ -106,7 +136,20 @@ impl RocksDbRunner {
         };
         store_config
             .clone()
-            .run_with_store(StorageMigration)
+            .run_with_store(
+                StorageCacheConfig {
+                    blob_cache_size: config.client.blob_cache_size,
+                    confirmed_block_cache_size: config.client.confirmed_block_cache_size,
+                    certificate_cache_size: config.client.certificate_cache_size,
+                    certificate_raw_cache_size: config.client.certificate_raw_cache_size,
+                    event_cache_size: config.client.event_cache_size,
+                    block_hash_by_height_cache_size: config.client.block_hash_by_height_cache_size,
+                    event_block_height_cache_size: config.client.event_block_height_cache_size,
+                    cache_cleanup_interval_secs:
+                        linera_service::storage::DEFAULT_CLEANUP_INTERVAL_SECS,
+                },
+                StorageMigration,
+            )
             .await
             .expect("Failure to migrate the database");
         let database =

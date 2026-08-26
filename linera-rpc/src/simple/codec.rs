@@ -85,6 +85,7 @@ impl Decoder for Codec {
 
 /// Errors that can arise during transmission or reception of [`RpcMessage`]s.
 #[derive(Debug, Error)]
+#[allow(missing_docs)]
 pub enum Error {
     #[error("I/O error in the underlying transport: {0}")]
     IoError(#[from] io::Error),
@@ -105,7 +106,7 @@ impl From<Error> for NodeError {
     fn from(error: Error) -> NodeError {
         match error {
             Error::IoError(io_error) => NodeError::ClientIoError {
-                error: format!("{}", io_error),
+                error: format!("{io_error}"),
             },
             err => {
                 tracing::error!("Unexpected decoding error: {err}");

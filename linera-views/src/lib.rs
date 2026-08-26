@@ -19,7 +19,6 @@ The databases supported are of the NoSQL variety and they are key-value stores.
 We provide support for the following databases:
 * `MemoryDatabase` is using the memory
 * `RocksDbDatabase` is a disk-based key-value store
-* `DynamoDbDatabase` is the AWS-based DynamoDB service.
 * `ScyllaDbDatabase` is a cloud-based Cassandra-compatible database.
 * `StorageServiceDatabase` is a gRPC-based storage that uses either memory or RocksDB. It is available in `linera-storage-service`.
 
@@ -102,8 +101,6 @@ pub mod random;
 #[cfg(with_testing)]
 pub mod test_utils;
 
-#[cfg(with_dynamodb)]
-pub use backends::dynamo_db;
 #[cfg(with_indexeddb)]
 pub use backends::indexed_db;
 #[cfg(with_metrics)]
@@ -122,6 +119,31 @@ pub use sha3;
 /// Expose the created views.
 pub use views::{
     bucket_queue_view, collection_view, hashable_wrapper, historical_hash_wrapper,
-    key_value_store_view, log_view, map_view, queue_view, reentrant_collection_view, register_view,
-    set_view,
+    key_value_store_view, lazy_register_view, log_view, map_view, queue_view,
+    reentrant_collection_view, register_view, set_view,
 };
+
+/// Registers every metric this crate declares.
+///
+/// Without this, a metric is only exported after the code path that observes it has run, so a
+/// rarely-taken path leaves its panels blank and makes a routine restart look like the metric
+/// was removed.
+#[cfg(with_metrics)]
+pub fn init_metrics() {
+    linera_base::init_metrics();
+    metrics::init_metrics();
+    backends::journaling::metrics::init_metrics();
+    backends::lru_caching::metrics::init_metrics();
+    backends::value_splitting::metrics::init_metrics();
+    views::bucket_queue_view::metrics::init_metrics();
+    views::collection_view::metrics::init_metrics();
+    views::historical_hash_wrapper::metrics::init_metrics();
+    views::key_value_store_view::metrics::init_metrics();
+    views::lazy_register_view::metrics::init_metrics();
+    views::log_view::metrics::init_metrics();
+    views::map_view::metrics::init_metrics();
+    views::queue_view::metrics::init_metrics();
+    views::reentrant_collection_view::metrics::init_metrics();
+    views::register_view::metrics::init_metrics();
+    views::set_view::metrics::init_metrics();
+}

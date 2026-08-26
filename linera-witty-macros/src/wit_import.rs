@@ -19,8 +19,8 @@ use crate::util::{AttributeParameters, TokensSetItem};
 /// The generated code contains a new generic type with the `trait_definition`'s name that allows
 /// calling into the functions imported from a guest Wasm instance represented by a generic
 /// parameter.
-pub fn generate(trait_definition: ItemTrait, parameters: AttributeParameters) -> TokenStream {
-    WitImportGenerator::new(&trait_definition, parameters).generate()
+pub fn generate(trait_definition: &ItemTrait, parameters: AttributeParameters) -> TokenStream {
+    WitImportGenerator::new(trait_definition, parameters).generate()
 }
 
 /// A helper type for generation of the importing of Wasm functions.
@@ -72,9 +72,10 @@ impl<'input> WitImportGenerator<'input> {
 
         let trait_name = self.trait_name;
 
+        let interface_name = self.parameters.interface_name(trait_name);
         let wit_interface_implementation = wit_interface::generate(
             self.parameters.package_name(),
-            self.parameters.interface_name(trait_name),
+            &interface_name,
             &self.functions,
         );
 

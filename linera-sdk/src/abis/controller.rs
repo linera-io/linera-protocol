@@ -1,17 +1,17 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
+use std::collections::BTreeMap;
 
 use async_graphql::{scalar, Request, Response, SimpleObject};
 use linera_sdk_derive::GraphQLMutationRootInCrate;
 use serde::{Deserialize, Serialize};
 
 use crate::linera_base_types::{
-    AccountOwner, ApplicationId, BlockHeight, ChainId, ContractAbi, DataBlobHash, MessagePolicy,
-    ServiceAbi,
+    AccountOwner, ApplicationId, ChainId, ContractAbi, DataBlobHash, MessagePolicy, ServiceAbi,
 };
 
+/// The ABI of the controller application.
 pub struct ControllerAbi;
 
 impl ContractAbi for ControllerAbi {
@@ -28,6 +28,7 @@ impl ServiceAbi for ControllerAbi {
 pub type ManagedServiceId = DataBlobHash;
 
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRootInCrate)]
+#[allow(missing_docs)]
 pub enum Operation {
     /// Worker commands
     ExecuteWorkerCommand {
@@ -39,13 +40,11 @@ pub enum Operation {
         admin: AccountOwner,
         command: ControllerCommand,
     },
-    /// Local worker operation: moves a service from `local_pending_services` to
-    /// `local_services` and removes the previous workers' owners.
-    StartLocalService { service_id: ManagedServiceId },
 }
 
 /// A worker command
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[allow(missing_docs)]
 pub enum WorkerCommand {
     /// Executed by workers to register themselves.
     RegisterWorker { capabilities: Vec<String> },
@@ -57,6 +56,7 @@ scalar!(WorkerCommand);
 
 /// A controller command
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[allow(missing_docs)]
 pub enum ControllerCommand {
     /// Set the admin owners.
     SetAdmins { admins: Option<Vec<AccountOwner>> },
@@ -118,19 +118,6 @@ pub struct ManagedService {
 
 scalar!(ManagedService);
 
-/// The description of a service that is going to be managed by the worker, but the worker
-/// should only start proposing once a given block height is reached.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PendingService {
-    /// The previous owners of the service chain, to be removed when this worker starts to
-    /// propose.
-    pub owners_to_remove: HashSet<AccountOwner>,
-    /// The chain height at which this worker is supposed to start proposing blocks.
-    pub start_block_height: BlockHeight,
-}
-
-scalar!(PendingService);
-
 /// The local state of a worker.
 // This is used to facilitate service queries.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -139,19 +126,18 @@ pub struct LocalWorkerState {
     pub local_worker: Option<Worker>,
     /// The services currently running locally.
     pub local_services: Vec<ManagedService>,
-    /// The services awaiting being managed by this worker.
-    pub local_pending_services: Vec<(ManagedServiceId, (ChainId, PendingService))>,
     /// The chains currently followed locally (besides ours and the active service
     /// chains).
     pub local_chains: Vec<ChainId>,
     /// The message policy that should be followed by the worker.
-    pub local_message_policy: Vec<(ChainId, MessagePolicy)>,
+    pub local_message_policy: BTreeMap<ChainId, MessagePolicy>,
 }
 
 scalar!(LocalWorkerState);
 
 /// Messages that can be exchanged across chains from the same application instance.
 #[derive(Clone, Debug, Deserialize, Serialize, GraphQLMutationRootInCrate)]
+#[allow(missing_docs)]
 pub enum Message {
     // -- Message to the controller chain --
     ExecuteWorkerCommand {
@@ -162,16 +148,13 @@ pub enum Message {
         admin: AccountOwner,
         command: ControllerCommand,
     },
-    // -- Messages sent to the workers' control chains from the controller chain --
+    // -- Messages sent to the workers from the controller chain --
     Reset,
     Start {
         service_id: ManagedServiceId,
-        owners_to_remove: HashSet<AccountOwner>,
-        start_height: Option<BlockHeight>,
     },
     Stop {
         service_id: ManagedServiceId,
-        new_owners: HashSet<AccountOwner>,
     },
     FollowChain {
         chain_id: ChainId,
@@ -179,26 +162,9 @@ pub enum Message {
     ForgetChain {
         chain_id: ChainId,
     },
-    // -- Messages sent from the worker's control chain to a service chain --
-    AddOwners {
-        service_id: ManagedServiceId,
-        new_owners: HashSet<AccountOwner>,
-    },
-    RemoveOwners {
-        owners_to_remove: HashSet<AccountOwner>,
-    },
-    // -- Messages sent from a service chain to the worker's control chain --
-    OwnersAdded {
-        service_id: ManagedServiceId,
-        added_at: BlockHeight,
-    },
-    // -- Messages sent from the workers' control chains to the controller chain --
-    HandoffStarted {
-        service_id: ManagedServiceId,
-        target_block_height: BlockHeight,
-    },
 }
 
+/// Serialization format descriptors for the controller ABI types.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod formats {
     use serde_reflection::{Samples, Tracer, TracerConfig};

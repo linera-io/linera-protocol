@@ -3,19 +3,18 @@
 
 //! A worker to handle a single chain.
 
-mod actor;
 mod config;
 mod delivery_notifier;
-mod state;
+pub(crate) mod export;
+pub(crate) mod handle;
+pub(crate) mod state;
 
 pub(super) use self::delivery_notifier::DeliveryNotifier;
 #[cfg(test)]
 pub(crate) use self::state::CrossChainUpdateHelper;
-pub(crate) use self::{
-    actor::{
-        ChainWorkerActor, ChainWorkerRequest, ChainWorkerRequestReceiver, ChainWorkerRequestSender,
-        EventSubscriptionsResult,
-    },
+pub(crate) use self::state::{BlockOutcome, CrossChainUpdateResult, EventSubscriptionsResult};
+pub use self::{
     config::ChainWorkerConfig,
-    state::BlockOutcome,
+    export::{spawn_block_export_queue, BlockExportConfig, BlockExportHandle},
+    state::ProcessConfirmedBlockMode,
 };

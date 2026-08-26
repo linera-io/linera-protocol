@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! A plugin that indexes the operations executed on each chain.
+
 use std::{
     cmp::{Ordering, PartialOrd},
     sync::Arc,
@@ -28,10 +30,15 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tracing::info;
 
+/// The key identifying an operation: the chain it ran on, the height of the block
+/// that contains it, and its index within that block.
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct OperationKey {
+    /// The chain on which the operation was executed.
     pub chain_id: ChainId,
+    /// The height of the block containing the operation.
     pub height: BlockHeight,
+    /// The index of the operation within the block.
     pub index: usize,
 }
 
@@ -47,6 +54,7 @@ impl PartialOrd for OperationKey {
     }
 }
 
+/// An indexed operation together with the location of the previous one on the same chain.
 #[derive(Deserialize, Serialize, Clone, SimpleObject, Debug)]
 pub struct ChainOperation {
     key: OperationKey,
@@ -56,6 +64,7 @@ pub struct ChainOperation {
     content: Operation,
 }
 
+/// The persistent state of the operations plugin: per-chain operation indices.
 #[derive(RootView)]
 pub struct Operations<C> {
     last: MapView<C, ChainId, OperationKey>,
@@ -64,9 +73,12 @@ pub struct Operations<C> {
     operations: MapView<C, OperationKey, ChainOperation>,
 }
 
+/// A way to refer to an operation: either by its exact key, or as the last operation on a chain.
 #[derive(OneofObject)]
 pub enum OperationKeyKind {
+    /// Refers to the operation with this exact key.
     Key(OperationKey),
+    /// Refers to the last operation registered for this chain.
     Last(ChainId),
 }
 
@@ -106,6 +118,7 @@ where
     }
 }
 
+/// The operations plugin: indexes executed operations and serves them over GraphQL.
 #[derive(Clone)]
 pub struct OperationsPlugin<C>(Arc<Mutex<Operations<C>>>);
 

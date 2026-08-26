@@ -18,13 +18,14 @@ pub struct TaskProcessorAbi;
 pub enum TaskProcessorOperation {
     /// Request a task to be processed by the given operator with the given input.
     RequestTask { operator: String, input: String },
+    /// Request a task to be processed on the given chain.
     RequestTaskOn {
         chain_id: ChainId,
         operator: String,
         input: String,
     },
-    /// Store the result of a completed task.
-    StoreResult { result: String },
+    /// Store the result of the completed task with the given identifier.
+    StoreResult { id: u64, result: String },
 }
 
 #[derive(Debug, Deserialize, Serialize)]

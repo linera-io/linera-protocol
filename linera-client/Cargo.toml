@@ -45,11 +45,13 @@ web-default = ["web", "wasmer", "indexed-db"]
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
 bcs.workspace = true
 clap.workspace = true
 futures.workspace = true
 hdrhistogram.workspace = true
 linera-base.workspace = true
+linera-cache.workspace = true
 linera-chain.workspace = true
 linera-core.workspace = true
 linera-execution.workspace = true
@@ -65,8 +67,8 @@ reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
+serde_yaml_08 = { package = "serde_yaml", version = "0.8" }
 thiserror.workspace = true
-thiserror-context.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true

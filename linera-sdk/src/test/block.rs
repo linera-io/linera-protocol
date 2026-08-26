@@ -13,8 +13,8 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{
-        IncomingBundle, LiteValue, LiteVote, MessageAction, ProposedBlock, SignatureAggregator,
-        Transaction,
+        BundleExecutionPolicy, IncomingBundle, LiteValue, LiteVote, MessageAction, ProposedBlock,
+        SignatureAggregator, Transaction,
     },
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
@@ -142,10 +142,22 @@ impl BlockBuilder {
         self.with_system_operation(SystemOperation::ChangeApplicationPermissions(permissions))
     }
 
+    /// Publishes the given data `blob` in this block.
+    ///
+    /// The same [`Blob`] must also be passed to
+    /// [`ActiveChain::add_block_with_blobs`](super::ActiveChain::add_block_with_blobs) so it is
+    /// available when the block is executed.
+    pub fn with_data_blob(&mut self, blob: &Blob) -> &mut Self {
+        self.with_system_operation(SystemOperation::PublishDataBlob {
+            blob_hash: blob.id().hash,
+        })
+    }
+
     /// Adds a user `operation` to this block.
     ///
     /// The operation is serialized using [`bcs`] and added to the block, marked to be executed by
     /// `application`.
+    #[expect(clippy::needless_pass_by_value)]
     pub fn with_operation<Abi>(
         &mut self,
         application_id: ApplicationId<Abi>,
@@ -244,10 +256,15 @@ impl BlockBuilder {
                     .clone()
             })
             .collect();
-        let (block, _, resource_tracker) = self
+        let (_, block, _, resource_tracker, _) = self
             .validator
             .worker()
-            .stage_block_execution(self.block, None, published_blobs)
+            .stage_block_execution(
+                self.block,
+                None,
+                published_blobs,
+                BundleExecutionPolicy::committed(),
+            )
             .await?;
 
         let value = ConfirmedBlock::new(block);

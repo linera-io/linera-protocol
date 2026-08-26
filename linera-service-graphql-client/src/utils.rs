@@ -1,14 +1,19 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Helpers for sending GraphQL requests to the node service.
+
 use graphql_client::{reqwest::post_graphql, GraphQLQuery};
 use reqwest::Client;
 use thiserror::Error;
 
+/// An error that occurs while performing a GraphQL request.
 #[derive(Error, Debug)]
 pub enum Error {
+    /// An HTTP transport error from `reqwest`.
     #[error(transparent)]
     ReqwestError(#[from] reqwest::Error),
+    /// The response contained GraphQL errors.
     #[error("GraphQL errors: {0:?}")]
     GraphQLError(Vec<graphql_client::Error>),
 }
@@ -19,6 +24,8 @@ impl From<Option<Vec<graphql_client::Error>>> for Error {
     }
 }
 
+/// Sends the GraphQL query `T` with the given `variables` to `url` and returns
+/// its response data.
 pub async fn request<T, V>(
     client: &Client,
     url: &str,

@@ -19,7 +19,8 @@
     openssl
     protobuf
     git
-    wasm-bindgen-cli
+    wasm-bindgen-cli_0_2_100
+    symbolicator
     pnpm
   ];
   checkInputs = with pkgs; [

@@ -249,13 +249,14 @@ impl Specialization {
 
     /// Replaces a type parameter in the [`Generics`] representation with a specialized type.
     pub fn apply_to_generics(&self, generics: &mut Generics) {
-        self.remove_from_where_clause(generics.where_clause.as_mut());
+        let mut maybe_where_clause = generics.where_clause.as_mut();
+        self.remove_from_where_clause(&mut maybe_where_clause);
         self.change_types_in_where_clause(generics.where_clause.as_mut());
     }
 
     /// Removes from a [`WhereClause`] all predicates for the [`Self::type_parameter`] that this
     /// specialization targets.
-    fn remove_from_where_clause(&self, maybe_where_clause: Option<&mut WhereClause>) {
+    fn remove_from_where_clause(&self, maybe_where_clause: &mut Option<&mut WhereClause>) {
         if let Some(WhereClause { predicates, .. }) = maybe_where_clause {
             let original_predicates = mem::take(predicates);
 

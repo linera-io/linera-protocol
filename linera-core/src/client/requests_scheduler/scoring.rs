@@ -29,7 +29,8 @@ pub struct ScoringWeights {
     pub latency: f64,
     /// Weight for success rate metric (higher success = higher score)
     pub success: f64,
-    /// Weight for load metric (lower load = higher score)
+    /// Weight for load metric (lower load = higher score).
+    /// NOTE: Not yet used in scoring; reserved for future use.
     pub load: f64,
 }
 
@@ -38,7 +39,7 @@ impl Default for ScoringWeights {
         Self {
             latency: 0.4, // 40% weight on response time
             success: 0.4, // 40% weight on success rate
-            load: 0.2,    // 20% weight on current load
+            load: 0.2,    // 20% weight on current load (reserved)
         }
     }
 }

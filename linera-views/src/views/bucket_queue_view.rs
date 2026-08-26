@@ -19,21 +19,20 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
     use prometheus::HistogramVec;
 
-    /// The runtime of hash computation
-    pub static BUCKET_QUEUE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "bucket_queue_view_hash_runtime",
-            "BucketQueueView hash runtime",
-            &[],
-            exponential_bucket_latencies(5.0),
-        )
-    });
+    linera_base::declare_metrics! {
+        /// The runtime of hash computation
+        pub static BUCKET_QUEUE_VIEW_HASH_RUNTIME: HistogramVec =
+            register_histogram_vec(
+                "bucket_queue_view_hash_runtime",
+                "BucketQueueView hash runtime",
+                &[],
+                exponential_bucket_latencies(5.0),
+            );
+    }
 }
 
 /// Key tags to create the sub-keys of a [`BucketQueueView`] on top of the base key.
@@ -334,21 +333,25 @@ where
             self.stored_buckets[0].index = 0;
         }
         if !self.new_back_values.is_empty() {
-            let mut index = match self.stored_buckets.back() {
-                Some(bucket) => bucket.index + 1,
-                None => 0,
-            };
+            let start = self
+                .stored_buckets
+                .back()
+                .map(|bucket| bucket.index + 1)
+                .unwrap_or_default();
             let new_back_values = std::mem::take(&mut self.new_back_values);
             let new_back_values = new_back_values.into_iter().collect::<Vec<_>>();
-            for value_chunk in new_back_values.chunks(N) {
-                self.stored_buckets.push_back(Bucket {
-                    index,
-                    state: State::Loaded {
-                        data: value_chunk.to_vec(),
-                    },
-                });
-                index += 1;
-            }
+            self.stored_buckets
+                .extend(
+                    new_back_values
+                        .chunks(N)
+                        .zip(start..)
+                        .map(|(value_chunk, index)| Bucket {
+                            index,
+                            state: State::Loaded {
+                                data: value_chunk.to_vec(),
+                            },
+                        }),
+                );
             if self.cursor.is_none() {
                 self.cursor = Some(Cursor {
                     offset: 0,
@@ -484,11 +487,17 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
     pub fn front_mut(&mut self) -> Option<&mut T> {
         match self.cursor {
             Some(Cursor { offset, position }) => {
-                let bucket = self.stored_buckets.get_mut(offset).unwrap();
+                let bucket = self
+                    .stored_buckets
+                    .get_mut(offset)
+                    .expect("cursor.offset must be a valid index into stored_buckets");
                 let State::Loaded { data } = &mut bucket.state else {
                     unreachable!();
                 };
-                Some(data.get_mut(position).unwrap())
+                Some(
+                    data.get_mut(position)
+                        .expect("cursor.position must be a valid index within the front bucket"),
+                )
             }
             None => self.new_back_values.front_mut(),
         }
@@ -519,10 +528,8 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
                 if offset == self.stored_buckets.len() {
                     self.cursor = None;
                 } else {
-                    self.cursor = Some(Cursor { offset, position });
-                    let bucket = self.stored_buckets.get_mut(offset).unwrap();
-                    let index = bucket.index;
-                    if !bucket.is_loaded() {
+                    if !self.stored_buckets[offset].is_loaded() {
+                        let index = self.stored_buckets[offset].index;
                         let key = self.get_bucket_key(index)?;
                         let data = self.context.store().read_value(&key).await?;
                         let data = match data {
@@ -535,6 +542,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
                         };
                         self.stored_buckets[offset].state = State::Loaded { data };
                     }
+                    self.cursor = Some(Cursor { offset, position });
                 }
             }
             None => {
@@ -604,22 +612,26 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
         let Some(bucket) = self.stored_buckets.back() else {
             return Ok(None);
         };
-        if !bucket.is_loaded() {
-            let key = self.get_bucket_key(bucket.index)?;
-            let data = self.context.store().read_value(&key).await?;
-            let data = match data {
-                Some(data) => data,
-                None => {
-                    return Err(ViewError::MissingEntries("BucketQueueView::back".into()));
-                }
-            };
-            self.stored_buckets.back_mut().unwrap().state = State::Loaded { data };
+        match &bucket.state {
+            State::Loaded { data } => Ok(Some(
+                data.last().expect("a stored bucket is never empty").clone(),
+            )),
+            State::NotLoaded { .. } => {
+                let key = self.get_bucket_key(bucket.index)?;
+                let data = self
+                    .context
+                    .store()
+                    .read_value::<Vec<T>>(&key)
+                    .await?
+                    .ok_or_else(|| ViewError::MissingEntries("BucketQueueView::back".into()))?;
+                let result = data.last().expect("a stored bucket is never empty").clone();
+                self.stored_buckets
+                    .back_mut()
+                    .expect("stored_buckets is non-empty since we just accessed its back element")
+                    .state = State::Loaded { data };
+                Ok(Some(result))
+            }
         }
-        let state = &self.stored_buckets.back_mut().unwrap().state;
-        let State::Loaded { data } = state else {
-            unreachable!();
-        };
-        Ok(Some(data.last().unwrap().clone()))
     }
 
     async fn read_context(
@@ -773,13 +785,13 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut queue = BucketQueueView::<_, u8, 5>::load(context).await.unwrap();
     /// queue.push_back(34);
-    /// let mut iter = queue.iter_mut().await.unwrap();
+    /// let mut iter = queue.try_iter_mut().await.unwrap();
     /// let value = iter.next().unwrap();
     /// *value = 42;
     /// assert_eq!(queue.elements().await.unwrap(), vec![42]);
     /// # })
     /// ```
-    pub async fn iter_mut(&mut self) -> Result<IterMut<'_, T>, ViewError> {
+    pub async fn try_iter_mut(&mut self) -> Result<IterMut<'_, T>, ViewError> {
         self.load_all().await?;
         Ok(self.new_back_values.iter_mut())
     }
@@ -853,5 +865,53 @@ mod graphql {
                 .read_front(count.unwrap_or_else(|| self.count()))
                 .await?)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        batch::Batch,
+        context::{Context, MemoryContext},
+        store::WritableKeyValueStore as _,
+    };
+
+    /// Regression test: a failed load while advancing the cursor in
+    /// `delete_front` must not leave the view in a state where the bucket at
+    /// `cursor.offset` is `NotLoaded`. Previously the cursor was advanced
+    /// before the load was attempted, so a subsequent `pre_save` would hit
+    /// `unreachable!("The front bucket is always loaded.")`.
+    #[tokio::test]
+    async fn delete_front_load_failure_preserves_invariant() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut view = BucketQueueView::<_, u8, 2>::load(context.clone()).await?;
+        for value in [1u8, 2, 3, 4] {
+            view.push_back(value);
+        }
+        save(&context, &mut view).await?;
+
+        let mut view = BucketQueueView::<_, u8, 2>::load(context.clone()).await?;
+
+        let bucket1_key = view.get_bucket_key(1)?;
+        let mut batch = Batch::new();
+        batch.delete_key(bucket1_key);
+        context.store().write_batch(batch).await?;
+
+        view.delete_front().await?;
+        let err = view.delete_front().await.expect_err("load should fail");
+        assert!(matches!(err, ViewError::MissingEntries(_)));
+
+        save(&context, &mut view).await?;
+
+        Ok(())
+    }
+
+    async fn save<V: View>(context: &V::Context, view: &mut V) -> Result<(), ViewError> {
+        let mut batch = Batch::new();
+        view.pre_save(&mut batch)?;
+        context.store().write_batch(batch).await?;
+        view.post_save();
+        Ok(())
     }
 }

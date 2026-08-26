@@ -363,7 +363,7 @@ impl Ed25519Signature {
     {
         Ed25519Signature::verify_batch_internal(value, votes).map_err(|error| {
             CryptoError::InvalidSignature {
-                error: format!("batched {}", error),
+                error: format!("batched {error}"),
                 type_name: T::type_name().to_string(),
             }
         })
@@ -411,7 +411,7 @@ impl<'de> Deserialize<'de> for Ed25519Signature {
 impl fmt::Display for Ed25519Signature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = hex::encode(self.0.to_bytes());
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

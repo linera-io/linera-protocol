@@ -13,7 +13,7 @@ use futures::StreamExt;
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash, InMemorySigner},
     data_types::*,
-    identifiers::{Account, AccountOwner, ApplicationId},
+    identifiers::{Account, AccountOwner, ApplicationId, BlobId, BlobType, GenericApplicationId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
@@ -35,8 +35,6 @@ use test_helpers::{
     assert_insufficient_funding,
 };
 
-#[cfg(feature = "dynamodb")]
-use crate::test_utils::DynamoDbStorageBuilder;
 #[cfg(feature = "rocksdb")]
 use crate::test_utils::RocksDbStorageBuilder;
 #[cfg(feature = "scylladb")]
@@ -44,7 +42,7 @@ use crate::test_utils::ScyllaDbStorageBuilder;
 #[cfg(feature = "storage-service")]
 use crate::test_utils::ServiceStorageBuilder;
 use crate::{
-    client::{ChainClient, ChainClientError, ChainClientOptions, ClientOutcome, ListeningMode},
+    client::{chain_client, ChainClient, ClientOutcome, ListeningMode},
     environment::wallet::Chain,
     local_node::LocalNodeError,
     node::{
@@ -71,7 +69,7 @@ fn test_listener_is_send() {
 
     async fn check_listener(
         chain_client: ChainClient<impl Environment>,
-    ) -> Result<(), ChainClientError> {
+    ) -> Result<(), chain_client::Error> {
         let (listener, _abort_notifications, _notifications) = chain_client.listen().await?;
         ensure_send(&listener);
         Ok(())
@@ -83,7 +81,6 @@ fn test_listener_is_send() {
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_initiating_valid_transfer_with_notifications<B>(
@@ -115,14 +112,14 @@ where
             sender.chain_info().await?.next_block_height,
             BlockHeight::from(1)
         );
-        assert!(sender.pending_proposal().is_none());
+        assert!(sender.pending_proposal().await.is_none());
         assert_eq!(
             sender.local_balance().await.unwrap(),
             Amount::from_millis(1000)
         );
         assert_eq!(
             builder
-                .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
+                .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::ZERO, 3)
                 .await
                 .unwrap(),
             certificate
@@ -153,7 +150,7 @@ where
             assert_eq!(height, BlockHeight::ZERO);
             assert_eq!(executed_block_hash, hash);
         }
-        other => panic!("Expected NewBlock notification, got {:?}", other),
+        other => panic!("Expected NewBlock notification, got {other:?}"),
     }
     Ok(())
 }
@@ -161,7 +158,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_claim_amount<B>(storage_builder: B) -> anyhow::Result<()>
@@ -272,7 +268,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_rotate_key_pair<B>(storage_builder: B) -> anyhow::Result<()>
@@ -295,11 +290,11 @@ where
         sender.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
-    assert!(sender.pending_proposal().is_none());
+    assert!(sender.pending_proposal().await.is_none());
     assert_eq!(sender.identity().await?, new_owner);
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::ZERO, 3)
             .await
             .unwrap(),
         certificate
@@ -320,7 +315,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_transfer_ownership<B>(storage_builder: B) -> anyhow::Result<()>
@@ -339,14 +333,14 @@ where
         sender.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
-    assert!(sender.pending_proposal().is_none());
+    assert!(sender.pending_proposal().await.is_none());
     assert_matches!(
         sender.identity().await,
-        Err(ChainClientError::NotAnOwner(_))
+        Err(chain_client::Error::NotAnOwner(_))
     );
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::ZERO, 3)
             .await
             .unwrap(),
         certificate
@@ -361,7 +355,7 @@ where
         sender
             .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
             .await,
-        Err(ChainClientError::NotAnOwner(_))
+        Err(chain_client::Error::NotAnOwner(_))
     );
     Ok(())
 }
@@ -369,7 +363,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_share_ownership<B>(storage_builder: B) -> anyhow::Result<()>
@@ -388,11 +381,11 @@ where
         sender.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
-    assert!(sender.pending_proposal().is_none());
-    assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
+    assert!(sender.pending_proposal().await.is_none());
+    assert_eq!(sender.identity().await?, sender.preferred_owner().unwrap());
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(sender.chain_id, BlockHeight::ZERO, 3)
+            .check_that_validators_have_certificate(sender.chain_id(), BlockHeight::ZERO, 3)
             .await
             .unwrap(),
         certificate
@@ -412,7 +405,7 @@ where
     // Make a client to try the new key.
     let mut client = builder
         .make_client(
-            sender.chain_id,
+            sender.chain_id(),
             sender_info.block_hash,
             BlockHeight::from(2),
         )
@@ -422,7 +415,7 @@ where
     // the blocks yet.
     assert_matches!(
         client.local_balance().await,
-        Err(ChainClientError::WalletSynchronizationError)
+        Err(chain_client::Error::WalletSynchronizationError)
     );
     client.synchronize_from_validators().await.unwrap();
     assert_eq!(
@@ -435,7 +428,7 @@ where
     let result = client.burn(AccountOwner::CHAIN, Amount::ONE).await;
     assert_matches!(
         result,
-        Err(ChainClientError::CommunicationError(
+        Err(chain_client::Error::CommunicationError(
             CommunicationError::Trusted(ClientIoError { .. }),
         ))
     );
@@ -443,7 +436,7 @@ where
     builder.set_fault_type([2, 3], FaultType::Offline);
     assert_matches!(
         sender.burn(AccountOwner::CHAIN, Amount::ONE).await,
-        Err(ChainClientError::CommunicationError(
+        Err(chain_client::Error::CommunicationError(
             CommunicationError::Trusted(ClientIoError { .. })
         ))
     );
@@ -456,7 +449,7 @@ where
         client.local_balance().await.unwrap(),
         Amount::from_tokens(2)
     );
-    client.clear_pending_proposal();
+    client.clear_pending_proposal().await;
     client
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
@@ -468,7 +461,7 @@ where
     sender.process_inbox().await.unwrap();
     assert_eq!(client.chain_info().await?, sender.chain_info().await?);
     assert_eq!(sender.local_balance().await.unwrap(), Amount::ONE);
-    sender.clear_pending_proposal();
+    sender.clear_pending_proposal().await;
     sender
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
@@ -485,7 +478,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_open_chain_then_close_it<B>(storage_builder: B) -> anyhow::Result<()>
@@ -512,8 +504,8 @@ where
         sender.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
-    assert!(sender.pending_proposal().is_none());
-    assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
+    assert!(sender.pending_proposal().await.is_none());
+    assert_eq!(sender.identity().await?, sender.preferred_owner().unwrap());
     // Make a client to try the new chain.
     let mut client = builder.make_client(new_id, None, BlockHeight::ZERO).await?;
     client.set_preferred_owner(new_public_key.into());
@@ -526,7 +518,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 /// Regression test: A super owner should be able to propose even without multi-leader rounds.
@@ -568,7 +559,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_transfer_then_open_chain<B>(storage_builder: B) -> anyhow::Result<()>
@@ -629,8 +619,8 @@ where
         parent.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
-    assert!(sender.pending_proposal().is_none());
-    assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
+    assert!(sender.pending_proposal().await.is_none());
+    assert_eq!(sender.identity().await?, sender.preferred_owner().unwrap());
     assert_matches!(
         &certificate.block().body.transactions[0],
         Transaction::ExecuteOperation(Operation::System(system_op)) if matches!(**system_op, SystemOperation::OpenChain(_)),
@@ -638,7 +628,7 @@ where
     );
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(parent.chain_id, BlockHeight::from(0), 3)
+            .check_that_validators_have_certificate(parent.chain_id(), BlockHeight::from(0), 3)
             .await
             .unwrap(),
         certificate
@@ -672,7 +662,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_open_chain_then_transfer<B>(storage_builder: B) -> anyhow::Result<()>
@@ -706,8 +695,8 @@ where
         sender.chain_info().await?.next_block_height,
         BlockHeight::from(2)
     );
-    assert!(sender.pending_proposal().is_none());
-    assert_eq!(sender.identity().await?, sender.preferred_owner.unwrap());
+    assert!(sender.pending_proposal().await.is_none());
+    assert_eq!(sender.identity().await?, sender.preferred_owner().unwrap());
     // Make a client to try the new chain.
     let mut client = builder.make_client(new_id, None, BlockHeight::ZERO).await?;
     client.set_preferred_owner(new_public_key.into());
@@ -730,7 +719,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_close_chain<B>(storage_builder: B) -> anyhow::Result<()>
@@ -759,11 +747,11 @@ where
         client1.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
-    assert!(client1.pending_proposal().is_none());
+    assert!(client1.pending_proposal().await.is_none());
     assert!(client1.identity().await.is_ok());
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(client1.chain_id, BlockHeight::ZERO, 3)
+            .check_that_validators_have_certificate(client1.chain_id(), BlockHeight::ZERO, 3)
             .await
             .unwrap(),
         certificate
@@ -775,12 +763,11 @@ where
     assert!(
         matches!(
             &result,
-            Err(ChainClientError::LocalNodeError(
+            Err(chain_client::Error::LocalNodeError(
                 LocalNodeError::WorkerError(WorkerError::ChainError(err))
             )) if matches!(**err, ChainError::ClosedChain)
         ),
-        "Unexpected result: {:?}",
-        result,
+        "Unexpected result: {result:?}",
     );
 
     // Incoming messages now get rejected.
@@ -817,7 +804,7 @@ where
     // Since blocks are free of charge on closed chains, empty blocks are not allowed.
     assert_matches!(
         client1.execute_operations(vec![], vec![]).await,
-        Err(ChainClientError::LocalNodeError(
+        Err(chain_client::Error::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(error))
         )) if matches!(*error, ChainError::EmptyBlock)
     );
@@ -831,7 +818,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_initiating_valid_transfer_too_many_faults<B>(storage_builder: B) -> anyhow::Result<()>
@@ -853,7 +839,7 @@ where
     // Malicious validators always return ArithmeticError when handling a proposal.
     assert_matches!(
         result,
-        Err(ChainClientError::CommunicationError(
+        Err(chain_client::Error::CommunicationError(
             CommunicationError::Trusted(NodeError::InactiveChain(_))
         )),
         "unexpected result"
@@ -862,7 +848,7 @@ where
         chain_1.chain_info().await?.next_block_height,
         BlockHeight::ZERO
     );
-    assert!(chain_1.pending_proposal().is_some());
+    assert!(chain_1.pending_proposal().await.is_some());
     assert_eq!(
         chain_1.local_balance().await.unwrap(),
         Amount::from_tokens(4)
@@ -870,10 +856,70 @@ where
     Ok(())
 }
 
+/// Regression test: when the preferred owner changes while a pending proposal exists, the
+/// next call to `process_pending_block` must sign the proposal as the original author (the
+/// owner that staged it), not as the new preferred owner. Otherwise the worker rejects the
+/// proposal with `WorkerError::InvalidSigner` because the operations in the block are
+/// authenticated by the original owner.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_pending_block_is_signed_by_original_owner<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let mut client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let owner_a = client.identity().await?;
+
+    // Co-own the chain with a second owner `b` and no super-owner, so it runs in
+    // multi-leader rounds — mirroring a chain shared by a wallet key and an autosigner.
+    let owner_b: AccountOwner = builder.signer.generate_new().into();
+    let ownership =
+        ChainOwnership::multiple([(owner_a, 50), (owner_b, 50)], 10, TimeoutConfig::default());
+    client.change_ownership(ownership).await?;
+
+    // Stage a block as owner `a` that can't reach a quorum, so it stays pending in the
+    // shared per-chain queue, authenticated by `a`.
+    builder.set_fault_type([0, 1], FaultType::Offline);
+    assert_matches!(
+        client.burn(AccountOwner::CHAIN, Amount::ONE).await,
+        Err(_),
+        "the burn should fail to commit with only two of four validators online"
+    );
+    let pending = client
+        .pending_proposal()
+        .await
+        .expect("a pending proposal authored by owner `a` should remain");
+    assert_eq!(pending.block.authenticated_signer, Some(owner_a));
+
+    // Bring the validators back and act as owner `b` on the same shared queue.
+    builder.set_fault_type([0, 1], FaultType::Honest);
+    client.synchronize_from_validators().await?;
+    client.set_preferred_owner(owner_b);
+
+    // Owner `b`'s client retries the pending block. The signer still holds owner `a`'s key,
+    // so the proposal is signed as `a` and the worker accepts it.
+    let certificate = client
+        .process_pending_block()
+        .await
+        .unwrap_ok_committed()
+        .expect("the pending block should be committed");
+    assert_eq!(
+        certificate.block().header.authenticated_signer,
+        Some(owner_a)
+    );
+    assert!(client.pending_proposal().await.is_none());
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_bidirectional_transfer<B>(storage_builder: B) -> anyhow::Result<()>
@@ -902,7 +948,7 @@ where
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::from_tokens(3),
-            Account::chain(client2.chain_id),
+            Account::chain(client2.chain_id()),
         )
         .await
         .unwrap_ok_committed();
@@ -911,7 +957,7 @@ where
         client1.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
-    assert!(client1.pending_proposal().is_none());
+    assert!(client1.pending_proposal().await.is_none());
     assert_eq!(client1.local_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(
         client1.query_system_application(SystemQuery).await.unwrap(),
@@ -926,7 +972,7 @@ where
 
     assert_eq!(
         builder
-            .check_that_validators_have_certificate(client1.chain_id, BlockHeight::ZERO, 3)
+            .check_that_validators_have_certificate(client1.chain_id(), BlockHeight::ZERO, 3)
             .await
             .unwrap(),
         certificate
@@ -956,7 +1002,7 @@ where
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::ONE,
-            Account::chain(client1.chain_id),
+            Account::chain(client1.chain_id()),
         )
         .await
         .unwrap();
@@ -964,7 +1010,7 @@ where
         client2.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
-    assert!(client2.pending_proposal().is_none());
+    assert!(client2.pending_proposal().await.is_none());
     assert_eq!(
         client2.local_balance().await.unwrap(),
         Amount::from_tokens(2)
@@ -989,7 +1035,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_receiving_unconfirmed_transfer<B>(storage_builder: B) -> anyhow::Result<()>
@@ -1006,7 +1051,7 @@ where
         .transfer_to_account_unsafe_unconfirmed(
             AccountOwner::CHAIN,
             Amount::from_tokens(2),
-            Account::chain(client2.chain_id),
+            Account::chain(client2.chain_id()),
         )
         .await
         .unwrap_ok_committed();
@@ -1019,7 +1064,7 @@ where
         client1.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
-    assert!(client1.pending_proposal().is_none());
+    assert!(client1.pending_proposal().await.is_none());
     // The receiver doesn't know about the transfer.
     client2.process_inbox().await.unwrap();
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
@@ -1035,7 +1080,163 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_proposal_batches_missing_dependency_catch_up<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    // Regression test for the hub-chain freeze fixed by the aggregated
+    // `MissingCrossChainUpdates` error. A block that consumes incoming bundles from several
+    // sender chains is proposed to a validator that is behind on *all* of those senders. The
+    // validator must report every missing sender at once and the client must catch them up in
+    // a single batch, instead of
+    // the legacy one-rejection-and-round-trip-per-sender loop that serialized into multi-minute
+    // stalls. The test exercises the client-side batching/termination logic in `updater.rs`,
+    // which the worker- and gRPC-level unit tests in this PR do not cover.
+    let signer = InMemorySigner::new(None);
+    // Zero default-faulty validators so the only unavailable validators are the ones this test
+    // deliberately takes offline below; the quorum is still three out of four.
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+
+    // Three independent sender chains and one recipient ("hub") chain. The committee has four
+    // validators with a quorum of three.
+    let sender1 = builder.add_root_chain(1, Amount::from_tokens(2)).await?;
+    let sender2 = builder.add_root_chain(2, Amount::from_tokens(2)).await?;
+    let sender3 = builder.add_root_chain(3, Amount::from_tokens(2)).await?;
+    let recipient = builder.add_root_chain(4, Amount::ZERO).await?;
+    let recipient_id = recipient.chain_id();
+
+    // Phase A: validator 3 is unavailable while the senders transfer to the recipient. In the
+    // single-process harness a validator only delivers a cross-chain message to the recipient's
+    // inbox when it handles the sender's certificate, so validator 3 ends up missing both the
+    // sender blocks and the resulting bundles in the recipient's inbox. The transfers still
+    // reach the quorum {0, 1, 2}.
+    builder.set_fault_type([3], FaultType::OfflineWithInfo);
+    for sender in [&sender1, &sender2, &sender3] {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::ONE,
+                Account::chain(recipient_id),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+
+    // The recipient learns about all three incoming bundles (and preprocesses the sender blocks
+    // into its local storage) from the honest quorum.
+    recipient.synchronize_from_validators().await?;
+
+    // Phase B: validator 3 comes back, but validator 2 — one of the validators that *does* have
+    // the sender blocks — goes offline. The recipient's block now needs validator 3's vote to
+    // reach a quorum {0, 1, 3}, so the updater cannot route around validator 3: it must catch it
+    // up on every missing sender before validator 3 can accept the proposal.
+    builder.set_fault_type([3], FaultType::Honest);
+    builder.set_fault_type([2], FaultType::Offline);
+
+    // Consume all three bundles in a single block. Validator 3 rejects the proposal with an
+    // aggregated `MissingCrossChainUpdates` listing all three senders; the client syncs them in
+    // one batch and the block is confirmed.
+    recipient.process_inbox().await?;
+
+    assert_eq!(
+        recipient.local_balance().await.unwrap(),
+        Amount::from_tokens(3),
+    );
+    // A single block consumed all three bundles (height 1, not 3).
+    assert_eq!(
+        recipient.chain_info().await?.next_block_height,
+        BlockHeight::from(1),
+    );
+    assert!(recipient.pending_proposal().await.is_none());
+
+    // The previously-lagging validator 3 was caught up and voted: the block reached the quorum
+    // {0, 1, 3} (validator 2 is offline and is skipped by the check).
+    builder
+        .check_that_validators_have_certificate(recipient_id, BlockHeight::ZERO, 3)
+        .await
+        .unwrap();
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_proposal_catch_up_with_sender_gap<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    // A lagging validator must be caught up on a sender that has a *gap* from the recipient's
+    // perspective: sender block 0 messages the recipient, block 1 does not, block 2 does. The
+    // recipient consumes those two bundles in two separate blocks, so the second proposal only
+    // references sender block 2 — whose bundle can only be scheduled once block 0 is executed.
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let sender_id = sender.chain_id();
+    let recipient_id = recipient.chain_id();
+
+    // Validator 3 is offline while the sender builds a gapped chain and the recipient consumes
+    // the first bundle.
+    builder.set_fault_type([3], FaultType::OfflineWithInfo);
+
+    // Sender block 0 -> recipient.
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+    recipient.synchronize_from_validators().await?;
+    recipient.process_inbox().await?; // recipient block 0 consumes sender block 0's bundle
+
+    // Sender block 1 -> itself (no message to the recipient: the gap), block 2 -> recipient.
+    sender
+        .transfer_to_account(AccountOwner::CHAIN, Amount::ONE, Account::chain(sender_id))
+        .await
+        .unwrap_ok_committed();
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(3),
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+    recipient.synchronize_from_validators().await?;
+
+    // Validator 3 comes back; validator 2 goes offline so the recipient's next block needs
+    // validator 3's vote — the updater must catch it up on the sender across the gap.
+    builder.set_fault_type([3], FaultType::Honest);
+    builder.set_fault_type([2], FaultType::Offline);
+
+    recipient.process_inbox().await?; // recipient block 1 consumes sender block 2's bundle
+
+    assert_eq!(
+        recipient.local_balance().await.unwrap(),
+        Amount::from_tokens(4),
+    );
+    assert_eq!(
+        recipient.chain_info().await?.next_block_height,
+        BlockHeight::from(2),
+    );
+    builder
+        .check_that_validators_have_certificate(recipient_id, BlockHeight::from(1), 3)
+        .await
+        .unwrap();
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances<B>(
@@ -1056,7 +1257,7 @@ where
         .transfer_to_account_unsafe_unconfirmed(
             AccountOwner::CHAIN,
             Amount::ONE,
-            Account::chain(client2.chain_id),
+            Account::chain(client2.chain_id()),
         )
         .await
         .unwrap();
@@ -1064,7 +1265,7 @@ where
         .transfer_to_account_unsafe_unconfirmed(
             AccountOwner::CHAIN,
             Amount::ONE,
-            Account::chain(client2.chain_id),
+            Account::chain(client2.chain_id()),
         )
         .await
         .unwrap();
@@ -1079,7 +1280,7 @@ where
         .transfer_to_account_unsafe_unconfirmed(
             AccountOwner::CHAIN,
             Amount::from_tokens(2),
-            Account::chain(client3.chain_id),
+            Account::chain(client3.chain_id()),
         )
         .await;
     assert_insufficient_funding(obtained_error, ChainExecutionContext::Operation(0));
@@ -1095,7 +1296,7 @@ where
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::from_tokens(2),
-            Account::chain(client3.chain_id),
+            Account::chain(client3.chain_id()),
         )
         .await
         .unwrap_ok_committed();
@@ -1105,13 +1306,13 @@ where
         client1.chain_info().await?.next_block_height,
         BlockHeight::from(2)
     );
-    assert!(client1.pending_proposal().is_none());
+    assert!(client1.pending_proposal().await.is_none());
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     assert_eq!(
         client2.chain_info().await?.next_block_height,
         BlockHeight::from(1)
     );
-    assert!(client2.pending_proposal().is_none());
+    assert!(client2.pending_proposal().await.is_none());
     // Last one was not confirmed remotely, hence a conservative balance.
     assert_eq!(client2.local_balance().await.unwrap(), Amount::ZERO);
     // Let the receiver confirm in last resort.
@@ -1126,7 +1327,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_change_voting_rights<B>(storage_builder: B) -> anyhow::Result<()>
@@ -1168,7 +1368,7 @@ where
         admin.chain_info().await?.next_block_height,
         BlockHeight::from(5)
     );
-    assert!(admin.pending_proposal().is_none());
+    assert!(admin.pending_proposal().await.is_none());
     assert!(admin.identity().await.is_ok());
     assert_eq!(admin.chain_info().await?.epoch, Epoch::from(2));
 
@@ -1205,11 +1405,11 @@ where
     // Revoking the current or an already revoked epoch fails.
     assert_matches!(
         admin.revoke_epochs(Epoch::ZERO).await,
-        Err(ChainClientError::EpochAlreadyRevoked)
+        Err(chain_client::Error::EpochAlreadyRevoked)
     );
     assert_matches!(
         admin.revoke_epochs(Epoch::from(3)).await,
-        Err(ChainClientError::CannotRevokeCurrentEpoch(Epoch(2)))
+        Err(chain_client::Error::CannotRevokeCurrentEpoch(Epoch(2)))
     );
 
     // Have the admin chain deprecate the previous epoch.
@@ -1257,6 +1457,111 @@ where
     Ok(())
 }
 
+/// Tests that a client whose local view of the admin chain is stale can still use a blob
+/// whose publishing certificate was signed by a committee from an epoch the client has
+/// not heard of yet.
+///
+/// The blob-recovery path downloads the publishing certificate from a validator, but
+/// validating it locally yields `CheckCertificateResult::FutureEpoch`. The client must
+/// react by catching up on the admin chain and retrying, instead of failing on the
+/// unknown epoch.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_stale_client_reads_blob_published_in_future_epoch<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let admin = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+    let publisher = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let stale = builder.add_root_chain(2, Amount::from_tokens(3)).await?;
+    let validators = builder.initial_committee.validators().clone();
+
+    // Move the network to epoch 1. The publisher catches up; `stale` does not.
+    let committee = Committee::new(validators, ResourceControlPolicy::default());
+    admin.stage_new_committee(committee).await?;
+    publisher.synchronize_from_validators().await?;
+    publisher.process_inbox().await?;
+    assert_eq!(publisher.chain_info().await?.epoch, Epoch::from(1));
+    assert_eq!(stale.chain_info().await?.epoch, Epoch::ZERO);
+
+    // Publish a data blob under the epoch-1 committee.
+    let blob_bytes = b"future-epoch blob".to_vec();
+    let blob_id = Blob::new(BlobContent::new_data(blob_bytes.clone())).id();
+    let certificate = publisher
+        .publish_data_blob(blob_bytes)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(certificate.block().header.epoch, Epoch::from(1));
+
+    // The stale client needs the blob: it is missing locally, so the client downloads
+    // the publishing certificate from a validator and must accept it after catching up
+    // on the admin chain, rather than choking on the unknown epoch.
+    stale
+        .read_data_blob(blob_id.hash)
+        .await
+        .unwrap_ok_committed();
+
+    Ok(())
+}
+
+/// Like `test_stale_client_reads_blob_published_in_future_epoch`, but one validator is
+/// offline while the stale client catches up. The admin-chain self-heal races the
+/// reachable validators, so a single unresponsive one must not prevent recovery.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_stale_client_reads_future_epoch_blob_with_offline_validator<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let admin = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+    let publisher = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let stale = builder.add_root_chain(2, Amount::from_tokens(3)).await?;
+    let validators = builder.initial_committee.validators().clone();
+
+    // Move the network to epoch 1 (the three remaining validators still form a quorum).
+    // The publisher catches up; `stale` does not.
+    let committee = Committee::new(validators, ResourceControlPolicy::default());
+    admin.stage_new_committee(committee).await?;
+    publisher.synchronize_from_validators().await?;
+    publisher.process_inbox().await?;
+    assert_eq!(publisher.chain_info().await?.epoch, Epoch::from(1));
+    assert_eq!(stale.chain_info().await?.epoch, Epoch::ZERO);
+
+    // Publish a data blob under the epoch-1 committee.
+    let blob_bytes = b"future-epoch blob".to_vec();
+    let blob_id = Blob::new(BlobContent::new_data(blob_bytes.clone())).id();
+    let certificate = publisher
+        .publish_data_blob(blob_bytes)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(certificate.block().header.epoch, Epoch::from(1));
+
+    // Take one validator offline. The stale client's admin-chain catch-up still succeeds
+    // against the reachable ones.
+    builder.set_fault_type([3], FaultType::Offline);
+
+    stale
+        .read_data_blob(blob_id.hash)
+        .await
+        .unwrap_ok_committed();
+
+    Ok(())
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[test_log::test(tokio::test)]
@@ -1286,6 +1591,13 @@ where
     Ok(())
 }
 
+/// The sender chain should be stored sparsely in the receiver's node: only blocks
+/// that sent messages to us should be downloaded, not the intermediate ones. When
+/// the sender is a non-root chain (so its `ChainDescription` blob isn't in the
+/// receiver's genesis storage) and the sender's height-0 block doesn't send to us,
+/// the `ChainDescription` itself should never be downloaded either — not during
+/// the initial message processing, and not during a later re-sync that routes the
+/// sender through `retry_pending_cross_chain_requests_from_sender_chains`.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[test_log::test(tokio::test)]
@@ -1294,12 +1606,42 @@ where
     B: StorageBuilder,
 {
     let signer = InMemorySigner::new(None);
-    let mut builder = TestBuilder::new(storage_builder, 2, 0, signer).await?;
-    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
+    let owner = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
     let receiver_id = receiver.chain_id();
 
+    // Open the sender as a non-root chain so that its `ChainDescription` isn't
+    // pre-populated in the receiver's genesis storage. We also make the sender's
+    // first block a burn rather than a transfer to the receiver: that keeps the
+    // message-sending blocks at height >= 1, so preprocessing them never requires
+    // the sender's `ChainDescription` (only height-0 blocks do).
+    let sender_public_key = builder.signer.generate_new();
+    let sender_ownership = ChainOwnership::single(sender_public_key.into())
+        .with_regular_owner(sender_public_key.into(), 100);
+    let (sender_description, _creation_certificate) = Box::pin(owner.open_chain(
+        sender_ownership,
+        ApplicationPermissions::default(),
+        Amount::from_tokens(4),
+    ))
+    .await
+    .unwrap_ok_committed();
+    let sender_id = sender_description.id();
+    let sender_chain_desc_blob_id = BlobId::new(sender_id.0, BlobType::ChainDescription);
+
+    let mut sender = builder
+        .make_client(sender_id, None, BlockHeight::ZERO)
+        .await?;
+    sender.set_preferred_owner(sender_public_key.into());
+    sender.synchronize_from_validators().await?;
+
+    // Heights 0 and 2 are burns; heights 1 and 3 send to the receiver.
     let cert0 = sender
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    let cert1 = sender
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::ONE,
@@ -1307,11 +1649,11 @@ where
         )
         .await
         .unwrap_ok_committed();
-    let cert1 = sender
+    let cert2 = sender
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
         .unwrap_ok_committed();
-    let cert2 = sender
+    let cert3 = sender
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::ONE,
@@ -1320,12 +1662,14 @@ where
         .await
         .unwrap_ok_committed();
 
-    // Process the notification about the incoming message.
+    // Process the notification about the most recent incoming message. This walks
+    // back along `previous_message_blocks` and preprocesses only the sender blocks
+    // that sent to us (heights 1 and 3).
     let notification = Notification {
         chain_id: receiver_id,
         reason: Reason::NewIncomingBundle {
-            origin: cert2.block().header.chain_id,
-            height: cert2.block().header.height,
+            origin: sender_id,
+            height: cert3.block().header.height,
         },
     };
     let validator = builder
@@ -1338,25 +1682,31 @@ where
         .await;
     receiver.process_inbox().await?;
 
-    // The first and last blocks sent something to the receiver. The middle one didn't.
-    // So the sender chain should have a gap.
+    // Only the blocks that sent something to the receiver should be in local
+    // storage. The burn blocks in between — and the sender's `ChainDescription`
+    // blob itself — should never have been downloaded.
+    let storage = receiver.storage_client();
+    assert!(!storage.contains_certificate(cert0.hash()).await?);
+    assert!(storage.contains_certificate(cert1.hash()).await?);
+    assert!(!storage.contains_certificate(cert2.hash()).await?);
+    assert!(storage.contains_certificate(cert3.hash()).await?);
     assert!(
-        receiver
-            .storage_client()
-            .contains_certificate(cert0.hash())
-            .await?
+        !storage.contains_blob(sender_chain_desc_blob_id).await?,
+        "preprocessing non-height-0 sender blocks must not download the ChainDescription",
     );
+
+    // `process_notification_from` does not advance the client's
+    // `received_certificate_trackers`, so a subsequent `synchronize_from_validators`
+    // still sees (sender, 1) and (sender, 3) in the received log. But the sender's
+    // outbox has those heights scheduled locally now, so `find_received_certificates`
+    // filters them out and routes the sender through
+    // `retry_pending_cross_chain_requests_from_sender_chains`. Before the fix this
+    // initialized the sender's chain worker inside the receiver's node and, on
+    // failing to find the `ChainDescription` blob in storage, triggered a download.
+    receiver.synchronize_from_validators().await?;
     assert!(
-        !receiver
-            .storage_client()
-            .contains_certificate(cert1.hash())
-            .await?
-    );
-    assert!(
-        receiver
-            .storage_client()
-            .contains_certificate(cert2.hash())
-            .await?
+        !storage.contains_blob(sender_chain_desc_blob_id).await?,
+        "retry_pending_cross_chain_requests must not download the ChainDescription",
     );
 
     Ok(())
@@ -1365,7 +1715,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_finalize_locked_block_with_blobs<B>(storage_builder: B) -> anyhow::Result<()>
@@ -1420,8 +1769,7 @@ where
         .await;
     assert_matches!(
         result,
-        Err(ChainClientError::RemoteNodeError(NodeError::BlobsNotFound(not_found_blob_ids)))
-            if not_found_blob_ids == [blob0_id]
+        Err(chain_client::Error::CannotDownloadBlob(blob_id)) if blob_id == blob0_id
     );
 
     // Take one validator down
@@ -1473,7 +1821,7 @@ where
         .await;
 
     assert!(b0_result.is_err());
-    assert!(client_2a.pending_proposal().is_some());
+    assert!(client_2a.pending_proposal().await.is_some());
 
     for i in 0..=2 {
         let info = builder
@@ -1540,7 +1888,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_existing_proposal_with_blobs<B>(storage_builder: B) -> anyhow::Result<()>
@@ -1611,7 +1958,7 @@ where
         .await;
 
     assert!(b0_result.is_err());
-    assert!(client2_a.pending_proposal().is_some());
+    assert!(client2_a.pending_proposal().await.is_some());
 
     for i in 0..=2 {
         let validator_manager = builder
@@ -1668,7 +2015,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_conflicting_proposals<B>(storage_builder: B) -> anyhow::Result<()>
@@ -1751,7 +2097,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_re_propose_locked_block_with_blobs<B>(storage_builder: B) -> anyhow::Result<()>
@@ -1842,7 +2187,7 @@ where
         .await;
 
     assert!(b0_result.is_err());
-    assert!(client3_a.pending_proposal().is_some());
+    assert!(client3_a.pending_proposal().await.is_some());
 
     let manager = client3_a
         .chain_info_with_manager_values()
@@ -1977,7 +2322,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_request_leader_timeout<B>(storage_builder: B) -> anyhow::Result<()>
@@ -2002,6 +2346,11 @@ where
     );
     let owner0 = client.identity().await.unwrap();
     let owner1 = AccountSecretKey::generate().public().into();
+    // The observer needs to fully execute the client's chain to see its manager
+    // state; otherwise the client chain would only be preprocessed.
+    observer
+        .client
+        .extend_chain_mode(chain_id, ListeningMode::FollowChain);
 
     let owners = [(owner0, 100), (owner1, 100)];
     let ownership = ChainOwnership::multiple(owners, 0, TimeoutConfig::default());
@@ -2019,14 +2368,14 @@ where
     let result = client.request_leader_timeout().await;
     if !matches!(
         result,
-        Err(ChainClientError::CommunicationError(
+        Err(chain_client::Error::CommunicationError(
             CommunicationError::Trusted(NodeError::ChainError { .. })
         ))
     ) && !matches!(&result,
-        Err(ChainClientError::CommunicationError(CommunicationError::Sample(samples)))
+        Err(chain_client::Error::CommunicationError(CommunicationError::Sample(samples)))
         if samples.iter().any(|(err, _)| matches!(err, NodeError::ChainError { .. }))
     ) {
-        panic!("unexpected leader timeout result: {:?}", result);
+        panic!("unexpected leader timeout result: {result:?}");
     }
 
     clock.set(manager.round_timeout.unwrap());
@@ -2058,7 +2407,7 @@ where
     };
     let round_number = match round {
         Round::SingleLeader(round_number) => round_number,
-        round => panic!("Unexpected round {:?}", round),
+        round => panic!("Unexpected round {round:?}"),
     };
 
     // The other owner is leader now. Trying to submit a block should return `WaitForTimeout`.
@@ -2075,7 +2424,7 @@ where
         ClientOutcome::Conflict(_) => panic!("Got conflict where we aren't the leader."),
         ClientOutcome::WaitForTimeout(timeout) => timeout,
     };
-    client.clear_pending_proposal();
+    client.clear_pending_proposal().await;
     assert!(client.request_leader_timeout().await.is_err());
     clock.set(timeout.timestamp);
     client.request_leader_timeout().await.unwrap();
@@ -2118,7 +2467,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_request_leader_timeout_client_behind_validators<B>(
@@ -2226,10 +2574,231 @@ where
     Ok(())
 }
 
+/// The updater must signal `LocalNodeLagging` — rather than pushing chain information —
+/// when a validator rejects a proposal because it is *ahead* of the proposal's round or
+/// height.
+///
+/// Drives a `RemoteNodeUpdater` directly. A full client cannot reach this state without
+/// clock skew: whenever validators advanced by timeout, the shared clock has also expired
+/// the client's own round, so the client requests a timeout certificate before ever
+/// proposing at the stale round.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_stale_proposal_signals_local_node_lagging<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use linera_chain::test::{make_first_block, BlockTestExt as _};
+
+    use crate::{
+        local_node::LocalNodeClient,
+        remote_node::RemoteNode,
+        updater::{CommunicateAction, RemoteNodeUpdater},
+        worker::WorkerState,
+        ChainWorkerConfig,
+    };
+
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let client = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let chain_id = client.chain_id();
+    let owner0 = client.identity().await.unwrap();
+    let owner1: AccountOwner = builder.signer.generate_new().into();
+
+    // Set up a multi-owner chain with single-leader rounds only.
+    let owners = [(owner0, 100), (owner1, 100)];
+    let ownership = ChainOwnership::multiple(owners, 0, TimeoutConfig::default());
+    client.change_ownership(ownership).await.unwrap();
+    let info = client.chain_info().await.unwrap();
+
+    // Advance the validators by two rounds, recording each round's leader: proposals must
+    // be signed by their round's leader for the round check to even be reached. The stale
+    // proposal targets the intermediate round rather than `SingleLeader(0)`, whose
+    // obsolete proposals are rejected with `InsufficientRound` instead of `WrongRound`.
+    let client2 = builder
+        .make_client(chain_id, None, BlockHeight::ZERO)
+        .await?;
+    client2.synchronize_from_validators().await?;
+    let manager = client2.chain_info().await.unwrap().manager;
+    clock.set(manager.round_timeout.unwrap());
+    client2.request_leader_timeout().await.unwrap();
+    let manager = client2.chain_info().await.unwrap().manager;
+    let (stale_round, stale_leader) = (manager.current_round, manager.leader.unwrap());
+    assert_matches!(stale_round, Round::SingleLeader(n) if n >= 1);
+    clock.set(manager.round_timeout.unwrap());
+    client2.request_leader_timeout().await.unwrap();
+    let manager = client2.chain_info().await.unwrap().manager;
+    let (validator_round, validator_leader) = (manager.current_round, manager.leader.unwrap());
+
+    // Drive the updater directly against an honest validator (validator 0 is the faulty
+    // one). An empty local node is enough: a validator that is ahead must produce the
+    // signal before anything is read from the local node.
+    let state = WorkerState::new(
+        builder.make_storage().await?,
+        ChainWorkerConfig::default(),
+        None,
+    );
+    let node = builder.node(1);
+    let mut updater = RemoteNodeUpdater {
+        remote_node: RemoteNode {
+            public_key: node.name(),
+            node,
+        },
+        local_node: LocalNodeClient::new(state),
+        admin_chain_id: builder.admin_chain_id(),
+        certificate_upload_batch_size: 100,
+    };
+    let submit = |proposal| {
+        let (clock_skew_sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        CommunicateAction::SubmitBlock {
+            proposal: Box::new(proposal),
+            blob_ids: vec![],
+            clock_skew_sender,
+        }
+    };
+
+    // A proposal in an older round than the validator's: `WrongRound`, validator ahead.
+    let mut block = make_first_block(chain_id);
+    block.height = info.next_block_height;
+    block.previous_block_hash = info.block_hash;
+    block.timestamp = clock.current_time();
+    let proposal = block
+        .clone()
+        .into_proposal_with_round(stale_leader, &builder.signer, stale_round)
+        .await?;
+    let result = updater.send_chain_update(submit(proposal)).await;
+    assert_matches!(
+        result,
+        Err(chain_client::Error::LocalNodeLagging { chain_id: id, error })
+            if id == chain_id && matches!(*error, NodeError::WrongRound(round) if round == validator_round)
+    );
+
+    // A proposal at an older height than the validator's: `UnexpectedBlockHeight`,
+    // validator ahead.
+    block.height = BlockHeight::ZERO;
+    block.previous_block_hash = None;
+    let proposal = block
+        .into_proposal_with_round(validator_leader, &builder.signer, validator_round)
+        .await?;
+    let result = updater.send_chain_update(submit(proposal)).await;
+    assert_matches!(
+        result,
+        Err(chain_client::Error::LocalNodeLagging { chain_id: id, error })
+            if id == chain_id
+                && matches!(
+                    *error,
+                    NodeError::UnexpectedBlockHeight {
+                        expected_block_height: BlockHeight(1),
+                        found_block_height: BlockHeight(0),
+                    }
+                )
+    );
+
+    Ok(())
+}
+
+/// Exercises the lazy locking-block fetch on proposal rejection.
+///
+/// Sets up a state where validators 2 and 3 hold a `Regular` locking block at
+/// `MultiLeader(0)` but validators 0 and 1 do not. `client_a` — which has no
+/// local knowledge of the lock — proposes a new (different) block. All four
+/// validators reject the proposal with `ChainError` (each has
+/// `validated_vote @ ML(0)` from `client_b`'s earlier attempt, so a fresh
+/// proposal at the same round fails the strict-round check). The per-validator
+/// updater's `NodeError::ChainError` arm pulls manager state from each
+/// rejecter, absorbing the locking block from validators 2 and 3 into
+/// `client_a`'s local node. `process_pending_block_without_prepare` detects the
+/// snapshot advance and retries; the retry finalizes the absorbed locking block
+/// (`client_b`'s transfer) and the chain advances. The outcome is `Conflict`
+/// because the committed block is `client_b`'s transfer, not `client_a`'s
+/// intended burn.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_lazy_pull_absorbs_locking_block_on_proposal_rejection<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let client_a = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = client_a.chain_id();
+    let recipient_id = recipient.chain_id();
+    let owner_a = client_a.identity().await?;
+    let owner_b: AccountOwner = builder.signer.generate_new().into();
+
+    let owners = [(owner_a, 100), (owner_b, 100)];
+    let ownership = ChainOwnership::multiple(owners, 4, TimeoutConfig::default());
+    client_a.change_ownership(ownership).await?;
+
+    let info = client_a.chain_info().await?;
+    let mut client_b = builder
+        .make_client(chain_id, info.block_hash, info.next_block_height)
+        .await?;
+    client_b.set_preferred_owner(owner_b);
+
+    // Setup: `client_b` proposes a transfer at `MultiLeader(0)`. All four validators
+    // vote to validate, but validators 0 and 1 refuse to absorb the resulting
+    // validated certificate and validator 3 refuses to send its confirm vote. So
+    // validators 2 and 3 end up holding a `LockingBlock::Regular @ MultiLeader(0)`
+    // and a `confirmed_vote` for it; validators 0 and 1 hold only a
+    // `validated_vote @ MultiLeader(0)`. The block never reaches a confirmation
+    // quorum, so `client_b`'s transfer fails.
+    builder.set_fault_type([0, 1], FaultType::DontProcessValidated);
+    builder.set_fault_type([3], FaultType::DontSendConfirmVote);
+    client_b.synchronize_from_validators().await?;
+    let b_result = client_b
+        .transfer(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient_id),
+        )
+        .await;
+    assert!(b_result.is_err());
+
+    // Restore honest behavior. `client_a`'s local node has not been touched since
+    // `change_ownership` — it has no proposed block and no locking block.
+    builder.set_fault_type([0, 1, 2, 3], FaultType::Honest);
+    assert!(
+        client_a
+            .chain_info_with_manager_values()
+            .await?
+            .manager
+            .requested_locking
+            .is_none(),
+        "client_a must not yet hold a locking block"
+    );
+
+    // `client_a` burns. The proposal goes out at `MultiLeader(0)`; every validator
+    // rejects it (each has `validated_vote @ ML(0)` from `client_b`'s transfer
+    // attempt, so a fresh proposal at the same round fails the strict-round check).
+    // The per-validator `NodeError::ChainError` arm pulls manager state, and
+    // `client_a`'s local node absorbs the locking block from validators 2/3. The
+    // retry then finalizes the locked block via `finalize_locking_block` and the
+    // chain advances to height 2 with `client_b`'s transfer committed — classified
+    // as `Conflict` because the committed block is not `client_a`'s intended burn.
+    let burn_result = client_a.burn(AccountOwner::CHAIN, Amount::ONE).await?;
+    assert_matches!(burn_result, ClientOutcome::Conflict(_));
+    assert_eq!(
+        client_a.chain_info().await?.next_block_height,
+        BlockHeight::from(2)
+    );
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_finalize_validated<B>(storage_builder: B) -> anyhow::Result<()>
@@ -2242,7 +2811,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
     let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
     let chain_id = client0.chain_id();
-    let owner0 = client0.preferred_owner.unwrap();
+    let owner0 = client0.preferred_owner().unwrap();
 
     let owners = [(owner0, 100), (owner1, 100)];
     let timeout_config = TimeoutConfig {
@@ -2286,6 +2855,7 @@ where
     assert!(result.is_err());
     assert!(!client1
         .pending_proposal()
+        .await
         .as_ref()
         .unwrap()
         .blobs
@@ -2303,7 +2873,7 @@ where
         manager.requested_locking.unwrap().round(),
         Round::MultiLeader(1)
     );
-    assert!(client0.pending_proposal().is_some());
+    assert!(client0.pending_proposal().await.is_some());
 
     // Client 0 now only tries to transfer 1 token. But instead, they automatically finalize the
     // pending block, which publishes the blob.
@@ -2317,7 +2887,7 @@ where
         client0.local_balance().await.unwrap(),
         Amount::from_tokens(10)
     );
-    assert!(client0.pending_proposal().is_none());
+    assert!(client0.pending_proposal().await.is_none());
 
     // Transfer a token so Client 1 sees that the blob is already published
     client1.prepare_chain().await.unwrap();
@@ -2328,14 +2898,13 @@ where
         client1.local_balance().await.unwrap(),
         Amount::from_tokens(9)
     );
-    assert!(client1.pending_proposal().is_none());
+    assert!(client1.pending_proposal().await.is_none());
     Ok(())
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_propose_pending_block<B>(storage_builder: B) -> anyhow::Result<()>
@@ -2373,7 +2942,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_re_propose_validated<B>(storage_builder: B) -> anyhow::Result<()>
@@ -2465,7 +3033,7 @@ where
         Round::MultiLeader(0)
     );
     assert_eq!(manager.current_round, Round::MultiLeader(1));
-    assert!(client1.pending_proposal().is_some());
+    assert!(client1.pending_proposal().await.is_some());
     assert_matches!(
         client1
             .burn(AccountOwner::CHAIN, Amount::from_tokens(4))
@@ -2485,7 +3053,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_re_propose_fast_block<B>(storage_builder: B) -> anyhow::Result<()>
@@ -2576,7 +3143,7 @@ where
     // validated block in round 0, and re-proposes it when it tries to burn 4 tokens.
     builder.set_fault_type([0, 1, 2], FaultType::Honest);
     client1.synchronize_from_validators().await.unwrap();
-    assert!(client1.pending_proposal().is_some());
+    assert!(client1.pending_proposal().await.is_some());
     // This test involves timeouts and potential conflicts. Handle them appropriately.
     loop {
         match client1
@@ -2603,8 +3170,11 @@ where
         }
     }
     // Process any pending block. If pending proposal was already committed via conflict,
-    // this will return None for the certificate.
-    let _ = client1.process_pending_block().await;
+    // this will return None for the certificate, and a remote conflict may surface as an
+    // error here.
+    if let Err(error) = client1.process_pending_block().await {
+        tracing::debug!("process_pending_block returned error after race: {error}");
+    }
 
     // Burning 3 and 4 tokens got finalized; the pending 2 tokens got skipped.
     client0.synchronize_from_validators().await.unwrap();
@@ -2644,8 +3214,10 @@ where
         Amount::from_tokens(3)
     );
 
-    receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Ignore, None, None, None);
+    receiver.options_mut().message_policy = MessagePolicy {
+        blanket: BlanketMessagePolicy::Ignore,
+        ..Default::default()
+    };
     receiver.synchronize_from_validators().await?;
     assert!(receiver.process_inbox().await?.0.is_empty());
     // The message was ignored.
@@ -2656,8 +3228,10 @@ where
         Amount::from_tokens(3)
     );
 
-    receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Reject, None, None, None);
+    receiver.options_mut().message_policy = MessagePolicy {
+        blanket: BlanketMessagePolicy::Reject,
+        ..Default::default()
+    };
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
     sender.synchronize_from_validators().await?;
@@ -2688,24 +3262,207 @@ where
     );
 
     // The receiver will only accept messages from sender, and not from sender2.
-    receiver.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Accept,
-        Some([sender.chain_id()].into_iter().collect()),
-        None,
-        None,
-    );
+    receiver.options_mut().message_policy = MessagePolicy {
+        restrict_chain_ids_to: Some([sender.chain_id()].into_iter().collect()),
+        ..Default::default()
+    };
     receiver.synchronize_from_validators().await?;
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
-    // Only the transfer from sender should have been accepted. The other should have been
-    // rejected.
+    // Only the transfer from sender should have been accepted.
     assert_eq!(receiver.local_balance().await.unwrap(), Amount::ONE);
 
-    // Even if we change the policy, there's no longer a message to receive.
-    receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None);
+    // Let's accept the other one, too.
+    receiver.options_mut().message_policy = MessagePolicy::default();
+    let certs = receiver.process_inbox().await?.0;
+    assert_eq!(certs.len(), 1);
+    assert_eq!(
+        receiver.local_balance().await.unwrap(),
+        Amount::from_tokens(2)
+    );
+
+    // A never-reject application bypasses a blanket Reject policy: the bundle must be accepted.
+    sender
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
+        .await
+        .unwrap_ok_committed();
+    receiver.synchronize_from_validators().await?;
+    receiver.options_mut().message_policy = MessagePolicy {
+        blanket: BlanketMessagePolicy::Reject,
+        never_reject_application_ids: [GenericApplicationId::System].into_iter().collect(),
+        ..Default::default()
+    };
+    let certs = receiver.process_inbox().await?.0;
+    assert_eq!(certs.len(), 1);
+    // The transfer was accepted (not bounced).
+    assert_eq!(
+        receiver.local_balance().await.unwrap(),
+        Amount::from_tokens(3)
+    );
+
+    // `restrict_chain_ids_to` still dominates over never-reject: a message from a non-whitelisted
+    // chain is still filtered out even if it belongs to a never-reject application.
+    sender
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
+        .await
+        .unwrap_ok_committed();
+    receiver.synchronize_from_validators().await?;
+    receiver.options_mut().message_policy = MessagePolicy {
+        restrict_chain_ids_to: Some([sender2.chain_id()].into_iter().collect()),
+        never_reject_application_ids: [GenericApplicationId::System].into_iter().collect(),
+        ..Default::default()
+    };
+    // The message from `sender` is filtered out and not processed; receiver balance unchanged.
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 0);
+    assert_eq!(
+        receiver.local_balance().await.unwrap(),
+        Amount::from_tokens(3)
+    );
+
+    Ok(())
+}
+
+/// Verifies that `process_notification` short-circuits on `NewIncomingBundle`
+/// notifications whose origin is filtered by `MessagePolicy`: the sender's
+/// block must not be downloaded into local storage.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[test_log::test(tokio::test)]
+async fn test_process_notification_filters_origin<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
+        .await?
+        .with_policy(ResourceControlPolicy::only_fuel());
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let mut receiver = builder.add_root_chain(2, Amount::ZERO).await?;
+    let recipient = Account::chain(receiver.chain_id());
+    let sender_id = sender.chain_id();
+    // `process_notification_from` is point-to-point, so pick an honest validator.
+    let validator = builder
+        .initial_committee
+        .validator_addresses()
+        .find(|(public_key, _)| builder.fault_type(public_key) == Some(FaultType::Honest))
+        .unwrap();
+    let storage = receiver.storage_client().clone();
+
+    // Baseline: with the default (permissive) policy, the sender's block
+    // is downloaded when its `NewIncomingBundle` notification is processed.
+    let cert_baseline = sender
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
+        .await
+        .unwrap_ok_committed();
+    receiver
+        .process_notification_from(
+            Notification {
+                chain_id: receiver.chain_id(),
+                reason: Reason::NewIncomingBundle {
+                    origin: sender_id,
+                    height: cert_baseline.block().header.height,
+                },
+            },
+            validator,
+        )
+        .await;
+    assert!(
+        storage.contains_certificate(cert_baseline.hash()).await?,
+        "baseline: sender block should be downloaded with the default policy"
+    );
+
+    // Each of the three filter modes must short-circuit the download.
+    for policy in [
+        // Blanket Ignore.
+        MessagePolicy {
+            blanket: BlanketMessagePolicy::Ignore,
+            ..Default::default()
+        },
+        // Origin in the denylist.
+        MessagePolicy {
+            ignore_chain_ids: [sender_id].into_iter().collect(),
+            ..Default::default()
+        },
+        // Origin not in the allowlist.
+        MessagePolicy {
+            restrict_chain_ids_to: Some([receiver.chain_id()].into_iter().collect()),
+            ..Default::default()
+        },
+    ] {
+        receiver.options_mut().message_policy = policy;
+        let cert = sender
+            .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
+            .await
+            .unwrap_ok_committed();
+        assert!(
+            !storage.contains_certificate(cert.hash()).await?,
+            "block must not be in local storage before notification"
+        );
+        receiver
+            .process_notification_from(
+                Notification {
+                    chain_id: receiver.chain_id(),
+                    reason: Reason::NewIncomingBundle {
+                        origin: sender_id,
+                        height: cert.block().header.height,
+                    },
+                },
+                validator,
+            )
+            .await;
+        assert!(
+            !storage.contains_certificate(cert.hash()).await?,
+            "filtered origin: sender block must not be downloaded"
+        );
+    }
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[test_log::test(tokio::test)]
+async fn test_priority_bundle_origins<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
+        .await?
+        .with_policy(ResourceControlPolicy::only_fuel());
+    let sender_a = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let sender_b = builder.add_root_chain(2, Amount::from_tokens(4)).await?;
+    let mut receiver = builder.add_root_chain(3, Amount::ZERO).await?;
+    let recipient = Account::chain(receiver.chain_id());
+
+    // Mark sender_b's bundles as priority for the receiver.
+    receiver.options_mut().priority_bundle_origins = [sender_b.chain_id()].into_iter().collect();
+
+    // Send from sender_a first (would normally come first by timestamp), then sender_b.
+    sender_a
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
+        .await
+        .unwrap_ok_committed();
+    sender_b
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
+        .await
+        .unwrap_ok_committed();
+
+    receiver.synchronize_from_validators().await?;
+    let cert = receiver.process_inbox().await?.0.pop().unwrap();
+    let bundles: Vec<_> = cert.block().body.incoming_bundles().collect();
+    assert_eq!(bundles.len(), 2);
+    assert_eq!(
+        bundles[0].origin,
+        sender_b.chain_id(),
+        "Priority bundle from sender_b should be first"
+    );
+    assert_eq!(
+        bundles[1].origin,
+        sender_a.chain_id(),
+        "Non-priority bundle from sender_a should be second"
+    );
 
     Ok(())
 }
@@ -2713,7 +3470,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_propose_block_with_messages_and_blobs<B>(storage_builder: B) -> anyhow::Result<()>
@@ -2794,14 +3550,14 @@ where
     let result = client1.publish_data_blobs(blob_bytes).await;
     assert_matches!(
         result,
-        Err(ChainClientError::LocalNodeError(
+        Err(chain_client::Error::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
         )) if matches!(*chain_error, ChainError::BlockProposalTooLarge(_))
     );
 
     assert_matches!(
         client1.publish_data_blob(large_blob_bytes).await,
-        Err(ChainClientError::LocalNodeError(
+        Err(chain_client::Error::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(chain_error))
         )) if matches!(&*chain_error, ChainError::ExecutionError(
             error, ChainExecutionContext::Block
@@ -2852,7 +3608,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_validator_outdated_admin_chain<B>(storage_builder: B) -> anyhow::Result<()>
@@ -2950,10 +3705,68 @@ where
     Ok(())
 }
 
+/// Regression test: when a fresh client syncs a chain that has a block at a
+/// non-genesis epoch, `process_certificates` must download the admin chain's
+/// `NewCommittee` event for that epoch — cert verification calls
+/// `get_committee_hashes` which reads the event. Without the fix this surfaces
+/// as `Events not found` for `StreamName(00)` rather than recovering.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_synchronize_downloads_admin_chain_events<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+
+    let admin_client = builder.add_root_chain(0, Amount::from_tokens(1000)).await?;
+    let parent = builder.add_root_chain(1, Amount::from_tokens(1000)).await?;
+
+    // Create a new epoch on the admin chain and migrate `parent` to it.
+    admin_client
+        .stage_new_committee(builder.initial_committee.clone())
+        .await
+        .unwrap();
+    parent.synchronize_from_validators().await.unwrap();
+    parent.process_inbox().await.unwrap();
+    // The migration block itself is at epoch 0 (the chain's epoch before
+    // `ProcessNewEpoch` executes). To make `process_certificates` actually
+    // verify against the new committee, the chain must have a follow-up block
+    // *at* epoch 1 — its cert's `get_committee_hashes(1..=1)` then reads the
+    // admin event during cert verification.
+    let cert = parent
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(cert.block().header.epoch, Epoch::from(1));
+    let parent_info = parent.chain_info().await?;
+
+    // A fresh client (its genesis storage has `parent`'s description blob but
+    // no admin-chain events).
+    let fresh_client = builder
+        .make_client(parent.chain_id(), None, BlockHeight::ZERO)
+        .await?;
+
+    // Before the fix, `process_certificates` propagated `EventsNotFound` for
+    // the epoch-1 transfer cert because cert verification couldn't load the
+    // admin chain's `NewCommittee` event. The fix retries after downloading
+    // the publisher certificates that contain the missing event.
+    fresh_client.synchronize_from_validators().await?;
+
+    assert_eq!(
+        fresh_client.chain_info().await?.next_block_height,
+        parent_info.next_block_height,
+    );
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_prepare_chain_with_cross_chain_messages<B>(storage_builder: B) -> anyhow::Result<()>
@@ -3051,7 +3864,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_rejected_message_bundles_are_free<B>(storage_builder: B) -> anyhow::Result<()>
@@ -3072,9 +3884,12 @@ where
             user.chain_id(),
             None,
             BlockHeight::ZERO,
-            ChainClientOptions {
-                message_policy: MessagePolicy::new(BlanketMessagePolicy::Reject, None, None, None),
-                ..ChainClientOptions::test_default()
+            chain_client::Options {
+                message_policy: MessagePolicy {
+                    blanket: BlanketMessagePolicy::Reject,
+                    ..Default::default()
+                },
+                ..chain_client::Options::test_default()
             },
         )
         .await?;
@@ -3101,7 +3916,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_follow_chain_mode<B>(storage_builder: B) -> anyhow::Result<()>
@@ -3228,7 +4042,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_open_chain_for_owned_key_is_fully_tracked<B>(storage_builder: B) -> anyhow::Result<()>
@@ -3300,7 +4113,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_disallow_fast_blocks<B>(storage_builder: B) -> anyhow::Result<()>
@@ -3356,7 +4168,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_block_limit_removes_bundles_not_rejects<B>(storage_builder: B) -> anyhow::Result<()>
@@ -3423,7 +4234,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_open_multi_leader_rounds<B>(storage_builder: B) -> anyhow::Result<()>
@@ -3472,7 +4282,7 @@ where
         .await;
     assert_matches!(
         result,
-        Err(ChainClientError::LocalNodeError(
+        Err(chain_client::Error::LocalNodeError(
             LocalNodeError::WorkerError(WorkerError::ChainError(ref chain_error))
         )) if matches!(&**chain_error, ChainError::ExecutionError(
             error, ChainExecutionContext::Operation(_)
@@ -3486,5 +4296,769 @@ where
         .unwrap_ok_committed();
     assert_eq!(certificate.round, Round::MultiLeader(0));
 
+    Ok(())
+}
+
+/// Tests that cross-chain message chunking works end-to-end: the sender splits large
+/// `UpdateRecipient` messages and the receiver processes all chunks correctly.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_cross_chain_message_chunking_end_to_end<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    // Use a tiny chunk limit so every transfer goes into its own UpdateRecipient.
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer)
+        .await?
+        .with_cross_chain_message_chunk_limit(1);
+
+    let sender = builder.add_root_chain(1, Amount::from_tokens(100)).await?;
+    let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
+
+    // Send three transfers from sender to receiver.
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(5),
+            Account::chain(receiver.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(3),
+            Account::chain(receiver.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(2),
+            Account::chain(receiver.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // Receiver synchronizes and processes the inbox. With chunk_limit=1, the
+    // cross-chain messages were split into multiple UpdateRecipient requests.
+    // This verifies the previous_height values are correct so the receiver
+    // accepts all chunks without gap detection errors.
+    receiver.synchronize_from_validators().await?;
+    receiver.process_inbox().await?;
+
+    // Verify the receiver got all three transfers.
+    assert_eq!(
+        receiver.local_balance().await?,
+        Amount::from_tokens(10),
+        "Receiver should have received all three transfers"
+    );
+
+    Ok(())
+}
+
+/// Regression test for #5664: when the chain advances (e.g. a notification or background
+/// sync commits another owner's block at our height) while a client is in the middle of
+/// `execute_block`, the staged pending proposal is cleared without committing ours. This
+/// used to surface as a hard `BlockProposalError("Unexpected block proposal error")`.
+/// The client must instead re-stage at the new height and never raise that error.
+///
+/// Two owners hammer the same multi-owner chain concurrently while each client runs a
+/// notification listener that advances its local node underneath the proposer task,
+/// reproducing the race. Requires the multi-threaded runtime: on a single thread the
+/// listener cannot advance the local node between staging and re-processing.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[test_log::test(tokio::test(flavor = "multi_thread", worker_threads = 4))]
+async fn test_execute_block_retries_when_chain_advances<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    const ROUNDS: usize = 50;
+
+    let mut signer = InMemorySigner::new(None);
+    let owner1 = signer.generate_new().into();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let chain_id = client0.chain_id();
+    let owner0 = client0.identity().await?;
+
+    // Make the chain a two-owner chain so both clients can propose at the same height.
+    let ownership = ChainOwnership {
+        super_owners: BTreeSet::new(),
+        owners: BTreeMap::from_iter([(owner0, 100), (owner1, 100)]),
+        multi_leader_rounds: 10,
+        open_multi_leader_rounds: false,
+        timeout_config: TimeoutConfig::default(),
+    };
+    client0.change_ownership(ownership).await.unwrap();
+
+    let mut client1 = builder
+        .make_client(
+            chain_id,
+            client0.chain_info().await?.block_hash,
+            BlockHeight::from(1),
+        )
+        .await?;
+    client1.set_preferred_owner(owner1);
+    client1.synchronize_from_validators().await.unwrap();
+
+    // Run a notification listener on each client so its local node is advanced by the other
+    // owner's commits in the background — the same way the node service's background sync
+    // advances the chain while `execute_block` is running.
+    let (listener0, _abort0, _notifs0) = client0.listen().await?;
+    let (listener1, _abort1, _notifs1) = client1.listen().await?;
+    tokio::spawn(listener0);
+    tokio::spawn(listener1);
+
+    // Both owners publish a stream of data blobs to the same chain concurrently. They
+    // collide at the same height repeatedly; whichever loses a race may observe the chain
+    // advancing mid-proposal. None of these calls may fail with the "unexpected block
+    // proposal error".
+    async fn race(client: &ChainClient<impl Environment>, tag: u8) {
+        for i in 0..ROUNDS {
+            let data = vec![tag, i as u8];
+            match client.publish_data_blob(data).await {
+                // Committed / Conflict / WaitForTimeout are all acceptable outcomes of a
+                // concurrent proposal.
+                Ok(_) => {}
+                Err(err) => {
+                    let message = err.to_string();
+                    assert!(
+                        !message.contains("Unexpected block proposal error"),
+                        "execute_block raised the #5664 error instead of retrying: {message}",
+                    );
+                    // Other transient errors (communication, conflicts surfaced as errors)
+                    // are not what this test guards; resynchronize and continue.
+                    client.synchronize_from_validators().await.ok();
+                }
+            }
+        }
+    }
+
+    futures::join!(race(&client0, 0), race(&client1, 1));
+
+    Ok(())
+}
+
+/// Regression test for the no-signer-key branch in `process_pending_block_without_prepare`:
+/// when a pending proposal is authenticated by an owner whose key the signer no longer holds
+/// (e.g. an autosigner key that staged the block is later withdrawn), the client must discard
+/// the stale proposal and report `Committed(None)` rather than erroring or wedging. This is the
+/// second of the two ways `execute_block`'s retry loop can observe `Committed(None)` — the
+/// other being the chain advancing past the staged height
+/// (`test_execute_block_retries_when_chain_advances`).
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[test_log::test(tokio::test)]
+async fn test_pending_block_discarded_when_signer_key_missing<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let mut client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let owner_a = client.identity().await?;
+
+    // Co-own the chain with a second owner `b` and no super-owner, so it runs in multi-leader
+    // (non-fast) rounds — the branch that discards rather than erroring.
+    let owner_b: AccountOwner = builder.signer.generate_new().into();
+    let ownership =
+        ChainOwnership::multiple([(owner_a, 50), (owner_b, 50)], 10, TimeoutConfig::default());
+    client.change_ownership(ownership).await?;
+
+    // Stage a block as owner `a` that can't reach a quorum, so it stays pending, authenticated
+    // by `a` (signing it here requires `a`'s key, which the signer still holds at this point).
+    builder.set_fault_type([0, 1], FaultType::Offline);
+    assert_matches!(
+        client.burn(AccountOwner::CHAIN, Amount::ONE).await,
+        Err(_),
+        "the burn should fail to commit with only two of four validators online"
+    );
+    assert_eq!(
+        client
+            .pending_proposal()
+            .await
+            .expect("a pending proposal authored by `a` should remain")
+            .block
+            .authenticated_signer,
+        Some(owner_a),
+    );
+
+    // Bring the validators back, then withdraw owner `a`'s key from the signer and act as `b`.
+    builder.set_fault_type([0, 1], FaultType::Honest);
+    client.synchronize_from_validators().await?;
+    assert!(
+        builder.signer.forget_key(&owner_a),
+        "owner `a`'s key should have been present before we forget it"
+    );
+    client.set_preferred_owner(owner_b);
+
+    // Processing the pending block must discard the stale proposal (we can no longer sign as `a`)
+    // and report `Committed(None)`, rather than raising an error or looping.
+    assert_matches!(
+        client.process_pending_block().await?,
+        ClientOutcome::Committed(None)
+    );
+    assert!(client.pending_proposal().await.is_none());
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[test_log::test(tokio::test)]
+async fn test_blocks_are_exported_to_the_committee<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new_with_block_export(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = sender.chain_id();
+
+    // Each save folds in whatever the export task has acknowledged *so far*, so the recorded
+    // heights necessarily trail the tip: the block being saved has only just been queued. Keep
+    // producing blocks until the exports of the earlier ones have been folded in.
+    let mut exported = BTreeMap::new();
+    for _ in 0..10 {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+        exported = builder.exported_heights(0, chain_id).await;
+        if exported.len() == 3 && exported.values().all(|height| *height >= BlockHeight(1)) {
+            break;
+        }
+        builder
+            .clock()
+            .add(linera_base::data_types::TimeDelta::from_millis(50));
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(50)).await;
+    }
+
+    // One entry per *other* committee member: a validator never exports to itself.
+    assert_eq!(
+        exported.len(),
+        3,
+        "expected the first validator to have exported to the three others, got {exported:?}"
+    );
+    assert!(
+        exported.values().all(|height| *height >= BlockHeight(1)),
+        "expected every destination to have acknowledged at least height 1, got {exported:?}"
+    );
+
+    // The destinations really do hold the chain, and the exporter's cursors agree with them.
+    let tip = sender.chain_info().await?.next_block_height;
+    for index in 0..4 {
+        assert_eq!(builder.next_block_height(index, chain_id).await, tip);
+    }
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_blocks_are_not_exported_by_default<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+
+    for _ in 0..3 {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+
+    assert!(
+        builder
+            .exported_heights(0, sender.chain_id())
+            .await
+            .is_empty(),
+        "block export must stay off unless a chain exporter factory is installed",
+    );
+    Ok(())
+}
+
+/// A validator that missed blocks is caught up by export alone, while the chain is idle.
+///
+/// After the validator comes back, *nothing else happens* — no blocks, no client traffic — so the
+/// only thing that can close the gap is the export task noticing a lagging destination.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_export_catches_a_lagging_validator_up_while_idle<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new_with_block_export(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = sender.chain_id();
+
+    // Validator 3 misses everything below. The other three still form a quorum, so the chain
+    // advances without it.
+    builder.set_fault_type([3], FaultType::Offline);
+    for _ in 0..5 {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+    let tip = sender.chain_info().await?.next_block_height;
+    assert!(tip >= BlockHeight(5));
+
+    // Bring it back and then do nothing at all: no new blocks, no client activity. Anything that
+    // happens from here is export catching up on its own. (Its height can only be read once it is
+    // reachable again — an offline validator answers no queries.)
+    builder.set_fault_type([3], FaultType::Honest);
+    assert!(
+        builder.next_block_height(3, chain_id).await < tip,
+        "the validator that was offline should start out behind",
+    );
+    for _ in 0..60 {
+        if builder.next_block_height(3, chain_id).await == tip {
+            return Ok(());
+        }
+        builder
+            .clock()
+            .add(linera_base::data_types::TimeDelta::from_millis(100));
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(100)).await;
+    }
+    panic!(
+        "export did not catch the lagging validator up to {tip} while idle; it is at {}",
+        builder.next_block_height(3, chain_id).await,
+    );
+}
+
+/// A destination that is unreachable must not stall export to the rest of the committee.
+///
+/// One dead peer must degrade to a gap in `exported_heights`, not to a stalled chain.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_export_survives_an_unreachable_destination<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new_with_block_export(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = sender.chain_id();
+
+    // Take one validator away. Its own exporter stops too, which is why the assertions below are
+    // all made from validator 0's point of view.
+    builder.set_fault_type([3], FaultType::Offline);
+
+    for _ in 0..6 {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+
+    // Three peers, one down, so exactly two are ever recorded. Which one is down is deliberately
+    // not asserted: `set_fault_type` indexes creation order, the committee map is keyed by public
+    // key, and the count is the property that matters.
+    // A block per iteration, because `exported_heights` is only folded while a block is being
+    // processed: progress acknowledged after the last block has nothing to write it. The clock
+    // advance is what lets the export tick run at all — it reads the storage clock, so under the
+    // test clock it only moves when the test moves it.
+    let mut exported = BTreeMap::new();
+    for _ in 0..40 {
+        exported = builder.exported_heights(0, chain_id).await;
+        if exported.len() >= 2 {
+            break;
+        }
+        builder
+            .clock()
+            .add(linera_base::data_types::TimeDelta::from_millis(100));
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(100)).await;
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+    assert_eq!(
+        exported.len(),
+        2,
+        "expected the two reachable peers to be exported to, and only those; got {exported:?}",
+    );
+    assert!(
+        exported.values().all(|height| *height >= BlockHeight(1)),
+        "reachable peers should have acknowledged real progress; got {exported:?}",
+    );
+    Ok(())
+}
+
+/// One catch-up round sends at most `max_catch_up_blocks`, and the next round picks up where it
+/// left off.
+///
+/// Asserted directly rather than through the export loop's timing, because a convergence-only
+/// test passes just as well with the bound ignored — ignoring it converges in one round.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_catch_up_sends_at_most_the_bound_per_round<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use crate::remote_node::RemoteNode;
+
+    /// Small enough that the backlog below needs several rounds, and not a divisor of it, so a
+    /// final short round is exercised too.
+    const MAX_CATCH_UP_BLOCKS: u64 = 3;
+    const BACKLOG: usize = 11;
+
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = sender.chain_id();
+
+    // Validator 3 misses the whole backlog. The other three still form a quorum.
+    builder.set_fault_type([3], FaultType::Offline);
+    for _ in 0..BACKLOG {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+    let target = sender.chain_info().await?.next_block_height;
+    assert_eq!(target, BlockHeight(BACKLOG as u64));
+    builder.set_fault_type([3], FaultType::Honest);
+    assert_eq!(builder.next_block_height(3, chain_id).await, BlockHeight(0));
+
+    // Drive the sender the way an export round does: at validator 3, reading the blocks out of
+    // validator 0's storage (it stayed online throughout).
+    let node = builder.node(3);
+    let mut sender_task = crate::chain_worker::export::BlockSender {
+        remote_node: RemoteNode {
+            public_key: node.name(),
+            node,
+        },
+        storage: builder.validator_storage(0),
+        certificate_upload_batch_size: 100,
+    };
+
+    // Round by round: each one advances by exactly the bound until the last, which sends only the
+    // remainder and stops at the target rather than overshooting.
+    let mut reached = None;
+    let mut rounds = 0;
+    while reached != Some(target) {
+        let before = reached;
+        reached = Some(
+            sender_task
+                .send_missing_blocks(chain_id, target, reached, MAX_CATCH_UP_BLOCKS)
+                .await?,
+        );
+        rounds += 1;
+        let expected = target.min(BlockHeight(
+            before.unwrap_or(BlockHeight(0)).0 + MAX_CATCH_UP_BLOCKS,
+        ));
+        assert_eq!(
+            reached,
+            Some(expected),
+            "round {rounds} starting at {before:?} should have reached {expected}",
+        );
+        assert_eq!(
+            builder.next_block_height(3, chain_id).await,
+            expected,
+            "the validator itself should be at {expected} after round {rounds}",
+        );
+        assert!(rounds <= BACKLOG, "catch-up is not converging");
+    }
+    // 11 blocks in chunks of 3: three full rounds and a remainder of two.
+    assert_eq!(rounds, 4);
+    Ok(())
+}
+
+/// A validator behind by more blocks than one round may send is still caught up, over several
+/// rounds, by the idle export loop alone.
+///
+/// The bound must not also stop the backfill short. The backlog is several times the bound and
+/// nothing else is running, so only the export loop repeating rounds can close the gap.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_export_catches_up_a_backlog_larger_than_the_bound<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    const MAX_CATCH_UP_BLOCKS: u64 = 2;
+    const BACKLOG: usize = 9;
+
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new_with_block_export_config(
+        storage_builder,
+        4,
+        0,
+        signer,
+        crate::BlockExportConfig {
+            max_catch_up_blocks: MAX_CATCH_UP_BLOCKS,
+            // The smallest queue the config accepts, so the bound is exercised; the sequential
+            // burst never outruns the in-process task, so no block is actually dropped here.
+            queue_size: 2,
+            ..TestBuilder::<B>::test_block_export_config()
+        },
+    )
+    .await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = sender.chain_id();
+
+    builder.set_fault_type([3], FaultType::Offline);
+    for _ in 0..BACKLOG {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+    let tip = sender.chain_info().await?.next_block_height;
+    assert_eq!(tip, BlockHeight(BACKLOG as u64));
+
+    // Back online, then idle. Everything from here is the export loop's doing.
+    builder.set_fault_type([3], FaultType::Honest);
+    assert!(builder.next_block_height(3, chain_id).await < tip);
+
+    for _ in 0..100 {
+        if builder.next_block_height(3, chain_id).await == tip {
+            return Ok(());
+        }
+        builder
+            .clock()
+            .add(linera_base::data_types::TimeDelta::from_millis(100));
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(100)).await;
+    }
+    panic!(
+        "export did not drain a backlog of {BACKLOG} in rounds of {MAX_CATCH_UP_BLOCKS}; it \
+         stopped at {} of {tip}",
+        builder.next_block_height(3, chain_id).await,
+    );
+}
+
+/// A block the destination already has is not sent again.
+///
+/// `reset_and_reexecute_chain` replays a chain's whole history, and without the guard every block
+/// goes back out. Taking the destination offline is what makes it observable: skipping succeeds
+/// precisely because nothing is sent.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_send_block_skips_a_block_the_destination_already_has<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use crate::remote_node::RemoteNode;
+
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = sender.chain_id();
+
+    for _ in 0..4 {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+    let tip = sender.chain_info().await?.next_block_height;
+    assert_eq!(tip, BlockHeight(4));
+    // Every validator followed along, so validator 3 is fully caught up.
+    assert_eq!(builder.next_block_height(3, chain_id).await, tip);
+
+    let storage = builder.validator_storage(0);
+    let hash = storage
+        .read_certificate_hashes_by_heights(chain_id, &[BlockHeight(0)])
+        .await?
+        .into_iter()
+        .next()
+        .flatten()
+        .expect("the chain has a block at height 0");
+    let certificate = storage
+        .read_certificate(hash)
+        .await?
+        .expect("the certificate at height 0 is in storage");
+
+    // From here the destination answers nothing at all, so reaching for it is an error.
+    builder.set_fault_type([3], FaultType::Offline);
+    let node = builder.node(3);
+    let mut sender_task = crate::chain_worker::export::BlockSender {
+        remote_node: RemoteNode {
+            public_key: node.name(),
+            node,
+        },
+        storage,
+        certificate_upload_batch_size: 100,
+    };
+
+    // Re-offer an old block, exactly as a re-execution would.
+    let reached = sender_task
+        .send_block(&certificate, &[], Some(tip), 100)
+        .await?;
+    assert_eq!(
+        reached, tip,
+        "the destination's height must be reported back"
+    );
+    Ok(())
+}
+
+/// A chain worker expires at its TTL even while block export is enabled.
+///
+/// The export machinery must never touch its own chain worker: a periodic touch resets the
+/// keep-alive clock, and a worker that is touched forever is resident forever — on a validator
+/// with many chains, that is unbounded memory growth and the TTL flag is a no-op.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_chain_workers_expire_while_export_is_enabled<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    const TTL: linera_base::time::Duration = linera_base::time::Duration::from_millis(500);
+
+    let signer = InMemorySigner::new(None);
+    let mut builder =
+        TestBuilder::new_with_block_export_and_ttl(storage_builder, 4, 0, signer, TTL).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_millis(1),
+            Account::chain(recipient.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+    assert!(builder.resident_chain_workers(0).await > 0);
+
+    // From here nothing touches any chain. Every worker must be gone within a few TTLs;
+    // the generous deadline keeps slow CI from flaking, not the assertion from biting.
+    for _ in 0..100 {
+        if builder.resident_chain_workers(0).await == 0 {
+            return Ok(());
+        }
+        builder
+            .clock()
+            .add(linera_base::data_types::TimeDelta::from_millis(100));
+        linera_base::time::timer::sleep(linera_base::time::Duration::from_millis(100)).await;
+    }
+    panic!(
+        "{} chain workers still resident 10s after the last activity, with a TTL of 500ms — \
+         something in the export path is touching them",
+        builder.resident_chain_workers(0).await,
+    );
+}
+
+/// A validator that has fallen behind its cursor reports its own height, which is what lets the
+/// queue notice a regression.
+///
+/// A validator restored from a backup is *behind* where we last saw it. The queue's cursor is
+/// only corrected because a send above that cursor comes back carrying the validator's real
+/// height rather than the one we assumed — this asserts that reporting, which
+/// `on_done` then follows downwards.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_send_block_reports_the_destinations_own_height<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use crate::remote_node::RemoteNode;
+
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = sender.chain_id();
+
+    // Validator 3 misses everything, so its real height stays far below the others'.
+    builder.set_fault_type([3], FaultType::Offline);
+    for _ in 0..4 {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+    let tip = sender.chain_info().await?.next_block_height;
+    builder.set_fault_type([3], FaultType::Honest);
+    assert_eq!(builder.next_block_height(3, chain_id).await, BlockHeight(0));
+
+    let storage = builder.validator_storage(0);
+    let node = builder.node(3);
+    let mut sender_task = crate::chain_worker::export::BlockSender {
+        remote_node: RemoteNode {
+            public_key: node.name(),
+            node,
+        },
+        storage,
+        certificate_upload_batch_size: 100,
+    };
+
+    // Ask with no cursor at all — the state a failed send leaves behind. One bounded round must
+    // come back with what the validator actually holds, so the queue can act on the truth.
+    let reached = sender_task
+        .send_missing_blocks(chain_id, tip, None, 2)
+        .await?;
+    assert_eq!(
+        reached,
+        BlockHeight(2),
+        "a bounded round must report the validator's own height afterwards",
+    );
     Ok(())
 }

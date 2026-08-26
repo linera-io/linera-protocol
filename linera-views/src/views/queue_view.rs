@@ -23,21 +23,20 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
     use prometheus::HistogramVec;
 
-    /// The runtime of hash computation
-    pub static QUEUE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "queue_view_hash_runtime",
-            "QueueView hash runtime",
-            &[],
-            exponential_bucket_latencies(5.0),
-        )
-    });
+    linera_base::declare_metrics! {
+        /// The runtime of hash computation
+        pub static QUEUE_VIEW_HASH_RUNTIME: HistogramVec =
+            register_histogram_vec(
+                "queue_view_hash_runtime",
+                "QueueView hash runtime",
+                &[],
+                exponential_bucket_latencies(5.0),
+            );
+    }
 }
 
 /// Key tags to create the sub-keys of a `QueueView` on top of the base key.
@@ -458,13 +457,13 @@ where
     /// # let context = MemoryContext::new_for_testing(());
     /// let mut queue = QueueView::load(context).await.unwrap();
     /// queue.push_back(34);
-    /// let mut iter = queue.iter_mut().await.unwrap();
+    /// let mut iter = queue.try_iter_mut().await.unwrap();
     /// let value = iter.next().unwrap();
     /// *value = 42;
     /// assert_eq!(queue.elements().await.unwrap(), vec![42]);
     /// # })
     /// ```
-    pub async fn iter_mut(&'a mut self) -> Result<IterMut<'a, T>, ViewError> {
+    pub async fn try_iter_mut(&'a mut self) -> Result<IterMut<'a, T>, ViewError> {
         self.load_all().await?;
         Ok(self.new_back_values.iter_mut())
     }

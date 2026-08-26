@@ -19,22 +19,20 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
     use prometheus::HistogramVec;
 
-    /// The runtime of hash computation
-    pub static HISTORICALLY_HASHABLE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> =
-        LazyLock::new(|| {
+    linera_base::declare_metrics! {
+        /// The runtime of hash computation
+        pub static HISTORICALLY_HASHABLE_VIEW_HASH_RUNTIME: HistogramVec =
             register_histogram_vec(
                 "historically_hashable_view_hash_runtime",
                 "HistoricallyHashableView hash runtime",
                 &[],
                 exponential_bucket_latencies(5.0),
-            )
-        });
+            );
+    }
 }
 
 /// Wrapper to compute the hash of the view based on its history of modifications.
@@ -207,7 +205,7 @@ where
 
 impl<W: View> HistoricallyHashableView<W::Context, W> {
     /// Obtains a hash of the history of the changes in the view.
-    pub async fn historical_hash(&mut self) -> Result<HasherOutput, ViewError> {
+    pub fn historical_hash(&mut self) -> Result<HasherOutput, ViewError> {
         if let Some(hash) = self.hash.get_mut().unwrap() {
             return Ok(*hash);
         }
@@ -287,7 +285,7 @@ mod tests {
         assert!(!view.has_pending_changes().await);
 
         // Initial hash should be the hash of an empty batch with default stored_hash
-        let hash = view.historical_hash().await?;
+        let hash = view.historical_hash()?;
         assert_eq!(hash, HasherOutput::default());
 
         Ok(())
@@ -301,14 +299,14 @@ mod tests {
             HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context.clone()).await?;
 
         // Get initial hash
-        let hash0 = view.historical_hash().await?;
+        let hash0 = view.historical_hash()?;
 
         // Set a value
         view.set(42);
         assert!(view.has_pending_changes().await);
 
         // Hash should change after modification
-        let hash1 = view.historical_hash().await?;
+        let hash1 = view.historical_hash()?;
 
         // Calling `historical_hash` doesn't flush changes.
         assert!(view.has_pending_changes().await);
@@ -320,11 +318,11 @@ mod tests {
         context.store().write_batch(batch).await?;
         view.post_save();
         assert!(!view.has_pending_changes().await);
-        assert_eq!(hash1, view.historical_hash().await?);
+        assert_eq!(hash1, view.historical_hash()?);
 
         // Make another modification
         view.set(84);
-        let hash2 = view.historical_hash().await?;
+        let hash2 = view.historical_hash()?;
         assert_ne!(hash1, hash2);
 
         Ok(())
@@ -343,14 +341,14 @@ mod tests {
         context.store().write_batch(batch).await?;
         view.post_save();
 
-        let hash_after_flush = view.historical_hash().await?;
+        let hash_after_flush = view.historical_hash()?;
 
         // Reload the view
         let mut view2 =
             HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context.clone()).await?;
 
         // Hash should be the same (loaded from storage)
-        let hash_reloaded = view2.historical_hash().await?;
+        let hash_reloaded = view2.historical_hash()?;
         assert_eq!(hash_after_flush, hash_reloaded);
 
         Ok(())
@@ -369,13 +367,13 @@ mod tests {
         context.store().write_batch(batch).await?;
         view.post_save();
 
-        let hash_before = view.historical_hash().await?;
+        let hash_before = view.historical_hash()?;
         assert!(!view.has_pending_changes().await);
 
         // Make a modification
         view.set(84);
         assert!(view.has_pending_changes().await);
-        let hash_modified = view.historical_hash().await?;
+        let hash_modified = view.historical_hash()?;
         assert_ne!(hash_before, hash_modified);
 
         // Rollback
@@ -383,7 +381,7 @@ mod tests {
         assert!(!view.has_pending_changes().await);
 
         // Hash should return to previous value
-        let hash_after_rollback = view.historical_hash().await?;
+        let hash_after_rollback = view.historical_hash()?;
         assert_eq!(hash_before, hash_after_rollback);
 
         Ok(())
@@ -402,7 +400,7 @@ mod tests {
         context.store().write_batch(batch).await?;
         view.post_save();
 
-        assert_ne!(view.historical_hash().await?, HasherOutput::default());
+        assert_ne!(view.historical_hash()?, HasherOutput::default());
 
         // Clear the view
         view.clear();
@@ -416,7 +414,7 @@ mod tests {
         view.post_save();
 
         // Verify the view is not reset to default
-        assert_ne!(view.historical_hash().await?, HasherOutput::default());
+        assert_ne!(view.historical_hash()?, HasherOutput::default());
 
         Ok(())
     }
@@ -434,22 +432,22 @@ mod tests {
         context.store().write_batch(batch).await?;
         view.post_save();
 
-        let original_hash = view.historical_hash().await?;
+        let original_hash = view.historical_hash()?;
 
         // Clone the view
         let mut cloned_view = view.clone_unchecked()?;
 
         // Verify the clone has the same hash initially
-        let cloned_hash = cloned_view.historical_hash().await?;
+        let cloned_hash = cloned_view.historical_hash()?;
         assert_eq!(original_hash, cloned_hash);
 
         // Modify the clone
         cloned_view.set(84);
-        let cloned_hash_after = cloned_view.historical_hash().await?;
+        let cloned_hash_after = cloned_view.historical_hash()?;
         assert_ne!(original_hash, cloned_hash_after);
 
         // Original should be unchanged
-        let original_hash_after = view.historical_hash().await?;
+        let original_hash_after = view.historical_hash()?;
         assert_eq!(original_hash, original_hash_after);
 
         Ok(())
@@ -468,7 +466,7 @@ mod tests {
         view.set(42);
         assert!(view.has_pending_changes().await);
 
-        let hash_before_flush = view.historical_hash().await?;
+        let hash_before_flush = view.historical_hash()?;
 
         // Flush - this should update stored_hash
         let mut batch = Batch::new();
@@ -481,7 +479,7 @@ mod tests {
 
         // Make another change
         view.set(84);
-        let hash_after_second_change = view.historical_hash().await?;
+        let hash_after_second_change = view.historical_hash()?;
 
         // The new hash should be based on the previous stored hash
         assert_ne!(hash_before_flush, hash_after_second_change);
@@ -513,7 +511,7 @@ mod tests {
             let mut view =
                 HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context.clone()).await?;
 
-            let mut previous_hash = view.historical_hash().await?;
+            let mut previous_hash = view.historical_hash()?;
             for &value in values {
                 view.set(value);
                 if value % 2 == 0 {
@@ -523,7 +521,7 @@ mod tests {
                     context.store().write_batch(batch).await?;
                     view.post_save();
                 }
-                let current_hash = view.historical_hash().await?;
+                let current_hash = view.historical_hash()?;
                 assert_ne!(previous_hash, current_hash);
                 previous_hash = current_hash;
             }
@@ -551,7 +549,7 @@ mod tests {
         context.store().write_batch(batch).await?;
         view.post_save();
 
-        let hash_before = view.historical_hash().await?;
+        let hash_before = view.historical_hash()?;
 
         // Flush again without changes - no new hash should be stored
         let mut batch = Batch::new();
@@ -560,7 +558,7 @@ mod tests {
         context.store().write_batch(batch).await?;
         view.post_save();
 
-        let hash_after = view.historical_hash().await?;
+        let hash_after = view.historical_hash()?;
         assert_eq!(hash_before, hash_after);
 
         Ok(())

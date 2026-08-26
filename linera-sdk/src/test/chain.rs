@@ -112,7 +112,7 @@ impl ActiveChain {
     pub async fn chain_balance(&self) -> Amount {
         let query = Query::System(SystemQuery);
 
-        let QueryOutcome { response, .. } = self
+        let (QueryOutcome { response, .. }, _) = self
             .validator
             .worker()
             .query_application(self.id(), query, None)
@@ -477,8 +477,8 @@ impl ActiveChain {
         let base_path = Self::find_output_directory_of(repository)
             .await
             .expect("Failed to look for output binaries");
-        let contract_path = base_path.join(format!("{}.wasm", contract_binary));
-        let service_path = base_path.join(format!("{}.wasm", service_binary));
+        let contract_path = base_path.join(format!("{contract_binary}.wasm"));
+        let service_path = base_path.join(format!("{service_binary}.wasm"));
 
         let contract = Bytecode::load_from_file(contract_path)
             .expect("Failed to load contract bytecode from file");
@@ -587,6 +587,49 @@ impl ActiveChain {
         ApplicationId::<()>::from(&description).with_abi()
     }
 
+    /// Fallible version of [`create_application`](Self::create_application).
+    ///
+    /// Returns the [`ApplicationId`] on success, or a [`WorkerError`] if instantiation fails.
+    pub async fn try_create_application<Abi, Parameters, InstantiationArgument>(
+        &mut self,
+        module_id: ModuleId<Abi, Parameters, InstantiationArgument>,
+        parameters: Parameters,
+        instantiation_argument: InstantiationArgument,
+        required_application_ids: Vec<ApplicationId>,
+    ) -> Result<ApplicationId<Abi>, WorkerError>
+    where
+        Abi: ContractAbi,
+        Parameters: Serialize,
+        InstantiationArgument: Serialize,
+    {
+        let parameters = serde_json::to_vec(&parameters).unwrap();
+        let instantiation_argument = serde_json::to_vec(&instantiation_argument).unwrap();
+
+        let (creation_certificate, _) = self
+            .try_add_block(|block| {
+                block.with_system_operation(SystemOperation::CreateApplication {
+                    module_id: module_id.forget_abi(),
+                    parameters: parameters.clone(),
+                    instantiation_argument,
+                    required_application_ids: required_application_ids.clone(),
+                });
+            })
+            .await?;
+
+        let block = creation_certificate.inner().block();
+
+        let description = ApplicationDescription {
+            module_id: module_id.forget_abi(),
+            creator_chain_id: block.header.chain_id,
+            block_height: block.header.height,
+            application_index: 0,
+            parameters,
+            required_application_ids,
+        };
+
+        Ok(ApplicationId::<()>::from(&description).with_abi())
+    }
+
     /// Returns whether this chain has been closed.
     pub async fn is_closed(&self) -> bool {
         let chain = self
@@ -627,10 +670,13 @@ impl ActiveChain {
     {
         let query_bytes = serde_json::to_vec(&query)?;
 
-        let QueryOutcome {
-            response,
-            operations,
-        } = self
+        let (
+            QueryOutcome {
+                response,
+                operations,
+            },
+            _,
+        ) = self
             .validator
             .worker()
             .query_application(

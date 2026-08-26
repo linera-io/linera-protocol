@@ -10,7 +10,7 @@ use linera_core::{
     data_types::CrossChainRequest,
     node::NodeError,
     worker::{NetworkActions, WorkerError, WorkerState},
-    JoinSetExt as _,
+    JoinSetExt as _, ProcessConfirmedBlockMode,
 };
 use linera_storage::Storage;
 use tokio::{sync::oneshot, task::JoinSet};
@@ -23,6 +23,7 @@ use crate::{
     cross_chain_message_queue, RpcMessage,
 };
 
+/// A server handling RPC requests over a simple (UDP or TCP) transport.
 #[derive(Clone)]
 pub struct Server<S>
 where
@@ -43,6 +44,7 @@ impl<S> Server<S>
 where
     S: Storage,
 {
+    /// Creates a new server with the given network configuration and worker state.
     pub fn new(
         network: ValidatorInternalNetworkPreConfig<TransportProtocol>,
         host: String,
@@ -63,10 +65,12 @@ where
         }
     }
 
+    /// Returns the number of packets processed so far.
     pub fn packets_processed(&self) -> u64 {
         self.packets_processed
     }
 
+    /// Returns the number of user errors encountered so far.
     pub fn user_errors(&self) -> u64 {
         self.user_errors
     }
@@ -122,8 +126,9 @@ where
         .await;
     }
 
+    /// Spawns the server, returning a handle to track its completion.
     pub fn spawn(
-        self,
+        mut self,
         shutdown_signal: CancellationToken,
         join_set: &mut JoinSet<()>,
     ) -> ServerHandle {
@@ -135,6 +140,23 @@ where
 
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(self.cross_chain_config.queue_size);
+
+        // Give the worker a shard-routing sender for cross-chain requests generated
+        // outside the normal `NetworkActions` return path (specifically, the
+        // `RevertConfirm`s emitted after resetting a corrupted chain).
+        {
+            let routing_network = self.network.clone();
+            let routing_sender = cross_chain_sender.clone();
+            self.state = self
+                .state
+                .clone()
+                .with_outbound_cross_chain_sender(Arc::new(move |request| {
+                    let shard_id = routing_network.get_shard_id(request.target_chain_id());
+                    if let Err(error) = routing_sender.clone().try_send((request, shard_id)) {
+                        tracing::error!(%error, "dropping cross-chain request");
+                    }
+                }));
+        }
 
         join_set.spawn_task(Self::forward_cross_chain_queries(
             self.state.nickname().to_string(),
@@ -183,13 +205,15 @@ where
     async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage> {
         let reply = match message {
             RpcMessage::BlockProposal(message) => {
-                match self.server.state.handle_block_proposal(*message).await {
-                    Ok((info, actions)) => {
-                        // Cross-shard requests
-                        self.handle_network_actions(actions);
-                        // Response
-                        Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
-                    }
+                let (result, actions) = self.server.state.handle_block_proposal(*message).await;
+                // Dispatch actions whether or not the proposal was accepted: a
+                // rejected proposal can still advance the manager's `current_round`
+                // (via `update_signed_proposal` on the `HasIncompatibleConfirmedVote`
+                // recovery path), and subscribers need the resulting `NewRound`
+                // notification.
+                self.handle_network_actions(actions);
+                match result {
+                    Ok(info) => Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info)))),
                     Err(error) => {
                         self.log_error(&error, "Failed to handle block proposal");
                         Err(error.into())
@@ -276,7 +300,11 @@ where
                 match self
                     .server
                     .state
-                    .handle_confirmed_certificate(request.certificate, sender)
+                    .handle_confirmed_certificate(
+                        request.certificate,
+                        ProcessConfirmedBlockMode::Auto,
+                        sender,
+                    )
                     .await
                 {
                     Ok((info, actions)) => {
@@ -331,7 +359,7 @@ where
                     .await
                 {
                     Ok(blob) => Ok(Some(RpcMessage::DownloadPendingBlobResponse(Box::new(
-                        blob.into(),
+                        blob.content().clone(),
                     )))),
                     Err(error) => {
                         self.log_error(&error, "Failed to handle pending blob request");
@@ -359,6 +387,24 @@ where
                 Ok(Some(RpcMessage::VersionInfoResponse(Box::default())))
             }
 
+            RpcMessage::PreviousEventBlocks(request) => {
+                let (chain_id, stream_ids) = *request;
+                match self
+                    .server
+                    .state
+                    .previous_event_blocks(chain_id, stream_ids)
+                    .await
+                {
+                    Ok(result) => Ok(Some(RpcMessage::PreviousEventBlocksResponse(Box::new(
+                        result,
+                    )))),
+                    Err(error) => {
+                        self.log_error(&error, "Failed to get previous event blocks");
+                        Err(error.into())
+                    }
+                }
+            }
+
             RpcMessage::Vote(_)
             | RpcMessage::Error(_)
             | RpcMessage::ChainInfoResponse(_)
@@ -366,6 +412,7 @@ where
             | RpcMessage::NetworkDescriptionQuery
             | RpcMessage::NetworkDescriptionResponse(_)
             | RpcMessage::DownloadBlob(_)
+            | RpcMessage::DownloadBlobs(_)
             | RpcMessage::DownloadBlobResponse(_)
             | RpcMessage::DownloadPendingBlobResponse(_)
             | RpcMessage::DownloadConfirmedBlock(_)
@@ -376,14 +423,15 @@ where
             | RpcMessage::BlobLastUsedByCertificateResponse(_)
             | RpcMessage::MissingBlobIds(_)
             | RpcMessage::MissingBlobIdsResponse(_)
+            | RpcMessage::EventBlockHeights(_)
+            | RpcMessage::EventBlockHeightsResponse(_)
             | RpcMessage::DownloadCertificates(_)
             | RpcMessage::DownloadCertificatesResponse(_)
             | RpcMessage::UploadBlob(_)
             | RpcMessage::UploadBlobResponse(_)
             | RpcMessage::DownloadCertificatesByHeights(_, _)
-            | RpcMessage::DownloadCertificatesByHeightsResponse(_) => {
-                Err(NodeError::UnexpectedMessage)
-            }
+            | RpcMessage::DownloadCertificatesByHeightsResponse(_)
+            | RpcMessage::PreviousEventBlocksResponse(_) => Err(NodeError::UnexpectedMessage),
         };
 
         self.server.packets_processed += 1;

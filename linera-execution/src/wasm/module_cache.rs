@@ -46,11 +46,18 @@ impl<Module> ModuleCache<Module> {
 impl<Module: Clone> ModuleCache<Module> {
     /// Returns a `Module` for the requested `bytecode`, creating it with `module_builder` and
     /// adding it to the cache if it doesn't already exist in the cache.
+    #[cfg_attr(not(with_metrics), allow(unused_variables))]
     pub fn get_or_insert_with<E>(
         &mut self,
         bytecode: Bytecode,
+        bytecode_type: &str,
         module_builder: impl FnOnce(Bytecode) -> Result<Module, E>,
     ) -> Result<Module, E> {
+        #[cfg(with_metrics)]
+        super::metrics::WASM_BYTECODE_SIZE_BYTES
+            .with_label_values(&[bytecode_type])
+            .observe(bytecode.as_ref().len() as f64);
+
         if let Some(module) = self.get(&bytecode) {
             Ok(module)
         } else {

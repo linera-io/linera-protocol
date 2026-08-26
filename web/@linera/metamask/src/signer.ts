@@ -79,6 +79,16 @@ export default class Signer implements SignerInterface {
     }
   }
 
+  async getPublicKey(_owner: string): Promise<string> {
+    // MetaMask signs only for `Address20` (EVM secp256k1) owners. The wasm bridge
+    // never calls `getPublicKey` on the Address20 path — EVM signatures carry the
+    // signer's address inline in `AccountSignature::EvmSecp256k1`. If we get here,
+    // a caller is reaching past the bridge contract.
+    throw new Error(
+      "MetaMask signer does not expose a public key; EVM signatures carry the address",
+    );
+  }
+
   async containsKey(owner: string): Promise<boolean> {
     const accounts = await this.provider.send("eth_requestAccounts", []);
     return accounts.some(

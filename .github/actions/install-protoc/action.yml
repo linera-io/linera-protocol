@@ -1,0 +1,42 @@
+name: Install Protoc
+description: Install the Protocol Buffers compiler from official GitHub releases.
+inputs:
+  version:
+    description: Protoc version (e.g. "34.1").
+    required: false
+    default: "34.1"
+runs:
+  using: "composite"
+  steps:
+    - name: Download and install protoc
+      shell: bash
+      env:
+        PB_VER: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+
+        # protoc release assets are named <version>-<os>-<arch>, and both halves
+        # use spellings that match neither uname nor Rust target triples:
+        # the OS is `osx` (not darwin/macos) and 64-bit ARM is `aarch_64` with an
+        # UNDERSCORE (not aarch64/arm64). Getting either wrong yields a 404 that
+        # only shows up on the platform you did not test.
+        case "$(uname -s)" in
+          Linux)  os=linux ;;
+          Darwin) os=osx ;;
+          *) echo "install-protoc: unsupported OS '$(uname -s)'" >&2; exit 1 ;;
+        esac
+
+        # macOS reports arm64, Linux reports aarch64 — both map to aarch_64.
+        case "$(uname -m)" in
+          x86_64|amd64)  arch=x86_64 ;;
+          aarch64|arm64) arch=aarch_64 ;;
+          *) echo "install-protoc: unsupported architecture '$(uname -m)'" >&2; exit 1 ;;
+        esac
+
+        asset="protoc-${PB_VER}-${os}-${arch}.zip"
+        echo "install-protoc: $(uname -s)/$(uname -m) -> ${asset}"
+
+        curl -fsSL -o /tmp/protoc.zip \
+          "https://github.com/protocolbuffers/protobuf/releases/download/v${PB_VER}/${asset}"
+        sudo unzip -o /tmp/protoc.zip -d /usr/local
+        protoc --version

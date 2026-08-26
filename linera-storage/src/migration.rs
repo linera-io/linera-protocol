@@ -157,6 +157,7 @@ where
         Ok(())
     }
 
+    /// Migrates the storage to the latest schema version if it is out of date.
     pub async fn migrate_if_needed(&self) -> Result<(), ViewError> {
         loop {
             if matches!(
@@ -243,7 +244,7 @@ mod tests {
             BaseKey, RootKey, BLOB_KEY, BLOB_STATE_KEY, BLOCK_KEY, LITE_CERTIFICATE_KEY,
             NETWORK_DESCRIPTION_KEY,
         },
-        DbStorage, WallClock,
+        DbStorage, StorageCacheConfig, WallClock,
     };
 
     #[derive(Clone, Debug, Eq, PartialEq)]
@@ -549,6 +550,9 @@ mod tests {
                     RootKey::BlockByHeight(_) => {
                         // Nothing to be done
                     }
+                    RootKey::EventBlockHeight(_) => {
+                        // Nothing to be done
+                    }
                 }
             }
         }
@@ -575,7 +579,17 @@ mod tests {
         let mut storage_state = get_storage_state();
         write_storage_state_old_schema(&database, storage_state.clone()).await?;
         // Creating a storage and migrate to the new database schema.
-        let storage = DbStorage::<D, WallClock>::new(database, None, WallClock);
+        let cache_sizes = StorageCacheConfig {
+            blob_cache_size: 1000,
+            confirmed_block_cache_size: 1000,
+            certificate_cache_size: 1000,
+            certificate_raw_cache_size: 1000,
+            event_cache_size: 1000,
+            block_hash_by_height_cache_size: 1000,
+            event_block_height_cache_size: 1000,
+            cache_cleanup_interval_secs: crate::DEFAULT_CLEANUP_INTERVAL_SECS,
+        };
+        let storage = DbStorage::<D, WallClock>::new(database, None, cache_sizes, WallClock);
         storage.migrate_if_needed().await?;
         // read the storage state and compare it.
         let read_storage_state = read_storage_state_new_schema(storage.database.deref()).await?;

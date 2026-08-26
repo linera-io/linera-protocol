@@ -17,7 +17,7 @@ key directly in memory and uses it to sign.
 
 // We sometimes need functions in this module to be async in order to
 // ensure the generated code will return a `Promise`.
-#![allow(clippy::unused_async)]
+#![expect(clippy::unused_async)]
 #![recursion_limit = "256"]
 
 use wasm_bindgen::prelude::*;
@@ -29,8 +29,15 @@ pub mod chain;
 pub use chain::Chain;
 pub mod error;
 pub use error::Error;
+pub mod listener;
+pub use listener::Listener;
 pub mod faucet;
+pub mod formats;
+pub use formats::Formats;
 pub mod lock;
+
+pub mod crypto;
+pub use crypto::account_owner_from_ed25519_public_key;
 
 pub mod signer;
 pub use signer::Signer;
@@ -43,7 +50,9 @@ pub type Network = linera_rpc::node_provider::NodeProvider;
 pub type Environment = linera_core::environment::Impl<Storage, Network, Signer, Wallet>;
 
 type JsResult<T> = std::result::Result<T, JsError>;
-type Result<T> = std::result::Result<T, Error>;
+type Result<T, E = Error> = std::result::Result<T, E>;
+type ClientContext =
+    std::sync::Arc<futures::lock::Mutex<linera_client::ClientContext<Environment>>>;
 
 #[derive(serde::Deserialize, Default, tsify::Tsify)]
 #[tsify(from_wasm_abi)]
@@ -73,7 +82,7 @@ pub fn initialize(options: Option<InitializeOptions>) {
     // If no log filter is provided, disable the user application log by default, to avoid
     // overwhelming the console with logs from the client library itself.
     let log_filter = if options.log.is_empty() {
-        "user_application_log=off,linera_client=info"
+        "user_application_log=off,linera_web=info"
     } else {
         &options.log
     };
@@ -100,4 +109,9 @@ pub fn initialize(options: Option<InitializeOptions>) {
             .filter(|_| options.profiling),
         )
         .init();
+}
+
+#[wasm_bindgen]
+pub fn panic() {
+    panic!("oh no!");
 }

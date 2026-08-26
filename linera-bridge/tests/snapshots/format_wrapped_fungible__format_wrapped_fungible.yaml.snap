@@ -1,0 +1,122 @@
+---
+source: linera-bridge/tests/format_wrapped_fungible.rs
+expression: registry
+---
+Account:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - owner:
+        TYPENAME: AccountOwner
+AccountOwner:
+  ENUM:
+    0:
+      Reserved:
+        NEWTYPE: U8
+    1:
+      Address32:
+        NEWTYPE:
+          TYPENAME: CryptoHash
+    2:
+      Address20:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 20
+ApplicationId:
+  STRUCT:
+    - application_description_hash:
+        TYPENAME: CryptoHash
+BurnEvent:
+  STRUCT:
+    - target:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 20
+    - amount: U128
+ChainId:
+  NEWTYPESTRUCT:
+    TYPENAME: CryptoHash
+CryptoHash:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+Message:
+  ENUM:
+    0:
+      Credit:
+        STRUCT:
+          - target:
+              TYPENAME: AccountOwner
+          - amount: U128
+          - source:
+              TYPENAME: AccountOwner
+    1:
+      Withdraw:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - amount: U128
+          - target_account:
+              TYPENAME: Account
+WrappedFungibleOperation:
+  ENUM:
+    0:
+      Balance:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+    1:
+      TickerSymbol: UNIT
+    2:
+      Approve:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - spender:
+              TYPENAME: AccountOwner
+          - allowance: U128
+    3:
+      Transfer:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - amount: U128
+          - target_account:
+              TYPENAME: Account
+    4:
+      TransferFrom:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - spender:
+              TYPENAME: AccountOwner
+          - amount: U128
+          - target_account:
+              TYPENAME: Account
+    5:
+      Claim:
+        STRUCT:
+          - source_account:
+              TYPENAME: Account
+          - amount: U128
+          - target_account:
+              TYPENAME: Account
+    6:
+      Mint:
+        STRUCT:
+          - target_account:
+              TYPENAME: Account
+          - amount: U128
+    7:
+      Burn:
+        STRUCT:
+          - owner:
+              TYPENAME: AccountOwner
+          - amount: U128
+    8:
+      RegisterAuthorizedCaller:
+        STRUCT:
+          - app_id:
+              TYPENAME: ApplicationId

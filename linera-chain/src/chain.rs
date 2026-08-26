@@ -11,17 +11,19 @@ use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
         ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Epoch,
-        OracleResponse, Timestamp,
+        NonCanonicalBTreeMap, NonCanonicalBTreeSet, OracleResponse, Timestamp,
     },
     ensure,
+    hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, StreamId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
 };
 use linera_execution::{
-    committee::Committee, ExecutionRuntimeContext, ExecutionStateView, Message, Operation,
-    OutgoingMessage, Query, QueryContext, QueryOutcome, ResourceController, ResourceTracker,
-    ServiceRuntimeEndpoint, TransactionTracker, FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE,
+    committee::Committee, system::EPOCH_STREAM_NAME, ExecutionRuntimeContext, ExecutionStateView,
+    Message, Operation, OutgoingMessage, Query, QueryContext, QueryOutcome, ResourceController,
+    ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
+    FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE,
 };
 use linera_views::{
     bucket_queue_view::BucketQueueView,
@@ -34,7 +36,7 @@ use linera_views::{
     views::{ClonableView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
-use tracing::{info, instrument};
+use tracing::{info, instrument, warn};
 
 use crate::{
     block::{Block, ConfirmedBlock},
@@ -57,139 +59,208 @@ mod chain_tests;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency;
 
+/// The protocol phase a block is executed in. Recorded as the `phase` label on the
+/// block-execution metrics so the three distinct paths — staging a proposal, validating a
+/// received proposal, and committing a confirmed certificate — are separate time series in
+/// Prometheus.
+///
+/// Every path that executes a block must name its phase explicitly: there is no `Default`,
+/// so a new caller cannot compile without choosing one, and no execution can land in an
+/// unlabeled or silently-mislabeled bucket.
+///
+/// The label strings are derived from the variant names in `snake_case`; they are part of the
+/// metrics wire format, so `metrics_label_values_are_stable` pins them against an accidental
+/// variant rename.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum BlockExecutionPhase {
+    /// A block proposer staging (building) its own block (`stage_block_execution`).
+    StageProposal,
+    /// A validator validating a received block proposal (`handle_block_proposal`).
+    HandleProposal,
+    /// A validator executing a confirmed certificate before committing it
+    /// (`process_confirmed_block`).
+    HandleConfirmed,
+}
+
+/// What a call to [`ChainStateView::execute_block`] is doing, carrying exactly the inputs that
+/// are legal for that phase.
+///
+/// Bundling the phase together with the replayed oracle responses and the bundle-execution
+/// policy makes the illegal combinations unrepresentable: only [`StageProposal`] may choose a
+/// policy (and thus `AutoRetry`), and only [`HandleConfirmed`] carries oracle responses to
+/// replay — so "replay oracle responses while auto-retrying" cannot be constructed.
+///
+/// [`StageProposal`]: BlockExecution::StageProposal
+/// [`HandleConfirmed`]: BlockExecution::HandleConfirmed
+pub enum BlockExecution {
+    /// A proposer staging (building) its own block. The bundle-failure policy is caller-chosen
+    /// (and may be `AutoRetry`); oracle responses are computed fresh, never replayed.
+    StageProposal {
+        /// How to handle failing bundles while building the proposal.
+        policy: BundleExecutionPolicy,
+    },
+    /// A validator validating a received block proposal. Bundles must abort on failure (the
+    /// proposal is fixed) and oracle responses are computed fresh.
+    HandleProposal,
+    /// A validator executing a confirmed certificate before committing it. Bundles must abort
+    /// on failure and the certificate's recorded oracle responses are replayed for determinism.
+    HandleConfirmed {
+        /// The oracle responses recorded in the certificate, replayed to reproduce the outcome.
+        oracle_responses: Vec<Vec<OracleResponse>>,
+    },
+}
+
+impl BlockExecution {
+    /// The protocol phase this execution represents, used to label execution metrics and spans.
+    pub fn phase(&self) -> BlockExecutionPhase {
+        match self {
+            BlockExecution::StageProposal { .. } => BlockExecutionPhase::StageProposal,
+            BlockExecution::HandleProposal => BlockExecutionPhase::HandleProposal,
+            BlockExecution::HandleConfirmed { .. } => BlockExecutionPhase::HandleConfirmed,
+        }
+    }
+
+    /// Splits into the oracle responses to replay (if any) and the bundle-execution policy.
+    fn into_oracle_and_policy(self) -> (Option<Vec<Vec<OracleResponse>>>, BundleExecutionPolicy) {
+        match self {
+            BlockExecution::StageProposal { policy } => (None, policy),
+            BlockExecution::HandleProposal => (None, BundleExecutionPolicy::committed()),
+            BlockExecution::HandleConfirmed { oracle_responses } => {
+                (Some(oracle_responses), BundleExecutionPolicy::committed())
+            }
+        }
+    }
+}
+
 #[cfg(with_metrics)]
 pub(crate) mod metrics {
-    use std::sync::LazyLock;
-
     use linera_base::prometheus_util::{
-        exponential_bucket_interval, exponential_bucket_latencies, register_histogram_vec,
-        register_int_counter_vec,
+        exponential_bucket_interval, register_histogram_vec, register_int_counter_vec,
     };
     use linera_execution::ResourceTracker;
     use prometheus::{HistogramVec, IntCounterVec};
 
-    pub static NUM_BLOCKS_EXECUTED: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec("num_blocks_executed", "Number of blocks executed", &[])
-    });
-
-    pub static BLOCK_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "block_execution_latency",
-            "Block execution latency",
-            &[],
-            exponential_bucket_interval(50.0_f64, 10_000_000.0),
-        )
-    });
-
-    #[cfg(with_metrics)]
-    pub static MESSAGE_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "message_execution_latency",
-            "Message execution latency",
-            &[],
-            exponential_bucket_interval(0.1_f64, 1_000_000.0),
-        )
-    });
-
-    pub static OPERATION_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "operation_execution_latency",
-            "Operation execution latency",
-            &[],
-            exponential_bucket_interval(0.1_f64, 1_000_000.0),
-        )
-    });
-
-    pub static WASM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "wasm_fuel_used_per_block",
-            "Wasm fuel used per block",
-            &[],
-            exponential_bucket_interval(10.0, 1_000_000.0),
-        )
-    });
-
-    pub static EVM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "evm_fuel_used_per_block",
-            "EVM fuel used per block",
-            &[],
-            exponential_bucket_interval(10.0, 1_000_000.0),
-        )
-    });
-
-    pub static VM_NUM_READS_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "vm_num_reads_per_block",
-            "VM number of reads per block",
-            &[],
-            exponential_bucket_interval(0.1, 100.0),
-        )
-    });
-
-    pub static VM_BYTES_READ_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "vm_bytes_read_per_block",
-            "VM number of bytes read per block",
-            &[],
-            exponential_bucket_interval(0.1, 10_000_000.0),
-        )
-    });
-
-    pub static VM_BYTES_WRITTEN_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "vm_bytes_written_per_block",
-            "VM number of bytes written per block",
-            &[],
-            exponential_bucket_interval(0.1, 10_000_000.0),
-        )
-    });
-
-    pub static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "state_hash_computation_latency",
-            "Time to recompute the state hash",
-            &[],
-            exponential_bucket_latencies(2000.0),
-        )
-    });
-
-    pub static NUM_INBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "num_inboxes",
-            "Number of inboxes",
-            &[],
-            exponential_bucket_interval(1.0, 10_000.0),
-        )
-    });
-
-    pub static NUM_OUTBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "num_outboxes",
-            "Number of outboxes",
-            &[],
-            exponential_bucket_interval(1.0, 10_000.0),
-        )
-    });
-
-    /// Tracks block execution metrics in Prometheus.
-    pub(crate) fn track_block_metrics(tracker: &ResourceTracker) {
-        NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
+    /// Tracks block execution metrics in Prometheus, labeled by the execution `phase`.
+    pub(crate) fn track_block_metrics(
+        tracker: &ResourceTracker,
+        phase: super::BlockExecutionPhase,
+    ) {
+        let phase: &[&str] = &[phase.into()];
+        NUM_BLOCKS_EXECUTED.with_label_values(phase).inc();
         WASM_FUEL_USED_PER_BLOCK
-            .with_label_values(&[])
+            .with_label_values(phase)
             .observe(tracker.wasm_fuel as f64);
         EVM_FUEL_USED_PER_BLOCK
-            .with_label_values(&[])
+            .with_label_values(phase)
             .observe(tracker.evm_fuel as f64);
         VM_NUM_READS_PER_BLOCK
-            .with_label_values(&[])
+            .with_label_values(phase)
             .observe(tracker.read_operations as f64);
         VM_BYTES_READ_PER_BLOCK
-            .with_label_values(&[])
+            .with_label_values(phase)
             .observe(tracker.bytes_read as f64);
         VM_BYTES_WRITTEN_PER_BLOCK
-            .with_label_values(&[])
+            .with_label_values(phase)
             .observe(tracker.bytes_written as f64);
+    }
+
+    linera_base::declare_metrics! {
+        pub static NUM_BLOCKS_EXECUTED: IntCounterVec =
+            register_int_counter_vec(
+                "num_blocks_executed",
+                "Number of blocks executed",
+                &["phase"],
+            );
+
+        pub static BLOCK_EXECUTION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "block_execution_latency",
+                "Block execution latency",
+                &["phase"],
+                exponential_bucket_interval(50.0_f64, 10_000_000.0),
+            );
+
+        #[cfg(with_metrics)]
+        pub static MESSAGE_EXECUTION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "message_execution_latency",
+                "Message execution latency",
+                &["phase"],
+                exponential_bucket_interval(0.1_f64, 1_000_000.0),
+            );
+
+        pub static OPERATION_EXECUTION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "operation_execution_latency",
+                "Operation execution latency",
+                &["phase"],
+                exponential_bucket_interval(0.1_f64, 1_000_000.0),
+            );
+
+        pub static WASM_FUEL_USED_PER_BLOCK: HistogramVec =
+            register_histogram_vec(
+                "wasm_fuel_used_per_block",
+                "Wasm fuel used per block",
+                &["phase"],
+                exponential_bucket_interval(10.0, 100_000_000.0),
+            );
+
+        pub static EVM_FUEL_USED_PER_BLOCK: HistogramVec =
+            register_histogram_vec(
+                "evm_fuel_used_per_block",
+                "EVM fuel used per block",
+                &["phase"],
+                exponential_bucket_interval(10.0, 100_000_000.0),
+            );
+
+        pub static VM_NUM_READS_PER_BLOCK: HistogramVec =
+            register_histogram_vec(
+                "vm_num_reads_per_block",
+                "VM number of reads per block",
+                &["phase"],
+                exponential_bucket_interval(0.1, 100.0),
+            );
+
+        pub static VM_BYTES_READ_PER_BLOCK: HistogramVec =
+            register_histogram_vec(
+                "vm_bytes_read_per_block",
+                "VM number of bytes read per block",
+                &["phase"],
+                exponential_bucket_interval(0.1, 10_000_000.0),
+            );
+
+        pub static VM_BYTES_WRITTEN_PER_BLOCK: HistogramVec =
+            register_histogram_vec(
+                "vm_bytes_written_per_block",
+                "VM number of bytes written per block",
+                &["phase"],
+                exponential_bucket_interval(0.1, 10_000_000.0),
+            );
+
+        pub static STATE_HASH_COMPUTATION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "state_hash_computation_latency",
+                "Time to recompute the state hash, in microseconds",
+                &["phase"],
+                exponential_bucket_interval(1.0, 2_000_000.0),
+            );
+
+        pub static NUM_OUTBOXES: HistogramVec =
+            register_histogram_vec(
+                "num_outboxes",
+                "Number of outboxes",
+                &[],
+                exponential_bucket_interval(1.0, 1_000_000.0),
+            );
+
+        pub static OUTBOX_COUNTERS_SIZE: HistogramVec =
+            register_histogram_vec(
+                "outbox_counters_size",
+                "Number of entries in the outbox_counters map (in-flight message heights)",
+                &[],
+                exponential_bucket_interval(1.0, 1_000_000.0),
+            );
     }
 }
 
@@ -219,6 +290,24 @@ pub struct BundleInInbox {
 // The `TimestampedBundleInInbox` is a relatively small type, so a total
 // of 100 seems reasonable for the storing of the data.
 const TIMESTAMPBUNDLE_BUCKET_SIZE: usize = 100;
+
+/// A set of fully-tracked chains. Wrapped in [`Hashed`] (as `Hashed<ChainIdSet>`) so the hash that
+/// identifies the set — stored in [`ChainStateView::outbox_index_tracked_hash`] to detect when the
+/// outbox indices must be reconciled — is computed once when the tracked set changes rather than on
+/// every cross-chain operation. The hash is order-independent because `BTreeSet` iterates in sorted
+/// order.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChainIdSet(pub BTreeSet<ChainId>);
+
+impl linera_base::crypto::BcsHashable<'_> for ChainIdSet {}
+
+impl std::ops::Deref for ChainIdSet {
+    type Target = BTreeSet<ChainId>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 /// A view accessing the state of a chain.
 #[cfg_attr(
@@ -271,12 +360,41 @@ where
     pub outboxes: ReentrantCollectionView<C, ChainId, OutboxStateView<C>>,
     /// Number of outgoing messages in flight for each block height.
     /// We use a `RegisterView` to prioritize speed for small maps.
-    pub outbox_counters: RegisterView<C, BTreeMap<BlockHeight, u32>>,
+    pub outbox_counters: RegisterView<C, NonCanonicalBTreeMap<BlockHeight, u32>>,
     /// Outboxes with at least one pending message. This allows us to avoid loading all outboxes.
-    pub nonempty_outboxes: RegisterView<C, BTreeSet<ChainId>>,
+    pub nonempty_outboxes: RegisterView<C, NonCanonicalBTreeSet<ChainId>>,
 
     /// Blocks that have been verified but not executed yet, and that may not be contiguous.
     pub preprocessed_blocks: MapView<C, BlockHeight, CryptoHash>,
+
+    /// The indices of next events we expect to see per stream (could be ahead of the last
+    /// executed block in sparse chains).
+    pub next_expected_events: MapView<C, StreamId, u32>,
+
+    /// Inboxes with at least one pending added bundle. This allows us to avoid loading all
+    /// inboxes. `None` means the set hasn't been computed yet for this chain (backwards
+    /// compatibility with pre-existing database entries).
+    pub nonempty_inboxes: RegisterView<C, Option<NonCanonicalBTreeSet<ChainId>>>,
+
+    /// The local wall-clock time when block 0 was last executed. Used to prevent
+    /// reset-on-incorrect-outcome from looping: if not enough time has elapsed since
+    /// the last reset, the error is returned instead.
+    pub block_zero_executed_at: RegisterView<C, Timestamp>,
+
+    /// The hash of the set of fully-tracked chains that `nonempty_outboxes` and
+    /// `outbox_counters` were last reconciled against. On a client these two indices only hold
+    /// entries for tracked targets; when the tracked set changes this hash stops matching and the
+    /// indices are reconciled (`reconcile_outbox_index`). `None` means
+    /// they have never been filtered — a pre-existing database entry (migration), or a validator
+    /// that tracks all chains and never filters.
+    pub outbox_index_tracked_hash: RegisterView<C, Option<CryptoHash>>,
+
+    // A lower bound, not an exact record: progress is reported asynchronously, so a crash loses
+    // whatever was not folded in. Deliberate — a re-sent block the destination already has is
+    // skipped on an integer compare, whereas under-sending would leave a permanent gap.
+    /// The highest block of this chain pushed to each other committee validator. A validator with
+    /// no entry is queried before its first push; ones that leave the committee are pruned.
+    pub exported_heights: RegisterView<C, NonCanonicalBTreeMap<ValidatorPublicKey, BlockHeight>>,
 }
 
 /// Block-chaining state.
@@ -383,6 +501,7 @@ where
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
     ))]
+    /// Executes the given query against an application on this chain.
     pub async fn query_application(
         &mut self,
         local_time: Timestamp,
@@ -404,6 +523,7 @@ where
         chain_id = %self.chain_id(),
         application_id = %application_id
     ))]
+    /// Returns the description of the application with the given ID.
     pub async fn describe_application(
         &mut self,
         application_id: ApplicationId,
@@ -420,28 +540,39 @@ where
         target = %target,
         height = %height
     ))]
+    /// Marks all messages sent to `target` up to the given height as received, returning whether
+    /// the outbox changed.
     pub async fn mark_messages_as_received(
         &mut self,
         target: &ChainId,
         height: BlockHeight,
+        tracked: Option<&ChainIdSet>,
     ) -> Result<bool, ChainError> {
         let mut outbox = self.outboxes.try_load_entry_mut(target).await?;
         let updates = outbox.mark_messages_as_received(height).await?;
         if updates.is_empty() {
             return Ok(false);
         }
-        for update in updates {
-            let counter = self
-                .outbox_counters
-                .get_mut()
-                .get_mut(&update)
-                .ok_or_else(|| {
-                    ChainError::InternalError("message counter should be present".into())
-                })?;
-            *counter = counter.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
-            if *counter == 0 {
-                // Important for the test in `all_messages_delivered_up_to`.
-                self.outbox_counters.get_mut().remove(&update);
+        // `outbox_counters` is keyed by block height and shared across all recipients of that
+        // block, but only counts targets we index: every chain on a validator (`tracked == None`),
+        // or tracked targets on a client. An untracked target was never counted, so confirming it
+        // must NOT touch the counters at all — a present `counter[height]` belongs to a tracked
+        // sibling recipient of the same block and must be left intact. We only drain the queue
+        // (done above) for such a target.
+        if tracked.is_none_or(|tracked| tracked.contains(target)) {
+            for update in updates {
+                let counter = self
+                    .outbox_counters
+                    .get_mut()
+                    .get_mut(&update)
+                    .ok_or_else(|| {
+                        ChainError::CorruptedChainState("message counter should be present".into())
+                    })?;
+                *counter = counter.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
+                if *counter == 0 {
+                    // Important for the test in `all_messages_delivered_up_to`.
+                    self.outbox_counters.get_mut().remove(&update);
+                }
             }
         }
         if outbox.queue.count() == 0 {
@@ -454,7 +585,11 @@ where
         #[cfg(with_metrics)]
         metrics::NUM_OUTBOXES
             .with_label_values(&[])
-            .observe(self.outboxes.count().await? as f64);
+            .observe(self.nonempty_outboxes.get().len() as f64);
+        #[cfg(with_metrics)]
+        metrics::OUTBOX_COUNTERS_SIZE
+            .with_label_values(&[])
+            .observe(self.outbox_counters.get().len() as f64);
         Ok(true)
     }
 
@@ -474,8 +609,8 @@ where
     }
 
     /// Invariant for the states of active chains.
-    pub fn is_active(&self) -> bool {
-        self.execution_state.system.is_active()
+    pub async fn is_active(&self) -> Result<bool, ChainError> {
+        Ok(self.execution_state.system.is_active().await?)
     }
 
     /// Initializes the chain if it is not active yet.
@@ -494,50 +629,20 @@ where
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash_mut().await?;
         self.execution_state_hash.set(Some(hash));
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
-        // Last, reset the consensus state based on the current ownership.
-        self.manager.reset(
-            self.execution_state.system.ownership.get().clone(),
-            BlockHeight(0),
-            local_time,
-            maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights()),
-        )?;
+        self.reset_chain_manager(BlockHeight(0), local_time).await?;
         Ok(())
-    }
-
-    pub async fn next_block_height_to_receive(
-        &self,
-        origin: &ChainId,
-    ) -> Result<BlockHeight, ChainError> {
-        let inbox = self.inboxes.try_load_entry(origin).await?;
-        match inbox {
-            Some(inbox) => inbox.next_block_height_to_receive(),
-            None => Ok(BlockHeight::ZERO),
-        }
     }
 
     /// Returns the height of the highest block we have, plus one. Includes preprocessed blocks.
     ///
     /// The "+ 1" is so that it can be used in the same places as `next_block_height`.
     pub async fn next_height_to_preprocess(&self) -> Result<BlockHeight, ChainError> {
-        if let Some(height) = self.preprocessed_blocks.indices().await?.last() {
+        // `indices()` returns heights in serialization order (BCS little-endian for `u64`),
+        // which does not match numeric order, so we take the numeric max rather than the last.
+        if let Some(height) = self.preprocessed_blocks.indices().await?.into_iter().max() {
             return Ok(height.saturating_add(BlockHeight(1)));
         }
         Ok(self.tip_state.get().next_block_height)
-    }
-
-    pub async fn last_anticipated_block_height(
-        &self,
-        origin: &ChainId,
-    ) -> Result<Option<BlockHeight>, ChainError> {
-        let inbox = self.inboxes.try_load_entry(origin).await?;
-        match inbox {
-            Some(inbox) => match inbox.removed_bundles.back().await? {
-                Some(bundle) => Ok(Some(bundle.height)),
-                None => Ok(None),
-            },
-            None => Ok(None),
-        }
     }
 
     /// Attempts to process a new `bundle` of messages from the given `origin`. Returns an
@@ -551,8 +656,9 @@ where
         origin = %origin,
         bundle_height = %bundle.height
     ))]
-    pub async fn receive_message_bundle(
+    pub async fn receive_message_bundle_with_inbox(
         &mut self,
+        inbox: &mut InboxStateView<C>,
         origin: &ChainId,
         bundle: MessageBundle,
         local_time: Timestamp,
@@ -561,7 +667,7 @@ where
         assert!(!bundle.messages.is_empty());
         let chain_id = self.chain_id();
         tracing::trace!(
-            "Processing new messages to {chain_id:.8} from {origin} at height {}",
+            "Processing new messages from {origin} at height {}",
             bundle.height,
         );
         let chain_and_height = ChainAndHeight {
@@ -584,20 +690,20 @@ where
         }
 
         // Process the inbox bundle and update the inbox state.
-        let mut inbox = self.inboxes.try_load_entry_mut(origin).await?;
-        #[cfg(with_metrics)]
-        metrics::NUM_INBOXES
-            .with_label_values(&[])
-            .observe(self.inboxes.count().await? as f64);
-        inbox
+        let newly_added = inbox
             .add_bundle(bundle)
             .await
             .map_err(|error| match error {
                 InboxError::ViewError(error) => ChainError::ViewError(error),
-                error => ChainError::InternalError(format!(
+                error => ChainError::CorruptedChainState(format!(
                     "while processing messages in certified block: {error}"
                 )),
             })?;
+        if newly_added {
+            if let Some(set) = self.nonempty_inboxes.get_mut() {
+                set.insert(*origin);
+            }
+        }
 
         // Remember the certificate for future validator/client synchronizations.
         if add_to_received_log {
@@ -626,15 +732,18 @@ where
         }
     }
 
-    pub fn current_committee(&self) -> Result<(Epoch, &Committee), ChainError> {
+    /// Returns the current epoch and committee of this chain.
+    pub async fn current_committee(&self) -> Result<(Epoch, Arc<Committee>), ChainError> {
         self.execution_state
             .system
             .current_committee()
+            .await?
             .ok_or_else(|| ChainError::InactiveChain(self.chain_id()))
     }
 
-    pub fn ownership(&self) -> &ChainOwnership {
-        self.execution_state.system.ownership.get()
+    /// Returns the ownership configuration of this chain.
+    pub async fn ownership(&self) -> Result<&ChainOwnership, ChainError> {
+        Ok(self.execution_state.system.ownership.get().await?)
     }
 
     /// Removes the incoming message bundles in the block from the inboxes.
@@ -667,9 +776,13 @@ where
         }
         let origins = bundles_by_origin.keys().copied().collect::<Vec<_>>();
         let inboxes = self.inboxes.try_load_entries_mut(&origins).await?;
+        // When the bundles must already be present (block proposals), collect *every* missing
+        // `(origin, height)` rather than bailing on the first, so the caller can be told the
+        // full set of cross-chain updates to fetch in a single round-trip.
+        let mut missing_bundles = Vec::new();
         for ((origin, bundles), mut inbox) in bundles_by_origin.into_iter().zip(inboxes) {
             tracing::trace!(
-                "Removing [{}] from {chain_id:.8}'s inbox for {origin:}",
+                "Removing [{}] from inbox for {origin}",
                 bundles
                     .iter()
                     .map(|bundle| bundle.height.to_string())
@@ -682,22 +795,24 @@ where
                     .remove_bundle(bundle)
                     .await
                     .map_err(|error| (chain_id, origin, error))?;
-                if must_be_present {
-                    ensure!(
-                        was_present,
-                        ChainError::MissingCrossChainUpdate {
-                            chain_id,
-                            origin,
-                            height: bundle.height,
-                        }
-                    );
+                if must_be_present && !was_present {
+                    missing_bundles.push((origin, bundle.height));
+                }
+            }
+            inbox.observe_size_metric();
+            if inbox.added_bundles.count() == 0 {
+                if let Some(set) = self.nonempty_inboxes.get_mut() {
+                    set.remove(&origin);
                 }
             }
         }
-        #[cfg(with_metrics)]
-        metrics::NUM_INBOXES
-            .with_label_values(&[])
-            .observe(self.inboxes.count().await? as f64);
+        ensure!(
+            missing_bundles.is_empty(),
+            ChainError::MissingCrossChainUpdates {
+                chain_id,
+                bundles: missing_bundles,
+            }
+        );
         Ok(())
     }
 
@@ -713,7 +828,53 @@ where
     ) -> Result<Vec<ReadGuardedView<OutboxStateView<C>>>, ChainError> {
         let vec_of_options = self.outboxes.try_load_entries(targets).await?;
         let optional_vec = vec_of_options.into_iter().collect::<Option<Vec<_>>>();
-        optional_vec.ok_or_else(|| ChainError::InternalError("Missing outboxes".into()))
+        optional_vec.ok_or_else(|| ChainError::CorruptedChainState("Missing outboxes".into()))
+    }
+
+    /// Reconciles the `nonempty_outboxes` and `outbox_counters` indices from the retained outbox
+    /// queues, rebuilding only when the tracked set changed since the last call (i.e. the stored
+    /// [`Self::outbox_index_tracked_hash`] no longer matches). The per-target outbox *queues* in
+    /// `outboxes` are always kept; only these indices are filtered. Returns whether a rebuild
+    /// actually happened, so a read-only caller can skip persisting when nothing changed.
+    pub async fn reconcile_outbox_index(
+        &mut self,
+        tracked: Option<&Hashed<ChainIdSet>>,
+    ) -> Result<bool, ChainError> {
+        let digest = tracked.map(|tracked| tracked.hash());
+        if *self.outbox_index_tracked_hash.get() == digest {
+            return Ok(false);
+        }
+        self.nonempty_outboxes.get_mut().clear();
+        self.outbox_counters.get_mut().clear();
+        // In full mode (`None`) there is no tracked subset to iterate, so re-index from the keys of
+        // every retained outbox queue.
+        let targets = match tracked {
+            Some(tracked) => tracked.inner().iter().copied().collect::<Vec<_>>(),
+            None => self.outboxes.indices().await?,
+        };
+        for target in &targets {
+            let heights = {
+                let Some(outbox) = self.outboxes.try_load_entry(target).await? else {
+                    continue;
+                };
+                outbox.queue.elements().await?
+            };
+            if heights.is_empty() {
+                continue;
+            }
+            for height in heights {
+                *self.outbox_counters.get_mut().entry(height).or_default() += 1;
+            }
+            self.nonempty_outboxes.get_mut().insert(*target);
+        }
+        self.outbox_index_tracked_hash.set(digest);
+        Ok(true)
+    }
+
+    /// Returns whether the outbox index is already reconciled to `tracked` (the stored hash
+    /// matches), so the read-only network-actions path can read it without a write-lock rebuild.
+    pub fn outbox_index_is_reconciled(&self, tracked: Option<&Hashed<ChainIdSet>>) -> bool {
+        *self.outbox_index_tracked_hash.get() == tracked.map(|tracked| tracked.hash())
     }
 
     /// Executes a block with a specified policy for handling bundle failures.
@@ -733,23 +894,19 @@ where
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         exec_policy: BundleExecutionPolicy,
-    ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
-        // AutoRetry is incompatible with replaying oracle responses because discarding or
-        // rejecting bundles would change which transactions execute.
-        if !matches!(exec_policy.on_failure, BundleFailurePolicy::Abort) {
-            assert!(
-                replaying_oracle_responses.is_none(),
-                "Cannot use AutoRetry policy when replaying oracle responses"
-            );
-        }
-
+        phase: BlockExecutionPhase,
+    ) -> Result<(BlockExecutionOutcome, ResourceTracker, HashSet<ChainId>), ChainError> {
         #[cfg(with_metrics)]
-        let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency_us();
+        let block_execution_latency =
+            metrics::BLOCK_EXECUTION_LATENCY.with_label_values(&[phase.into()]);
+        #[cfg(with_metrics)]
+        let _execution_latency = block_execution_latency.measure_latency_us();
         chain.system.timestamp.set(block.timestamp);
 
         let committee_policy = chain
             .system
             .current_committee()
+            .await?
             .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?
             .1
             .policy()
@@ -779,15 +936,20 @@ where
             local_time,
             replaying_oracle_responses,
             block,
+            phase,
         )?;
 
-        // Extract failure policy settings.
-        let max_failures = match exec_policy.on_failure {
-            BundleFailurePolicy::Abort => 0,
-            BundleFailurePolicy::AutoRetry { max_failures } => max_failures,
+        // Extract failure-policy parameters from exec_policy.
+        let (max_failures, never_reject_application_ids) = match &exec_policy.on_failure {
+            BundleFailurePolicy::Abort => (0, Arc::new(HashSet::new())),
+            BundleFailurePolicy::AutoRetry {
+                max_failures,
+                never_reject_application_ids,
+            } => (*max_failures, never_reject_application_ids.clone()),
         };
         let auto_retry = !matches!(exec_policy.on_failure, BundleFailurePolicy::Abort);
         let mut failure_count = 0u32;
+        let mut never_reject_discarded_origins = HashSet::new();
 
         // Track cumulative bundle execution time if time budget is set.
         let time_budget = exec_policy.time_budget;
@@ -857,8 +1019,12 @@ where
 
             // Restore checkpoint.
             *chain = saved_chain;
-            block_execution_tracker.restore_checkpoint(saved_tracker);
+            block_execution_tracker.restore_checkpoint(&saved_tracker);
 
+            let all_messages_never_reject = !never_reject_application_ids.is_empty()
+                && incoming_bundle.messages().all(|posted_msg| {
+                    never_reject_application_ids.contains(&posted_msg.message.application_id())
+                });
             if error.is_limit_error() && i > 0 {
                 failure_count += 1;
                 // If we've exceeded max failures, discard all remaining message bundles.
@@ -882,10 +1048,23 @@ where
                 };
                 Self::discard_remaining_bundles(block, i, maybe_sender);
                 // Continue without incrementing i (next transaction is now at i).
-            } else if incoming_bundle.bundle.is_protected()
-                || incoming_bundle.action == MessageAction::Reject
+            } else if (all_messages_never_reject || incoming_bundle.bundle.is_protected())
+                && incoming_bundle.action != MessageAction::Reject
             {
-                // Protected bundles cannot be rejected. Failed rejected bundles fail the block.
+                let origin = incoming_bundle.origin;
+                never_reject_discarded_origins.insert(origin);
+                warn!(
+                    %error,
+                    index = i,
+                    %origin,
+                    "Message bundle cannot be rejected (protected or never-reject); \
+                    discarding the bundle (and same-sender subsequent bundles) for retry \
+                    in a later block"
+                );
+                Self::discard_remaining_bundles(block, i, Some(origin));
+                // Continue without incrementing i (next transaction is now at i).
+            } else if incoming_bundle.action == MessageAction::Reject {
+                // Failed rejected bundles fail the block.
                 return Err(ChainError::ExecutionError(error, context));
             } else {
                 // Reject the bundle: either a non-limit error, or the first bundle
@@ -920,7 +1099,7 @@ where
         let mut previous_message_blocks = BTreeMap::new();
         for (hash, (recipient, height)) in hashes.into_iter().zip(recipient_heights) {
             let hash = hash.ok_or_else(|| {
-                ChainError::InternalError("missing entry in confirmed_log".into())
+                ChainError::CorruptedChainState("missing entry in confirmed_log".into())
             })?;
             previous_message_blocks.insert(recipient, (hash, height));
         }
@@ -940,14 +1119,17 @@ where
         let mut previous_event_blocks = BTreeMap::new();
         for (hash, (stream, height)) in hashes.into_iter().zip(stream_heights) {
             let hash = hash.ok_or_else(|| {
-                ChainError::InternalError("missing entry in confirmed_log".into())
+                ChainError::CorruptedChainState("missing entry in confirmed_log".into())
             })?;
             previous_event_blocks.insert(stream, (hash, height));
         }
 
         let state_hash = {
             #[cfg(with_metrics)]
-            let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency();
+            let state_hash_latency =
+                metrics::STATE_HASH_COMPUTATION_LATENCY.with_label_values(&[phase.into()]);
+            #[cfg(with_metrics)]
+            let _hash_latency = state_hash_latency.measure_latency_us();
             chain.crypto_hash_mut().await?
         };
 
@@ -966,6 +1148,7 @@ where
                 operation_results,
             },
             resource_tracker,
+            never_reject_discarded_origins,
         ))
     }
 
@@ -1008,9 +1191,16 @@ where
         local_time: Timestamp,
         round: Option<u32>,
         published_blobs: &[Blob],
-        replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
-        policy: BundleExecutionPolicy,
-    ) -> Result<(ProposedBlock, BlockExecutionOutcome, ResourceTracker), ChainError> {
+        execution: BlockExecution,
+    ) -> Result<
+        (
+            ProposedBlock,
+            BlockExecutionOutcome,
+            ResourceTracker,
+            HashSet<ChainId>,
+        ),
+        ChainError,
+    > {
         assert_eq!(
             block.chain_id,
             self.execution_state.context().extra().chain_id()
@@ -1042,21 +1232,24 @@ where
         }
 
         let mandatory_apps_need_accepted_message = self
-            .execution_state
-            .system
             .current_committee()
-            .is_some_and(|(_epoch, committee)| {
-                committee
-                    .policy()
-                    .http_request_allow_list
-                    .contains(FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE)
-            });
+            .await?
+            .1
+            .policy()
+            .http_request_allow_list
+            .contains(FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE);
         Self::check_app_permissions(
-            self.execution_state.system.application_permissions.get(),
+            self.execution_state
+                .system
+                .application_permissions
+                .get()
+                .await?,
             &block,
             mandatory_apps_need_accepted_message,
         )?;
 
+        let phase = execution.phase();
+        let (replaying_oracle_responses, policy) = execution.into_oracle_and_policy();
         Self::execute_block_inner(
             &mut self.execution_state,
             &self.confirmed_log,
@@ -1068,9 +1261,57 @@ where
             published_blobs,
             replaying_oracle_responses,
             policy,
+            phase,
         )
         .await
-        .map(|(outcome, tracker)| (block, outcome, tracker))
+        .map(|(outcome, tracker, never_reject_origins)| {
+            (block, outcome, tracker, never_reject_origins)
+        })
+    }
+
+    /// Tracks emitted events per stream and returns the set of streams where new contiguous
+    /// events were observed (starting from `next_expected_events`).
+    ///
+    /// Callers must ensure that `next_expected_events` has been initialized for every stream
+    /// present in the block's events before calling this method. See
+    /// `ChainWorkerState::initialize_next_expected_events`.
+    async fn process_emitted_events(
+        &mut self,
+        block: &Block,
+    ) -> Result<BTreeSet<StreamId>, ChainError> {
+        let mut emitted_streams = BTreeMap::<StreamId, BTreeSet<u32>>::new();
+        for event in block.body.events.iter().flatten() {
+            emitted_streams
+                .entry(event.stream_id.clone())
+                .or_default()
+                .insert(event.index);
+        }
+
+        let mut updated_streams = BTreeSet::new();
+        for (stream_id, indices) in emitted_streams {
+            // Epoch 0 is created at genesis, so the first published event is index 1.
+            let initial_index = if stream_id == StreamId::system(EPOCH_STREAM_NAME) {
+                1
+            } else {
+                0
+            };
+            let mut current_expected_index = self
+                .next_expected_events
+                .get(&stream_id)
+                .await?
+                .unwrap_or(initial_index);
+            for index in indices {
+                if index == current_expected_index {
+                    updated_streams.insert(stream_id.clone());
+                    current_expected_index = index.saturating_add(1);
+                }
+            }
+            if current_expected_index != 0 {
+                self.next_expected_events
+                    .insert(&stream_id, current_expected_index)?;
+            }
+        }
+        Ok(updated_streams)
     }
 
     /// Applies an execution outcome to the chain, updating the outboxes, state hash and chain
@@ -1084,11 +1325,15 @@ where
         &mut self,
         block: &ConfirmedBlock,
         local_time: Timestamp,
-    ) -> Result<(), ChainError> {
+        tracked: Option<&ChainIdSet>,
+    ) -> Result<BTreeSet<StreamId>, ChainError> {
         let hash = block.inner().hash();
         let block = block.inner().inner();
+        if block.header.height == BlockHeight::ZERO {
+            self.block_zero_executed_at.set(local_time);
+        }
         self.execution_state_hash.set(Some(block.header.state_hash));
-        let recipients = self.process_outgoing_messages(block).await?;
+        let recipients = self.process_outgoing_messages(block, tracked).await?;
 
         for recipient in recipients {
             self.previous_message_blocks
@@ -1098,8 +1343,10 @@ where
             self.previous_event_blocks
                 .insert(&event.stream_id, block.header.height)?;
         }
+        let updated_streams = self.process_emitted_events(block).await?;
         // Last, reset the consensus state based on the current ownership.
-        self.reset_chain_manager(block.header.height.try_add_one()?, local_time)?;
+        self.reset_chain_manager(block.header.height.try_add_one()?, local_time)
+            .await?;
 
         // Advance to next block height.
         let tip = self.tip_state.get_mut();
@@ -1108,33 +1355,30 @@ where
         tip.update_counters(&block.body.transactions, &block.body.messages)?;
         self.confirmed_log.push(hash);
         self.preprocessed_blocks.remove(&block.header.height)?;
-        Ok(())
+        Ok(updated_streams)
     }
 
     /// Adds a block to `preprocessed_blocks`, and updates the outboxes where possible.
+    /// Returns the set of event streams that were updated as a result of preprocessing the block.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %block.inner().inner().header.height
     ))]
-    pub async fn preprocess_block(&mut self, block: &ConfirmedBlock) -> Result<(), ChainError> {
+    pub async fn preprocess_block(
+        &mut self,
+        block: &ConfirmedBlock,
+        tracked: Option<&ChainIdSet>,
+    ) -> Result<BTreeSet<StreamId>, ChainError> {
         let hash = block.inner().hash();
         let block = block.inner().inner();
         let height = block.header.height;
         if height < self.tip_state.get().next_block_height {
-            return Ok(());
+            return Ok(BTreeSet::new());
         }
-        self.process_outgoing_messages(block).await?;
+        self.process_outgoing_messages(block, tracked).await?;
+        let updated_streams = self.process_emitted_events(block).await?;
         self.preprocessed_blocks.insert(&height, hash)?;
-        Ok(())
-    }
-
-    /// Returns whether this is a child chain.
-    pub fn is_child(&self) -> bool {
-        let Some(description) = self.execution_state.system.description.get() else {
-            // Root chains are always initialized, so this must be a child chain.
-            return true;
-        };
-        description.is_child()
+        Ok(updated_streams)
     }
 
     /// Verifies that the block is valid according to the chain's application permission settings.
@@ -1147,9 +1391,11 @@ where
         block: &ProposedBlock,
         mandatory_apps_need_accepted_message: bool,
     ) -> Result<(), ChainError> {
-        let mut mandatory = HashSet::<ApplicationId>::from_iter(
-            app_permissions.mandatory_applications.iter().copied(),
-        );
+        let mut mandatory = app_permissions
+            .mandatory_applications
+            .iter()
+            .copied()
+            .collect::<HashSet<ApplicationId>>();
         for transaction in &block.transactions {
             match transaction {
                 Transaction::ExecuteOperation(operation)
@@ -1223,15 +1469,16 @@ where
     }
 
     /// Resets the chain manager for the next block height.
-    fn reset_chain_manager(
+    async fn reset_chain_manager(
         &mut self,
         next_height: BlockHeight,
         local_time: Timestamp,
     ) -> Result<(), ChainError> {
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
-        let ownership = self.execution_state.system.ownership.get().clone();
-        let fallback_owners =
-            maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights());
+        let maybe_committee = self.execution_state.system.current_committee().await?;
+        let ownership = self.execution_state.system.ownership.get().await?.clone();
+        let fallback_owners = maybe_committee
+            .iter()
+            .flat_map(|(_, committee)| committee.account_keys_and_weights());
         self.pending_validated_blobs.clear();
         self.pending_proposed_blobs.clear();
         self.manager
@@ -1248,6 +1495,7 @@ where
     async fn process_outgoing_messages(
         &mut self,
         block: &Block,
+        tracked: Option<&ChainIdSet>,
     ) -> Result<Vec<ChainId>, ChainError> {
         // Record the messages of the execution. Messages are understood within an
         // application.
@@ -1255,11 +1503,11 @@ where
         let block_height = block.header.height;
         let next_height = self.tip_state.get().next_block_height;
 
-        // Update the outboxes.
-        let outbox_counters = self.outbox_counters.get_mut();
-        let nonempty_outboxes = self.nonempty_outboxes.get_mut();
+        // Update the outboxes. Every recipient's per-target outbox queue is updated, but the
+        // `nonempty_outboxes` and `outbox_counters` indices are only populated for targets we track.
         let targets = recipients.into_iter().collect::<Vec<_>>();
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
+        let mut scheduled_tracked = Vec::new();
         for (mut outbox, target) in outboxes.into_iter().zip(&targets) {
             if block_height > next_height {
                 // There may be a gap in the chain before this block. We can only add it to this
@@ -1275,13 +1523,17 @@ where
                         let index =
                             usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
                         Some(self.confirmed_log.get(index).await?.ok_or_else(|| {
-                            ChainError::InternalError("missing entry in confirmed_log".into())
+                            ChainError::CorruptedChainState("missing entry in confirmed_log".into())
                         })?)
                     }
                     // The block with last added message has not been executed yet. If we have it,
                     // it's in preprocessed_blocks.
                     Some(height) => Some(self.preprocessed_blocks.get(&height).await?.ok_or_else(
-                        || ChainError::InternalError("missing entry in preprocessed_blocks".into()),
+                        || {
+                            ChainError::CorruptedChainState(
+                                "missing entry in preprocessed_blocks".into(),
+                            )
+                        },
                     )?),
                     None => None, // No message to that sender was added yet.
                 };
@@ -1297,7 +1549,7 @@ where
                     (Some(_), None) => {
                         // Outbox indicates there was a previous message block, but
                         // previous_message_blocks has no idea about it - possible bug
-                        return Err(ChainError::InternalError(
+                        return Err(ChainError::CorruptedChainState(
                             "block indicates no previous message block,\
                             but we have one in the outbox"
                                 .into(),
@@ -1320,8 +1572,26 @@ where
                     }
                 }
             }
-            if outbox.schedule_message(block_height)? {
-                *outbox_counters.entry(block_height).or_default() += 1;
+            if outbox.schedule_message(block_height)?
+                && tracked.is_none_or(|set| set.contains(target))
+            {
+                scheduled_tracked.push(*target);
+            }
+            #[cfg(with_metrics)]
+            crate::outbox::metrics::OUTBOX_SIZE
+                .with_label_values(&[])
+                .observe(outbox.queue.count() as f64);
+        }
+
+        if !scheduled_tracked.is_empty() {
+            // All scheduled messages are at `block_height`.
+            *self
+                .outbox_counters
+                .get_mut()
+                .entry(block_height)
+                .or_default() += scheduled_tracked.len() as u32;
+            let nonempty_outboxes = self.nonempty_outboxes.get_mut();
+            for target in &scheduled_tracked {
                 nonempty_outboxes.insert(*target);
             }
         }
@@ -1329,7 +1599,11 @@ where
         #[cfg(with_metrics)]
         metrics::NUM_OUTBOXES
             .with_label_values(&[])
-            .observe(self.outboxes.count().await? as f64);
+            .observe(self.nonempty_outboxes.get().len() as f64);
+        #[cfg(with_metrics)]
+        metrics::OUTBOX_COUNTERS_SIZE
+            .with_label_values(&[])
+            .observe(self.outbox_counters.get().len() as f64);
         Ok(targets)
     }
 }

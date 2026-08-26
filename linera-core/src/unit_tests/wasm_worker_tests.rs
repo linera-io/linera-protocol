@@ -35,8 +35,6 @@ use linera_execution::{
     WasmContractModule, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage};
-#[cfg(feature = "dynamodb")]
-use linera_views::dynamo_db::DynamoDbDatabase;
 #[cfg(feature = "rocksdb")]
 use linera_views::rocks_db::RocksDbDatabase;
 #[cfg(feature = "scylladb")]
@@ -65,17 +63,6 @@ async fn test_rocks_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
     let storage = DbStorage::<RocksDbDatabase, _>::make_test_storage(Some(wasm_runtime)).await;
-    run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
-}
-
-#[cfg(feature = "dynamodb")]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn test_dynamo_db_handle_certificates_to_create_application(
-    wasm_runtime: WasmRuntime,
-) -> anyhow::Result<()> {
-    let storage = DbStorage::<DynamoDbDatabase, _>::make_test_storage(Some(wasm_runtime)).await;
     run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
 
@@ -396,9 +383,14 @@ where
         .with_timestamp(1)
         .with_operation(publish_counter_op)
         .with_operation(publish_meta_op);
-    let (publish_executed, _, _) = env
+    let (_, publish_executed, _, _, _) = env
         .worker()
-        .stage_block_execution(publish_block, None, all_blobs.to_vec())
+        .stage_block_execution(
+            publish_block,
+            None,
+            all_blobs.to_vec(),
+            BundleExecutionPolicy::committed(),
+        )
         .await?;
     let publish_cert = env.make_certificate(ConfirmedBlock::new(publish_executed));
     env.worker()
@@ -426,9 +418,14 @@ where
     let create_counter_block = make_child_block(&publish_cert.into_value())
         .with_timestamp(2)
         .with_operation(create_counter_op);
-    let (create_counter_executed, _, _) = env
+    let (_, create_counter_executed, _, _, _) = env
         .worker()
-        .stage_block_execution(create_counter_block, None, vec![])
+        .stage_block_execution(
+            create_counter_block,
+            None,
+            vec![],
+            BundleExecutionPolicy::committed(),
+        )
         .await?;
     let create_counter_cert = env.make_certificate(ConfirmedBlock::new(create_counter_executed));
     env.worker()
@@ -456,9 +453,14 @@ where
     let create_meta_block = make_child_block(&create_counter_cert.into_value())
         .with_timestamp(3)
         .with_operation(create_meta_op);
-    let (create_meta_executed, _, _) = env
+    let (_, create_meta_executed, _, _, _) = env
         .worker()
-        .stage_block_execution(create_meta_block, None, vec![])
+        .stage_block_execution(
+            create_meta_block,
+            None,
+            vec![],
+            BundleExecutionPolicy::committed(),
+        )
         .await?;
     let create_meta_cert = env.make_certificate(ConfirmedBlock::new(create_meta_executed));
     env.worker()
@@ -474,9 +476,14 @@ where
             application_id: meta_app_id,
             bytes: fail_op_bytes,
         });
-    let (send_fail_executed, _, _) = env
+    let (_, send_fail_executed, _, _, _) = env
         .worker()
-        .stage_block_execution(send_fail_block, None, vec![])
+        .stage_block_execution(
+            send_fail_block,
+            None,
+            vec![],
+            BundleExecutionPolicy::committed(),
+        )
         .await?;
     let send_fail_cert = env.make_certificate(ConfirmedBlock::new(send_fail_executed));
     env.worker()
@@ -514,14 +521,17 @@ where
 
     // Stage execution with AutoRetry policy.
     // This should handle the failing message by rejecting the bundle.
-    let (modified_block, auto_retry_executed, _, _) = env
+    let (modified_block, auto_retry_executed, _, _, _) = env
         .worker()
-        .stage_block_execution_with_policy(
+        .stage_block_execution(
             proposed_block.clone(),
             None,
             vec![],
             BundleExecutionPolicy {
-                on_failure: BundleFailurePolicy::AutoRetry { max_failures: 3 },
+                on_failure: BundleFailurePolicy::AutoRetry {
+                    max_failures: 3,
+                    never_reject_application_ids: Default::default(),
+                },
                 time_budget: None,
             },
         )
@@ -543,9 +553,9 @@ where
     // Now stage the modified block with Abort policy.
     // Since the bundle is already marked as Reject, this should succeed
     // and produce the same outcome.
-    let (_, abort_executed, _, _) = env
+    let (_, abort_executed, _, _, _) = env
         .worker()
-        .stage_block_execution_with_policy(
+        .stage_block_execution(
             modified_block.clone(),
             None,
             vec![],

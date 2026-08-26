@@ -1,3 +1,0 @@
-webhook:
-  createSelfSignedCertificate: true
-  certificateSecretName: ""

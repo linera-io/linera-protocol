@@ -21,7 +21,6 @@ pub mod abi;
 pub mod command;
 pub mod crypto;
 pub mod data_types;
-pub mod dyn_convert;
 mod graphql;
 pub mod hashed;
 pub mod http;
@@ -29,11 +28,15 @@ pub mod identifiers;
 mod limited_writer;
 pub mod ownership;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod panic_hook;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod port;
 #[cfg(with_metrics)]
 pub mod prometheus_util;
 #[cfg(not(chain))]
 pub mod task;
+#[cfg(not(chain))]
+pub use task::Task;
 pub mod task_processor;
 pub mod time;
 #[cfg_attr(web, path = "tracing_web.rs")]
@@ -190,4 +193,15 @@ pub async fn listen_for_shutdown_signals(shutdown_sender: CancellationToken) {
             .expect("Failed to set up Ctrl+C handler");
         debug!("Received Ctrl+C");
     }
+}
+
+/// Registers every metric this crate declares.
+///
+/// Without this, a metric is only exported after the code path that observes it has run, so a
+/// rarely-taken path leaves its panels blank and makes a routine restart look like the metric
+/// was removed.
+#[cfg(with_metrics)]
+pub fn init_metrics() {
+    data_types::metrics::init_metrics();
+    panic_hook::metrics::init_metrics();
 }
