@@ -22,7 +22,7 @@ use futures::{
 use guard::INTEGRATION_TEST_GUARD;
 use linera_base::{
     crypto::{CryptoHash, Secp256k1SecretKey},
-    data_types::Amount,
+    data_types::{Amount, ApplicationPermissions},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
     time::{Duration, Instant},
     vm::VmRuntime,
@@ -5100,6 +5100,24 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         )
         .await?;
 
+    use std::collections::BTreeMap;
+
+    use fungible::{InitialState, Parameters};
+    let accounts = BTreeMap::from([(admin_owner, Amount::from_tokens(100))]);
+    let state = InitialState { accounts };
+    let (fungible_contract, fungible_service) = admin_client.build_example("fungible").await?;
+    let fungible_id = admin_client
+        .publish_and_create::<fungible::FungibleTokenAbi, Parameters, InitialState>(
+            fungible_contract,
+            fungible_service,
+            VmRuntime::Wasm,
+            &Parameters::new("FUN"),
+            &state,
+            &[],
+            None,
+        )
+        .await?;
+
     let operators = vec![("ls".to_string(), "/bin/ls".into())];
 
     let worker1_client = net.make_client().await;
@@ -5138,6 +5156,17 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         )
         .await?;
     service_client.assign(service_owner, service_chain).await?;
+    // Allow the controller application to change ownership of the service chain.
+    service_client
+        .change_application_permissions(
+            service_chain,
+            ApplicationPermissions {
+                close_chain: vec![controller_id.forget_abi()],
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("changing application permissions should succeed");
 
     let admin_port = get_node_port().await;
     let mut admin_node_service = admin_client
@@ -5194,6 +5223,8 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
             &[],
         )
         .await?;
+
+    let mut notifications2 = node_service2.notifications(worker2_chain).await?;
 
     // Same pattern: poll the controller app until it reports worker 2 registered.
     let app2 = node_service2.make_application(&worker2_chain, &controller_id)?;
@@ -5321,8 +5352,24 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
             .unwrap_or_else(|_| panic!("timed out waiting for task processing on {service_chain}"));
     }
 
+    // Transfer to the service chain from an application the service chain's message policy does
+    // not allow. The bundle must be rejected and the tracked `Credit` message bounced back.
+    let admin_fungible_app =
+        FungibleApp(admin_node_service.make_application(&admin_chain, &fungible_id)?);
+    admin_fungible_app
+        .transfer(
+            &admin_owner,
+            Amount::from_tokens(10),
+            fungible::Account {
+                chain_id: service_chain,
+                owner: admin_owner,
+            },
+        )
+        .await;
+
+    // Move the service to the second worker.
     let mutation = format!(
-        "executeControllerCommand(admin: \"{admin_owner}\", command: {{UpdateService: {{ service_id: \"{service_id}\", workers: [] }} }})"
+        "executeControllerCommand(admin: \"{admin_owner}\", command: {{UpdateService: {{ service_id: \"{service_id}\", workers: [\"{worker2_chain}\"] }} }})"
     );
     admin_app.mutate(&mutation).await?;
 
@@ -5337,6 +5384,55 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
             .wait_for_block(None)
             .await
             .unwrap_or_else(|_| panic!("timed out waiting for service removal on {worker1_chain}"));
+    }
+
+    // Poll worker 2's view until it has picked the service up.
+    loop {
+        let response = app2.query("localWorkerState").await?;
+        let state: LocalWorkerState = serde_json::from_value(response["localWorkerState"].clone())?;
+        if state.local_services.len() == 1 {
+            assert_eq!(state.local_services[0].name, "test-service");
+            break;
+        }
+        notifications2
+            .wait_for_block(None)
+            .await
+            .unwrap_or_else(|_| panic!("timed out waiting for service handoff on {worker2_chain}"));
+    }
+
+    // Request a task on the service chain from the admin chain, so the request arrives as a
+    // cross-chain message rather than as a local operation.
+    let mut service_notifications = service_service.notifications(service_chain).await?;
+    let admin_task_app = admin_node_service.make_application(&admin_chain, &task_processor_id)?;
+    admin_task_app
+        .mutate(&format!(
+            r#"requestTaskOn(chainId: "{service_chain}", operator: "ls", input: "")"#
+        ))
+        .await?;
+
+    // Poll until the second task has been processed, now by worker 2.
+    loop {
+        let task_count: u64 = service_task_app.query_json("taskCount").await?;
+        if task_count == 2 {
+            break;
+        }
+        service_notifications
+            .wait_for_block(None)
+            .await
+            .unwrap_or_else(|_| panic!("timed out waiting for the second task on {service_chain}"));
+    }
+
+    // Poll until the rejected transfer has bounced back and restored the admin's balance.
+    loop {
+        if admin_fungible_app.get_amount(&admin_owner).await == Amount::from_tokens(100) {
+            break;
+        }
+        admin_notifications
+            .wait_for_block(None)
+            .await
+            .unwrap_or_else(|_| {
+                panic!("timed out waiting for the bounced transfer on {admin_chain}")
+            });
     }
 
     node_service1.ensure_is_running()?;

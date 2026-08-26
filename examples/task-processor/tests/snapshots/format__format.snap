@@ -3,6 +3,9 @@ source: task-processor/tests/format.rs
 expression: "TaskProcessorApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
+  ChainId:
+    NEWTYPESTRUCT:
+      TYPENAME: CryptoHash
   TaskProcessorOperation:
     ENUM:
       0:
@@ -11,6 +14,13 @@ REGISTRY:
             - operator: STR
             - input: STR
       1:
+        RequestTaskOn:
+          STRUCT:
+            - chain_id:
+                TYPENAME: ChainId
+            - operator: STR
+            - input: STR
+      2:
         StoreResult:
           STRUCT:
             - id: U64

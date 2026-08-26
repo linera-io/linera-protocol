@@ -267,8 +267,45 @@ impl IncomingBundle {
         self.bundle.messages.iter()
     }
 
+    /// Returns whether the policy allows this bundle to be delivered with its current action.
+    ///
+    /// Covers the application-level rules only. The chain-level filters are applied by
+    /// [`Self::apply_policy`], which drops the bundle outright rather than rejecting it.
+    fn matches_policy(&self, policy: &MessagePolicy) -> bool {
+        if !policy.never_reject_application_ids.is_empty()
+            && self.messages().all(|posted_msg| {
+                policy
+                    .never_reject_application_ids
+                    .contains(&posted_msg.message.application_id())
+            })
+        {
+            return true;
+        }
+        if let Some(app_ids) = &policy.reject_message_bundles_without_application_ids {
+            if !self
+                .messages()
+                .any(|posted_msg| app_ids.contains(&posted_msg.message.application_id()))
+            {
+                return false;
+            }
+        }
+        if let Some(app_ids) = &policy.reject_message_bundles_with_other_application_ids {
+            if !self
+                .messages()
+                .all(|posted_msg| app_ids.contains(&posted_msg.message.application_id()))
+            {
+                return false;
+            }
+        }
+        !policy.is_reject()
+    }
+
     /// Applies the message policy to this bundle, returning `None` if it is dropped,
     /// or the bundle with a possibly updated action otherwise.
+    ///
+    /// A bundle from a chain the policy filters out is dropped. A bundle the policy rejects on
+    /// application grounds is dropped only if it is skippable; otherwise it is marked rejected,
+    /// so that a tracked message bounces back to its sender instead of being stranded.
     #[instrument(level = "trace", skip(self))]
     pub fn apply_policy(mut self, policy: &MessagePolicy) -> Option<IncomingBundle> {
         if let Some(chain_ids) = &policy.restrict_chain_ids_to {
@@ -279,32 +316,7 @@ impl IncomingBundle {
         if policy.ignore_chain_ids.contains(&self.origin) {
             return None;
         }
-        if !policy.never_reject_application_ids.is_empty()
-            && self.messages().all(|posted_msg| {
-                policy
-                    .never_reject_application_ids
-                    .contains(&posted_msg.message.application_id())
-            })
-        {
-            return Some(self);
-        }
-        if let Some(app_ids) = &policy.reject_message_bundles_without_application_ids {
-            if !self
-                .messages()
-                .any(|posted_msg| app_ids.contains(&posted_msg.message.application_id()))
-            {
-                return None;
-            }
-        }
-        if let Some(app_ids) = &policy.reject_message_bundles_with_other_application_ids {
-            if !self
-                .messages()
-                .all(|posted_msg| app_ids.contains(&posted_msg.message.application_id()))
-            {
-                return None;
-            }
-        }
-        if policy.is_reject() {
+        if !self.matches_policy(policy) {
             if self.bundle.is_skippable() {
                 return None;
             } else if !self.bundle.is_protected() {

@@ -8,7 +8,7 @@
 //! the results in its state.
 
 use async_graphql::{Request, Response};
-use linera_sdk::linera_base_types::{ContractAbi, ServiceAbi};
+use linera_sdk::linera_base_types::{ChainId, ContractAbi, ServiceAbi};
 use serde::{Deserialize, Serialize};
 
 pub struct TaskProcessorAbi;
@@ -18,8 +18,19 @@ pub struct TaskProcessorAbi;
 pub enum TaskProcessorOperation {
     /// Request a task to be processed by the given operator with the given input.
     RequestTask { operator: String, input: String },
+    /// Request a task to be processed on the given chain.
+    RequestTaskOn {
+        chain_id: ChainId,
+        operator: String,
+        input: String,
+    },
     /// Store the result of the completed task with the given identifier.
     StoreResult { id: u64, result: String },
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub enum Message {
+    RequestTask { operator: String, input: String },
 }
 
 impl ContractAbi for TaskProcessorAbi {

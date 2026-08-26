@@ -10,7 +10,7 @@ use linera_sdk::{
     views::{RootView, View},
     Contract, ContractRuntime,
 };
-use task_processor::{TaskProcessorAbi, TaskProcessorOperation};
+use task_processor::{Message, TaskProcessorAbi, TaskProcessorOperation};
 
 use self::state::{PendingTask, TaskProcessorState};
 
@@ -26,7 +26,7 @@ impl WithContractAbi for TaskProcessorContract {
 }
 
 impl Contract for TaskProcessorContract {
-    type Message = ();
+    type Message = Message;
     type InstantiationArgument = ();
     type Parameters = ();
     type EventValue = ();
@@ -47,6 +47,15 @@ impl Contract for TaskProcessorContract {
             TaskProcessorOperation::RequestTask { operator, input } => {
                 self.add_pending_task(operator, input);
             }
+            TaskProcessorOperation::RequestTaskOn {
+                chain_id,
+                operator,
+                input,
+            } => {
+                self.runtime
+                    .prepare_message(Message::RequestTask { operator, input })
+                    .send_to(chain_id);
+            }
             TaskProcessorOperation::StoreResult { id, result } => {
                 self.remove_pending_task(id).await;
                 self.state.results.push_back(result);
@@ -56,8 +65,12 @@ impl Contract for TaskProcessorContract {
         }
     }
 
-    async fn execute_message(&mut self, _message: ()) {
-        panic!("Task processor application doesn't support any cross-chain messages");
+    async fn execute_message(&mut self, message: Message) {
+        match message {
+            Message::RequestTask { operator, input } => {
+                self.add_pending_task(operator, input);
+            }
+        }
     }
 
     async fn store(self) {

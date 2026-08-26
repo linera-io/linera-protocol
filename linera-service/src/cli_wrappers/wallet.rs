@@ -24,7 +24,7 @@ use linera_base::{
     abi::ContractAbi,
     command::{resolve_binary, CommandExt},
     crypto::{CryptoHash, InMemorySigner},
-    data_types::{Amount, BlockHeight, Bytecode, Epoch},
+    data_types::{Amount, ApplicationPermissions, BlockHeight, Bytecode, Epoch},
     identifiers::{
         Account, AccountOwner, ApplicationId, ChainId, IndexAndEvent, ModuleId, StreamId,
     },
@@ -1035,6 +1035,23 @@ impl ClientWrapper {
                 .zip(std::iter::repeat(100u64))
                 .collect::<BTreeMap<_, _>>(),
         )?);
+        command.spawn_and_wait_for_stdout().await?;
+        Ok(())
+    }
+
+    /// Runs `linera change-application-permissions --chain-id CHAIN_ID`.
+    pub async fn change_application_permissions(
+        &self,
+        chain_id: ChainId,
+        application_permissions: ApplicationPermissions,
+    ) -> Result<()> {
+        let mut command = self.command().await?;
+        command
+            .arg("change-application-permissions")
+            .args(["--chain-id", &chain_id.to_string()]);
+        command
+            .arg("--close-chain")
+            .arg(serde_json::to_string(&application_permissions.close_chain)?);
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
     }
