@@ -396,14 +396,12 @@ where
             .await?)
     }
 
-    /// Gets the hash of each requested block, or `None` for heights we do not have.
-    ///
-    /// Positionally aligned with `heights`; see [`linera_chain::ChainStateView::block_hashes`].
+    /// Gets block hashes for the given heights.
     pub async fn get_block_hashes(
         &self,
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
-    ) -> Result<Vec<Option<CryptoHash>>, LocalNodeError> {
+    ) -> Result<Vec<CryptoHash>, LocalNodeError> {
         Ok(self.node.state.get_block_hashes(chain_id, heights).await?)
     }
 

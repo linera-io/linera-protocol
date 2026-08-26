@@ -1434,16 +1434,10 @@ where
         Ok(())
     }
 
-    /// Returns the hash of each requested block, or `None` for heights we do not have.
+    /// Returns the hashes of all blocks we have in the given range.
     ///
-    /// The result is positionally aligned with the input: entry `i` is the hash for the `i`-th
-    /// requested height. Heights we do not hold are `None` rather than being dropped, so callers
-    /// can zip the result against the heights they asked for. `preprocessed_blocks` is sparse for
-    /// a chain we merely receive from, so a hole can appear anywhere, not just at the end —
-    /// compacting the result would silently shift every later entry.
-    ///
-    /// The two stores are queried in batches, then scattered back to the caller's positions, so
-    /// the input order is preserved even when it is not ascending.
+    /// If the input heights are in ascending order, the hashes will be in the same order.
+    /// Otherwise they may be unordered.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         next_block_height = %self.tip_state.get().next_block_height,
@@ -1451,40 +1445,27 @@ where
     pub async fn block_hashes(
         &self,
         heights: impl IntoIterator<Item = BlockHeight>,
-    ) -> Result<Vec<Option<CryptoHash>>, ChainError> {
+    ) -> Result<Vec<CryptoHash>, ChainError> {
         let next_height = self.tip_state.get().next_block_height;
-        let heights = heights.into_iter().collect::<Vec<_>>();
-        // Everything up to (excluding) next_height is in confirmed_log, the rest in
-        // preprocessed_blocks if we have it. Remember each height's position so the batched
-        // results can be scattered back into it.
-        let mut confirmed_positions = Vec::new();
-        let mut confirmed_indices = Vec::new();
-        let mut unconfirmed_positions = Vec::new();
-        let mut unconfirmed_heights = Vec::new();
-        for (position, height) in heights.iter().enumerate() {
-            if *height < next_height {
-                confirmed_positions.push(position);
-                confirmed_indices
-                    .push(usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?);
-            } else {
-                unconfirmed_positions.push(position);
-                unconfirmed_heights.push(*height);
-            }
-        }
+        // Everything up to (excluding) next_height is in confirmed_log.
+        let (confirmed_heights, unconfirmed_heights) = heights
+            .into_iter()
+            .partition::<Vec<_>, _>(|height| *height < next_height);
+        let confirmed_indices = confirmed_heights
+            .into_iter()
+            .map(|height| usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow))
+            .collect::<Result<_, _>>()?;
         let confirmed_hashes = self.confirmed_log.multi_get(confirmed_indices).await?;
+        // Everything after (including) next_height in preprocessed_blocks if we have it.
         let unconfirmed_hashes = self
             .preprocessed_blocks
             .multi_get(&unconfirmed_heights)
             .await?;
-        let mut hashes = vec![None; heights.len()];
-        for (position, hash) in confirmed_positions
+        Ok(confirmed_hashes
             .into_iter()
-            .zip(confirmed_hashes)
-            .chain(unconfirmed_positions.into_iter().zip(unconfirmed_hashes))
-        {
-            hashes[position] = hash;
-        }
-        Ok(hashes)
+            .chain(unconfirmed_hashes)
+            .flatten()
+            .collect())
     }
 
     /// Resets the chain manager for the next block height.

@@ -998,16 +998,9 @@ where
             return Ok(certificates_by_height.into_iter().flatten().collect());
         }
 
-        // Fallback to the traditional approach. Heights we do not hold come back as `None`; drop
-        // them here rather than pairing them with a hash, and let the index derive each height
-        // from the block itself.
-        let hashes: Vec<_> = self
-            .local_node
-            .get_block_hashes(chain_id, heights)
-            .await?
-            .into_iter()
-            .flatten()
-            .collect();
+        // Fallback to the traditional approach. This drops the heights we do not hold, so it
+        // cannot tell us which height each hash answers; the index derives that from the block.
+        let hashes = self.local_node.get_block_hashes(chain_id, heights).await?;
 
         let certificates = storage.read_certificates(&hashes).await?;
 

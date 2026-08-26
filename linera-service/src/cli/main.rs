@@ -1829,8 +1829,7 @@ impl Runnable for Job {
                 let block_hash = chain_state_view
                     .block_hashes([height])
                     .await
-                    .context("Failed to find a block hash for the given height")?[0]
-                    .with_context(|| format!("No block at height {height} on chain {chain_id}"))?;
+                    .context("Failed to find a block hash for the given height")?[0];
                 let block = context
                     .storage()
                     .read_confirmed_block(block_hash)
