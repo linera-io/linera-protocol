@@ -329,14 +329,12 @@ impl<W: View> ByteCollectionView<W::Context, W> {
                 let (subview_context, keys) =
                     collection_entry::entry_keys::<W>(&self.context, short_key)?;
                 let values = self.context.store().read_multi_values_bytes(&keys).await?;
-                Ok(
-                    collection_entry::post_load_entry::<W>(subview_context, &values)?.map(|view| {
-                        ReadGuardedView::NotLoaded {
-                            _updates: updates,
-                            view,
-                        }
-                    }),
-                )
+                let subview = collection_entry::post_load_entry::<W>(subview_context, &values)?;
+                let entry = subview.map(|view| ReadGuardedView::NotLoaded {
+                    _updates: updates,
+                    view,
+                });
+                Ok(entry)
             }
         }
     }
@@ -580,7 +578,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
     /// ```
     pub async fn contains_key(&self, short_key: &[u8]) -> Result<bool, ViewError> {
         let updates = self.updates.read().await;
-        Ok(match updates.get(short_key) {
+        let contains = match updates.get(short_key) {
             Some(entry) => match entry {
                 Update::Set(_view) => true,
                 _entry @ Update::Removed => false,
@@ -589,7 +587,8 @@ impl<W: View> ByteCollectionView<W::Context, W> {
                 let key_index = collection_entry::index_key(&self.context, short_key);
                 !self.delete_storage_first && self.context.store().contains_key(&key_index).await?
             }
-        })
+        };
+        Ok(contains)
     }
 
     /// Marks the entry as removed. If absent then nothing is done.
