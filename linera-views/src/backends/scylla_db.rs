@@ -486,8 +486,8 @@ impl ScyllaDbClient {
     }
 
     /// Issues an unlogged batch that contains only prefix-delete statements,
-    /// letting the coordinator assign the write timestamp.
-    async fn write_batch_prefix_deletes(
+    /// letting the coordinator assign the write timestamp. Shared mode only.
+    async fn write_shared_batch_prefix_deletes(
         &self,
         root_key: &[u8],
         key_prefix_deletions: Vec<Vec<u8>>,
@@ -516,13 +516,13 @@ impl ScyllaDbClient {
         session
             .batch(&batch_query, batch_values)
             .await
-            .map_err(ScyllaDbStoreInternalError::WriteBatchExecutionError)?;
+            .map_err(ScyllaDbStoreInternalError::SharedWriteBatchExecutionError)?;
         Ok(())
     }
 
     /// Issues an unlogged batch containing the single-key deletions and the
-    /// insertions, letting the coordinator assign the write timestamp.
-    async fn write_simple_batch(
+    /// insertions, letting the coordinator assign the write timestamp. Shared mode only.
+    async fn write_shared_simple_batch(
         &self,
         root_key: &[u8],
         batch: SimpleUnorderedBatch,
@@ -549,7 +549,7 @@ impl ScyllaDbClient {
         session
             .batch(&batch_query, batch_values)
             .await
-            .map_err(ScyllaDbStoreInternalError::WriteBatchExecutionError)?;
+            .map_err(ScyllaDbStoreInternalError::SharedWriteBatchExecutionError)?;
         Ok(())
     }
 
@@ -640,7 +640,7 @@ impl ScyllaDbClient {
         session
             .batch(&batch_query, batch_values)
             .await
-            .map_err(ScyllaDbStoreInternalError::WriteBatchExecutionError)?;
+            .map_err(ScyllaDbStoreInternalError::ExclusiveWriteBatchExecutionError)?;
         Ok(())
     }
 
@@ -785,7 +785,7 @@ pub enum ScyllaDbStoreInternalError {
     /// An execution error during a write-batch operation on a store opened in
     /// exclusive mode, which backs a view.
     #[error(transparent)]
-    WriteBatchExecutionError(ExecutionError),
+    ExclusiveWriteBatchExecutionError(ExecutionError),
 
     /// An execution error during a write-batch operation on a store opened in
     /// shared mode, which backs no view.
@@ -822,16 +822,6 @@ pub enum ScyllaDbStoreInternalError {
     ZeroLengthKey,
 }
 
-impl ScyllaDbStoreInternalError {
-    /// Reclassifies a write-batch error as having been raised on a shared store.
-    fn into_shared(self) -> Self {
-        match self {
-            Self::WriteBatchExecutionError(error) => Self::SharedWriteBatchExecutionError(error),
-            other => other,
-        }
-    }
-}
-
 impl KeyValueStoreError for ScyllaDbStoreInternalError {
     const BACKEND: &'static str = "scylla_db";
 
@@ -840,7 +830,7 @@ impl KeyValueStoreError for ScyllaDbStoreInternalError {
         // the batch was applied. That only invalidates in-memory state when the store
         // backs a view, which is the case in exclusive mode; a shared store backs none,
         // so the same ambiguity is reported as an ordinary, retryable error.
-        matches!(self, Self::WriteBatchExecutionError(_))
+        matches!(self, Self::ExclusiveWriteBatchExecutionError(_))
     }
 }
 
@@ -961,13 +951,11 @@ impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
             store.write_batch_exclusive(&self.root_key, batch, t).await
         } else {
             store
-                .write_batch_prefix_deletes(&self.root_key, batch.key_prefix_deletions)
-                .await
-                .map_err(ScyllaDbStoreInternalError::into_shared)?;
+                .write_shared_batch_prefix_deletes(&self.root_key, batch.key_prefix_deletions)
+                .await?;
             store
-                .write_simple_batch(&self.root_key, batch.simple_unordered_batch)
-                .await
-                .map_err(ScyllaDbStoreInternalError::into_shared)?;
+                .write_shared_simple_batch(&self.root_key, batch.simple_unordered_batch)
+                .await?;
             Ok(())
         }
     }
@@ -1373,23 +1361,25 @@ mod tests {
     /// the store backs a view, which is the case in exclusive mode.
     #[test]
     fn write_batch_error_reloads_the_view_only_in_exclusive_mode() {
-        let exclusive =
-            ScyllaDbStoreInternalError::WriteBatchExecutionError(ExecutionError::EmptyPlan);
-        assert!(exclusive.must_reload_view());
-        assert!(!exclusive.into_shared().must_reload_view());
+        assert!(
+            ScyllaDbStoreInternalError::ExclusiveWriteBatchExecutionError(
+                ExecutionError::EmptyPlan
+            )
+            .must_reload_view()
+        );
+        assert!(!ScyllaDbStoreInternalError::SharedWriteBatchExecutionError(
+            ExecutionError::EmptyPlan
+        )
+        .must_reload_view());
     }
 
-    /// Reclassifying for a shared store leaves every other error untouched.
+    /// No other error asks for a view reload.
     #[test]
-    fn into_shared_only_reclassifies_write_batch_errors() {
-        assert!(matches!(
-            ScyllaDbStoreInternalError::ZeroLengthKey.into_shared(),
-            ScyllaDbStoreInternalError::ZeroLengthKey
-        ));
-        assert!(matches!(
-            ScyllaDbStoreInternalError::ExecutionError(ExecutionError::EmptyPlan).into_shared(),
-            ScyllaDbStoreInternalError::ExecutionError(_)
-        ));
+    fn other_errors_do_not_reload_the_view() {
         assert!(!ScyllaDbStoreInternalError::ZeroLengthKey.must_reload_view());
+        assert!(
+            !ScyllaDbStoreInternalError::ExecutionError(ExecutionError::EmptyPlan)
+                .must_reload_view()
+        );
     }
 }
