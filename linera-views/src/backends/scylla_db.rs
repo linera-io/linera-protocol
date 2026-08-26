@@ -487,7 +487,7 @@ impl ScyllaDbClient {
 
     /// Issues an unlogged batch that contains only prefix-delete statements,
     /// letting the coordinator assign the write timestamp. Shared mode only.
-    async fn write_shared_batch_prefix_deletes(
+    async fn write_batch_prefix_deletes_shared(
         &self,
         root_key: &[u8],
         key_prefix_deletions: Vec<Vec<u8>>,
@@ -522,7 +522,7 @@ impl ScyllaDbClient {
 
     /// Issues an unlogged batch containing the single-key deletions and the
     /// insertions, letting the coordinator assign the write timestamp. Shared mode only.
-    async fn write_shared_simple_batch(
+    async fn write_simple_batch_shared(
         &self,
         root_key: &[u8],
         batch: SimpleUnorderedBatch,
@@ -779,18 +779,18 @@ pub enum ScyllaDbStoreInternalError {
     PrepareError(#[from] PrepareError),
 
     /// An execution error during a query (except write-batch).
-    #[error(transparent)]
-    ExecutionError(ExecutionError),
+    #[error("query execution error: {0}")]
+    ExecutionError(#[source] ExecutionError),
 
     /// An execution error during a write-batch operation on a store opened in
     /// exclusive mode, which backs a view.
-    #[error(transparent)]
-    ExclusiveWriteBatchExecutionError(ExecutionError),
+    #[error("write batch execution error (exclusive mode): {0}")]
+    ExclusiveWriteBatchExecutionError(#[source] ExecutionError),
 
     /// An execution error during a write-batch operation on a store opened in
     /// shared mode, which backs no view.
-    #[error(transparent)]
-    SharedWriteBatchExecutionError(ExecutionError),
+    #[error("write batch execution error (shared mode): {0}")]
+    SharedWriteBatchExecutionError(#[source] ExecutionError),
 
     /// A session creation error
     #[error(transparent)]
@@ -951,10 +951,10 @@ impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
             store.write_batch_exclusive(&self.root_key, batch, t).await
         } else {
             store
-                .write_shared_batch_prefix_deletes(&self.root_key, batch.key_prefix_deletions)
+                .write_batch_prefix_deletes_shared(&self.root_key, batch.key_prefix_deletions)
                 .await?;
             store
-                .write_shared_simple_batch(&self.root_key, batch.simple_unordered_batch)
+                .write_simple_batch_shared(&self.root_key, batch.simple_unordered_batch)
                 .await?;
             Ok(())
         }
