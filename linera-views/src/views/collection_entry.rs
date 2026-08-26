@@ -8,6 +8,11 @@
 //! is present but has written no bytes of its own, so it cannot be inferred from the subview's
 //! keys. It is read in the same batch instead, which is what makes loading an entry cost a single
 //! round trip whether or not the entry exists.
+//!
+//! The tags are what keep those two key spaces apart. Sub-views in a collection share a common
+//! key prefix, like in other view types, so appending a sub-view's own keys straight to that
+//! prefix would leave a child sub-view's key indistinguishable from a grandchild's — consider a
+//! collection stored inside a collection.
 
 use crate::{
     context::Context,
@@ -72,14 +77,8 @@ pub(crate) fn post_load_entry<W: View>(
     subview_context: W::Context,
     values: &[Option<Vec<u8>>],
 ) -> Result<Option<W>, ViewError> {
-    let Some((marker, init_values)) = values.split_first() else {
-        // The store returned fewer values than we gave it keys, which is a broken contract
-        // rather than an absent entry.
-        return Err(ViewError::MissingEntries(format!(
-            "{:?}",
-            subview_context.base_key().bytes
-        )));
-    };
+    // Fewer values than keys is a broken store contract rather than an absent entry.
+    let (marker, init_values) = values.split_first().ok_or(ViewError::PostLoadValuesError)?;
     if marker.is_none() {
         return Ok(None);
     }
