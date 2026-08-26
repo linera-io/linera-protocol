@@ -2027,10 +2027,15 @@ impl Runnable for Job {
                     .load_chain(chain_id)
                     .await
                     .context("Failed to load chain")?;
+                // `block_hashes_for_heights` skips heights it does not hold, so an unknown
+                // height yields an empty vector rather than an error.
                 let block_hash = chain_state_view
                     .block_hashes_for_heights([height])
                     .await
-                    .context("Failed to find a block hash for the given height")?[0];
+                    .context("Failed to find a block hash for the given height")?
+                    .into_iter()
+                    .next()
+                    .with_context(|| format!("Chain {chain_id} has no block at height {height}"))?;
                 let block = context
                     .storage()
                     .read_confirmed_block(block_hash)
