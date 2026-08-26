@@ -2382,7 +2382,7 @@ impl<Env: Environment> ChainClient<Env> {
         blobs: &[Blob],
         committee: &Committee,
     ) -> Option<ConfirmedBlockCertificate> {
-        let delegate = self.client.confirmation_delegate()?;
+        let delegate = self.client.proposer_delegate()?;
         let address = delegate.address();
         let outcome = delegate
             .submit_and_confirm(

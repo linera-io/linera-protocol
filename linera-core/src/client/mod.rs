@@ -52,7 +52,7 @@ use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
-    delegate::ConfirmationDelegate,
+    delegate::ProposerDelegate,
     environment::Environment,
     local_node::{LocalNodeClient, LocalNodeError},
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode as _, ValidatorNodeProvider as _},
@@ -391,7 +391,7 @@ pub struct Client<Env: Environment> {
     /// configured. Everything it returns is checked here against our own committee, so a
     /// delegate that fails or withholds costs us the fallback to forming certificates
     /// ourselves and nothing more.
-    confirmation_delegate: Option<Arc<dyn ConfirmationDelegate>>,
+    proposer_delegate: Option<Arc<dyn ProposerDelegate>>,
 }
 
 /// Boxed future returned by `receive_sender_certificate`. It is `Send` off the `web`
@@ -464,7 +464,7 @@ impl<Env: Environment> Client<Env> {
             chain_modes,
             notifier: Arc::new(ChannelNotifier::default()),
             options,
-            confirmation_delegate: None,
+            proposer_delegate: None,
         }
     }
 
@@ -473,13 +473,13 @@ impl<Env: Environment> Client<Env> {
     /// The client keeps forming certificates itself whenever the delegate cannot finish the
     /// round it was given, so this only ever changes how a block is committed, never whether
     /// the result is trusted.
-    pub fn set_confirmation_delegate(&mut self, delegate: Arc<dyn ConfirmationDelegate>) {
-        self.confirmation_delegate = Some(delegate);
+    pub fn set_proposer_delegate(&mut self, delegate: Arc<dyn ProposerDelegate>) {
+        self.proposer_delegate = Some(delegate);
     }
 
     /// Returns the node that forms confirmation certificates on this client's behalf, if any.
-    pub fn confirmation_delegate(&self) -> Option<&Arc<dyn ConfirmationDelegate>> {
-        self.confirmation_delegate.as_ref()
+    pub fn proposer_delegate(&self) -> Option<&Arc<dyn ProposerDelegate>> {
+        self.proposer_delegate.as_ref()
     }
 
     /// Returns the chain ID of the admin chain.

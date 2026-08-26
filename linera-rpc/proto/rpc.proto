@@ -100,7 +100,7 @@ service ValidatorWorker {
 // storage whatever the validators turn out to be missing. The round is covered by the owner's
 // signature, so a delegate can never open one; anything that needs a new signature goes back to
 // the owner as the chain state the delegate observed.
-service ConfirmationDelegate {
+service ProposerDelegate {
   // Carry a signed proposal through the rest of the round it was signed for.
   rpc SubmitAndConfirm(DelegatedProposal) returns (DelegatedOutcomeResult);
 }

@@ -75,7 +75,7 @@ pub enum DelegatedOutcome {
 /// without another owner signature. It is object-safe so that a delegate can be plugged into a
 /// [`Client`](crate::Client) without every [`Environment`](crate::environment::Environment)
 /// having to name a delegate type.
-pub trait ConfirmationDelegate: std::fmt::Debug + MaybeSend + MaybeSync {
+pub trait ProposerDelegate: std::fmt::Debug + MaybeSend + MaybeSync {
     /// Returns the address of this delegate.
     fn address(&self) -> String;
 
