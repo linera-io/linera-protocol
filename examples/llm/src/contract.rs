@@ -19,17 +19,17 @@ impl Contract for LlmContract {
     type Parameters = ();
     type EventValue = ();
 
-    async fn load(_runtime: ContractRuntime<Self>) -> Self {
+    fn load(_runtime: ContractRuntime<Self>) -> Self {
         LlmContract
     }
 
-    async fn instantiate(&mut self, _value: ()) {}
+    fn instantiate(&mut self, _value: ()) {}
 
-    async fn execute_operation(&mut self, _operation: ()) -> Self::Response {}
+    fn execute_operation(&mut self, _operation: ()) -> Self::Response {}
 
-    async fn execute_message(&mut self, _message: ()) {
+    fn execute_message(&mut self, _message: ()) {
         panic!("Llm application doesn't support any cross-chain messages");
     }
 
-    async fn store(self) {}
+    fn store(self) {}
 }

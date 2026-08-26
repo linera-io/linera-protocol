@@ -21,7 +21,7 @@ pub struct WrappedFungibleTokenState {
 
 #[allow(dead_code)]
 impl WrappedFungibleTokenState {
-    pub async fn initialize_accounts(&mut self, state: InitialState) {
+    pub fn initialize_accounts(&mut self, state: InitialState) {
         for (k, v) in state.accounts {
             if v.0 != 0 {
                 self.accounts
@@ -31,18 +31,17 @@ impl WrappedFungibleTokenState {
         }
     }
 
-    pub async fn balance(&self, account: &AccountOwner) -> Option<U128> {
+    pub fn balance(&self, account: &AccountOwner) -> Option<U128> {
         self.accounts
             .get(account)
-            .await
             .expect("Failure in the retrieval")
     }
 
-    pub async fn balance_or_default(&self, account: &AccountOwner) -> U128 {
-        self.balance(account).await.unwrap_or_default()
+    pub fn balance_or_default(&self, account: &AccountOwner) -> U128 {
+        self.balance(account).unwrap_or_default()
     }
 
-    pub async fn approve(&mut self, owner: AccountOwner, spender: AccountOwner, allowance: U128) {
+    pub fn approve(&mut self, owner: AccountOwner, spender: AccountOwner, allowance: U128) {
         let owner_spender = OwnerSpender::new(owner, spender);
         if allowance.0 == 0 {
             self.allowances
@@ -53,12 +52,11 @@ impl WrappedFungibleTokenState {
         let total = self
             .allowances
             .get_mut_or_default(&owner_spender)
-            .await
             .expect("Failed allowance access");
         *total = allowance;
     }
 
-    pub async fn debit_for_transfer_from(
+    pub fn debit_for_transfer_from(
         &mut self,
         owner: AccountOwner,
         spender: AccountOwner,
@@ -70,7 +68,6 @@ impl WrappedFungibleTokenState {
         let balance = self
             .accounts
             .get(&owner)
-            .await
             .expect("Failed balance access")
             .unwrap_or_default();
         let new_balance = balance.0.checked_sub(amount.0).unwrap_or_else(|| {
@@ -89,7 +86,6 @@ impl WrappedFungibleTokenState {
         let allowance = self
             .allowances
             .get(&owner_spender)
-            .await
             .expect("Failed allowance access")
             .unwrap_or_default();
         let new_allowance = allowance.0.checked_sub(amount.0).unwrap_or_else(|| {
@@ -109,22 +105,22 @@ impl WrappedFungibleTokenState {
         }
     }
 
-    pub async fn credit(&mut self, account: AccountOwner, amount: U128) {
+    pub fn credit(&mut self, account: AccountOwner, amount: U128) {
         if amount.0 == 0 {
             return;
         }
-        let balance = self.balance_or_default(&account).await;
+        let balance = self.balance_or_default(&account);
         let new_balance = U128(balance.0.saturating_add(amount.0));
         self.accounts
             .insert(&account, new_balance)
             .expect("Failed insert statement");
     }
 
-    pub async fn debit(&mut self, account: AccountOwner, amount: U128) {
+    pub fn debit(&mut self, account: AccountOwner, amount: U128) {
         if amount.0 == 0 {
             return;
         }
-        let balance = self.balance_or_default(&account).await;
+        let balance = self.balance_or_default(&account);
         let new_balance = balance.0.checked_sub(amount.0).unwrap_or_else(|| {
             panic!("Source account {account} does not have sufficient balance for transfer")
         });

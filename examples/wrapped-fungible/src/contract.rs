@@ -34,26 +34,25 @@ impl Contract for WrappedFungibleTokenContract {
     type InstantiationArgument = InitialState;
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = WrappedFungibleTokenState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         WrappedFungibleTokenContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, state: Self::InstantiationArgument) {
+    fn instantiate(&mut self, state: Self::InstantiationArgument) {
         self.runtime.application_parameters();
         for (k, v) in state.accounts {
             if v.0 != 0 {
-                self.state.credit(k, v).await;
+                self.state.credit(k, v);
             }
         }
     }
 
-    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
             WrappedFungibleOperation::Balance { owner } => {
-                let balance = self.state.balance_or_default(&owner).await;
+                let balance = self.state.balance_or_default(&owner);
                 FungibleResponse::Balance(balance)
             }
 
@@ -70,7 +69,7 @@ impl Contract for WrappedFungibleTokenContract {
                 self.runtime
                     .check_account_permission(owner)
                     .expect("Permission for Approve operation");
-                self.state.approve(owner, spender, allowance).await;
+                self.state.approve(owner, spender, allowance);
                 FungibleResponse::Ok
             }
 
@@ -82,9 +81,8 @@ impl Contract for WrappedFungibleTokenContract {
                 self.runtime
                     .check_account_permission(owner)
                     .expect("Permission for Transfer operation");
-                self.state.debit(owner, amount).await;
-                self.finish_transfer_to_account(amount, target_account, owner)
-                    .await;
+                self.state.debit(owner, amount);
+                self.finish_transfer_to_account(amount, target_account, owner);
                 FungibleResponse::Ok
             }
 
@@ -97,11 +95,8 @@ impl Contract for WrappedFungibleTokenContract {
                 self.runtime
                     .check_account_permission(spender)
                     .expect("Permission for TransferFrom operation");
-                self.state
-                    .debit_for_transfer_from(owner, spender, amount)
-                    .await;
-                self.finish_transfer_to_account(amount, target_account, owner)
-                    .await;
+                self.state.debit_for_transfer_from(owner, spender, amount);
+                self.finish_transfer_to_account(amount, target_account, owner);
                 FungibleResponse::Ok
             }
 
@@ -113,7 +108,7 @@ impl Contract for WrappedFungibleTokenContract {
                 self.runtime
                     .check_account_permission(source_account.owner)
                     .expect("Permission for Claim operation");
-                self.claim(source_account, amount, target_account).await;
+                self.claim(source_account, amount, target_account);
                 FungibleResponse::Ok
             }
 
@@ -122,13 +117,13 @@ impl Contract for WrappedFungibleTokenContract {
                 amount,
             } => {
                 self.require_authorized_chain();
-                self.execute_mint_and_transfer(target_account, amount).await;
+                self.execute_mint_and_transfer(target_account, amount);
                 FungibleResponse::Ok
             }
 
             WrappedFungibleOperation::Burn { owner, amount } => {
                 self.require_authorized_chain();
-                self.state.debit(owner, amount).await;
+                self.state.debit(owner, amount);
                 FungibleResponse::Ok
             }
 
@@ -150,7 +145,7 @@ impl Contract for WrappedFungibleTokenContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Message) {
+    fn execute_message(&mut self, message: Message) {
         match message {
             Message::Credit {
                 amount,
@@ -165,9 +160,9 @@ impl Contract for WrappedFungibleTokenContract {
                 // (e.g. when a driven burn is rejected and the funding transfer
                 // bounces back). Otherwise credit the `target`.
                 if is_bouncing {
-                    self.state.credit(source, amount).await;
+                    self.state.credit(source, amount);
                 } else {
-                    self.state.credit(target, amount).await;
+                    self.state.credit(target, amount);
                 }
             }
             Message::Withdraw {
@@ -178,15 +173,14 @@ impl Contract for WrappedFungibleTokenContract {
                 self.runtime
                     .check_account_permission(owner)
                     .expect("Permission for Withdraw message");
-                self.state.debit(owner, amount).await;
-                self.finish_transfer_to_account(amount, target_account, owner)
-                    .await;
+                self.state.debit(owner, amount);
+                self.finish_transfer_to_account(amount, target_account, owner);
             }
         }
     }
 
-    async fn store(mut self) {
-        self.state.save().await.expect("Failed to save state");
+    fn store(mut self) {
+        self.state.save().expect("Failed to save state");
     }
 }
 
@@ -219,9 +213,9 @@ impl WrappedFungibleTokenContract {
         );
     }
 
-    async fn execute_mint_and_transfer(&mut self, target_account: Account, amount: U128) {
+    fn execute_mint_and_transfer(&mut self, target_account: Account, amount: U128) {
         if target_account.chain_id == self.runtime.chain_id() {
-            self.state.credit(target_account.owner, amount).await;
+            self.state.credit(target_account.owner, amount);
         } else {
             let source = self
                 .runtime
@@ -239,11 +233,10 @@ impl WrappedFungibleTokenContract {
         }
     }
 
-    async fn claim(&mut self, source_account: Account, amount: U128, target_account: Account) {
+    fn claim(&mut self, source_account: Account, amount: U128, target_account: Account) {
         if source_account.chain_id == self.runtime.chain_id() {
-            self.state.debit(source_account.owner, amount).await;
-            self.finish_transfer_to_account(amount, target_account, source_account.owner)
-                .await;
+            self.state.debit(source_account.owner, amount);
+            self.finish_transfer_to_account(amount, target_account, source_account.owner);
         } else {
             let message = Message::Withdraw {
                 owner: source_account.owner,
@@ -257,14 +250,14 @@ impl WrappedFungibleTokenContract {
         }
     }
 
-    async fn finish_transfer_to_account(
+    fn finish_transfer_to_account(
         &mut self,
         amount: U128,
         target_account: Account,
         source: AccountOwner,
     ) {
         if target_account.chain_id == self.runtime.chain_id() {
-            self.state.credit(target_account.owner, amount).await;
+            self.state.credit(target_account.owner, amount);
         } else {
             let message = Message::Credit {
                 target: target_account.owner,

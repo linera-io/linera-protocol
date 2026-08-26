@@ -25,7 +25,6 @@ impl Service for CostTrackingService {
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
         let state = CostTrackingState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         CostTrackingService { state }
     }
@@ -36,7 +35,7 @@ impl Service for CostTrackingService {
                 let count = self.state.logs.count();
                 let mut logs = Vec::with_capacity(count);
                 for i in 0..count {
-                    if let Some(entry) = self.state.logs.get(i).await.expect("Failed to get log") {
+                    if let Some(entry) = self.state.logs.get(i).expect("Failed to get log") {
                         logs.push(entry);
                     }
                 }

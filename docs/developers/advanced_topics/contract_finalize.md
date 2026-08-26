@@ -63,9 +63,8 @@ impl Contract for MyContract {
     type Parameters = ();
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = MyState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
 
         MyContract {
@@ -75,9 +74,9 @@ impl Contract for MyContract {
         }
     }
 
-    async fn instantiate(&mut self, (): Self::InstantiationArgument) {}
+    fn instantiate(&mut self, (): Self::InstantiationArgument) {}
 
-    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         let caller_id = self.runtime
             .authenticated_caller_id()
             .expect("Missing caller ID");
@@ -98,17 +97,17 @@ impl Contract for MyContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Self::Message) {
+    fn execute_message(&mut self, message: Self::Message) {
         unreachable!("This example doesn't support messages");
     }
 
-    async fn store(mut self) {
+    fn store(mut self) {
         assert!(
             self.active_sessions.is_empty(),
             "Some sessions have not ended"
         );
 
-        self.state.save().await.expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }
 ```
