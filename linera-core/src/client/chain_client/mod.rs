@@ -132,12 +132,13 @@ pub struct Options {
     /// Maximum number of event stream IDs to include in a single `PreviousEventBlocks`
     /// request. Larger sets are split into multiple requests.
     pub max_event_stream_queries: usize,
-    /// Whether a proposer delegate also delivers the block's outgoing cross-chain messages.
+    /// Whether a proposer delegate also broadcasts the confirmed certificate to the validators,
+    /// in place of our own [`ChainClient::update_validators`].
     ///
-    /// Delivery is the one part of the delegated work whose result is not a certificate we can
-    /// check, so with this off we deliver the messages ourselves and the delegate saves us only
-    /// the round trips it can prove it made.
-    pub delegate_message_delivery: bool,
+    /// That broadcast is the one part of the delegated work whose result is not a certificate we
+    /// can check, so with this off we make it ourselves and the delegate saves us only the round
+    /// trips it can prove it made.
+    pub delegate_validator_updates: bool,
 }
 
 struct CircuitBreakerState {
@@ -185,7 +186,7 @@ impl Options {
             notification_circuit_breaker_initial_probe_interval: Duration::from_secs(300),
             notification_circuit_breaker_max_probe_interval: Duration::from_secs(3600),
             max_event_stream_queries: DEFAULT_MAX_EVENT_STREAM_QUERIES,
-            delegate_message_delivery: false,
+            delegate_validator_updates: false,
         }
     }
 }
@@ -2331,8 +2332,8 @@ impl<Env: Environment> ChainClient<Env> {
         let delegated = self
             .try_delegated_submission(&proposal, &block, &blobs, &committee)
             .await;
-        let (certificate, delivered) = match delegated {
-            Some(certificate) => (certificate, self.options.delegate_message_delivery),
+        let (certificate, updated_validators) = match delegated {
+            Some(certificate) => (certificate, self.options.delegate_validator_updates),
             None if round.is_fast() => {
                 let hashed_value = ConfirmedBlock::new(block);
                 let certificate = self
@@ -2357,7 +2358,7 @@ impl<Env: Environment> ChainClient<Env> {
             "process_pending_block_without_prepare completing"
         );
         let certificate = self.client.storage_client().cache_certificate(certificate);
-        if !delivered {
+        if !updated_validators {
             debug!(round = %certificate.round, "Sending confirmed block to validators");
             self.update_validators(Some(&committee), Some(certificate.clone()))
                 .await?;
@@ -2369,12 +2370,12 @@ impl<Env: Environment> ChainClient<Env> {
         ))))
     }
 
-    /// Returns the delivery mode to ask a delegate for.
+    /// Returns the cross-chain message delivery mode to ask a delegate for.
     ///
-    /// When the delegate is not trusted with delivery we ask it not to wait for one, since we
-    /// deliver the messages ourselves once it hands the certificate back.
+    /// A delegate that does not broadcast for us is asked not to wait on delivery either, since
+    /// the broadcast we make once it hands the certificate back does that waiting.
     fn delegated_delivery(&self) -> CrossChainMessageDelivery {
-        if self.options.delegate_message_delivery {
+        if self.options.delegate_validator_updates {
             self.options.cross_chain_message_delivery
         } else {
             CrossChainMessageDelivery::NonBlocking
@@ -2534,11 +2535,11 @@ impl<Env: Environment> ChainClient<Env> {
         let committee = self.local_committee().await?;
         // Finalizing needs no signature of ours, so a delegate can take the lock straight to a
         // confirmation certificate without our going to the validators at all.
-        let (certificate, delivered) = match self
+        let (certificate, updated_validators) = match self
             .try_delegated_finalization(&certificate, &committee)
             .await
         {
-            Some(certificate) => (certificate, self.options.delegate_message_delivery),
+            Some(certificate) => (certificate, self.options.delegate_validator_updates),
             None => {
                 let certificate = self
                     .client
@@ -2548,7 +2549,7 @@ impl<Env: Environment> ChainClient<Env> {
             }
         };
         let certificate = self.client.storage_client().cache_certificate(certificate);
-        if !delivered {
+        if !updated_validators {
             self.update_validators(Some(&committee), Some(certificate.clone()))
                 .await?;
         }

@@ -153,10 +153,10 @@ pub struct Options {
     #[arg(long)]
     pub allow_fast_blocks: bool,
 
-    /// Whether a proposer delegate also delivers a block's outgoing cross-chain messages,
-    /// rather than our delivering them ourselves once the delegate returns the certificate.
+    /// Whether a proposer delegate also broadcasts the confirmed certificate to the validators,
+    /// rather than our broadcasting it ourselves once the delegate returns it.
     #[arg(long)]
-    pub delegate_message_delivery: bool,
+    pub delegate_validator_updates: bool,
 
     /// (EXPERIMENTAL) Whether application services can persist in some cases between queries.
     #[arg(long)]
@@ -382,7 +382,7 @@ impl Options {
             notification_circuit_breaker_max_probe_interval: self
                 .notification_circuit_breaker_max_probe_interval,
             max_event_stream_queries: self.max_event_stream_queries,
-            delegate_message_delivery: self.delegate_message_delivery,
+            delegate_validator_updates: self.delegate_validator_updates,
         }
     }
 
