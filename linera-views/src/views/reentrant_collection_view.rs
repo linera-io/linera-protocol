@@ -297,7 +297,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
     /// If the entry is missing, then it is set to default.
     async fn try_load_view_mut(&mut self, short_key: &[u8]) -> Result<Arc<RwLock<W>>, ViewError> {
         use btree_map::Entry::*;
-        Ok(match self.updates.entry(short_key.to_owned()) {
+        let view = match self.updates.entry(short_key.to_owned()) {
             Occupied(mut entry) => match entry.get_mut() {
                 Update::Set(view) => view.clone(),
                 entry @ Update::Removed => {
@@ -312,14 +312,15 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                 entry.insert(Update::Set(wrapped_view.clone()));
                 wrapped_view
             }
-        })
+        };
+        Ok(view)
     }
 
     /// Load the view from the update is available.
     /// If missing, then the entry is loaded from storage and if
     /// missing there an error is reported.
     async fn try_load_view(&self, short_key: &[u8]) -> Result<Option<Arc<RwLock<W>>>, ViewError> {
-        Ok(if let Some(entry) = self.updates.get(short_key) {
+        let view = if let Some(entry) = self.updates.get(short_key) {
             match entry {
                 Update::Set(view) => Some(view.clone()),
                 _entry @ Update::Removed => None,
@@ -334,7 +335,8 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
             let values = self.context.store().read_multi_values_bytes(&keys).await?;
             collection_entry::post_load_entry::<W>(subview_context, &values)?
                 .map(|view| Arc::new(RwLock::new(view)))
-        })
+        };
+        Ok(view)
     }
 
     /// Loads a subview for the data at the given index in the collection. If an entry
@@ -414,7 +416,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
     /// # })
     /// ```
     pub async fn contains_key(&self, short_key: &[u8]) -> Result<bool, ViewError> {
-        Ok(if let Some(entry) = self.updates.get(short_key) {
+        let contains = if let Some(entry) = self.updates.get(short_key) {
             match entry {
                 Update::Set(_view) => true,
                 Update::Removed => false,
@@ -424,7 +426,8 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         } else {
             let key_index = collection_entry::index_key(&self.context, short_key);
             self.context.store().contains_key(&key_index).await?
-        })
+        };
+        Ok(contains)
     }
 
     /// Removes an entry. If absent then nothing happens.
