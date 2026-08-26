@@ -24,7 +24,9 @@ use crate::{
     hashable_wrapper::WrappedHashableContainerView,
     historical_hash_wrapper::HistoricallyHashableView,
     store::ReadableKeyValueStore as _,
-    views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
+    views::{
+        collection_entry, ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError,
+    },
 };
 
 #[cfg(with_metrics)]
@@ -146,14 +148,6 @@ where
 /// just concatenating the shared prefix with sub-view keys makes it impossible to distinguish if a
 /// given key belongs to a child sub-view or a grandchild sub-view (consider for example if a
 /// collection is stored inside the collection).
-#[repr(u8)]
-enum KeyTag {
-    /// Prefix for specifying an index and serves to indicate the existence of an entry in the collection.
-    Index = MIN_VIEW_TAG,
-    /// Prefix for specifying as the prefix for the sub-view.
-    Subview,
-}
-
 impl<W: View> View for ReentrantByteCollectionView<W::Context, W> {
     const NUM_INIT_KEYS: usize = 0;
 
@@ -269,15 +263,11 @@ impl<W: ClonableView> ClonableView for ReentrantByteCollectionView<W::Context, W
 
 impl<C: Context, W> ReentrantByteCollectionView<C, W> {
     fn get_index_key(&self, index: &[u8]) -> Vec<u8> {
-        self.context
-            .base_key()
-            .base_tag_index(KeyTag::Index as u8, index)
+        collection_entry::index_key(&self.context, index)
     }
 
     fn get_subview_key(&self, index: &[u8]) -> Vec<u8> {
-        self.context
-            .base_key()
-            .base_tag_index(KeyTag::Subview as u8, index)
+        collection_entry::subview_key(&self.context, index)
     }
 
     fn add_index(&self, batch: &mut Batch, index: &[u8]) {
@@ -287,54 +277,13 @@ impl<C: Context, W> ReentrantByteCollectionView<C, W> {
 }
 
 impl<W: View> ReentrantByteCollectionView<W::Context, W> {
-    /// The context of the subview stored at `short_key`.
-    fn subview_context(context: &W::Context, short_key: &[u8]) -> W::Context {
-        let key = context
-            .base_key()
-            .base_tag_index(KeyTag::Subview as u8, short_key);
-        context.clone_with_base_key(key)
-    }
-
-    /// The keys deciding whether the entry at `short_key` exists and, if it does, loading its
-    /// subview: the index marker followed by the subview's initialization keys.
-    fn entry_keys(
-        context: &W::Context,
-        subview_context: &W::Context,
-        short_key: &[u8],
-    ) -> Result<Vec<Vec<u8>>, ViewError> {
-        let mut keys = Vec::with_capacity(1 + W::NUM_INIT_KEYS);
-        keys.push(
-            context
-                .base_key()
-                .base_tag_index(KeyTag::Index as u8, short_key),
-        );
-        keys.extend(W::pre_load(subview_context)?);
-        Ok(keys)
-    }
-
-    /// Builds the subview out of the values read for `entry_keys`, or `None` when the index
-    /// marker is absent. The marker is stored with an empty value, so its presence and not
-    /// its content is what decides.
-    fn post_load_entry(
-        subview_context: W::Context,
-        values: &[Option<Vec<u8>>],
-    ) -> Result<Option<W>, ViewError> {
-        let Some((marker, init_values)) = values.split_first() else {
-            return Ok(None);
-        };
-        if marker.is_none() {
-            return Ok(None);
-        }
-        Ok(Some(W::post_load(subview_context, init_values)?))
-    }
-
     /// Reads the view and if missing returns the default view
     async fn wrapped_view(
         context: &W::Context,
         delete_storage_first: bool,
         short_key: &[u8],
     ) -> Result<Arc<RwLock<W>>, ViewError> {
-        let context = Self::subview_context(context, short_key);
+        let context = collection_entry::subview_context(context, short_key);
         // Obtain a view and set its pending state to the default (e.g. empty) state
         let view = if delete_storage_first {
             W::new(context)?
@@ -380,10 +329,11 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         } else {
             // The index marker and the subview's initialization keys are read together, so
             // that loading an entry costs a single round trip whether or not it exists.
-            let subview_context = Self::subview_context(&self.context, short_key);
-            let keys = Self::entry_keys(&self.context, &subview_context, short_key)?;
+            let (subview_context, keys) =
+                collection_entry::entry_keys::<W>(&self.context, short_key)?;
             let values = self.context.store().read_multi_values_bytes(&keys).await?;
-            Self::post_load_entry(subview_context, &values)?.map(|view| Arc::new(RwLock::new(view)))
+            collection_entry::post_load_entry::<W>(subview_context, &values)?
+                .map(|view| Arc::new(RwLock::new(view)))
         })
     }
 
@@ -472,10 +422,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         } else if self.delete_storage_first {
             false
         } else {
-            let key_index = self
-                .context
-                .base_key()
-                .base_tag_index(KeyTag::Index as u8, short_key);
+            let key_index = collection_entry::index_key(&self.context, short_key);
             self.context.store().contains_key(&key_index).await?
         })
     }
@@ -529,10 +476,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
     /// # })
     /// ```
     pub fn try_reset_entry_to_default(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
-        let key = self
-            .context
-            .base_key()
-            .base_tag_index(KeyTag::Subview as u8, short_key);
+        let key = collection_entry::subview_key(&self.context, short_key);
         let context = self.context.clone_with_base_key(key);
         let view = W::new(context)?;
         let view = Arc::new(RwLock::new(view));
@@ -578,10 +522,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         let mut short_keys_to_load = Vec::new();
         let mut keys = Vec::new();
         for short_key in &short_keys {
-            let key = self
-                .context
-                .base_key()
-                .base_tag_index(KeyTag::Subview as u8, short_key);
+            let key = collection_entry::subview_key(&self.context, short_key);
             let context = self.context.clone_with_base_key(key);
             match self.updates.entry(short_key.to_vec()) {
                 btree_map::Entry::Occupied(mut entry) => {
@@ -608,10 +549,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
             .chunks_exact_or_repeat(W::NUM_INIT_KEYS)
             .zip(short_keys_to_load)
         {
-            let key = self
-                .context
-                .base_key()
-                .base_tag_index(KeyTag::Subview as u8, &short_key);
+            let key = collection_entry::subview_key(&self.context, &short_key);
             let context = self.context.clone_with_base_key(key);
             let view = W::post_load(context, loaded_values)?;
             let wrapped_view = Arc::new(RwLock::new(view));
@@ -675,16 +613,13 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
         if !entries_to_load.is_empty() {
             // The index markers and the subviews' initialization keys are read together, so
             // that loading entries costs a single round trip whether or not they exist.
-            let entry_len = 1 + W::NUM_INIT_KEYS;
+            let entry_len = collection_entry::entry_len::<W>();
             let mut keys = Vec::with_capacity(entries_to_load.len() * entry_len);
             let mut subview_contexts = Vec::with_capacity(entries_to_load.len());
             for (_, short_key) in &entries_to_load {
-                let subview_context = Self::subview_context(&self.context, short_key);
-                keys.extend(Self::entry_keys(
-                    &self.context,
-                    &subview_context,
-                    short_key,
-                )?);
+                let (subview_context, entry) =
+                    collection_entry::entry_keys::<W>(&self.context, short_key)?;
+                keys.extend(entry);
                 subview_contexts.push(subview_context);
             }
             let values = self.context.store().read_multi_values_bytes(&keys).await?;
@@ -692,7 +627,9 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                 .into_iter()
                 .zip(values.chunks_exact(entry_len).zip(subview_contexts))
             {
-                if let Some(view) = Self::post_load_entry(subview_context, entry_values)? {
+                if let Some(view) =
+                    collection_entry::post_load_entry::<W>(subview_context, entry_values)?
+                {
                     results[position] = Some((short_key, Arc::new(RwLock::new(view))));
                 }
             }
@@ -739,10 +676,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
             let mut short_keys_and_indexes = Vec::new();
             for (index, short_key) in short_keys.iter().enumerate() {
                 if !self.updates.contains_key(short_key) {
-                    let key = self
-                        .context
-                        .base_key()
-                        .base_tag_index(KeyTag::Subview as u8, short_key);
+                    let key = collection_entry::subview_key(&self.context, short_key);
                     let context = self.context.clone_with_base_key(key);
                     keys.extend(W::pre_load(&context)?);
                     short_keys_and_indexes.push((short_key.to_vec(), index));
@@ -753,10 +687,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                 .chunks_exact_or_repeat(W::NUM_INIT_KEYS)
                 .zip(short_keys_and_indexes)
             {
-                let key = self
-                    .context
-                    .base_key()
-                    .base_tag_index(KeyTag::Subview as u8, &short_key);
+                let key = collection_entry::subview_key(&self.context, &short_key);
                 let context = self.context.clone_with_base_key(key);
                 let view = W::post_load(context, loaded_values)?;
                 let wrapped_view = Arc::new(RwLock::new(view));
@@ -812,10 +743,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
 
             for short_key in &short_keys {
                 if !self.updates.contains_key(short_key) {
-                    let key = self
-                        .context
-                        .base_key()
-                        .base_tag_index(KeyTag::Subview as u8, short_key);
+                    let key = collection_entry::subview_key(&self.context, short_key);
                     let context = self.context.clone_with_base_key(key);
                     keys.extend(W::pre_load(&context)?);
                     short_keys_to_load.push(short_key.to_vec());
@@ -827,10 +755,7 @@ impl<W: View> ReentrantByteCollectionView<W::Context, W> {
                 .chunks_exact_or_repeat(W::NUM_INIT_KEYS)
                 .zip(short_keys_to_load)
             {
-                let key = self
-                    .context
-                    .base_key()
-                    .base_tag_index(KeyTag::Subview as u8, &short_key);
+                let key = collection_entry::subview_key(&self.context, &short_key);
                 let context = self.context.clone_with_base_key(key);
                 let view = W::post_load(context, loaded_values)?;
                 let wrapped_view = Arc::new(RwLock::new(view));
@@ -1030,10 +955,7 @@ impl<W: HashableView> HashableView for ReentrantByteCollectionView<W::Context, W
                     .ok_or_else(|| ViewError::TryLockError(key))?;
                 view.hash_mut().await?
             } else {
-                let key = self
-                    .context
-                    .base_key()
-                    .base_tag_index(KeyTag::Subview as u8, &key);
+                let key = collection_entry::subview_key(&self.context, &key);
                 let context = self.context.clone_with_base_key(key);
                 let mut view = W::load(context).await?;
                 view.hash_mut().await?
@@ -1061,10 +983,7 @@ impl<W: HashableView> HashableView for ReentrantByteCollectionView<W::Context, W
                     .ok_or_else(|| ViewError::TryLockError(key))?;
                 view.hash().await?
             } else {
-                let key = self
-                    .context
-                    .base_key()
-                    .base_tag_index(KeyTag::Subview as u8, &key);
+                let key = collection_entry::subview_key(&self.context, &key);
                 let context = self.context.clone_with_base_key(key);
                 let view = W::load(context).await?;
                 view.hash().await?
