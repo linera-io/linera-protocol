@@ -34,7 +34,8 @@ pub enum ViewError {
         /// The inner error
         #[source]
         error: Box<dyn std::error::Error + Send + Sync>,
-        /// Whether this error was caused by a journal resolution failure.
+        /// Whether this error may have left storage in an undetermined state,
+        /// so the view must be reloaded before being used again.
         must_reload_view: bool,
     },
 
@@ -61,8 +62,8 @@ pub enum ViewError {
 }
 
 impl ViewError {
-    /// Returns `true` if this error was caused by a journal resolution failure,
-    /// which may leave storage in an inconsistent state requiring a view reload.
+    /// Returns `true` if this error may have left storage in an undetermined state,
+    /// so the view must be reloaded before being used again.
     pub fn must_reload_view(&self) -> bool {
         matches!(
             self,
