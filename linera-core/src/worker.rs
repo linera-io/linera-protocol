@@ -428,7 +428,7 @@ pub enum WorkerError {
 
     #[error("Fallback mode is not available on this network")]
     NoFallbackMode,
-    #[error("Chain worker was poisoned by a journal resolution failure")]
+    #[error("Chain worker was poisoned by a failed save that may have left storage in an undetermined state")]
     PoisonedWorker,
     #[error("Cross-chain batch was rolled back due to an error in another request")]
     BatchRolledBack,
