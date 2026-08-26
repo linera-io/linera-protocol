@@ -344,7 +344,7 @@ pub enum Error {
         expected_round: Round,
     },
 
-    #[error("signer error: {0:?}")]
+    #[error("signer error: {0}")]
     Signer(#[source] Box<dyn signer::Error>),
 
     #[error("Cannot revoke the current epoch {0}")]
