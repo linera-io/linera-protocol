@@ -28,6 +28,11 @@
 //! as it meets something that needs a fresh owner signature it stops, hands back the chain state
 //! it observed, and leaves the next signature to the owner.
 //!
+//! A delegate joins a round wherever someone else has already supplied the authority to be there,
+//! so there are two ways in. [`ProposerDelegate::submit_and_confirm`] enters on the owner's
+//! signature over a proposal. [`ProposerDelegate::finalize`] enters on a quorum's signatures over
+//! a validated block, which is what a caller resuming an interrupted attempt has to hand.
+//!
 //! [`ProposalContent`]: linera_chain::data_types::ProposalContent
 //! [`ValidatedBlockCertificate`]: linera_chain::types::ValidatedBlockCertificate
 
@@ -41,7 +46,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{Block, ConfirmedBlockCertificate},
+    types::{Block, ConfirmedBlockCertificate, ValidatedBlockCertificate},
 };
 
 use crate::{
@@ -98,6 +103,19 @@ pub trait ProposerDelegate: std::fmt::Debug + MaybeSend + MaybeSync {
         proposal: BlockProposal,
         block: Block,
         blobs: Vec<Blob>,
+        delivery: CrossChainMessageDelivery,
+    ) -> BoxFuture<'a, Result<DelegatedOutcome, NodeError>>;
+
+    /// Carries an already validated block to a confirmation certificate.
+    ///
+    /// This is the same work as the tail of [`submit_and_confirm`](Self::submit_and_confirm), for
+    /// a caller that holds a lock rather than a fresh proposal -- one resuming an attempt that
+    /// was interrupted, or that found the lock on the validators. Finalization carries no owner
+    /// signature at all: the certificate authorizes itself, so a delegate accepts one whatever
+    /// the caller's relation to the chain.
+    fn finalize<'a>(
+        &'a self,
+        certificate: ValidatedBlockCertificate,
         delivery: CrossChainMessageDelivery,
     ) -> BoxFuture<'a, Result<DelegatedOutcome, NodeError>>;
 }

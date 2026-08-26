@@ -41,7 +41,7 @@ use linera_chain::{
     manager::LockingBlock,
     types::{
         Block, ConfirmedBlock, ConfirmedBlockCertificate, Timeout, TimeoutCertificate,
-        ValidatedBlock,
+        ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainExecutionContext,
 };
@@ -132,6 +132,12 @@ pub struct Options {
     /// Maximum number of event stream IDs to include in a single `PreviousEventBlocks`
     /// request. Larger sets are split into multiple requests.
     pub max_event_stream_queries: usize,
+    /// Whether a proposer delegate also delivers the block's outgoing cross-chain messages.
+    ///
+    /// Delivery is the one part of the delegated work whose result is not a certificate we can
+    /// check, so with this off we deliver the messages ourselves and the delegate saves us only
+    /// the round trips it can prove it made.
+    pub delegate_message_delivery: bool,
 }
 
 struct CircuitBreakerState {
@@ -179,6 +185,7 @@ impl Options {
             notification_circuit_breaker_initial_probe_interval: Duration::from_secs(300),
             notification_circuit_breaker_max_probe_interval: Duration::from_secs(3600),
             max_event_stream_queries: DEFAULT_MAX_EVENT_STREAM_QUERIES,
+            delegate_message_delivery: false,
         }
     }
 }
@@ -2325,7 +2332,7 @@ impl<Env: Environment> ChainClient<Env> {
             .try_delegated_submission(&proposal, &block, &blobs, &committee)
             .await;
         let (certificate, delivered) = match delegated {
-            Some(certificate) => (certificate, true),
+            Some(certificate) => (certificate, self.options.delegate_message_delivery),
             None if round.is_fast() => {
                 let hashed_value = ConfirmedBlock::new(block);
                 let certificate = self
@@ -2362,18 +2369,78 @@ impl<Env: Environment> ChainClient<Env> {
         ))))
     }
 
-    /// Asks the configured delegate, if any, to carry `proposal` through the rest of the round
-    /// it was signed for, and returns the confirmation certificate it formed.
+    /// Returns the delivery mode to ask a delegate for.
     ///
-    /// Returns `None` when there is no delegate, when the delegate could not be reached, or
-    /// when it stopped at something that needs a new owner signature. The caller then forms the
+    /// When the delegate is not trusted with delivery we ask it not to wait for one, since we
+    /// deliver the messages ourselves once it hands the certificate back.
+    fn delegated_delivery(&self) -> CrossChainMessageDelivery {
+        if self.options.delegate_message_delivery {
+            self.options.cross_chain_message_delivery
+        } else {
+            CrossChainMessageDelivery::NonBlocking
+        }
+    }
+
+    /// Accepts a delegate's answer, or returns `None` so that the caller does the work itself.
+    ///
+    /// The delegate is not trusted, so its certificate is accepted only if it carries a quorum of
+    /// this committee's signatures over `block`, which is the same check the certificate would
+    /// have to pass had we collected the votes ourselves. Handing the work back is an ordinary
+    /// answer rather than a failure, and is reported as such.
+    fn accept_delegated_outcome(
+        &self,
+        outcome: Result<DelegatedOutcome, NodeError>,
+        block: &Block,
+        committee: &Committee,
+        address: &str,
+    ) -> Option<ConfirmedBlockCertificate> {
+        let certificate = match outcome {
+            Ok(DelegatedOutcome::Confirmed(certificate)) => *certificate,
+            Ok(DelegatedOutcome::NeedsOwner(info)) => {
+                debug!(
+                    delegate = address,
+                    round = %info.manager.current_round,
+                    "Delegate handed the block back; going to the validators ourselves",
+                );
+                return None;
+            }
+            Err(error) => {
+                warn!(
+                    delegate = address,
+                    %error,
+                    "Delegate failed; going to the validators ourselves",
+                );
+                return None;
+            }
+        };
+        if certificate.block() != block {
+            warn!(
+                delegate = address,
+                "Delegate returned a certificate for a different block; \
+                 going to the validators ourselves",
+            );
+            return None;
+        }
+        if let Err(error) = certificate.check(committee) {
+            warn!(
+                delegate = address,
+                %error,
+                "Delegate returned an unverifiable certificate; \
+                 going to the validators ourselves",
+            );
+            return None;
+        }
+        Some(certificate)
+    }
+
+    /// Asks the configured delegate, if any, to carry `proposal` through the rest of the round it
+    /// was signed for, and returns the confirmation certificate it formed.
+    ///
+    /// Returns `None` when there is no delegate, when the delegate could not be reached, or when
+    /// it stopped at something that needs a new owner signature. The caller then forms the
     /// certificate itself from the very same signed proposal: a super owner that proposes two
     /// different blocks for one round can wedge its chain until the round times out, so a
     /// fallback must re-submit the existing proposal rather than build another.
-    ///
-    /// The delegate is not trusted. The certificate it returns is accepted only if it carries a
-    /// quorum of this committee's signatures over the block we proposed, which is the same
-    /// check the certificate would have to pass had we collected the votes ourselves.
     #[instrument(level = "trace", skip_all)]
     async fn try_delegated_submission(
         &self,
@@ -2389,46 +2456,30 @@ impl<Env: Environment> ChainClient<Env> {
                 proposal.clone(),
                 block.clone(),
                 blobs.to_vec(),
-                self.options.cross_chain_message_delivery,
+                self.delegated_delivery(),
             )
             .await;
-        let certificate = match outcome {
-            Ok(DelegatedOutcome::Confirmed(certificate)) => *certificate,
-            Ok(DelegatedOutcome::NeedsOwner(info)) => {
-                debug!(
-                    delegate = address,
-                    round = %info.manager.current_round,
-                    "Delegate handed the proposal back; submitting it to the validators",
-                );
-                return None;
-            }
-            Err(error) => {
-                warn!(
-                    delegate = address,
-                    %error,
-                    "Delegate failed; submitting the proposal to the validators",
-                );
-                return None;
-            }
-        };
-        if certificate.block() != block {
-            warn!(
-                delegate = address,
-                "Delegate returned a certificate for a different block; \
-                 submitting the proposal to the validators",
-            );
-            return None;
-        }
-        if let Err(error) = certificate.check(committee) {
-            warn!(
-                delegate = address,
-                %error,
-                "Delegate returned an unverifiable certificate; \
-                 submitting the proposal to the validators",
-            );
-            return None;
-        }
-        Some(certificate)
+        self.accept_delegated_outcome(outcome, block, committee, &address)
+    }
+
+    /// Asks the configured delegate, if any, to carry an already validated block to a
+    /// confirmation certificate.
+    ///
+    /// This is the entry point for a caller that holds a lock rather than a fresh proposal, after
+    /// an interrupted attempt or after finding the lock on the validators. Finalization carries no
+    /// owner signature, so the delegate needs nothing from us beyond the certificate itself.
+    #[instrument(level = "trace", skip_all)]
+    async fn try_delegated_finalization(
+        &self,
+        certificate: &ValidatedBlockCertificate,
+        committee: &Committee,
+    ) -> Option<ConfirmedBlockCertificate> {
+        let delegate = self.client.proposer_delegate()?;
+        let address = delegate.address();
+        let outcome = delegate
+            .finalize(certificate.clone(), self.delegated_delivery())
+            .await;
+        self.accept_delegated_outcome(outcome, certificate.block(), committee, &address)
     }
 
     #[expect(
@@ -2481,13 +2532,26 @@ impl<Env: Environment> ChainClient<Env> {
             "Finalizing locking block"
         );
         let committee = self.local_committee().await?;
-        let certificate = self
-            .client
-            .finalize_block(&committee, certificate.clone())
-            .await?;
+        // Finalizing needs no signature of ours, so a delegate can take the lock straight to a
+        // confirmation certificate without our going to the validators at all.
+        let (certificate, delivered) = match self
+            .try_delegated_finalization(&certificate, &committee)
+            .await
+        {
+            Some(certificate) => (certificate, self.options.delegate_message_delivery),
+            None => {
+                let certificate = self
+                    .client
+                    .finalize_block(&committee, certificate.clone())
+                    .await?;
+                (certificate, false)
+            }
+        };
         let certificate = self.client.storage_client().cache_certificate(certificate);
-        self.update_validators(Some(&committee), Some(certificate.clone()))
-            .await?;
+        if !delivered {
+            self.update_validators(Some(&committee), Some(certificate.clone()))
+                .await?;
+        }
         Ok(ClientOutcome::Committed(Some(CacheArc::unwrap_or_clone(
             certificate,
         ))))
