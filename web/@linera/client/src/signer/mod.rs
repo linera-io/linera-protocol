@@ -132,6 +132,8 @@ fn signature_scheme(owner: &AccountOwner) -> &'static str {
     match owner {
         AccountOwner::Address20(_) => "secp256k1",
         AccountOwner::Address32(_) => "Ed25519",
+        // Reserved owners are rejected as `ReservedOwner` before any signature is parsed,
+        // so this arm exists only to keep the match total.
         AccountOwner::Reserved(_) => "unsupported",
     }
 }
