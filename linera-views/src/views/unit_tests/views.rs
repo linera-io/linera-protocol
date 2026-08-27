@@ -205,8 +205,7 @@ impl TestContextFactory for RocksDbContextFactory {
         let config = RocksDbDatabase::new_test_config().await?;
         let namespace = generate_test_namespace();
         let database = RocksDbDatabase::recreate_and_connect(&config, &namespace).await?;
-        let store = database.open_shared(&[])?;
-        let context = ViewContext::create_root_context(store, ()).await?;
+        let context = ViewContext::create_root_context(&database, &[], ()).await?;
 
         Ok(context)
     }
@@ -223,8 +222,7 @@ impl TestContextFactory for ScyllaDbContextFactory {
         let config = ScyllaDbDatabase::new_test_config().await?;
         let namespace = generate_test_namespace();
         let database = ScyllaDbDatabase::recreate_and_connect(&config, &namespace).await?;
-        let store = database.open_shared(&[])?;
-        let context = ViewContext::create_root_context(store, ()).await?;
+        let context = ViewContext::create_root_context(&database, &[], ()).await?;
         Ok(context)
     }
 }

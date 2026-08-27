@@ -148,8 +148,8 @@ pub trait KeyValueDatabase: WithError + linera_base::util::traits::AutoTraits + 
     /// The configuration needed to interact with a new backend.
     type Config: Send + Sync;
 
-    /// The result of opening a partition.
-    type Store;
+    /// The result of opening a partition. Its errors are the database's errors.
+    type Store: WithError<Error = Self::Error>;
 
     /// The name of this database.
     fn get_name() -> String;

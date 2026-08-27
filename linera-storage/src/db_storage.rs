@@ -766,8 +766,8 @@ where
             user_services: self.user_services.clone(),
         };
         let root_key = RootKey::ChainState(chain_id).bytes();
-        let store = self.database.open_exclusive(&root_key)?;
-        let context = ViewContext::create_root_context(store, runtime_context).await?;
+        let context =
+            ViewContext::create_root_context(&*self.database, &root_key, runtime_context).await?;
         ChainStateView::load(context).await
     }
 
@@ -1580,8 +1580,7 @@ where
         block_exporter_id: u32,
     ) -> Result<Self::BlockExporterContext, ViewError> {
         let root_key = RootKey::BlockExporterState(block_exporter_id).bytes();
-        let store = self.database.open_exclusive(&root_key)?;
-        Ok(ViewContext::create_root_context(store, block_exporter_id).await?)
+        Ok(ViewContext::create_root_context(&*self.database, &root_key, block_exporter_id).await?)
     }
 
     async fn list_blob_ids(&self) -> Result<Vec<BlobId>, ViewError> {
