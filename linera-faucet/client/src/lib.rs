@@ -29,13 +29,13 @@ pub enum Error {
     #[error("GraphQL error: {0:?}")]
     GraphQl(Vec<serde_json::Value>),
     /// An HTTP request to the faucet failed.
-    #[error("HTTP error: {0:?}")]
+    #[error("{}", describe_http_failure(.0))]
     Http(#[from] reqwest::Error),
     /// An arithmetic operation overflowed.
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
     /// A GraphQL query could not be sent to the faucet.
-    #[error("failed to execute query {query:?}: {source}")]
+    #[error("failed to execute query {query:?}: {}", describe_http_failure(.source))]
     Query {
         /// The query that could not be sent.
         query: String,
@@ -43,6 +43,32 @@ pub enum Error {
         #[source]
         source: reqwest::Error,
     },
+}
+
+/// Describes a `reqwest` failure without reproducing its source.
+///
+/// On wasm that source is built with `format!("{js_val:?}")`, which embeds the JavaScript
+/// stack trace of the failed `fetch`. The trace differs per browser and per bundle hash, so
+/// carrying it splits one underlying failure across many distinct-looking reports. It buys
+/// little in exchange: browsers deliberately report CORS rejections, offline and DNS
+/// failures as the same opaque `TypeError`, so the text that varies is mostly the browser's
+/// own phrasing. The error is still available through `source()` for anything that wants it.
+fn describe_http_failure(error: &reqwest::Error) -> String {
+    let where_ = match error.url() {
+        Some(url) => format!(" at {url}"),
+        None => String::new(),
+    };
+    if let Some(status) = error.status() {
+        format!("the faucet{where_} returned {status}")
+    } else if error.is_timeout() {
+        format!("the request to the faucet{where_} timed out")
+    } else if error.is_decode() {
+        format!("could not decode the faucet's response{where_}")
+    } else if error.is_body() {
+        format!("the request body sent to the faucet{where_} was rejected")
+    } else {
+        format!("could not reach the faucet{where_}")
+    }
 }
 
 /// The result of a successful claim mutation.
