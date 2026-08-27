@@ -197,8 +197,8 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     /// Elements are `None` if no certificate exists at that height.
     ///
     /// An index row whose block turns out to have a different height is reported as `None` and
-    /// deleted: left in place it would keep the index looking complete, so the fallback that
-    /// rewrites it correctly would never run again.
+    /// deleted by the raw read this delegates to: left in place it would keep the index looking
+    /// complete, so the fallback that rewrites it correctly would never run again.
     ///
     /// **This read writes.** Repair is access-triggered, so an otherwise read-only caller issues
     /// deletes here, and a bad row at a height nobody queries stays until something asks for it.
@@ -213,12 +213,12 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     /// Elements are `None` if no certificate exists at that height.
     /// Each found certificate is returned as a tuple of (lite_certificate_bytes, confirmed_block_bytes).
     ///
-    /// Unlike [`Storage::read_certificates_by_heights`] this does not check that each block really
-    /// has the height it was indexed at, because that would mean deserializing every block on the
-    /// path that exists to avoid deserializing. **It therefore neither rejects nor repairs a
-    /// mispaired row, and will serve one over the wire.** The receiver is responsible for the
-    /// check: `RemoteNode::download_certificates_by_heights` asserts that each certificate has the
-    /// height it was requested at.
+    /// Like [`Storage::read_certificates_by_heights`], a row whose block turns out to have a
+    /// different height is reported as `None` and deleted — this is the read that answers other
+    /// nodes, so a mispaired row left here goes out on the wire.
+    ///
+    /// **This read writes,** and it decodes a block on a cache miss to check the height. That cost
+    /// is deliberate: serving a certificate for a height it does not have is worse.
     async fn read_certificates_by_heights_raw(
         &self,
         chain_id: ChainId,
