@@ -50,7 +50,7 @@ use linera_core::{
 use linera_storage::Arc as CacheArc;
 use linera_version::VersionInfo;
 use tonic::{Code, IntoRequest, Request, Status};
-use tracing::{debug, instrument, trace, Level};
+use tracing::{debug, instrument, trace, warn, Level};
 
 use super::{
     api::{self, validator_node_client::ValidatorNodeClient, SubscriptionRequest},
@@ -626,10 +626,22 @@ impl ValidatorNode for GrpcClient {
             }
 
             // Remove only the heights we actually received from missing set.
+            let outstanding = missing.len();
             for cert in &received {
                 missing.remove(&cert.inner().height());
             }
             certs_collected.append(&mut received);
+            // A validator whose height index points at the wrong blocks answers with certificates
+            // we did not ask for, which removes nothing and leaves the request identical — so
+            // without this the loop re-sends it forever. Stop and let the caller's per-height
+            // check reject what we did collect.
+            if missing.len() == outstanding {
+                warn!(
+                    %chain_id, address = self.address, outstanding,
+                    "validator returned no requested height; abandoning download by heights",
+                );
+                break;
+            }
         }
         certs_collected.sort_by_key(|cert| cert.inner().height());
         Ok(certs_collected)
