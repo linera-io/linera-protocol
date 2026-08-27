@@ -1201,6 +1201,56 @@ mod tests {
             "the mispaired row must be gone, or the fallback stays locked out"
         );
     }
+
+    /// `ValueCache::insert` deduplicates instead of overwriting, so correcting the row is not
+    /// enough on its own — the cache in front of it has to be invalidated or reads keep serving
+    /// the hash the old code persisted.
+    #[cfg(with_testing)]
+    #[tokio::test]
+    async fn test_write_certificate_height_indices_invalidates_a_cached_stale_hash() {
+        use linera_views::{batch::Batch, store::WritableKeyValueStore as _};
+
+        let storage = DbStorage::<MemoryDatabase, TestClock>::make_test_storage(None).await;
+        let chain_id = ChainId(CryptoHash::test_hash("test_chain"));
+
+        let correct = test_certificate(chain_id, BlockHeight(4));
+        write_certificate_without_index(&storage, &correct).await;
+        let stale_hash = test_certificate(chain_id, BlockHeight(9)).hash();
+
+        // Plant the row the old zip would have written, then read it so the hash is cached.
+        let store = storage
+            .database
+            .open_shared(&RootKey::BlockByHeight(chain_id).bytes())
+            .unwrap();
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(
+            to_height_key(BlockHeight(4)),
+            bcs::to_bytes(&stale_hash).unwrap(),
+        );
+        store.write_batch(batch).await.unwrap();
+        assert_eq!(
+            storage
+                .read_certificate_hashes_by_heights(chain_id, &[BlockHeight(4)])
+                .await
+                .unwrap(),
+            vec![Some(stale_hash)],
+            "the stale hash should now be cached"
+        );
+
+        storage
+            .write_certificate_height_indices(chain_id, &[correct.hash()])
+            .await
+            .unwrap();
+
+        assert_eq!(
+            storage
+                .read_certificate_hashes_by_heights(chain_id, &[BlockHeight(4)])
+                .await
+                .unwrap(),
+            vec![Some(correct.hash())],
+            "the corrected row must be visible; a cache-first read would still serve the stale hash"
+        );
+    }
 }
 
 /// An implementation of [`DualStoreRootKeyAssignment`] that stores the
@@ -2066,9 +2116,14 @@ where
             }
         }
         // Without this the row would keep the index looking complete, and the fallback that
-        // rewrites it correctly would never run again.
-        self.delete_certificate_height_indices(chain_id, &stale_heights)
-            .await?;
+        // rewrites it correctly would never run again. A failure here must not discard the
+        // certificates we already resolved: the row survives, so the next read retries the repair.
+        if let Err(error) = self
+            .delete_certificate_height_indices(chain_id, &stale_heights)
+            .await
+        {
+            warn!(%chain_id, %error, "failed to drop stale height index rows; retrying on next read");
+        }
         Ok(certificates)
     }
 
@@ -2095,7 +2150,7 @@ where
                 continue;
             }
             key_values.push((to_height_key(header.height), bcs::to_bytes(hash)?));
-            heights.push((header.height, *hash));
+            heights.push(header.height);
         }
         if key_values.is_empty() {
             return Ok(());
@@ -2103,11 +2158,11 @@ where
         let mut batch = MultiPartitionBatch::new();
         batch.put_key_values(RootKey::BlockByHeight(chain_id).bytes(), key_values);
         self.write_batch(batch).await?;
-        // Reads are cache-first, so a stale entry would outlive the row we just corrected.
-        for (height, hash) in heights {
-            self.caches
-                .block_hash_by_height
-                .insert(&(chain_id, height), hash);
+        // Invalidate rather than overwrite: `ValueCache::insert` deduplicates, so on a live entry
+        // it keeps the cached value and drops ours, which would strand the stale hash we just
+        // corrected on disk.
+        for height in heights {
+            self.caches.block_hash_by_height.remove(&(chain_id, height));
         }
         Ok(())
     }

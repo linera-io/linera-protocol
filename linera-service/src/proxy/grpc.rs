@@ -624,7 +624,7 @@ where
         heights: Vec<BlockHeight>,
     ) -> Result<Vec<linera_base::crypto::CryptoHash>, Status> {
         let chain_info_request =
-            ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_by_heights(heights.clone());
+            ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_by_heights(heights);
 
         let chain_info_response = self
             .handle_chain_info_query(Request::new(chain_info_request.try_into()?))
