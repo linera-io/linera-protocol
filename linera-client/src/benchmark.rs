@@ -520,15 +520,20 @@ impl<Env: Environment> Benchmark<Env> {
         }
         info!("All benchmark tasks completed successfully");
 
+        // Both figures, always: `offered` is what the search bracketed on, `achieved` is what
+        // the network actually committed, and a level is confirmed while delivering as little
+        // as 80% of its target. Reporting only the offered rate overstates throughput.
         match bps_control_task.await? {
-            Some(rate::SearchOutcome::Converged(knee_bps)) => info!(
-                knee_bps,
-                knee_tps = knee_bps * transactions_per_block,
+            Some(rate::SearchOutcome::Converged(knee)) => info!(
+                knee_bps = knee.offered_bps,
+                knee_achieved_bps = knee.achieved_bps,
+                knee_achieved_tps = knee.achieved_bps * transactions_per_block as f64,
                 "rate search converged; the highest rate that held the latency budget"
             ),
-            Some(rate::SearchOutcome::CutShort(best_bps)) => warn!(
-                best_bps,
-                best_tps = best_bps * transactions_per_block,
+            Some(rate::SearchOutcome::CutShort(best)) => warn!(
+                best_bps = best.offered_bps,
+                best_achieved_bps = best.achieved_bps,
+                best_achieved_tps = best.achieved_bps * transactions_per_block as f64,
                 "rate search cut short by the runtime limit; this is a LOWER BOUND on the knee, \
                  not the knee"
             ),
@@ -690,8 +695,10 @@ impl<Env: Environment> Benchmark<Env> {
                                     "rate search"
                                 );
                             }
-                            rate::Decision::Converged { best_bps } => {
-                                converged = Some(best_bps);
+                            rate::Decision::Converged { .. } => {
+                                // From the search, not the decision: it carries the delivered
+                                // rate alongside the offered one.
+                                converged = Some(search.best_so_far());
                                 shutdown_notifier.cancel();
                                 break;
                             }
@@ -705,7 +712,7 @@ impl<Env: Environment> Benchmark<Env> {
                 // Converged and cut-short stay distinct: a lower bound reported as a knee is
                 // the failure the e2e assertion exists to catch.
                 match converged {
-                    Some(best_bps) => Some(rate::SearchOutcome::Converged(best_bps)),
+                    Some(knee) => Some(rate::SearchOutcome::Converged(knee)),
                     None => search
                         .as_ref()
                         .map(|search| rate::SearchOutcome::CutShort(search.best_so_far())),
@@ -793,8 +800,16 @@ impl<Env: Environment> Benchmark<Env> {
                             break;
                         }
                     }
-                    time::sleep(time::Duration::from_secs(runtime_in_seconds)).await;
-                    shutdown_notifier.cancel();
+                    // Raced against the token: under `--rate-auto` an early exit is the NORMAL
+                    // ending -- convergence cancels -- and a bare sleep here would hold the run
+                    // open, chains and all, for the rest of `--runtime-in-seconds` after the
+                    // knee had already been reported.
+                    tokio::select! {
+                        _ = time::sleep(time::Duration::from_secs(runtime_in_seconds)) => {
+                            shutdown_notifier.cancel();
+                        }
+                        _ = shutdown_notifier.cancelled() => {}
+                    }
                 }
                 .instrument(tracing::info_span!("runtime_control")),
             );

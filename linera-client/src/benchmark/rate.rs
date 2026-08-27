@@ -43,14 +43,28 @@ pub const MAX_CONSECUTIVE_COMMIT_FAILURES: u32 = 20;
 /// than reporting nothing — it does so while still returning a plausible-looking number.
 pub const SETTLE_SECS: u64 = 5;
 
+/// The highest sustainable rate, as offered and as actually delivered.
+///
+/// Both, because they differ: a level is confirmed while delivering as little as
+/// `min_achieved_fraction` of what was asked for, so the offered rate overstates throughput by
+/// up to 25% at the default 0.8. The offered figure is what the search brackets and bisects on;
+/// the delivered figure is the measurement.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Knee {
+    /// The rate that was asked for.
+    pub offered_bps: usize,
+    /// Blocks per second actually committed at that rate.
+    pub achieved_bps: f64,
+}
+
 /// How a rate search ended.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SearchOutcome {
     /// The knee was bracketed to within the configured resolution.
-    Converged(usize),
+    Converged(Knee),
     /// A runtime limit or cancellation ended the run first; this is the best rate confirmed
     /// so far, which is a lower bound on the knee rather than the knee itself.
-    CutShort(usize),
+    CutShort(Knee),
 }
 
 /// One control interval's worth of measurement.
@@ -120,6 +134,9 @@ pub struct RateSearch {
     target: usize,
     /// Highest rate confirmed inside the budget.
     good: Option<usize>,
+    /// Blocks per second actually delivered at `good`, which is the measurement the offered
+    /// rate only approximates.
+    good_achieved: f64,
     /// Lowest rate confirmed outside it.
     bad: Option<usize>,
     /// Consecutive intervals agreeing about the current target.
@@ -135,6 +152,7 @@ impl RateSearch {
             target: config.start_bps.max(1),
             config,
             good: None,
+            good_achieved: 0.0,
             bad: None,
             agreeing: 0,
             verdict: None,
@@ -175,6 +193,11 @@ impl RateSearch {
         self.verdict = None;
 
         if good {
+            // Record what was delivered only when this level actually raises the confirmed
+            // rate, so the pair stays consistent.
+            if self.good.is_none_or(|g| self.target > g) {
+                self.good_achieved = observation.achieved_bps;
+            }
             self.good = Some(self.good.map_or(self.target, |g| g.max(self.target)));
         } else {
             self.bad = Some(self.bad.map_or(self.target, |b| b.min(self.target)));
@@ -214,8 +237,15 @@ impl RateSearch {
     }
 
     /// The best confirmed rate so far, for a search cut short by a runtime limit.
-    pub fn best_so_far(&self) -> usize {
-        self.good.unwrap_or(0)
+    pub fn best_so_far(&self) -> Knee {
+        Knee {
+            offered_bps: self.good.unwrap_or(0),
+            achieved_bps: if self.good.is_some() {
+                self.good_achieved
+            } else {
+                0.0
+            },
+        }
     }
 }
 
@@ -324,7 +354,7 @@ mod tests {
             search.observe(observation);
         }
         assert_eq!(
-            search.best_so_far(),
+            search.best_so_far().offered_bps,
             0,
             "a target that was never actually offered was counted as sustained"
         );
@@ -359,7 +389,36 @@ mod tests {
             search.target_bps() > start,
             "the climb stalled at {start} because of one slow interval"
         );
-        assert_eq!(search.best_so_far(), start);
+        assert_eq!(search.best_so_far().offered_bps, start);
+    }
+
+    /// A level is confirmed while delivering as little as `min_achieved_fraction` of its
+    /// target, so the offered rate overstates throughput. Both must be carried, or the number
+    /// we publish is up to 25% above what the network actually committed.
+    #[test]
+    fn the_knee_reports_what_was_delivered_not_only_what_was_asked() {
+        let config = RateSearchConfig::default();
+        let mut search = RateSearch::new(config);
+        let target = search.target_bps();
+        // Inside the latency budget and inside the 80% floor, but short of the target.
+        let observation = Observation {
+            achieved_bps: target as f64 * 0.85,
+            p99: ms(10),
+        };
+        for _ in 0..config.confirmations {
+            search.observe(observation);
+        }
+        let knee = search.best_so_far();
+        assert_eq!(
+            knee.offered_bps, target,
+            "the confirmed level is the target"
+        );
+        assert!(
+            (knee.achieved_bps - target as f64 * 0.85).abs() < f64::EPSILON,
+            "reported {} delivered at an offered {target}, but only {} was committed",
+            knee.achieved_bps,
+            target as f64 * 0.85
+        );
     }
 
     /// Convergence is on the bracket, so a tighter resolution must not loop forever.
