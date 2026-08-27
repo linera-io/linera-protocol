@@ -5378,6 +5378,8 @@ where
         },
         storage: builder.validator_storage(0),
         certificate_upload_batch_size: 100,
+        #[cfg(with_metrics)]
+        address: "test".to_owned(),
     };
 
     // Round by round: each one advances by exactly the bound until the last, which sends only the
@@ -5540,6 +5542,8 @@ where
         },
         storage,
         certificate_upload_batch_size: 100,
+        #[cfg(with_metrics)]
+        address: "test".to_owned(),
     };
 
     // Re-offer an old block, exactly as a re-execution would.
@@ -5650,6 +5654,8 @@ where
         },
         storage,
         certificate_upload_batch_size: 100,
+        #[cfg(with_metrics)]
+        address: "test".to_owned(),
     };
 
     // Ask with no cursor at all — the state a failed send leaves behind. One bounded round must

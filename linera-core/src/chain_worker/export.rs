@@ -123,13 +123,35 @@ pub(crate) mod metrics {
             exponential_bucket_latencies(60_000.0),
         );
 
-        /// Time for one push to one destination, including any catch-up it triggered.
-        pub static SEND_LATENCY: HistogramVec = register_histogram_vec(
-            "block_export_send_latency",
-            "Time (ms) to push one block to one destination validator",
-            &["validator"],
-            exponential_bucket_latencies(60_000.0),
-        );
+        /// Time for one catch-up ROUND against one destination — every certificate it pushed, not
+        /// one block. A round closes up to `max_catch_up_blocks` of the gap, so this scales with
+        /// how far behind the destination is and says nothing on its own about how responsive that
+        /// destination is. Use `CERTIFICATE_SEND_LATENCY` for that, and read this one as "how long
+        /// a unit of catch-up work takes".
+        ///
+        /// The ceiling is well above `max_retry_delay` so a slow round lands in a real bucket
+        /// instead of piling into `+Inf`: at 60 s every destination with a backlog pegged at the
+        /// top bucket and the quantiles stopped discriminating between them.
+        pub static SEND_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "block_export_send_latency",
+                "Time (ms) for one catch-up round against one destination validator",
+                &["validator"],
+                exponential_bucket_latencies(600_000.0),
+            );
+
+        /// Time for a SINGLE certificate push, which is one round trip to the destination.
+        ///
+        /// This is the destination's actual responsiveness, independent of how much catch-up the
+        /// round carried: a peer that is far behind makes long rounds out of fast round trips, and
+        /// only this metric can tell that apart from a peer that is genuinely slow to answer.
+        pub static CERTIFICATE_SEND_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "block_export_certificate_send_latency",
+                "Time (ms) for one certificate round trip to one destination validator",
+                &["validator"],
+                exponential_bucket_latencies(60_000.0),
+            );
 
         /// How many concurrent sends each destination is currently allowed.
         pub static DESTINATION_WINDOW: IntGaugeVec = register_int_gauge_vec(
@@ -1653,6 +1675,9 @@ where
                 .remove_label_values(&[address])
                 .ok();
             metrics::SEND_LATENCY.remove_label_values(&[address]).ok();
+            metrics::CERTIFICATE_SEND_LATENCY
+                .remove_label_values(&[address])
+                .ok();
             metrics::SENDS_SUCCEEDED
                 .remove_label_values(&[address])
                 .ok();
@@ -1852,6 +1877,8 @@ where
             },
             storage: storage.clone(),
             certificate_upload_batch_size: config.certificate_upload_batch_size,
+            #[cfg(with_metrics)]
+            address: dest.address.clone(),
         };
         let cursor = chain_dest.next_height;
         let max_catch_up = config.max_catch_up_blocks;
@@ -2034,6 +2061,9 @@ pub(crate) struct BlockSender<S, N> {
     pub(crate) remote_node: RemoteNode<N>,
     pub(crate) storage: S,
     pub(crate) certificate_upload_batch_size: u64,
+    /// Destination address, carried only to label per-certificate latency.
+    #[cfg(with_metrics)]
+    pub(crate) address: String,
 }
 
 impl<S, N> BlockSender<S, N>
@@ -2138,6 +2168,13 @@ where
         held: &[CacheArc<Blob>],
     ) -> Result<Box<crate::data_types::ChainInfo>, chain_client::Error> {
         let delivery = CrossChainMessageDelivery::NonBlocking;
+        // Covers the blob-recovery retries below too: what the caller cares about is how long this
+        // certificate took to land, not how many attempts it needed.
+        #[cfg(with_metrics)]
+        let certificate_latency =
+            metrics::CERTIFICATE_SEND_LATENCY.with_label_values(&[&self.address]);
+        #[cfg(with_metrics)]
+        let _certificate_latency = certificate_latency.measure_latency();
         let mut result = self
             .remote_node
             .handle_optimized_confirmed_certificate(certificate, delivery)
