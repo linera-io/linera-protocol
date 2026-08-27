@@ -13,6 +13,7 @@
 // We conditionally add autotraits to the traits here.
 #![allow(async_fn_in_trait)]
 
+mod block_sender;
 mod chain_worker;
 pub use chain_worker::{
     spawn_block_export_queue, BlockExportConfig, BlockExportHandle, ChainWorkerConfig,
