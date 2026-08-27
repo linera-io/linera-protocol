@@ -391,7 +391,7 @@ pub struct Client<Env: Environment> {
     /// configured. Everything it returns is checked here against our own committee, so a
     /// delegate that fails or withholds costs us the fallback to forming certificates
     /// ourselves and nothing more.
-    proposer_delegate: Option<Arc<dyn ProposerDelegate>>,
+    proposer_delegate: RwLock<Option<Arc<dyn ProposerDelegate>>>,
 }
 
 /// Boxed future returned by `receive_sender_certificate`. It is `Send` off the `web`
@@ -464,7 +464,7 @@ impl<Env: Environment> Client<Env> {
             chain_modes,
             notifier: Arc::new(ChannelNotifier::default()),
             options,
-            proposer_delegate: None,
+            proposer_delegate: RwLock::new(None),
         }
     }
 
@@ -473,13 +473,20 @@ impl<Env: Environment> Client<Env> {
     /// The client keeps forming certificates itself whenever the delegate cannot finish the
     /// round it was given, so this only ever changes how a block is committed, never whether
     /// the result is trusted.
-    pub fn set_proposer_delegate(&mut self, delegate: Arc<dyn ProposerDelegate>) {
-        self.proposer_delegate = Some(delegate);
+    pub fn set_proposer_delegate(&self, delegate: Option<Arc<dyn ProposerDelegate>>) {
+        *self
+            .proposer_delegate
+            .write()
+            .expect("Panics should not happen while holding a lock to `proposer_delegate`") =
+            delegate;
     }
 
     /// Returns the node that forms confirmation certificates on this client's behalf, if any.
-    pub fn proposer_delegate(&self) -> Option<&Arc<dyn ProposerDelegate>> {
-        self.proposer_delegate.as_ref()
+    pub fn proposer_delegate(&self) -> Option<Arc<dyn ProposerDelegate>> {
+        self.proposer_delegate
+            .read()
+            .expect("Panics should not happen while holding a lock to `proposer_delegate`")
+            .clone()
     }
 
     /// Returns the chain ID of the admin chain.
@@ -1373,7 +1380,7 @@ impl<Env: Environment> Client<Env> {
 
     /// Submits a block proposal to the validators.
     #[instrument(level = "trace", skip_all)]
-    async fn submit_block_proposal<T: ProcessableCertificate>(
+    pub(crate) async fn submit_block_proposal<T: ProcessableCertificate>(
         self: &Arc<Self>,
         committee: Arc<Committee>,
         proposal: Box<BlockProposal>,
@@ -1518,7 +1525,7 @@ impl<Env: Environment> Client<Env> {
 
     /// Broadcasts certified blocks to validators.
     #[instrument(level = "trace", skip_all, fields(chain_id, block_height, delivery))]
-    async fn communicate_chain_updates(
+    pub(crate) async fn communicate_chain_updates(
         self: &Arc<Self>,
         committee: &Committee,
         chain_id: ChainId,
@@ -1640,7 +1647,7 @@ impl<Env: Environment> Client<Env> {
     /// Processes the confirmed block certificate in the local node without checking signatures.
     /// Also downloads and processes all ancestors that are still missing.
     #[instrument(level = "trace", skip_all)]
-    async fn receive_certificate_with_checked_signatures(
+    pub(crate) async fn receive_certificate_with_checked_signatures(
         &self,
         certificate: ConfirmedBlockCertificate,
         mode: ProcessConfirmedBlockMode,
@@ -2189,7 +2196,7 @@ impl<Env: Environment> Client<Env> {
     ///
     /// Whether manager values are fetched depends on the chain's follow-only state.
     #[instrument(level = "trace", skip_all)]
-    async fn synchronize_chain_state(
+    pub(crate) async fn synchronize_chain_state(
         &self,
         chain_id: ChainId,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {

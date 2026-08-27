@@ -36,21 +36,32 @@
 //! [`ProposalContent`]: linera_chain::data_types::ProposalContent
 //! [`ValidatedBlockCertificate`]: linera_chain::types::ValidatedBlockCertificate
 
+use std::sync::Arc;
+
 #[cfg(not(web))]
 use futures::future::BoxFuture;
 #[cfg(web)]
 use futures::future::LocalBoxFuture as BoxFuture;
 use linera_base::{
     data_types::Blob,
+    identifiers::ChainId,
     task::{MaybeSend, MaybeSync},
 };
 use linera_chain::{
     data_types::BlockProposal,
-    types::{Block, ConfirmedBlockCertificate, ValidatedBlockCertificate},
+    types::{
+        Block, ConfirmedBlock, ConfirmedBlockCertificate, ValidatedBlock, ValidatedBlockCertificate,
+    },
 };
+use linera_execution::committee::Committee;
+use linera_storage::Storage as _;
+use tracing::{debug, warn};
 
 use crate::{
+    client::{chain_client, Client, ListeningMode},
     data_types::ChainInfo,
+    environment::Environment,
+    local_node::LocalNodeError,
     node::{CrossChainMessageDelivery, NodeError},
 };
 
@@ -118,4 +129,236 @@ pub trait ProposerDelegate: std::fmt::Debug + MaybeSend + MaybeSync {
         certificate: ValidatedBlockCertificate,
         delivery: CrossChainMessageDelivery,
     ) -> BoxFuture<'a, Result<DelegatedOutcome, NodeError>>;
+}
+
+#[cfg(test)]
+#[path = "unit_tests/delegate_tests.rs"]
+mod delegate_tests;
+
+/// Reports a failure of the delegate's own machinery, as opposed to one of the chain's rounds.
+fn internal_error(error: impl std::fmt::Display) -> NodeError {
+    NodeError::WorkerError {
+        error: error.to_string(),
+    }
+}
+
+/// A [`ProposerDelegate`] that does the work in this process, against a local [`Client`].
+///
+/// This is the delegate proper, not a handle to a remote one: a node that offers delegation over
+/// the network serves it from one of these, and a client reaching that node holds an
+/// implementation that forwards to it instead.
+///
+/// The [`Client`] it drives needs no key for the chains it serves, since nothing the delegate
+/// does is signed by an owner. It does need to be close to the validators and to hold, or be able
+/// to fetch, the blocks and blobs they turn out to be missing, because that is the work being
+/// moved off the caller.
+pub struct LocalProposerDelegate<Env: Environment> {
+    client: Arc<Client<Env>>,
+    address: String,
+}
+
+impl<Env: Environment> std::fmt::Debug for LocalProposerDelegate<Env> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LocalProposerDelegate")
+            .field("address", &self.address)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<Env: Environment> LocalProposerDelegate<Env> {
+    /// Creates a delegate that serves proposals from the given client, reporting `address` as
+    /// its own.
+    pub fn new(client: Arc<Client<Env>>, address: impl Into<String>) -> Self {
+        Self {
+            client,
+            address: address.into(),
+        }
+    }
+
+    /// Returns the committee of the chain's current epoch, as our local node sees it.
+    async fn committee(&self, chain_id: ChainId) -> Result<Arc<Committee>, chain_client::Error> {
+        let info = self.client.local_node.chain_info(chain_id).await?;
+        let hash = info
+            .committee_hash
+            .ok_or(LocalNodeError::InactiveChain(chain_id))?;
+        Ok(self
+            .client
+            .storage_client()
+            .get_or_load_committee_by_hash(hash)
+            .await
+            .map_err(LocalNodeError::from)?)
+    }
+
+    /// Starts following the chain and brings our view of it level with the validators.
+    ///
+    /// We serve chains we were never configured for, so the mode is extended on demand. The
+    /// chain has to be followed in full: repairing a validator that is behind can mean pushing
+    /// blocks from the chains that sent it messages, not just from this one.
+    async fn prepare(&self, chain_id: ChainId) -> Result<(), chain_client::Error> {
+        self.client
+            .extend_chain_mode(chain_id, ListeningMode::FullChain);
+        self.client.synchronize_chain_state(chain_id).await?;
+        Ok(())
+    }
+
+    /// Reports the chain state we can see, for a caller that has to decide what to sign next.
+    ///
+    /// We resynchronize first, so that a timeout certificate or a locking block that appeared
+    /// while we were working is in what we hand back: those carry their own proof, and are the
+    /// part of this the caller can actually use.
+    async fn hand_back(&self, chain_id: ChainId) -> Result<DelegatedOutcome, NodeError> {
+        let info = match self.client.synchronize_chain_state(chain_id).await {
+            Ok(info) => info,
+            Err(error) => {
+                debug!(%chain_id, %error, "Could not resynchronize before handing the block back");
+                self.client
+                    .local_node
+                    .chain_info(chain_id)
+                    .await
+                    .map_err(internal_error)?
+            }
+        };
+        Ok(DelegatedOutcome::NeedsOwner(info))
+    }
+
+    /// Makes the validators aware of a block we just got confirmed.
+    ///
+    /// A delegate that formed a certificate and left the validators ignorant of it would have
+    /// done half the job, so this always runs; `delivery` only decides whether we also wait for
+    /// the block's outgoing messages to reach their inboxes. A caller that broadcasts for itself
+    /// as well loses nothing, since the operation is idempotent.
+    async fn broadcast(
+        &self,
+        chain_id: ChainId,
+        committee: &Committee,
+        certificate: &ConfirmedBlockCertificate,
+        delivery: CrossChainMessageDelivery,
+    ) {
+        let height = certificate.block().header.height;
+        let cached = self
+            .client
+            .storage_client()
+            .cache_certificate(certificate.clone());
+        if let Err(error) = self
+            .client
+            .communicate_chain_updates(committee, chain_id, height, delivery, Some(cached))
+            .await
+        {
+            // The caller's certificate is good regardless, and the validators that missed this
+            // will catch up through the usual synchronization, so this is not worth failing over.
+            warn!(%chain_id, %height, %error, "Could not broadcast the confirmed block");
+        }
+    }
+
+    /// Carries a signed proposal through the rest of its round. See
+    /// [`ProposerDelegate::submit_and_confirm`].
+    async fn run_proposal(
+        &self,
+        proposal: BlockProposal,
+        block: Block,
+        blobs: Vec<Blob>,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<DelegatedOutcome, NodeError> {
+        let chain_id = proposal.content.block.chain_id;
+        let round = proposal.content.round;
+        self.prepare(chain_id).await.map_err(internal_error)?;
+        // Hold the proposal ourselves before offering it around. That is what lets us answer a
+        // validator that reports the blobs missing, since they are then ours to send.
+        self.client
+            .local_node
+            .handle_pending_blobs(chain_id, blobs)
+            .await
+            .map_err(internal_error)?;
+        if let Err(error) = self
+            .client
+            .local_node
+            .handle_block_proposal(proposal.clone())
+            .await
+        {
+            debug!(%chain_id, %round, %error, "Rejected the proposal locally");
+            return self.hand_back(chain_id).await;
+        }
+        let committee = match self.committee(chain_id).await {
+            Ok(committee) => committee,
+            Err(error) => return Err(internal_error(error)),
+        };
+        let proposal = Box::new(proposal);
+        let certificate = if round.is_fast() {
+            self.client
+                .submit_block_proposal(committee.clone(), proposal, ConfirmedBlock::new(block))
+                .await
+        } else {
+            // Nothing in finalization is signed by an owner, so we close the round ourselves
+            // rather than handing the validated certificate back for a second round trip.
+            match self
+                .client
+                .submit_block_proposal(committee.clone(), proposal, ValidatedBlock::new(block))
+                .await
+            {
+                Ok(validated) => self.client.finalize_block(&committee, validated).await,
+                Err(error) => Err(error),
+            }
+        };
+        match certificate {
+            Ok(certificate) => {
+                self.broadcast(chain_id, &committee, &certificate, delivery)
+                    .await;
+                Ok(DelegatedOutcome::Confirmed(Box::new(certificate)))
+            }
+            Err(error) => {
+                debug!(%chain_id, %round, %error, "Could not carry the proposal to a certificate");
+                self.hand_back(chain_id).await
+            }
+        }
+    }
+
+    /// Carries an already validated block to a confirmation certificate. See
+    /// [`ProposerDelegate::finalize`].
+    async fn run_finalization(
+        &self,
+        validated: ValidatedBlockCertificate,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<DelegatedOutcome, NodeError> {
+        let chain_id = validated.block().header.chain_id;
+        self.prepare(chain_id).await.map_err(internal_error)?;
+        let committee = match self.committee(chain_id).await {
+            Ok(committee) => committee,
+            Err(error) => return Err(internal_error(error)),
+        };
+        match self.client.finalize_block(&committee, validated).await {
+            Ok(certificate) => {
+                self.broadcast(chain_id, &committee, &certificate, delivery)
+                    .await;
+                Ok(DelegatedOutcome::Confirmed(Box::new(certificate)))
+            }
+            Err(error) => {
+                debug!(%chain_id, %error, "Could not finalize the validated block");
+                self.hand_back(chain_id).await
+            }
+        }
+    }
+}
+
+impl<Env: Environment> ProposerDelegate for LocalProposerDelegate<Env> {
+    fn address(&self) -> String {
+        self.address.clone()
+    }
+
+    fn submit_and_confirm<'a>(
+        &'a self,
+        proposal: BlockProposal,
+        block: Block,
+        blobs: Vec<Blob>,
+        delivery: CrossChainMessageDelivery,
+    ) -> BoxFuture<'a, Result<DelegatedOutcome, NodeError>> {
+        Box::pin(self.run_proposal(proposal, block, blobs, delivery))
+    }
+
+    fn finalize<'a>(
+        &'a self,
+        certificate: ValidatedBlockCertificate,
+        delivery: CrossChainMessageDelivery,
+    ) -> BoxFuture<'a, Result<DelegatedOutcome, NodeError>> {
+        Box::pin(self.run_finalization(certificate, delivery))
+    }
 }

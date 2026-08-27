@@ -78,6 +78,7 @@ use crate::{
     remote_node::RemoteNode,
     updater::{communicate_with_quorum, CommunicateAction, CommunicationError},
     worker::{Notification, Reason, WorkerError},
+    ProcessConfirmedBlockMode,
 };
 
 /// Options that configure the behavior of a [`ChainClient`].
@@ -2370,6 +2371,11 @@ impl<Env: Environment> ChainClient<Env> {
         ))))
     }
 
+    /// Returns the client this chain client belongs to.
+    pub fn client(&self) -> &Arc<Client<Env>> {
+        &self.client
+    }
+
     /// Returns the cross-chain message delivery mode to ask a delegate for.
     ///
     /// A delegate that does not broadcast for us is asked not to wait on delivery either, since
@@ -2388,7 +2394,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// this committee's signatures over `block`, which is the same check the certificate would
     /// have to pass had we collected the votes ourselves. Handing the work back is an ordinary
     /// answer rather than a failure, and is reported as such.
-    fn accept_delegated_outcome(
+    async fn accept_delegated_outcome(
         &self,
         outcome: Result<DelegatedOutcome, NodeError>,
         block: &Block,
@@ -2431,6 +2437,24 @@ impl<Env: Environment> ChainClient<Env> {
             );
             return None;
         }
+        // Nothing has told our own node about this block yet: the round we skipped is where that
+        // normally happens. Execute it here, so that the certificate we return leaves the chain
+        // in the state it would have been in had we collected the votes ourselves.
+        if let Err(error) = self
+            .client
+            .receive_certificate_with_checked_signatures(
+                certificate.clone(),
+                ProcessConfirmedBlockMode::Execute,
+            )
+            .await
+        {
+            warn!(
+                delegate = address,
+                %error,
+                "Could not execute the delegate's certificate; going to the validators ourselves",
+            );
+            return None;
+        }
         Some(certificate)
     }
 
@@ -2461,6 +2485,7 @@ impl<Env: Environment> ChainClient<Env> {
             )
             .await;
         self.accept_delegated_outcome(outcome, block, committee, &address)
+            .await
     }
 
     /// Asks the configured delegate, if any, to carry an already validated block to a
@@ -2481,6 +2506,7 @@ impl<Env: Environment> ChainClient<Env> {
             .finalize(certificate.clone(), self.delegated_delivery())
             .await;
         self.accept_delegated_outcome(outcome, certificate.block(), committee, &address)
+            .await
     }
 
     #[expect(
