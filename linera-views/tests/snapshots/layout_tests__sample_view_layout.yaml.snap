@@ -1,0 +1,71 @@
+---
+source: linera-views/tests/layout_tests.rs
+expression: "SampleView::<MemoryContext<()>>::layout()"
+---
+Struct:
+  - name: counter
+    index: 0
+    index_type: u8
+    layout:
+      Value:
+        Bcs:
+          type_name: u64
+  - name: log
+    index: 1
+    index_type: u8
+    layout:
+      Tagged:
+        - tag: 1
+          name: Count
+          layout:
+            Value:
+              Bcs:
+                type_name: u32
+        - tag: 2
+          name: Index
+          layout:
+            Indexed:
+              index: u32
+              layout:
+                Value:
+                  Bcs:
+                    type_name: String
+  - name: names
+    index: 2
+    index_type: u8
+    layout:
+      Indexed:
+        index: u32
+        layout:
+          Value:
+            Bcs:
+              type_name: String
+  - name: tags
+    index: 3
+    index_type: u8
+    layout:
+      Indexed:
+        index: u32
+        layout:
+          Value: Marker
+  - name: nested
+    index: 4
+    index_type: u8
+    layout:
+      Tagged:
+        - tag: 1
+          name: Index
+          layout:
+            Indexed:
+              index: u32
+              layout:
+                Value: Marker
+        - tag: 2
+          name: Subview
+          layout:
+            Indexed:
+              index: u32
+              layout:
+                Value:
+                  Bcs:
+                    type_name: u64

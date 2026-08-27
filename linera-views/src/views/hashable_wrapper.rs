@@ -250,3 +250,26 @@ mod graphql {
         }
     }
 }
+
+impl<C, W, O> crate::views::layout::DescribeLayout for WrappedHashableContainerView<C, W, O>
+where
+    W: crate::views::layout::DescribeLayout,
+{
+    fn layout() -> crate::views::layout::ViewLayout {
+        use crate::views::layout::{short_type_name, TaggedArm, ValueFormat, ViewLayout};
+        ViewLayout::Tagged(vec![
+            TaggedArm {
+                tag: KeyTag::Inner as u8,
+                name: "Inner",
+                layout: W::layout(),
+            },
+            TaggedArm {
+                tag: KeyTag::Hash as u8,
+                name: "Hash",
+                layout: ViewLayout::Value(ValueFormat::Bcs {
+                    type_name: short_type_name::<O>(),
+                }),
+            },
+        ])
+    }
+}

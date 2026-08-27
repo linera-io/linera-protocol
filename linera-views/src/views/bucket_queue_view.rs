@@ -1067,6 +1067,40 @@ mod graphql {
     }
 }
 
+impl<C, T, const N: usize> crate::views::layout::DescribeLayout for BucketQueueView<C, T, N> {
+    fn layout() -> crate::views::layout::ViewLayout {
+        use crate::views::layout::{TaggedArm, ValueFormat, ViewLayout};
+        let bucket = || ViewLayout::Value(ValueFormat::Bcs { type_name: "Vec" });
+        ViewLayout::Tagged(vec![
+            TaggedArm {
+                tag: KeyTag::Layout as u8,
+                name: "Layout",
+                layout: ViewLayout::Value(ValueFormat::Bcs {
+                    type_name: "BucketLayout",
+                }),
+            },
+            TaggedArm {
+                tag: KeyTag::Front as u8,
+                name: "Front",
+                layout: bucket(),
+            },
+            TaggedArm {
+                tag: KeyTag::Middle as u8,
+                name: "Middle",
+                layout: ViewLayout::Indexed {
+                    index: Some("u32"),
+                    layout: Box::new(bucket()),
+                },
+            },
+            TaggedArm {
+                tag: KeyTag::Back as u8,
+                name: "Back",
+                layout: bucket(),
+            },
+        ])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

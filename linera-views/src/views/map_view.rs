@@ -2385,6 +2385,33 @@ mod graphql {
     }
 }
 
+impl<C, V> crate::views::layout::DescribeLayout for ByteMapView<C, V> {
+    fn layout() -> crate::views::layout::ViewLayout {
+        crate::views::layout::ViewLayout::Indexed {
+            index: None,
+            layout: Box::new(crate::views::layout::ViewLayout::value::<V>()),
+        }
+    }
+}
+
+impl<C, I, V> crate::views::layout::DescribeLayout for MapView<C, I, V> {
+    fn layout() -> crate::views::layout::ViewLayout {
+        crate::views::layout::ViewLayout::Indexed {
+            index: Some(crate::views::layout::short_type_name::<I>()),
+            layout: Box::new(crate::views::layout::ViewLayout::value::<V>()),
+        }
+    }
+}
+
+impl<C, I, V> crate::views::layout::DescribeLayout for CustomMapView<C, I, V> {
+    fn layout() -> crate::views::layout::ViewLayout {
+        crate::views::layout::ViewLayout::Indexed {
+            index: Some(crate::views::layout::short_type_name::<I>()),
+            layout: Box::new(crate::views::layout::ViewLayout::value::<V>()),
+        }
+    }
+}
+
 /// The tests for `Borrow` and `bcs`.
 #[cfg(test)]
 pub mod tests {
