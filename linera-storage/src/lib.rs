@@ -199,6 +199,9 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     /// An index row whose block turns out to have a different height is reported as `None` and
     /// deleted: left in place it would keep the index looking complete, so the fallback that
     /// rewrites it correctly would never run again.
+    ///
+    /// **This read writes.** Repair is access-triggered, so an otherwise read-only caller issues
+    /// deletes here, and a bad row at a height nobody queries stays until something asks for it.
     async fn read_certificates_by_heights(
         &self,
         chain_id: ChainId,
@@ -211,7 +214,11 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     /// Each found certificate is returned as a tuple of (lite_certificate_bytes, confirmed_block_bytes).
     ///
     /// Unlike [`Storage::read_certificates_by_heights`] this does not check that each block really
-    /// has the height it was indexed at, because that would mean deserializing it.
+    /// has the height it was indexed at, because that would mean deserializing every block on the
+    /// path that exists to avoid deserializing. **It therefore neither rejects nor repairs a
+    /// mispaired row, and will serve one over the wire.** The receiver is responsible for the
+    /// check: `RemoteNode::download_certificates_by_heights` asserts that each certificate has the
+    /// height it was requested at.
     async fn read_certificates_by_heights_raw(
         &self,
         chain_id: ChainId,
@@ -235,7 +242,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     async fn write_certificate_height_indices(
         &self,
         chain_id: ChainId,
-        hashes: &[CryptoHash],
+        certificates: &[ConfirmedBlockCertificate],
     ) -> Result<(), ViewError>;
 
     /// Looks up the block heights where the given events were published.

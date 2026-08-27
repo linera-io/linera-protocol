@@ -13,6 +13,7 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight, NetworkDescription, TimeDelta, Timestamp},
+    ensure,
     identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
     time::Duration,
 };
@@ -1082,7 +1083,7 @@ mod tests {
 
         // Write the height index (simulating what updater does after fallback)
         storage
-            .write_certificate_height_indices(chain_id, &[hash])
+            .write_certificate_height_indices(chain_id, std::slice::from_ref(&cert))
             .await
             .unwrap();
 
@@ -1124,7 +1125,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         storage
-            .write_certificate_height_indices(chain_id, &hashes)
+            .write_certificate_height_indices(chain_id, &certificates)
             .await
             .unwrap();
 
@@ -1238,7 +1239,7 @@ mod tests {
         );
 
         storage
-            .write_certificate_height_indices(chain_id, &[correct.hash()])
+            .write_certificate_height_indices(chain_id, std::slice::from_ref(&correct))
             .await
             .unwrap();
 
@@ -2091,6 +2092,12 @@ where
         let raw_certificates = self
             .read_certificates_by_heights_raw(chain_id, heights)
             .await?;
+        // The contract is one entry per requested height; zipping a shorter vector is exactly the
+        // silent mispairing this whole change exists to remove, so assert it rather than trust it.
+        ensure!(
+            raw_certificates.len() == heights.len(),
+            ViewError::InconsistentEntries
+        );
         let mut certificates = Vec::with_capacity(heights.len());
         let mut stale_heights = Vec::new();
         for (height, maybe_raw) in heights.iter().zip(raw_certificates) {
@@ -2127,29 +2134,27 @@ where
         Ok(certificates)
     }
 
-    #[instrument(skip_all, fields(%chain_id, hashes_len = hashes.len()))]
+    #[instrument(skip_all, fields(%chain_id, certificates_len = certificates.len()))]
     async fn write_certificate_height_indices(
         &self,
         chain_id: ChainId,
-        hashes: &[CryptoHash],
+        certificates: &[ConfirmedBlockCertificate],
     ) -> Result<(), ViewError> {
-        let certificates = self.read_certificates(hashes).await?;
-        let mut key_values = Vec::with_capacity(hashes.len());
-        let mut heights = Vec::with_capacity(hashes.len());
-        for (hash, certificate) in hashes.iter().zip(certificates) {
-            let Some(certificate) = certificate else {
-                warn!(%chain_id, %hash, "not indexing a certificate that is not in storage");
-                continue;
-            };
+        let mut key_values = Vec::with_capacity(certificates.len());
+        let mut heights = Vec::with_capacity(certificates.len());
+        for certificate in certificates {
             let header = &certificate.value().block().header;
             if header.chain_id != chain_id {
                 warn!(
-                    %chain_id, %hash, block_chain_id = %header.chain_id,
+                    %chain_id, hash = %certificate.hash(), block_chain_id = %header.chain_id,
                     "not indexing a certificate that belongs to another chain",
                 );
                 continue;
             }
-            key_values.push((to_height_key(header.height), bcs::to_bytes(hash)?));
+            key_values.push((
+                to_height_key(header.height),
+                bcs::to_bytes(&certificate.hash())?,
+            ));
             heights.push(header.height);
         }
         if key_values.is_empty() {

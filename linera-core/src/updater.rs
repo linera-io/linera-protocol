@@ -1006,9 +1006,10 @@ where
 
         match ResultReadCertificates::new(certificates, hashes.clone()) {
             ResultReadCertificates::Certificates(certs) => {
-                // Index what the fallback found, so the direct lookup can serve it next time.
+                // Index what the fallback found, so the direct lookup can serve it next time. Each
+                // height comes from the block itself, so this cannot repeat the old mispairing.
                 storage
-                    .write_certificate_height_indices(chain_id, &hashes)
+                    .write_certificate_height_indices(chain_id, &certs)
                     .await?;
                 Ok(certs
                     .into_iter()

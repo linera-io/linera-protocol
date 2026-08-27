@@ -655,11 +655,21 @@ where
         };
 
         // The shard drops the heights it does not hold and `heights` is whatever the caller put on
-        // the wire, so neither the length nor the order of the response can pair them; only the
-        // hashes are ours to index, and the index takes each height from the block itself.
+        // the wire, so neither the length nor the order of the response can pair them; the index
+        // takes each height from the block itself instead.
+        let certificates = self
+            .0
+            .storage
+            .read_certificates(&hashes)
+            .await
+            .map_err(Self::view_error_to_status)?
+            .into_iter()
+            .flatten()
+            .map(CacheArc::unwrap_or_clone)
+            .collect::<Vec<_>>();
         self.0
             .storage
-            .write_certificate_height_indices(chain_id, &hashes)
+            .write_certificate_height_indices(chain_id, &certificates)
             .await
             .map_err(Self::view_error_to_status)?;
 
