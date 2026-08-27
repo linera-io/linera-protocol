@@ -2,6 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Implements [`crate::store::KeyValueStore`] for the RocksDB database.
+//!
+//! # Durability
+//!
+//! Writes go through `DB::write` with RocksDB's default `WriteOptions`: the write-ahead log
+//! is enabled and `sync` is off. Upstream states that such a write survives a process crash
+//! but not a machine crash — "if it is just the process that crashes (i.e., the machine does
+//! not reboot), no writes will be lost even if sync==false", whereas on a machine crash "some
+//! recent writes may be lost". A caller that needs power-loss durability cannot get it from
+//! this backend; the absence of `WriteOptions` here is the contract, not an oversight.
 
 // RocksDB's C API uses `i32` and signed sizes; casts at this boundary are
 // by design.
