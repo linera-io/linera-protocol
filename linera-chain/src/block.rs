@@ -22,8 +22,8 @@ use thiserror::Error;
 
 use crate::{
     data_types::{
-        BlockExecutionOutcome, CheckpointRef, IncomingBundle, MessageBundle, OperationResult,
-        OutgoingMessageExt, ProposedBlock, Transaction,
+        BlockExecutionOutcome, IncomingBundle, MessageBundle, OperationResult, OutgoingMessageExt,
+        ProposedBlock, Transaction,
     },
     types::CertificateValue,
 };
@@ -392,7 +392,7 @@ pub struct BlockHeader {
     pub previous_message_blocks_hash: CryptoHash,
     /// Cryptographic hash of the lookup table for previous blocks publishing events.
     pub previous_event_blocks_hash: CryptoHash,
-    /// The height and hash of the most recent checkpoint block strictly below this one, if any.
+    /// The height of the most recent checkpoint block strictly below this one, if any.
     ///
     /// A block cannot name itself here: its hash is not known while it is being executed. So a
     /// block that *is* a checkpoint points at the one before it, and a reader takes the latest
@@ -403,7 +403,7 @@ pub struct BlockHeader {
     /// exporter, a proposer delegate -- offer a lagging validator the checkpoint instead of
     /// replaying the history below it. Reading it from a chain's own view would mean opening a
     /// second [`ChainStateView`](crate::ChainStateView) for a chain a worker already owns.
-    pub previous_checkpoint: Option<CheckpointRef>,
+    pub previous_checkpoint: Option<BlockHeight>,
     /// Cryptographic hash of all the oracle responses in the block.
     pub oracle_responses_hash: CryptoHash,
     /// Cryptographic hash of all the events in the block.
@@ -815,7 +815,7 @@ struct SerializedHeader {
     state_hash: CryptoHash,
     previous_block_hash: Option<CryptoHash>,
     authenticated_owner: Option<AccountOwner>,
-    previous_checkpoint: Option<CheckpointRef>,
+    previous_checkpoint: Option<BlockHeight>,
 }
 
 mod hashing {

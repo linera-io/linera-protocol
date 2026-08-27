@@ -4926,13 +4926,10 @@ where
         )
         .await
         .unwrap_ok_committed();
-    let named = after
-        .block()
-        .header
-        .previous_checkpoint
-        .expect("a block above a checkpoint must name it");
-    assert_eq!(named.height, BlockHeight::from(1));
-    assert_eq!(named.hash, checkpoint.hash());
+    assert_eq!(
+        after.block().header.previous_checkpoint,
+        Some(BlockHeight::from(1))
+    );
     assert!(!after.block().body.starts_with_checkpoint());
 
     // A second checkpoint names nothing, even though an earlier one exists. It replaces the
@@ -4949,8 +4946,8 @@ where
         .await
         .unwrap_ok_committed();
     assert_eq!(
-        latest.block().header.previous_checkpoint.map(|c| c.hash),
-        Some(second.hash()),
+        latest.block().header.previous_checkpoint,
+        Some(second.block().header.height),
     );
     Ok(())
 }

@@ -41,7 +41,7 @@ use crate::{
     block_tracker::BlockExecutionTracker,
     data_types::{
         BlockExecutionOutcome, BundleExecutionPolicy, BundleFailurePolicy, ChainAndHeight,
-        CheckpointRef, IncomingBundle, MessageAction, MessageBundle, ProposedBlock, Transaction,
+        IncomingBundle, MessageAction, MessageBundle, ProposedBlock, Transaction,
     },
     inbox::{InboxError, InboxStateView},
     manager::ChainManager,
@@ -1226,15 +1226,7 @@ where
         // the latest checkpoint at or below a checkpoint block is that block itself, which
         // `BlockBody::starts_with_checkpoint` already says.
         let previous_checkpoint =
-            match latest_checkpoint_height.filter(|_| !block.starts_with_checkpoint()) {
-                None => None,
-                Some(height) => {
-                    let hash = block_hashes.get(&height).await?.ok_or_else(|| {
-                        ChainError::CorruptedChainState("missing entry in block_hashes".into())
-                    })?;
-                    Some(CheckpointRef { height, hash })
-                }
-            };
+            latest_checkpoint_height.filter(|_| !block.starts_with_checkpoint());
 
         let state_hash = {
             #[cfg(with_metrics)]

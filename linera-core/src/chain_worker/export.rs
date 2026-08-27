@@ -54,7 +54,7 @@ use linera_base::{
     identifiers::{BlobId, ChainId, StreamId},
     time::{timer::timeout, Duration},
 };
-use linera_chain::{data_types::CheckpointRef, types::ConfirmedBlockCertificate};
+use linera_chain::types::ConfirmedBlockCertificate;
 use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
 use linera_storage::{Arc as CacheArc, Clock as _, Storage};
 use tokio::sync::mpsc;
@@ -2076,10 +2076,17 @@ where
         };
         // Strictly below means the destination is already past it, and `send_missing_blocks` then
         // has certificates it can actually read, so replaying is both correct and cheaper.
-        if checkpoint.height < next_height {
+        if checkpoint < next_height {
             return Ok(next_height);
         }
-        let Some(certificate) = self.storage.read_certificate(checkpoint.hash).await? else {
+        let Some(certificate) = self
+            .storage
+            .read_certificates_by_heights(chain_id, &[checkpoint])
+            .await?
+            .into_iter()
+            .flatten()
+            .next()
+        else {
             return Ok(next_height);
         };
         let info = self.send_confirmed_certificate(&certificate, &[]).await?;
@@ -2094,7 +2101,7 @@ where
         &self,
         chain_id: ChainId,
         target_next_height: BlockHeight,
-    ) -> Result<Option<CheckpointRef>, chain_client::Error> {
+    ) -> Result<Option<BlockHeight>, chain_client::Error> {
         let Ok(height) = target_next_height.try_sub_one() else {
             return Ok(None);
         };
@@ -2110,10 +2117,7 @@ where
         };
         let block = tip.block();
         if block.body.starts_with_checkpoint() {
-            return Ok(Some(CheckpointRef {
-                height: block.header.height,
-                hash: tip.hash(),
-            }));
+            return Ok(Some(block.header.height));
         }
         Ok(block.header.previous_checkpoint)
     }

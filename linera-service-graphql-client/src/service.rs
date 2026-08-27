@@ -688,12 +688,7 @@ mod from {
                 messages_hash,
                 previous_message_blocks_hash,
                 previous_event_blocks_hash,
-                previous_checkpoint: previous_checkpoint.map(|checkpoint| {
-                    linera_chain::data_types::CheckpointRef {
-                        height: checkpoint.height,
-                        hash: checkpoint.hash,
-                    }
-                }),
+                previous_checkpoint,
                 oracle_responses_hash,
                 events_hash,
                 blobs_hash,

@@ -297,7 +297,7 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
         messagesHash
         previousMessageBlocksHash
         previousEventBlocksHash
-        previousCheckpoint { height hash }
+        previousCheckpoint
         oracleResponsesHash
         eventsHash
         blobsHash
@@ -478,7 +478,7 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
         messagesHash
         previousMessageBlocksHash
         previousEventBlocksHash
-        previousCheckpoint { height hash }
+        previousCheckpoint
         oracleResponsesHash
         eventsHash
         blobsHash
