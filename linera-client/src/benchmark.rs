@@ -524,6 +524,13 @@ impl<Env: Environment> Benchmark<Env> {
         // the network actually committed, and a level is confirmed while delivering as little
         // as 80% of its target. Reporting only the offered rate overstates throughput.
         match bps_control_task.await? {
+            // Zero is the absence of a measurement, not a measurement of zero: the search
+            // bracketed all the way down without any rate holding the budget. Logging it on
+            // the success line would read as a knee of 0 rather than as no knee at all.
+            Some(rate::SearchOutcome::Converged(knee)) if knee.offered_bps == 0 => warn!(
+                "rate search found NO sustainable rate: every rate tried, down to the lowest \
+                 the generators can offer, missed the latency budget or was not delivered"
+            ),
             Some(rate::SearchOutcome::Converged(knee)) => info!(
                 knee_bps = knee.offered_bps,
                 knee_achieved_bps = knee.achieved_bps,
