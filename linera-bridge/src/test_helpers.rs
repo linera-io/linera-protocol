@@ -527,6 +527,7 @@ fn build_block(
         messages: vec![],
         previous_message_blocks: Default::default(),
         previous_event_blocks: Default::default(),
+        previous_checkpoint: None,
         oracle_responses: vec![],
         events,
         blobs: vec![],

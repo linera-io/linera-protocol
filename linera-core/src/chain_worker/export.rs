@@ -54,7 +54,7 @@ use linera_base::{
     identifiers::{BlobId, ChainId, StreamId},
     time::{timer::timeout, Duration},
 };
-use linera_chain::types::ConfirmedBlockCertificate;
+use linera_chain::{data_types::CheckpointRef, types::ConfirmedBlockCertificate};
 use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
 use linera_storage::{Arc as CacheArc, Clock as _, Storage};
 use tokio::sync::mpsc;
@@ -2007,6 +2007,21 @@ where
                     .next_block_height
             }
         };
+        if next_height.0.saturating_add(max_blocks) < target_next_height.0 {
+            // Best-effort, deliberately: a destination may refuse someone else's execution state
+            // and must still be caught up by replaying. Failing the round here would leave such a
+            // destination permanently behind, since the replay below would never run.
+            match self
+                .push_checkpoint_if_useful(chain_id, next_height, target_next_height)
+                .await
+            {
+                Ok(reached) => next_height = reached,
+                Err(error) => debug!(
+                    %chain_id, %error,
+                    "Checkpoint push did not land; falling back to replaying blocks",
+                ),
+            }
+        }
         let last = target_next_height
             .0
             .min(next_height.0.saturating_add(max_blocks));
@@ -2028,6 +2043,79 @@ where
             }
         }
         Ok(next_height)
+    }
+
+    /// Offers the chain's latest checkpoint when the destination has not reached it, so that it
+    /// installs the execution state instead of replaying every block below it, and returns the
+    /// height it reports afterwards.
+    ///
+    /// This is what makes a bounded catch-up window safe on a checkpointed chain. A validator
+    /// that bootstrapped from a checkpoint does not hold its own pre-checkpoint history, so a
+    /// window sitting entirely below the checkpoint reads heights it cannot supply, skips them,
+    /// sends nothing, and retries the same empty round forever. Reaching the checkpoint is the
+    /// whole fix: a destination already restores rather than preprocesses a block that starts
+    /// with one.
+    ///
+    /// Where the checkpoint is comes from the certificates themselves --
+    /// [`BlockHeader::previous_checkpoint`], and the block's own body when it is a checkpoint --
+    /// never from a view of this chain. Opening one would mean a second
+    /// [`ChainStateView`](linera_chain::ChainStateView) racing the worker that owns it, which
+    /// `Storage::load_chain` documents as causing invalid states and data corruption.
+    ///
+    /// A missing checkpoint is *not useful* rather than an error. A push the destination
+    /// **rejects** does return one, which the caller swallows: replaying is still correct
+    /// wherever a checkpoint cannot be had, and a validator is free not to accept one.
+    async fn push_checkpoint_if_useful(
+        &mut self,
+        chain_id: ChainId,
+        next_height: BlockHeight,
+        target_next_height: BlockHeight,
+    ) -> Result<BlockHeight, chain_client::Error> {
+        let Some(checkpoint) = self.latest_checkpoint(chain_id, target_next_height).await? else {
+            return Ok(next_height);
+        };
+        // Strictly below means the destination is already past it, and `send_missing_blocks` then
+        // has certificates it can actually read, so replaying is both correct and cheaper.
+        if checkpoint.height < next_height {
+            return Ok(next_height);
+        }
+        let Some(certificate) = self.storage.read_certificate(checkpoint.hash).await? else {
+            return Ok(next_height);
+        };
+        let info = self.send_confirmed_certificate(&certificate, &[]).await?;
+        Ok(info.next_block_height)
+    }
+
+    /// Reads the chain's latest checkpoint out of the block we are trying to deliver.
+    ///
+    /// That block names the checkpoint below it and says whether it is one itself, so a single
+    /// certificate answers both halves without loading the chain.
+    async fn latest_checkpoint(
+        &self,
+        chain_id: ChainId,
+        target_next_height: BlockHeight,
+    ) -> Result<Option<CheckpointRef>, chain_client::Error> {
+        let Ok(height) = target_next_height.try_sub_one() else {
+            return Ok(None);
+        };
+        let Some(tip) = self
+            .storage
+            .read_certificates_by_heights(chain_id, &[height])
+            .await?
+            .into_iter()
+            .flatten()
+            .next()
+        else {
+            return Ok(None);
+        };
+        let block = tip.block();
+        if block.body.starts_with_checkpoint() {
+            return Ok(Some(CheckpointRef {
+                height: block.header.height,
+                hash: tip.hash(),
+            }));
+        }
+        Ok(block.header.previous_checkpoint)
     }
 
     /// Sends one confirmed certificate, uploading blobs the validator reports missing.

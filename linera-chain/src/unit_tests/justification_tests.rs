@@ -48,6 +48,7 @@ fn header_at(chain: u32, height: u64, name: &str) -> BlockHeader {
         messages_hash: h,
         previous_message_blocks_hash: h,
         previous_event_blocks_hash: h,
+        previous_checkpoint: None,
         oracle_responses_hash: h,
         events_hash: h,
         blobs_hash: h,

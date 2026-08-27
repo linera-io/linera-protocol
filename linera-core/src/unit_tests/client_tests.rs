@@ -4887,6 +4887,74 @@ where
 /// pre-checkpoint, message-free block is no longer in `block_hashes`: it sits below the
 /// checkpoint and isn't recertified, so a from-checkpoint reset never replays it — which a
 /// from-block-0 reset would have.
+/// Every block names the checkpoint below it, so a reader holding only certificates can find it.
+///
+/// A block cannot name itself — its hash is not known while it executes — so the checkpoint block
+/// points at whatever came before it, and its own body is what says it is a checkpoint. Both
+/// halves are needed to answer "the latest checkpoint at or below this block".
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_blocks_name_the_checkpoint_below_them<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let chain = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let target = builder.add_root_chain(2, Amount::ZERO).await?;
+
+    // Height 0, below any checkpoint: nothing to name.
+    let first = chain
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(first.block().header.previous_checkpoint, None);
+
+    // Height 1, the checkpoint itself: it names what came before, which is nothing, and its body
+    // is what identifies it.
+    let checkpoint = chain.checkpoint().await.unwrap().unwrap();
+    assert_eq!(checkpoint.block().header.height, BlockHeight::from(1));
+    assert_eq!(checkpoint.block().header.previous_checkpoint, None);
+    assert!(checkpoint.block().body.starts_with_checkpoint());
+
+    // Height 2 onwards: the checkpoint is named, by height and by hash.
+    let after = chain
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(target.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+    let named = after
+        .block()
+        .header
+        .previous_checkpoint
+        .expect("a block above a checkpoint must name it");
+    assert_eq!(named.height, BlockHeight::from(1));
+    assert_eq!(named.hash, checkpoint.hash());
+    assert!(!after.block().body.starts_with_checkpoint());
+
+    // A second checkpoint names nothing, even though an earlier one exists. It replaces the
+    // history that held the first, so a node bootstrapping from this block cannot know about it
+    // and would compute a different header. Readers lose nothing: the latest checkpoint at or
+    // below a checkpoint block is that block.
+    let second = chain.checkpoint().await.unwrap().unwrap();
+    assert_eq!(second.block().header.previous_checkpoint, None);
+    assert!(second.block().body.starts_with_checkpoint());
+
+    // Blocks above it name it, and the first checkpoint is superseded.
+    let latest = chain
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(
+        latest.block().header.previous_checkpoint.map(|c| c.hash),
+        Some(second.hash()),
+    );
+    Ok(())
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[test_log::test(tokio::test)]

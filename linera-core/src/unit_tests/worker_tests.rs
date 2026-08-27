@@ -572,6 +572,7 @@ where
                 messages,
                 previous_message_blocks,
                 previous_event_blocks: BTreeMap::new(),
+                previous_checkpoint: None,
                 events,
                 blobs,
                 state_hash,

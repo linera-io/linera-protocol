@@ -234,6 +234,20 @@ type BlockHeader {
 	"""
 	previousEventBlocksHash: CryptoHash!
 	"""
+	The height and hash of the most recent checkpoint block strictly below this one, if any.
+	
+	A block cannot name itself here: its hash is not known while it is being executed. So a
+	block that *is* a checkpoint points at the one before it, and a reader takes the latest
+	checkpoint at or below a block from this field, or from the block itself when
+	[`BlockBody::starts_with_checkpoint`].
+	
+	This is what lets a sender that holds only certificates and storage -- a proxy, a block
+	exporter, a proposer delegate -- offer a lagging validator the checkpoint instead of
+	replaying the history below it. Reading it from a chain's own view would mean opening a
+	second [`ChainStateView`](crate::ChainStateView) for a chain a worker already owns.
+	"""
+	previousCheckpoint: CheckpointRef
+	"""
 	Cryptographic hash of all the oracle responses in the block.
 	"""
 	oracleResponsesHash: CryptoHash!
@@ -529,6 +543,23 @@ type CheckpointAckMessageMetadata {
 	The cursor past the last bundle from the recipient that the sender has consumed.
 	"""
 	latestReceivedCursor: Cursor!
+}
+
+"""
+Where a chain's most recent checkpoint block is, and which block it is.
+
+The height answers whether a validator has already passed it; the hash fetches it without
+consulting the height index, which is a separate structure that can be wrong.
+"""
+type CheckpointRef {
+	"""
+	The height of the checkpoint block.
+	"""
+	height: BlockHeight!
+	"""
+	The hash of the checkpoint block.
+	"""
+	hash: CryptoHash!
 }
 
 """

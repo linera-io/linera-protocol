@@ -529,6 +529,20 @@ doc_scalar!(
     "The execution result of a single operation."
 );
 
+/// Where a chain's most recent checkpoint block is, and which block it is.
+///
+/// The height answers whether a validator has already passed it; the hash fetches it without
+/// consulting the height index, which is a separate structure that can be wrong.
+#[derive(
+    Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize, SimpleObject, Allocative,
+)]
+pub struct CheckpointRef {
+    /// The height of the checkpoint block.
+    pub height: BlockHeight,
+    /// The hash of the checkpoint block.
+    pub hash: CryptoHash,
+}
+
 /// The messages and the state hash resulting from a [`ProposedBlock`]'s execution.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, SimpleObject, Allocative)]
 #[cfg_attr(with_testing, derive(Default))]
@@ -539,6 +553,8 @@ pub struct BlockExecutionOutcome {
     pub previous_message_blocks: BTreeMap<ChainId, (CryptoHash, BlockHeight)>,
     /// The hashes and heights of previous blocks that published events to the same channels.
     pub previous_event_blocks: BTreeMap<StreamId, (CryptoHash, BlockHeight)>,
+    /// The most recent checkpoint block strictly below this one, if any.
+    pub previous_checkpoint: Option<CheckpointRef>,
     /// The hash of the chain's execution state after this block.
     pub state_hash: CryptoHash,
     /// The record of oracle responses for each transaction.
