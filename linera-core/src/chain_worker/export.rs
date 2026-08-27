@@ -2059,8 +2059,8 @@ where
     /// Where the checkpoint is comes from the certificates themselves --
     /// [`BlockHeader::previous_checkpoint`], and the block's own body when it is a checkpoint --
     /// never from a view of this chain. Opening one would mean a second
-    /// [`ChainStateView`](linera_chain::ChainStateView) racing the worker that owns it, which
-    /// `Storage::load_chain` documents as causing invalid states and data corruption.
+    /// [`ChainStateView`](linera_chain::ChainStateView) racing the worker that owns it, which the
+    /// storage API documents as causing invalid states and data corruption.
     ///
     /// A missing checkpoint is *not useful* rather than an error. A push the destination
     /// **rejects** does return one, which the caller swallows: replaying is still correct
