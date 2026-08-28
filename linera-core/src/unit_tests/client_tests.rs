@@ -4816,6 +4816,69 @@ where
     Ok(())
 }
 
+/// A validator whose binary has no batch push is still caught up, one certificate per request.
+///
+/// This is every external validator for as long as a rollout takes, so the path has to converge on
+/// its own rather than merely not crash — and it is the export layer, not the transport, that has
+/// to notice, or the round trips it really spent are recorded as one.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_export_falls_back_for_a_validator_without_the_batch_push<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use crate::remote_node::RemoteNode;
+
+    const BACKLOG: usize = 5;
+
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = sender.chain_id();
+
+    builder.set_fault_type([3], FaultType::Offline);
+    for _ in 0..BACKLOG {
+        sender
+            .transfer_to_account(
+                AccountOwner::CHAIN,
+                Amount::from_millis(1),
+                Account::chain(recipient.chain_id()),
+            )
+            .await
+            .unwrap_ok_committed();
+    }
+    let target = sender.chain_info().await?.next_block_height;
+    builder.set_fault_type([3], FaultType::Honest);
+
+    let node = builder.node(3).without_batch_push();
+    let mut sender_task = crate::chain_worker::export::BlockSender {
+        remote_node: RemoteNode {
+            public_key: node.name(),
+            node,
+        },
+        storage: builder.validator_storage(0),
+        certificate_upload_batch_size: 100,
+        // Large enough that a working batch push would close the gap in one request, so the
+        // assertion below is about the fallback and not about the run bound.
+        certificates_per_push: 100,
+        push_bytes: 1024 * 1024,
+        #[cfg(with_metrics)]
+        address: "test".to_owned(),
+    };
+
+    let reached = sender_task
+        .send_missing_blocks(chain_id, target, None, 100)
+        .await?;
+    assert_eq!(
+        reached, target,
+        "a validator without the batch push must still be caught up",
+    );
+    Ok(())
+}
+
 /// Every certificate of a run gets its blobs, not just the first one.
 ///
 /// A destination reports the missing blobs of one certificate at a time, so a run stopping at its

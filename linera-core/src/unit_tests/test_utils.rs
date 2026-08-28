@@ -96,6 +96,8 @@ where
     public_key: ValidatorPublicKey,
     client: Arc<Mutex<LocalValidator<S>>>,
     fault_type: FaultType,
+    /// Cleared to stand in for a validator whose binary predates the batch push.
+    batch_push: bool,
 }
 
 impl<S> ValidatorNode for LocalValidatorClient<S>
@@ -109,7 +111,7 @@ where
     }
 
     fn supports_batch_push(&self) -> bool {
-        true
+        self.batch_push
     }
 
     async fn handle_block_proposal(
@@ -170,6 +172,9 @@ where
         certificates: Vec<CacheArc<GenericCertificate<ConfirmedBlock>>>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
+        if !self.batch_push {
+            return Err(NodeError::BatchPushUnsupported);
+        }
         let mut info = None;
         for certificate in certificates {
             info = Some(
@@ -352,7 +357,14 @@ where
             public_key,
             client: Arc::new(Mutex::new(client)),
             fault_type: FaultType::Honest,
+            batch_push: true,
         }
+    }
+
+    /// Makes this validator answer as one whose binary has no batch push.
+    pub fn without_batch_push(mut self) -> Self {
+        self.batch_push = false;
+        self
     }
 
     /// Returns the validator's public key.
