@@ -191,6 +191,32 @@ pub trait DerivedStateAgreesWithCertifiedPrefix:
 {
 }
 
+/// **Caveat (An inbox entry is never reclaimed).** Every structure cross-chain messaging uses is
+/// bounded except one: a recipient keeps an inbox entry for each chain that has *ever* sent it a
+/// message, permanently.
+///
+/// What is reclaimed: an outbox queue drains as bundles are delivered and confirmed, and the outbox
+/// itself is then removed — `outboxes.remove_entry(target)` once the queue is empty and not ahead of
+/// the tip, with `outbox_counters` and `nonempty_outboxes` cleared alongside. Queued and anticipated
+/// bundles leave `added_bundles` on consumption and `removed_bundles` on arrival. The sender's
+/// `unfinalized_message_blocks` is trimmed as recipients acknowledge.
+///
+/// What is not: nothing anywhere removes an entry from `ChainStateView::inboxes`. Once an origin has
+/// delivered a single bundle, its `InboxStateView` — cursors and empty queues — persists for the
+/// life of the chain. The residue is small per origin and unbounded in count, so the cost falls on
+/// exactly the chains a network wants to encourage: a widely used application chain pays for every
+/// counterparty it has ever had.
+///
+/// **Checkpointing preserves this rather than clearing it, by design.**
+/// `PreparedCheckpoint::inbox_cursors` records *every* inbox with a non-default
+/// `next_cursor_to_remove`, so a node bootstrapping from a checkpoint recreates the full set of
+/// origins rather than starting clean. That is deliberate and load-bearing: by
+/// `linera_chain::proof::checkpoints::CheckpointPreservesConsumptionBoundary` each origin's
+/// `restored_cursor` is what turns a re-pushed already-consumed bundle into a no-op instead of a
+/// duplicate consumption. Reclaiming an inbox would forget that boundary, so the two goals are in
+/// direct tension and the current design resolves it in favour of correctness.
+pub trait InboxEntriesAreNeverReclaimed: DerivedStateAgreesWithCertifiedPrefix {}
+
 /// **Theorem (Storage converges at equal heights).** Take two correct validators that agree on the
 /// tip height of every chain. Once cross-chain delivery has quiesced at both — no bundle derivable
 /// from a committed block is still undelivered internally — their storage agrees on everything the
