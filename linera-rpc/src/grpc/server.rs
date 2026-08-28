@@ -22,7 +22,7 @@ use linera_core::{
 use linera_storage::Storage;
 use tokio::sync::{broadcast::error::RecvError, oneshot};
 use tokio_util::sync::CancellationToken;
-use tonic::{transport::Channel, Request, Response, Status};
+use tonic::{transport::Channel, Request, Response, Status, Streaming};
 use tower::{builder::ServiceBuilder, Layer, Service};
 use tracing::{debug, error, info, instrument, trace, warn};
 
@@ -36,7 +36,7 @@ use super::{
         HandlePendingBlobRequest, LiteCertificate, PendingBlobRequest, PendingBlobResult,
     },
     pool::GrpcConnectionPool,
-    GrpcError, GRPC_MAX_MESSAGE_SIZE,
+    push_stream, GrpcError, GRPC_MAX_MESSAGE_SIZE,
 };
 #[cfg(feature = "opentelemetry")]
 use crate::propagation::{get_traffic_type_from_request, OtelContextLayer};
@@ -626,7 +626,12 @@ where
         }
     }
 
-    fn handle_network_actions(&self, actions: NetworkActions) {
+    /// The worker this server exposes.
+    pub(crate) fn worker(&self) -> WorkerState<S> {
+        self.state.clone()
+    }
+
+    pub(crate) fn handle_network_actions(&self, actions: NetworkActions) {
         let mut cross_chain_sender = self.cross_chain_sender.clone();
         let notification_sender = self.notification_sender.clone();
 
@@ -882,6 +887,23 @@ where
                 ))
             }
         }
+    }
+
+    type PushConfirmedCertificatesStream = push_stream::ResponseStream;
+
+    /// Accepts a continuous stream of certificates for many chains, answering each.
+    ///
+    /// Nothing is awaited here: `serve` reads the stream on its own task, so this returns as soon
+    /// as the response headers can go out and the sender may start writing immediately.
+    #[instrument(target = "grpc_server", skip_all, fields(nickname = self.state.nickname()))]
+    async fn push_confirmed_certificates(
+        &self,
+        request: Request<Streaming<api::PushCertificateRequest>>,
+    ) -> Result<Response<Self::PushConfirmedCertificatesStream>, Status> {
+        Ok(Response::new(push_stream::serve(
+            self.clone(),
+            request.into_inner(),
+        )))
     }
 
     #[instrument(
@@ -1152,6 +1174,12 @@ impl GrpcProxyable for LiteCertificate {
 }
 
 impl GrpcProxyable for api::HandleConfirmedCertificateRequest {
+    fn chain_id(&self) -> Option<ChainId> {
+        self.chain_id.clone()?.try_into().ok()
+    }
+}
+
+impl GrpcProxyable for api::PushCertificateRequest {
     fn chain_id(&self) -> Option<ChainId> {
         self.chain_id.clone()?.try_into().ok()
     }

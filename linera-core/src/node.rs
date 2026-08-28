@@ -82,6 +82,16 @@ pub trait ValidatorNode {
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 
+    /// The push stream this node hands out, if it accepts one.
+    type PushStream: CertificatePushStream + MaybeSend + MaybeSync;
+
+    /// Opens a stream for pushing confirmed certificates to this validator.
+    ///
+    /// One stream carries every chain going to this destination. Returns
+    /// `PushStreamUnsupported` for a transport that has none and for a validator whose binary
+    /// predates it, so the caller falls back to one certificate per request.
+    async fn open_push_stream(&self) -> Result<Self::PushStream, NodeError>;
+
     /// Processes a validated certificate.
     async fn handle_validated_certificate(
         &self,
@@ -361,6 +371,57 @@ pub enum NodeError {
         chain_id: ChainId,
         bundles: Vec<(ChainId, BlockHeight)>,
     },
+
+    #[error("This validator does not accept a certificate push stream")]
+    PushStreamUnsupported,
+
+    #[error("The certificate push stream closed before answering")]
+    PushStreamClosed,
+
+    #[error("A certificate push carried no certificates")]
+    EmptyCertificateRun,
+
+    #[error("Pushed {length} certificates for chain {chain_id} at once, past the window")]
+    PushRunTooLong { chain_id: ChainId, length: usize },
+}
+
+/// A live stream for pushing confirmed certificates to one validator.
+///
+/// Certificates for one chain must be pushed in ascending height order; chains are independent
+/// and may be interleaved. The destination answers each certificate, so a push resolves once its
+/// run has landed rather than once it has been written.
+#[allow(async_fn_in_trait)]
+#[cfg_attr(not(web), trait_variant::make(Send))]
+pub trait CertificatePushStream {
+    /// Pushes a run of certificates for a single chain, and returns the chain info the
+    /// destination reports for the last of them.
+    ///
+    /// The run must be non-empty, all for one chain, and no longer than [`PUSH_WINDOW`] — the
+    /// destination refuses a sender that leaves more than that unanswered for one chain.
+    async fn push(
+        &self,
+        certificates: Vec<CacheArc<ConfirmedBlockCertificate>>,
+    ) -> Result<ChainInfoResponse, NodeError>;
+}
+
+/// The most certificates a sender may leave unanswered for one chain.
+///
+/// Chosen to cover a round trip at a fast chain's apply rate, so the destination's worker for that
+/// chain is never left idle waiting for the next certificate to cross the network. It must not
+/// exceed the destination's per-chain queue, which is what refuses a sender that overruns it.
+pub const PUSH_WINDOW: usize = 128;
+
+/// The push stream of a node that has none.
+#[derive(Clone, Copy, Debug)]
+pub struct NoPushStream;
+
+impl CertificatePushStream for NoPushStream {
+    async fn push(
+        &self,
+        _certificates: Vec<CacheArc<ConfirmedBlockCertificate>>,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        Err(NodeError::PushStreamUnsupported)
+    }
 }
 
 /// Parsed data from an `InvalidTimestamp` error.
@@ -441,7 +502,11 @@ impl NodeError {
             | NodeError::EmptyBlobsNotFound
             | NodeError::ResponseHandlingError { .. }
             | NodeError::MissingCertificatesByHeights { .. }
-            | NodeError::TooManyCertificatesReturned { .. } => false,
+            | NodeError::TooManyCertificatesReturned { .. }
+            | NodeError::PushStreamUnsupported
+            | NodeError::PushStreamClosed
+            | NodeError::EmptyCertificateRun
+            | NodeError::PushRunTooLong { .. } => false,
         }
     }
 }

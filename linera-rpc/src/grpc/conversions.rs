@@ -496,6 +496,43 @@ impl TryFrom<HandleConfirmedCertificateRequest> for api::HandleConfirmedCertific
     }
 }
 
+/// Reads a pushed certificate, rejecting one whose chain does not match the routing id.
+///
+/// The id is what the receiving proxy shards on, so a mismatch would land the certificate on a
+/// worker that does not own the chain.
+impl TryFrom<api::PushCertificateRequest> for ConfirmedBlockCertificate {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(request: api::PushCertificateRequest) -> Result<Self, Self::Error> {
+        let certificate: ConfirmedBlockCertificate = request
+            .certificate
+            .ok_or(GrpcProtoConversionError::MissingField)?
+            .try_into()?;
+        let chain_id: ChainId = request
+            .chain_id
+            .ok_or(GrpcProtoConversionError::MissingField)?
+            .try_into()?;
+        ensure!(
+            certificate.inner().chain_id() == chain_id,
+            GrpcProtoConversionError::InconsistentChainId
+        );
+        Ok(certificate)
+    }
+}
+
+/// Builds a pushed certificate without consuming it, so a sender that has to fall back to the
+/// single-certificate path still holds it.
+pub fn push_certificate_request(
+    certificate: &ConfirmedBlockCertificate,
+) -> Result<api::PushCertificateRequest, GrpcProtoConversionError> {
+    Ok(api::PushCertificateRequest {
+        chain_id: Some(certificate.inner().chain_id().into()),
+        certificate: Some(certificate.try_into()?),
+        // This binary understands the aggregated `MissingCrossChainUpdates` error.
+        supports_aggregated_missing: true,
+    })
+}
+
 impl TryFrom<HandleValidatedCertificateRequest> for api::HandleValidatedCertificateRequest {
     type Error = GrpcProtoConversionError;
 
@@ -587,21 +624,24 @@ impl TryFrom<TimeoutCertificate> for api::Certificate {
     }
 }
 
+impl TryFrom<&ConfirmedBlockCertificate> for api::Certificate {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(certificate: &ConfirmedBlockCertificate) -> Result<Self, Self::Error> {
+        Ok(Self {
+            value: bincode::serialize(certificate.value())?,
+            round: bincode::serialize(&certificate.round)?,
+            signatures: bincode::serialize(certificate.signatures())?,
+            kind: api::CertificateKind::Confirmed as i32,
+        })
+    }
+}
+
 impl TryFrom<ConfirmedBlockCertificate> for api::Certificate {
     type Error = GrpcProtoConversionError;
 
     fn try_from(certificate: ConfirmedBlockCertificate) -> Result<Self, Self::Error> {
-        let round = bincode::serialize(&certificate.round)?;
-        let signatures = bincode::serialize(certificate.signatures())?;
-
-        let value = bincode::serialize(certificate.value())?;
-
-        Ok(Self {
-            value,
-            round,
-            signatures,
-            kind: api::CertificateKind::Confirmed as i32,
-        })
+        (&certificate).try_into()
     }
 }
 
