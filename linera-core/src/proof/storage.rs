@@ -24,6 +24,9 @@
 //! it: the `ChainError::CorruptedChainState` sites in `linera_chain::chain` are assertions about
 //! derived data, made at the point of use because there is nothing to check it against earlier.
 //!
+//! The last statement turns the classification outward: two correct validators at equal heights
+//! agree on everything with a validity proof, and are entitled to differ on everything without one.
+//!
 //! Shared storage is partitioned by `RootKey` — `BlobId`, `BlockHash`, `Event`, `BlockByHeight`,
 //! `EventBlockHeight`, `ChainState`, `NetworkDescription`, `BlockExporterState` — and the
 //! classification runs across that partition rather than along it: `ChainState` alone holds fields
@@ -187,3 +190,80 @@ pub trait DerivedStateAgreesWithCertifiedPrefix:
     AdmissionChecksTheValidityProof + StorageAtomicity + MaxByzantineWeight
 {
 }
+
+/// **Theorem (Storage converges at equal heights).** Take two correct validators that agree on the
+/// tip height of every chain. Once cross-chain delivery has quiesced at both — no bundle derivable
+/// from a committed block is still undelivered internally — their storage agrees on everything the
+/// protocol determines:
+///
+/// | | agrees | why |
+/// |---|---|---|
+/// | execution state of every chain | yes, and *certifiably* so | it is a function of the committed prefix, and the last block's `state_hash` attests the value |
+/// | committed blocks, their certificates, their events | yes | same prefix, and each is certified data |
+/// | blobs a committed block requires | yes | named by the blocks, which agree |
+/// | derived indexes and counters | yes | functions of the same prefix ([`DerivedStateAgreesWithCertifiedPrefix`]) |
+/// | inbox consumption boundaries | yes | fixed by which bundles the committed blocks consumed |
+/// | inbox queues and outbox queues | yes, **only after quiescence** | they hold what is delivered but not yet consumed, which is a function of the prefix *plus* delivery progress |
+///
+/// This is the first statement here about two validators rather than one, and it is what would make
+/// a divergence *detectable*: at equal heights, two correct validators cannot differ on any row
+/// above, so a difference convicts one of them of being faulty — which is the missing half of
+/// [`AccountabilityScope`], where a mis-executed block leaves no forensic residue.
+///
+/// *Proof.* Fix a chain and a common tip height `h`.
+///
+/// *The prefixes coincide.* By [`CommitAgreement`] at most one block is certified per height, and by
+/// `UniqueChain` the committed sequence below `h` is unique. Both validators reached `h` only
+/// through valid certificates (`TipAdvancesOnlyOnValidCertificate`), so they hold the same blocks at
+/// every height below `h`. Note the hypothesis is only about *heights*: agreement on content follows
+/// rather than being assumed, and it is [`MaxByzantineWeight`] that makes it follow.
+///
+/// *Execution state follows the prefix.* By [`DerivedStateAgreesWithCertifiedPrefix`] each
+/// validator's execution state equals the result of executing its committed prefix, and by
+/// `DeterministicExecution` executing the same prefix yields the same result. The equality is
+/// moreover *witnessed*: the `state_hash` in the block at `h - 1` is covered by that block's hash and
+/// certified, so the agreed value is one a quorum attested rather than one each validator merely
+/// computed.
+///
+/// *Derived state follows too*, by the same lemma — the height indexes, outbox counters and
+/// `nonempty_*` sets are functions of the prefix.
+///
+/// *Message state needs the quiescence hypothesis.* What a chain has *consumed* is fixed by its
+/// committed blocks, so inbox consumption boundaries agree immediately. What is *queued* is not: a
+/// bundle is derived from a committed block of the sending chain and then delivered by that
+/// validator's own worker for that chain ([`InboxHoldsOnlySentBundles`]), so at any instant one
+/// validator may have delivered internally what the other has not. Since the sending chains are at
+/// equal heights, both derive the same bundles ([`EffectsSurviveRestart`], sender half); once
+/// delivery has quiesced both have delivered all of them, and by
+/// [`BundleConsumedAtMostOnce`] neither has consumed one twice. The queues therefore coincide. ∎
+///
+/// **What does not converge, and need not.** Three classes, all legitimate.
+///
+/// *Retained history.* A validator that bootstrapped from a checkpoint holds a pruned chain: it has
+/// the execution state without the blocks below the checkpoint, and events below a stream's floor
+/// are gone ([`EventFloorTracksCheckpoints`]). So two validators at the same heights may hold
+/// genuinely different *sets* of blocks and events, and the theorem above claims agreement only on
+/// what they both retain. This is the sharpest limit on any consistency check built from it: a
+/// missing block is not evidence of a fault.
+///
+/// *Work ahead of the tip.* `next_height_to_preprocess` may exceed the tip by different amounts,
+/// since preprocessing a block does not advance it. One validator may hold certificates and outbox
+/// updates for blocks the other has not seen.
+///
+/// *Local fields.* `pending_proposed_blobs`, `pending_validated_blobs`, `pre_checkpoint_block_trust`
+/// and `received_log` are per-validator by construction — the last records the order in which
+/// certificates arrived, which is not a function of anything committed.
+///
+/// **Quiescence is a hypothesis, not a guarantee.** Nothing here says delivery ever quiesces; that
+/// would need the outbox to be drained, which no statement provides. So this is a conditional
+/// convergence result, and the condition is exactly the one the messaging theme has yet to
+/// discharge.
+///
+/// [`CommitAgreement`]: linera_chain::manager::proof::safety::CommitAgreement
+/// [`MaxByzantineWeight`]: linera_chain::manager::proof::model::MaxByzantineWeight
+/// [`AccountabilityScope`]: linera_chain::justification::proof::AccountabilityScope
+/// [`EventFloorTracksCheckpoints`]: linera_chain::proof::checkpoints::EventFloorTracksCheckpoints
+/// [`InboxHoldsOnlySentBundles`]: super::availability::InboxHoldsOnlySentBundles
+/// [`EffectsSurviveRestart`]: super::availability::EffectsSurviveRestart
+/// [`BundleConsumedAtMostOnce`]: super::availability::BundleConsumedAtMostOnce
+pub trait StorageConvergesAtEqualHeights: DerivedStateAgreesWithCertifiedPrefix {}
