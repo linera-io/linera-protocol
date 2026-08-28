@@ -18,7 +18,7 @@ use std::{
 };
 
 use async_lock::{Semaphore, SemaphoreGuard};
-use futures::{future::join_all, StreamExt as _};
+use futures::{stream, StreamExt as _, TryStreamExt as _};
 use linera_base::{ensure, util::future::FutureSyncExt as _};
 use scylla::{
     client::{
@@ -61,6 +61,14 @@ use crate::{
 /// Fundamental constant in ScyllaDB: The maximum size of a multi keys query
 /// The limit is in reality 100. But we need one entry for the root key.
 const MAX_MULTI_KEYS: usize = 100 - 1;
+
+/// How many chunk queries a single multi-key read may have in flight at once.
+///
+/// A multi-key read is split into `MAX_MULTI_KEYS`-sized chunks, so one logical read of a large
+/// range expands into many queries against the *same* partition. Issuing them all at once
+/// exhausts ScyllaDB's reader-concurrency semaphore and inflates read latency for every other
+/// caller without buying throughput, so the fan-out is capped instead.
+const MAX_CONCURRENT_CHUNK_QUERIES: usize = 10;
 
 /// The maximal size of an operation on ScyllaDB seems to be 16 MiB
 /// https://www.scylladb.com/2019/03/27/best-practices-for-scylla-applications/
@@ -877,11 +885,12 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
         let _guard = self.acquire().await;
         let handles = keys
             .chunks(MAX_MULTI_KEYS)
-            .map(|keys| store.contains_keys_internal(&self.root_key, keys.to_vec()));
-        let results: Vec<_> = join_all(handles)
-            .await
-            .into_iter()
-            .collect::<Result<_, _>>()?;
+            .map(|keys| store.contains_keys_internal(&self.root_key, keys.to_vec()))
+            .collect::<Vec<_>>();
+        let results: Vec<_> = stream::iter(handles)
+            .buffered(MAX_CONCURRENT_CHUNK_QUERIES)
+            .try_collect()
+            .await?;
         Ok(results.into_iter().flatten().collect())
     }
 
@@ -896,11 +905,12 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
         let _guard = self.acquire().await;
         let handles = keys
             .chunks(MAX_MULTI_KEYS)
-            .map(|keys| store.read_multi_values_internal(&self.root_key, keys.to_vec()));
-        let results: Vec<_> = join_all(handles)
-            .await
-            .into_iter()
-            .collect::<Result<_, _>>()?;
+            .map(|keys| store.read_multi_values_internal(&self.root_key, keys.to_vec()))
+            .collect::<Vec<_>>();
+        let results: Vec<_> = stream::iter(handles)
+            .buffered(MAX_CONCURRENT_CHUNK_QUERIES)
+            .try_collect()
+            .await?;
         Ok(results.into_iter().flatten().collect())
     }
 
