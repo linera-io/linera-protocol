@@ -20,7 +20,12 @@ use linera_base::identifiers::ChainId;
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{node::NodeError, ProcessConfirmedBlockMode};
 use linera_storage::Storage;
-use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
+use std::time::Duration;
+
+use tokio::{
+    sync::{mpsc, OwnedSemaphorePermit, Semaphore},
+    time::timeout,
+};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Status, Streaming};
 use tracing::{debug, warn};
@@ -36,6 +41,15 @@ pub const CHAIN_QUEUE: usize = 128;
 /// is what bounds memory: a count per chain multiplied by an unbounded number of chains is not a
 /// bound at all.
 pub const STREAM_QUEUE: usize = 1024;
+
+/// How long a chain's task waits for another certificate before retiring.
+///
+/// Retiring is what makes [`CHAINS_PER_STREAM`] a bound on *concurrent* chains: while a task
+/// lives, the map holds its sender, so nothing can prune it. A stream legitimately carries
+/// thousands of chains over its life — every chain that ever falls behind this destination — and
+/// only a handful at a time, so without this the cap would count chains ever seen and refuse the
+/// stream partway through exactly the mass catch-up it exists to serve.
+const CHAIN_IDLE: Duration = Duration::from_secs(30);
 
 /// Chains one stream may have tasks for at once.
 ///
@@ -140,9 +154,22 @@ where
                         .await;
                     break;
                 }
-                // The chain's task is gone; start a new one on the next certificate.
-                Err(mpsc::error::TrySendError::Closed(_)) => {
-                    chains.remove(&chain_id);
+                // The chain's task retired between the lookup and the send. Dropping the
+                // certificate here would leave its sender waiting for an answer that never
+                // comes, so a fresh task takes it.
+                Err(mpsc::error::TrySendError::Closed(queued)) => {
+                    let (sender, receiver) = mpsc::channel(CHAIN_QUEUE);
+                    tokio::spawn(apply_chain(
+                        server.clone(),
+                        chain_id,
+                        receiver,
+                        responses.clone(),
+                    ));
+                    if sender.try_send(queued).is_err() {
+                        warn!(%chain_id, "Could not hand a certificate to a fresh chain task");
+                        break;
+                    }
+                    chains.insert(chain_id, sender);
                 }
             }
         }
@@ -168,7 +195,9 @@ async fn apply_chain<S>(
 ) where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    while let Some(queued) = queue.recv().await {
+    // Retiring on idle is what lets the stream forget a chain it has finished with; see
+    // `CHAIN_IDLE`. The sender re-creates the task on its next certificate.
+    while let Ok(Some(queued)) = timeout(CHAIN_IDLE, queue.recv()).await {
         let height = queued.certificate.block().header.height;
         let result = server
             .worker()
@@ -180,8 +209,13 @@ async fn apply_chain<S>(
                 info.try_into()
             }
             // An answer, not the end of the stream: certificates for every other chain on this
-            // stream must keep flowing when one chain's fail.
-            Err(error) => NodeError::from(error).try_into(),
+            // stream must keep flowing when one chain's fail. Logged here as well as answered,
+            // because the sender's copy names the peer while this one names the chain and the
+            // worker that actually failed.
+            Err(error) => {
+                warn!(%chain_id, %error, "Failed to apply a pushed certificate");
+                NodeError::from(error).try_into()
+            }
         };
         let response = match result {
             Ok(result) => api::PushCertificateResponse {
@@ -209,22 +243,27 @@ async fn apply_chain<S>(
 mod tests {
     use super::*;
 
-    /// The dispatch a full chain queue takes must not be one that waits.
+    /// A chain's task must retire when idle, or the cap counts chains ever seen.
     ///
-    /// A slow chain must not hold up a fast one, which is the entire reason many chains share a
-    /// stream. Asserting on a bare `mpsc` would prove nothing about `serve`, so this reads the
-    /// dispatch `serve` actually performs: a `send(...).await` here would park the reader and
-    /// stop every other chain on the stream, and that regression is a one-word edit away.
-    #[test]
-    fn the_reader_dispatches_without_waiting() {
-        let source = include_str!("push_stream.rs");
-        let dispatch = source
-            .split_once("match queue.try_send(queued)")
-            .map(|(before, _)| before);
+    /// The map holds a chain's only sender while its task lives, so `is_closed()` cannot become
+    /// true on its own. Without retirement the live set only grows and the stream is refused
+    /// partway through a mass catch-up — the workload it exists to serve.
+    #[test_log::test(tokio::test(start_paused = true))]
+    async fn an_idle_chain_task_retires_so_its_entry_can_be_pruned() {
+        let (sender, mut receiver) = mpsc::channel::<u8>(CHAIN_QUEUE);
+        let task = tokio::spawn(async move {
+            while let Ok(Some(_)) = timeout(CHAIN_IDLE, receiver.recv()).await {}
+        });
+
         assert!(
-            dispatch.is_some(),
-            "the reader must dispatch with `try_send`; a blocking `send` would let one chain's \
-             full queue stall every other chain sharing the stream",
+            !sender.is_closed(),
+            "a live task must keep its entry, or a busy chain would be pruned mid-run",
+        );
+        tokio::time::sleep(CHAIN_IDLE * 2).await;
+        task.await.expect("the task retires rather than panicking");
+        assert!(
+            sender.is_closed(),
+            "an idle task must retire so `retain` can prune its entry and free a slot",
         );
     }
 
