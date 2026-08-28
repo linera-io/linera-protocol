@@ -45,6 +45,12 @@ impl ValidatorNode for DummyValidatorNode {
         "dummy".to_string()
     }
 
+    type PushStream = NoPushStream;
+
+    async fn open_push_stream(&self) -> Result<Self::PushStream, NodeError> {
+        Err(NodeError::PushStreamUnsupported)
+    }
+
     async fn handle_block_proposal(
         &self,
         _: BlockProposal,

@@ -38,7 +38,7 @@ use tracing::{debug, instrument, Level};
 use super::{
     api::{self, validator_relay_client::ValidatorRelayClient},
     pool::GrpcConnectionPool,
-    transport, GrpcError, GRPC_MAX_MESSAGE_SIZE,
+    push_client, transport, GrpcError, GRPC_MAX_MESSAGE_SIZE,
 };
 use crate::{
     config::ValidatorPublicNetworkConfig, node_provider::NodeOptions,
@@ -97,6 +97,47 @@ impl ValidatorNode for RelayClient {
 
     fn address(&self) -> String {
         self.address.clone()
+    }
+
+    type PushStream = push_client::PushStream;
+
+    /// Opens a push stream through this validator's own proxy.
+    ///
+    /// The destination is named in the first message and only there, so the proxy checks it
+    /// against the committee once per stream rather than once per certificate.
+    async fn open_push_stream(&self) -> Result<Self::PushStream, NodeError> {
+        let (certificates, queue) = push_client::write_half();
+        let (relayed, relayed_queue) = tokio::sync::mpsc::channel(1);
+        relayed
+            .send(api::RelayPushRequest {
+                inner: Some(api::relay_push_request::Inner::Destination(
+                    self.destination.clone(),
+                )),
+            })
+            .await
+            .map_err(|_| NodeError::PushStreamClosed)?;
+        // Wraps each certificate for the relay without the caller knowing there is one.
+        tokio::spawn(async move {
+            let mut queue = queue;
+            while let Some(certificate) = queue.recv().await {
+                let wrapped = api::RelayPushRequest {
+                    inner: Some(api::relay_push_request::Inner::Certificate(certificate)),
+                };
+                if relayed.send(wrapped).await.is_err() {
+                    return;
+                }
+            }
+        });
+        let responses = self
+            .client
+            .clone()
+            .relay_confirmed_certificates(tokio_stream::wrappers::ReceiverStream::new(
+                relayed_queue,
+            ))
+            .await
+            .map_err(push_client::open_error)?
+            .into_inner();
+        Ok(push_client::PushStream::new(certificates, responses))
     }
 
     #[instrument(target = "relay_client", skip_all, err(level = Level::DEBUG), fields(destination = self.address))]

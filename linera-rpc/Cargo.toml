@@ -70,6 +70,7 @@ rand.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["sync"] }
+tokio-stream.workspace = true
 tokio-util = { workspace = true, optional = true, features = ["codec"] }
 tonic-health = { workspace = true, optional = true }
 tonic-reflection = { workspace = true, optional = true }
@@ -78,6 +79,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml"] }
+linera-cache.workspace = true
 linera-rpc = { path = ".", default-features = false, features = [
     "server",
     "test",
@@ -86,7 +88,14 @@ opentelemetry_sdk.workspace = true
 proptest.workspace = true
 serde-reflection.workspace = true
 test-strategy.workspace = true
-tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
+test-log.workspace = true
+tokio = { workspace = true, features = [
+    "macros",
+    "net",
+    "rt",
+    "rt-multi-thread",
+    "test-util",
+] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 http.workspace = true

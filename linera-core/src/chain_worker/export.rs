@@ -54,7 +54,7 @@ use linera_base::{
     identifiers::{BlobId, ChainId, StreamId},
     time::{timer::timeout, Duration},
 };
-use linera_chain::types::ConfirmedBlockCertificate;
+use linera_chain::types::{CertificateValue as _, ConfirmedBlockCertificate};
 use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
 use linera_storage::{Arc as CacheArc, Clock as _, Storage};
 use tokio::sync::mpsc;
@@ -62,8 +62,11 @@ use tracing::{debug, instrument, warn};
 
 use crate::{
     client::chain_client,
-    data_types::ChainInfoQuery,
-    node::{CrossChainMessageDelivery, NodeError, ValidatorNode, ValidatorNodeProvider},
+    data_types::{ChainInfoQuery, ChainInfoResponse},
+    node::{
+        CertificatePushStream as _, CrossChainMessageDelivery, NodeError, ValidatorNode,
+        ValidatorNodeProvider, PUSH_WINDOW,
+    },
     remote_node::RemoteNode,
 };
 
@@ -157,6 +160,15 @@ pub(crate) mod metrics {
                 "Time (ms) for one certificate round trip to one destination validator",
                 &["validator"],
                 exponential_bucket_latencies(60_000.0),
+            );
+
+        /// Certificates a destination accepted, as opposed to pushes: a streamed run answers once
+        /// for many, so this is the one that reads as blocks/s.
+        pub static CERTIFICATES_PUSHED: IntCounterVec =
+            register_int_counter_vec(
+                "block_export_certificates_pushed",
+                "Certificates accepted by a destination validator",
+                &["validator"],
             );
 
         /// How many concurrent sends each destination is currently allowed.
@@ -608,6 +620,7 @@ where
         dest_indices: BTreeMap::new(),
         next_generation: 0,
         total_window: max_in_flight_total,
+        streams: BTreeMap::new(),
         announced_epoch: None,
         scan_attempted_for: None,
         destinations_changed: false,
@@ -973,6 +986,8 @@ where
     /// own window bounds what one peer can consume; this bounds what the queue as a whole asks
     /// of storage.
     total_window: usize,
+    /// One push stream per destination, kept across jobs so the setup round trip is paid once.
+    streams: BTreeMap<DestIndex, SharedStream<P::Node>>,
     /// The newest epoch any exported block has announced; the tick loads its committee when it
     /// is ahead of `latest_epoch`.
     announced_epoch: Option<Epoch>,
@@ -1191,6 +1206,7 @@ where
                     chain_id,
                     index,
                     dest,
+                    self.streams.entry(index).or_default().clone(),
                     chain_dest,
                     record_tip,
                     Some((block.certificate.clone(), block.blobs.clone())),
@@ -1204,6 +1220,7 @@ where
                         &self.config,
                         index,
                         dest,
+                        &mut self.streams,
                         jobs,
                         now,
                         budget,
@@ -1291,6 +1308,9 @@ where
                     Ok(mut nodes) => {
                         if let Some((_, node)) = nodes.next() {
                             dest.node = node;
+                            // The stream belonged to the connection we just replaced; keeping it
+                            // would push into the node we gave up on.
+                            self.streams.remove(&index);
                         }
                     }
                     Err(error) => {
@@ -1403,6 +1423,7 @@ where
             &self.config,
             index,
             dest,
+            &mut self.streams,
             jobs,
             now,
             budget,
@@ -1577,6 +1598,7 @@ where
                 &self.config,
                 index,
                 dest,
+                &mut self.streams,
                 jobs,
                 now,
                 budget,
@@ -1677,6 +1699,10 @@ where
         });
         if rebuilt_any {
             self.destinations_changed = true;
+            // Streams outlive individual jobs, so one whose destination is gone has to be
+            // dropped here or it would be handed to whatever takes that index next.
+            self.streams
+                .retain(|index, _| self.destinations.contains_key(index));
         }
         // Drop the metric series of every address that just went away, so a departed validator
         // does not leave a window gauge frozen at its last value and a lag histogram that never
@@ -1692,6 +1718,9 @@ where
                 .remove_label_values(&[address])
                 .ok();
             metrics::SENDS_SUCCEEDED
+                .remove_label_values(&[address])
+                .ok();
+            metrics::CERTIFICATES_PUSHED
                 .remove_label_values(&[address])
                 .ok();
             metrics::DESTINATION_LAG
@@ -1875,6 +1904,7 @@ where
         chain_id: ChainId,
         index: DestIndex,
         dest: &mut DestState<P::Node>,
+        stream: SharedStream<P::Node>,
         chain_dest: &mut ChainDest,
         target: BlockHeight,
         live: Option<(CacheArc<ConfirmedBlockCertificate>, Vec<CacheArc<Blob>>)>,
@@ -1889,6 +1919,7 @@ where
             },
             storage: storage.clone(),
             certificate_upload_batch_size: config.certificate_upload_batch_size,
+            stream,
             #[cfg(with_metrics)]
             address: dest.address.clone(),
         };
@@ -1947,6 +1978,7 @@ where
         config: &BlockExportConfig,
         index: DestIndex,
         dest: &mut DestState<P::Node>,
+        streams: &mut BTreeMap<DestIndex, SharedStream<P::Node>>,
         jobs: &mut FuturesUnordered<JobFuture>,
         now: Timestamp,
         budget: usize,
@@ -2008,7 +2040,16 @@ where
                 continue;
             };
             Self::spawn_job(
-                jobs, storage, config, chain_id, index, dest, chain_dest, tip, None,
+                jobs,
+                storage,
+                config,
+                chain_id,
+                index,
+                dest,
+                streams.entry(index).or_default().clone(),
+                chain_dest,
+                tip,
+                None,
             );
         }
         spawned
@@ -2062,6 +2103,55 @@ fn backoff_delay(attempt: u32, config: &BlockExportConfig) -> TimeDelta {
     TimeDelta::from_micros(delay.as_micros() as u64)
 }
 
+/// The push stream shared by every job going to one destination.
+///
+/// Opened once and reused: a stream per job would pay the setup round trip that streaming exists
+/// to avoid, and would give each job its own window instead of one per peer.
+pub(crate) struct SharedStream<N: ValidatorNode>(
+    Arc<tokio::sync::Mutex<Option<Arc<N::PushStream>>>>,
+);
+
+impl<N: ValidatorNode> Clone for SharedStream<N> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<N: ValidatorNode> Default for SharedStream<N> {
+    fn default() -> Self {
+        Self(Arc::new(tokio::sync::Mutex::new(None)))
+    }
+}
+
+impl<N: ValidatorNode> SharedStream<N> {
+    /// The destination's stream, opening one if this is the first job to need it.
+    async fn get(&self, node: &N) -> Result<Arc<N::PushStream>, NodeError> {
+        let mut guard = self.0.lock().await;
+        match guard.as_ref() {
+            Some(stream) => Ok(stream.clone()),
+            None => {
+                let opened = Arc::new(node.open_push_stream().await?);
+                *guard = Some(opened.clone());
+                Ok(opened)
+            }
+        }
+    }
+
+    /// Forgets `stream` if it is still the current one, so the next job opens a fresh one.
+    ///
+    /// The identity check matters: another job may already have replaced a dead stream, and
+    /// clearing unconditionally would throw away the replacement it just opened.
+    async fn discard(&self, stream: &Arc<N::PushStream>) {
+        let mut guard = self.0.lock().await;
+        if guard
+            .as_ref()
+            .is_some_and(|current| Arc::ptr_eq(current, stream))
+        {
+            *guard = None;
+        }
+    }
+}
+
 /// Sends this validator's blocks to one other validator, reading everything it needs from
 /// storage.
 ///
@@ -2069,10 +2159,12 @@ fn backoff_delay(attempt: u32, config: &BlockExportConfig) -> TimeDelta {
 /// holds a local node, and anything on the export path that reaches a chain worker resets its
 /// TTL. Blobs and certificates for committed blocks are always durable before export sees them
 /// (`write_blobs_and_certificate` precedes execution), so storage is sufficient.
-pub(crate) struct BlockSender<S, N> {
+pub(crate) struct BlockSender<S, N: ValidatorNode> {
     pub(crate) remote_node: RemoteNode<N>,
     pub(crate) storage: S,
     pub(crate) certificate_upload_batch_size: u64,
+    /// The destination's push stream, shared with every other job going there.
+    pub(crate) stream: SharedStream<N>,
     /// Destination address, carried only to label per-certificate latency.
     #[cfg(with_metrics)]
     pub(crate) address: String,
@@ -2146,18 +2238,116 @@ where
             let certificates = self
                 .storage
                 .read_certificates_by_heights(chain_id, chunk)
-                .await?;
-            for certificate in certificates.into_iter().flatten() {
-                // The validator's own responses move the cursor, so skip anything it has since
-                // reported holding rather than re-sending it.
-                if certificate.block().header.height < next_height {
-                    continue;
+                .await?
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
+            let mut rest = certificates.as_slice();
+            loop {
+                // The destination's own answer is the cursor, so drop what it now reports
+                // holding rather than re-sending it. Storage answers in the order asked and
+                // `heights` ascends, so one partition point covers the whole chunk.
+                let held = rest
+                    .partition_point(|certificate| certificate.block().header.height < next_height);
+                rest = &rest[held..];
+                let take = PUSH_WINDOW.min(rest.len());
+                if take == 0 {
+                    break;
                 }
-                let info = self.send_confirmed_certificate(&certificate, &[]).await?;
-                next_height = info.next_block_height;
+                let (run, remaining) = rest.split_at(take);
+                let reached = self.push_run(run).await?.next_block_height;
+                // A destination that answers without advancing would spin here on the same run;
+                // ending the round hands it to the queue's backoff instead.
+                if reached <= next_height {
+                    next_height = reached;
+                    break;
+                }
+                next_height = reached;
+                rest = remaining;
             }
         }
         Ok(next_height)
+    }
+
+    /// Pushes a run of one chain's certificates, over the destination's stream when it has one.
+    ///
+    /// The whole run is written before anything is awaited, so it costs one round trip rather
+    /// than one per certificate. A destination without a stream — an older binary, or a transport
+    /// that has none — falls back to exactly what every push did before: one request each, still
+    /// preferring the compact lite form where the destination signed the block.
+    async fn push_run(
+        &mut self,
+        certificates: &[CacheArc<ConfirmedBlockCertificate>],
+    ) -> Result<Box<crate::data_types::ChainInfo>, chain_client::Error> {
+        let chain_id = certificates
+            .first()
+            .ok_or(NodeError::EmptyCertificateRun)?
+            .inner()
+            .chain_id();
+        #[cfg(with_metrics)]
+        let push_latency = metrics::CERTIFICATE_SEND_LATENCY.with_label_values(&[&self.address]);
+        #[cfg(with_metrics)]
+        let _push_latency = push_latency.measure_latency();
+        let mut result = self.stream_run(certificates).await;
+        // The same once-per-cause loop as `send_confirmed_certificate`, over the run: a run stops
+        // at the destination's first refusal, so its next `BlobsNotFound` names the *next*
+        // certificate's blobs. Recovering once would strand a blob-per-block chain after one of
+        // them. Terminates: `required` is finite and every pass uploads at least one new id.
+        let required = certificates
+            .iter()
+            .flat_map(|certificate| certificate.inner().required_blob_ids())
+            .collect::<BTreeSet<_>>();
+        let mut uploaded = BTreeSet::new();
+        loop {
+            match result {
+                // No stream to this destination, so the run goes one certificate at a time.
+                Err(NodeError::PushStreamUnsupported) => {
+                    let mut info = None;
+                    for certificate in certificates {
+                        info = Some(self.send_confirmed_certificate(certificate, &[]).await?);
+                    }
+                    return Ok(info.ok_or(NodeError::EmptyCertificateRun)?);
+                }
+                Err(NodeError::BlobsNotFound(blob_ids))
+                    if blob_ids.iter().any(|id| !uploaded.contains(id)) =>
+                {
+                    self.remote_node
+                        .check_blobs_not_found(&required, &blob_ids)?;
+                    let blobs = self.resolve_blobs(&blob_ids, &[]).await?;
+                    self.remote_node
+                        .node
+                        .upload_blobs(blobs.into_iter().map(CacheArc::into_std).collect())
+                        .await?;
+                    uploaded.extend(blob_ids);
+                }
+                result => {
+                    let response = result?;
+                    let info = self.remote_node.check_and_return_info(response, chain_id)?;
+                    #[cfg(with_metrics)]
+                    metrics::CERTIFICATES_PUSHED
+                        .with_label_values(&[&self.address])
+                        .inc_by(certificates.len() as u64);
+                    return Ok(info);
+                }
+            }
+            result = self.stream_run(certificates).await;
+        }
+    }
+
+    /// Writes a run to the destination's stream, opening one if this is the first.
+    ///
+    /// A stream that has died is dropped and reopened on the next run rather than retried here:
+    /// the queue's own backoff is what decides whether a failing destination is worth attempting.
+    async fn stream_run(
+        &mut self,
+        certificates: &[CacheArc<ConfirmedBlockCertificate>],
+    ) -> Result<ChainInfoResponse, NodeError> {
+        let stream = self.stream.get(&self.remote_node.node).await?;
+        let result = stream.push(certificates.to_vec()).await;
+        if matches!(result, Err(NodeError::PushStreamClosed)) {
+            self.stream.discard(&stream).await;
+        }
+        result
     }
 
     /// Sends one confirmed certificate, uploading blobs the validator reports missing.
@@ -2196,8 +2386,10 @@ where
         loop {
             match result {
                 Err(NodeError::BlobsNotFound(blob_ids)) if !sent_blobs => {
-                    self.remote_node
-                        .check_blobs_not_found(certificate, &blob_ids)?;
+                    self.remote_node.check_blobs_not_found(
+                        &certificate.inner().required_blob_ids(),
+                        &blob_ids,
+                    )?;
                     let blobs = self.resolve_blobs(&blob_ids, held).await?;
                     self.remote_node
                         .node
