@@ -272,10 +272,6 @@ pub struct BlockExportConfig {
     /// value. Each destination climbs towards it from 1 and halves away from it on failure, so
     /// this only has to be above what the fastest committee member can apply inside one request.
     pub max_certificates_per_push: u64,
-    /// The most certificate bytes one push may carry, below the 16 MiB a gRPC message allows and
-    /// the encode footprint `max_in_flight_total` concurrent sends multiply. The block-size policy
-    /// alone lets a run exceed both, and a run that cannot be encoded stalls rather than slows.
-    pub push_bytes: usize,
     /// How many blocks the export queue holds before dropping new ones for catch-up to repair.
     pub queue_size: usize,
     /// The most blob payload bytes queued blocks may pin before new ones are dropped for
@@ -320,10 +316,6 @@ impl BlockExportConfig {
         if self.max_certificates_per_push == 0 {
             // No certificate would ever be sent, and catch-up would spin without progressing.
             return Err("block export certificates per push must be greater than zero".into());
-        }
-        if self.push_bytes == 0 {
-            // Every run would degenerate to one certificate, silently undoing batching.
-            return Err("block export push byte budget must be greater than zero".into());
         }
         if self.queue_size == 0 {
             // Every block would be dropped and export would run on catch-up alone.
@@ -382,7 +374,6 @@ impl Default for BlockExportConfig {
         BlockExportConfig {
             certificate_upload_batch_size: 100,
             max_certificates_per_push: 100,
-            push_bytes: 1024 * 1024,
             queue_size: 1024,
             queue_bytes: 256 * 1024 * 1024,
             max_in_flight_per_destination: 8,
@@ -1959,7 +1950,6 @@ where
             storage: storage.clone(),
             certificate_upload_batch_size: config.certificate_upload_batch_size,
             certificates_per_push: dest.run_length,
-            push_bytes: config.push_bytes,
             #[cfg(with_metrics)]
             address: dest.address.clone(),
         };
@@ -2145,7 +2135,6 @@ pub(crate) struct BlockSender<S, N> {
     pub(crate) storage: S,
     pub(crate) certificate_upload_batch_size: u64,
     pub(crate) certificates_per_push: u64,
-    pub(crate) push_bytes: usize,
     /// Destination address, carried only to label per-push latency and throughput.
     #[cfg(with_metrics)]
     pub(crate) address: String,
@@ -2225,19 +2214,31 @@ where
                 .collect::<Vec<_>>();
             let mut rest = certificates.as_slice();
             loop {
-                // The validator's own responses move the cursor, so skip anything it has since
-                // reported holding rather than re-sending it. Storage answers in the order
-                // asked and `heights` ascends, so one partition point covers the whole chunk.
+                // The destination's own answer is the cursor, so drop what it now reports holding
+                // rather than re-sending it. Storage answers in the order asked and `heights`
+                // ascends, so one partition point covers the whole chunk.
+                //
+                // This is also what makes a short push safe: the transport may carry fewer
+                // certificates than offered to keep the message under its size limit, and the
+                // rest are simply still here on the next pass.
                 let held = rest
                     .partition_point(|certificate| certificate.block().header.height < next_height);
                 rest = &rest[held..];
-                let take = self.push_len(rest);
+                let take = (self.certificates_per_push as usize).min(rest.len());
                 if take == 0 {
                     break;
                 }
-                let (push, remaining) = rest.split_at(take);
-                next_height = self.push_certificates(push).await?.next_block_height;
-                rest = remaining;
+                let reached = self
+                    .push_certificates(&rest[..take])
+                    .await?
+                    .next_block_height;
+                // A destination that answers without advancing would otherwise spin here on the
+                // same slice forever; ending the round hands it to the queue's backoff instead.
+                if reached <= next_height {
+                    next_height = reached;
+                    break;
+                }
+                next_height = reached;
             }
         }
         Ok(next_height)
@@ -2304,27 +2305,6 @@ where
                 .handle_confirmed_certificate(certificate.clone(), delivery)
                 .await;
         }
-    }
-
-    /// How many of `certificates` one push carries: at most `certificates_per_push` of them, and
-    /// at most `push_bytes` — but never fewer than one, so an oversized certificate still moves
-    /// rather than wedging the chain.
-    fn push_len(&self, certificates: &[CacheArc<ConfirmedBlockCertificate>]) -> usize {
-        let mut bytes = 0usize;
-        for (index, certificate) in certificates
-            .iter()
-            .take(self.certificates_per_push as usize)
-            .enumerate()
-        {
-            // A certificate whose size cannot be computed is treated as filling the budget, so it
-            // is pushed on its own and the destination's answer is what decides its fate.
-            let size = bcs::serialized_size(&**certificate).unwrap_or(self.push_bytes);
-            bytes = bytes.saturating_add(size);
-            if bytes > self.push_bytes {
-                return index.max(1);
-            }
-        }
-        certificates.len().min(self.certificates_per_push as usize)
     }
 
     /// Pushes a run of certificates for one chain, and returns the chain info the destination
@@ -2468,10 +2448,6 @@ mod tests {
             },
             BlockExportConfig {
                 max_certificates_per_push: 0,
-                ..BlockExportConfig::default()
-            },
-            BlockExportConfig {
-                push_bytes: 0,
                 ..BlockExportConfig::default()
             },
             BlockExportConfig {

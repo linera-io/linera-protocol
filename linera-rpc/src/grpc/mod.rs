@@ -51,6 +51,11 @@ pub const GRPC_MAX_MESSAGE_SIZE: usize = 16 * MEBIBYTE;
 /// We leave 30% of buffer for the rest of the message and potential underestimation.
 pub const GRPC_CHUNKED_MESSAGE_FILL_LIMIT: usize = GRPC_MAX_MESSAGE_SIZE * 7 / 10;
 
+/// The most certificate bytes one batch push carries. Far below `GRPC_MAX_MESSAGE_SIZE` on
+/// purpose: block export can have `max_in_flight_total` of these encoded at once, so the ceiling
+/// that matters is the sender's aggregate footprint rather than what a single message may hold.
+pub const BATCH_PUSH_FILL_LIMIT: usize = MEBIBYTE;
+
 /// Prometheus label for the gRPC method name.
 pub const METHOD_NAME_LABEL: &str = "method_name";
 

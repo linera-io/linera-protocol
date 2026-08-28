@@ -4779,7 +4779,6 @@ where
         // Not a divisor of the round's bound, so a round splits into a full push and a short
         // one and the cursor has to survive between them.
         certificates_per_push: 2,
-        push_bytes: 1024 * 1024,
         #[cfg(with_metrics)]
         address: "test".to_owned(),
     };
@@ -4864,7 +4863,6 @@ where
         // Large enough that a working batch push would close the gap in one request, so the
         // assertion below is about the fallback and not about the run bound.
         certificates_per_push: 100,
-        push_bytes: 1024 * 1024,
         #[cfg(with_metrics)]
         address: "test".to_owned(),
     };
@@ -4925,7 +4923,6 @@ where
         // The whole backlog in one push, so every blob after the first has to be recovered
         // inside a single run rather than by a later round starting over.
         certificates_per_push: 100,
-        push_bytes: 1024 * 1024,
         #[cfg(with_metrics)]
         address: "test".to_owned(),
     };
@@ -5069,7 +5066,6 @@ where
         storage,
         certificate_upload_batch_size: 100,
         certificates_per_push: 20,
-        push_bytes: 1024 * 1024,
         #[cfg(with_metrics)]
         address: "test".to_owned(),
     };
@@ -5183,9 +5179,6 @@ where
         storage,
         certificate_upload_batch_size: 100,
         certificates_per_push: 20,
-        // A budget no certificate can fit in, which is how a block larger than a whole push
-        // presents. Every certificate must still go, one per push, rather than the run wedging.
-        push_bytes: 1,
         #[cfg(with_metrics)]
         address: "test".to_owned(),
     };

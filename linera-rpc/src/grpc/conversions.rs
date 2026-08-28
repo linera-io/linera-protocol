@@ -27,10 +27,14 @@ use linera_core::{
     worker::Notification,
 };
 use linera_storage::Arc as CacheArc;
+use prost::Message as _;
 use thiserror::Error;
 use tonic::{Code, Status};
 
-use super::api::{self, PendingBlobRequest};
+use super::{
+    api::{self, PendingBlobRequest},
+    BATCH_PUSH_FILL_LIMIT,
+};
 use crate::{
     HandleConfirmedCertificateRequest, HandleConfirmedCertificatesRequest, HandleLiteCertRequest,
     HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
@@ -529,11 +533,16 @@ impl TryFrom<api::HandleConfirmedCertificatesRequest> for HandleConfirmedCertifi
     }
 }
 
-/// Builds a batch push from borrowed certificates.
+/// Builds a batch push from borrowed certificates, taking as many as fit in
+/// [`BATCH_PUSH_FILL_LIMIT`].
 ///
 /// Borrowed rather than owned so a sender that discovers the destination has no batch push still
-/// holds the certificates to send one at a time.
-pub(crate) fn batch_push_request(
+/// holds the certificates to send one at a time. Sending fewer than offered needs no signalling:
+/// the caller's cursor comes from the height the destination reports back, never from what it sent.
+///
+/// Each certificate is encoded once and measured with `encoded_len`, which walks the built message
+/// rather than serialising a second copy — the size of a run is not worth a second pass over it.
+pub fn batch_push_request(
     certificates: &[CacheArc<ConfirmedBlockCertificate>],
     wait_for_outgoing_messages: bool,
 ) -> Result<api::HandleConfirmedCertificatesRequest, GrpcProtoConversionError> {
@@ -542,13 +551,22 @@ pub(crate) fn batch_push_request(
         .ok_or(GrpcProtoConversionError::EmptyCertificateBatch)?
         .inner()
         .chain_id();
-    let certificates = certificates
-        .iter()
-        .map(|certificate| api::Certificate::try_from(&**certificate))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut encoded = Vec::with_capacity(certificates.len());
+    let mut remaining = BATCH_PUSH_FILL_LIMIT;
+    for certificate in certificates {
+        let certificate = api::Certificate::try_from(&**certificate)?;
+        let size = certificate.encoded_len();
+        // The first one goes however large it is: a certificate bigger than the whole budget is
+        // exactly what every push carried before batching, so refusing it would strand the chain.
+        if size > remaining && !encoded.is_empty() {
+            break;
+        }
+        remaining = remaining.saturating_sub(size);
+        encoded.push(certificate);
+    }
     Ok(api::HandleConfirmedCertificatesRequest {
         chain_id: Some(chain_id.into()),
-        certificates,
+        certificates: encoded,
         wait_for_outgoing_messages,
         // This binary understands the aggregated `MissingCrossChainUpdates` error.
         supports_aggregated_missing: true,
