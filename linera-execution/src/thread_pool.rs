@@ -39,6 +39,8 @@ pub const DECOMPRESS_CONTRACT: &str = "decompress_contract";
 /// Decompression of service bytecode.
 pub const DECOMPRESS_SERVICE: &str = "decompress_service";
 
+/// Every purpose, so that the labelled metrics can create all their children at registration.
+#[cfg(with_metrics)]
 const PURPOSES: [&str; 5] = [
     CONTRACT,
     SERVICE_QUERY,
