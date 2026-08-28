@@ -128,19 +128,31 @@ impl CertificatePushStream for PushStream {
 
 /// Wakes each waiter with the answer that names it, until the destination stops answering.
 ///
-/// A chain's answers arrive in height order, so every waiter at or below the height answered is
-/// satisfied by it — a caller that pushed a run is woken by the run's last certificate, and one
-/// whose certificates the destination had already applied is woken by the next answer past them
-/// rather than waiting for one that will never come.
+/// A chain's answers arrive in height order, and only a run's last certificate carries a waiter,
+/// so the two directions are deliberately asymmetric:
+///
+/// * a **success** satisfies every waiter at or below it — a caller whose certificates the
+///   destination had already applied is woken by the next answer past them rather than waiting
+///   for one that will never come;
+/// * a **failure** wakes every waiter at or above it, because a certificate that did not land
+///   makes everything above it unlandable too. Passing the first failure up is what keeps the
+///   error actionable: recovery dispatches on the *variant*, and a `BlobsNotFound` at the third
+///   certificate of a run would otherwise reach the caller as the `UnexpectedBlockHeight` its
+///   own absence caused at the last one, so the blobs would never be uploaded.
 async fn route_responses(
     mut responses: impl Stream<Item = Result<api::PushCertificateResponse, Status>> + Unpin,
     waiters: Arc<Mutex<HashMap<ChainId, Vec<(BlockHeight, Waiter)>>>>,
 ) {
+    let mut ended = None;
     while let Some(message) = responses.next().await {
         let response = match message {
             Ok(response) => response,
+            // The code matters: a destination that does not serve the stream can refuse it here
+            // rather than at open time, and flattening that to `PushStreamClosed` would hide the
+            // one signal the per-certificate fallback dispatches on.
             Err(status) => {
                 debug!(%status, "Certificate push stream ended");
+                ended = Some(open_error(status));
                 break;
             }
         };
@@ -148,6 +160,7 @@ async fn route_responses(
             continue;
         };
         let (chain_id, height, result) = answered;
+        let failed = result.is_err();
         let woken = {
             let mut table = waiters
                 .lock()
@@ -156,7 +169,9 @@ async fn route_responses(
                 continue;
             };
             let (woken, waiting): (Vec<_>, Vec<_>) =
-                chain.drain(..).partition(|(at, _)| *at <= height);
+                chain
+                    .drain(..)
+                    .partition(|(at, _)| if failed { *at >= height } else { *at <= height });
             *chain = waiting;
             if chain.is_empty() {
                 table.remove(&chain_id);
@@ -175,7 +190,7 @@ async fn route_responses(
     );
     for (_, chain) in table {
         for (_, waiter) in chain {
-            let _ = waiter.send(Err(NodeError::PushStreamClosed));
+            let _ = waiter.send(Err(ended.clone().unwrap_or(NodeError::PushStreamClosed)));
         }
     }
 }
@@ -237,8 +252,20 @@ mod tests {
         api::PushCertificateResponse {
             chain_id: Some(chain_id.into()),
             height: Some(BlockHeight(height).into()),
-            // An absent result reads as malformed and is skipped, which is what the "ignores what
-            // it cannot attribute" case below relies on; the wake-up cases set one.
+            result: Some(api::ChainInfoResult {
+                inner: Some(api::chain_info_result::Inner::Error(
+                    bincode::serialize(&NodeError::PushStreamClosed).expect("serializes"),
+                )),
+            }),
+        }
+    }
+
+    /// An answer carrying no result at all cannot be attributed, and waking a waiter with it
+    /// would resolve a push on a message the destination never really sent.
+    fn unattributable(chain_id: ChainId, height: u64) -> api::PushCertificateResponse {
+        api::PushCertificateResponse {
+            chain_id: Some(chain_id.into()),
+            height: Some(BlockHeight(height).into()),
             result: None,
         }
     }
@@ -291,6 +318,59 @@ mod tests {
         assert!(
             above.try_recv().is_err(),
             "a waiter above the answer is still outstanding",
+        );
+    }
+
+    /// A malformed answer must be ignored rather than used to wake anyone.
+    #[test_log::test(tokio::test)]
+    async fn an_unattributable_answer_wakes_nobody() {
+        let (certificates, _queue) = mpsc::channel(4);
+        let (mut responses, response_stream) = futures_mpsc::unbounded();
+        let stream = PushStream::new(certificates, response_stream.map(Ok));
+
+        let mut waiting = stream.expect(chain(1), BlockHeight(1));
+        responses
+            .start_send(unattributable(chain(1), 1))
+            .expect("the channel is open");
+        tokio::task::yield_now().await;
+        assert!(
+            waiting.try_recv().is_err(),
+            "an answer with no result must not resolve a push",
+        );
+    }
+
+    /// A failure below the run's last certificate must reach the caller as itself.
+    ///
+    /// Only the last certificate carries a waiter, so a failure at the third of ten would
+    /// otherwise be discarded and the caller woken by the `UnexpectedBlockHeight` that failure
+    /// caused at the tenth. Recovery dispatches on the variant, so the blobs a `BlobsNotFound`
+    /// asks for would never be uploaded and the chain would never land.
+    #[test_log::test(tokio::test)]
+    async fn a_failure_below_the_run_reaches_the_caller_intact() {
+        let (certificates, _queue) = mpsc::channel(4);
+        let (mut responses, response_stream) = futures_mpsc::unbounded();
+        let stream = PushStream::new(certificates, response_stream.map(Ok));
+
+        // The caller pushed heights 5..=7, so only 7 has a waiter.
+        let waiting = stream.expect(chain(1), BlockHeight(7));
+
+        let missing = vec![linera_base::identifiers::BlobId::default()];
+        responses
+            .start_send(api::PushCertificateResponse {
+                chain_id: Some(chain(1).into()),
+                height: Some(BlockHeight(6).into()),
+                result: Some(api::ChainInfoResult {
+                    inner: Some(api::chain_info_result::Inner::Error(
+                        bincode::serialize(&NodeError::BlobsNotFound(missing.clone()))
+                            .expect("serializes"),
+                    )),
+                }),
+            })
+            .expect("the channel is open");
+
+        assert!(
+            matches!(waiting.await, Ok(Err(NodeError::BlobsNotFound(ids))) if ids == missing),
+            "the caller must see the failure that actually happened, not its consequence",
         );
     }
 

@@ -37,6 +37,14 @@ pub const CHAIN_QUEUE: usize = 128;
 /// bound at all.
 pub const STREAM_QUEUE: usize = 1024;
 
+/// Chains one stream may have tasks for at once.
+///
+/// The id is attacker-chosen and the service is public, so without a cap a peer could name a
+/// million chains and make us hold a task and a queue for each. A stream legitimately carries far
+/// fewer at a time — the sender's own in-flight window bounds it — so reaching this is abuse or a
+/// bug rather than load.
+const CHAINS_PER_STREAM: usize = 256;
+
 /// Answers flowing back to the sender. Bounded so a sender that stops reading cannot make us
 /// accumulate answers without limit; the tasks producing them block instead.
 const RESPONSE_QUEUE: usize = 256;
@@ -85,6 +93,18 @@ where
                 }
             };
             let chain_id = certificate.inner().chain_id();
+            // Chains whose task has finished are forgotten here rather than accumulating for the
+            // life of the stream.
+            chains.retain(|_, queue| !queue.is_closed());
+            if !chains.contains_key(&chain_id) && chains.len() >= CHAINS_PER_STREAM {
+                warn!(%chain_id, "Push stream naming more than {CHAINS_PER_STREAM} chains at once");
+                let _ = responses
+                    .send(Err(Status::resource_exhausted(format!(
+                        "a push stream may carry at most {CHAINS_PER_STREAM} chains at once"
+                    ))))
+                    .await;
+                break;
+            }
             let queue = chains.entry(chain_id).or_insert_with(|| {
                 let (sender, receiver) = mpsc::channel(CHAIN_QUEUE);
                 tokio::spawn(apply_chain(
@@ -189,19 +209,22 @@ async fn apply_chain<S>(
 mod tests {
     use super::*;
 
-    /// A slow chain must not hold up a fast one, which is the entire reason many chains share a
-    /// stream instead of getting one each. The reader therefore never waits on a chain's queue.
+    /// The dispatch a full chain queue takes must not be one that waits.
     ///
-    /// `try_send` is what enforces that. If it were `send`, a full queue would park the reader and
-    /// every other chain on the stream would stop with it — a stall no metric would attribute to
-    /// the chain that caused it.
+    /// A slow chain must not hold up a fast one, which is the entire reason many chains share a
+    /// stream. Asserting on a bare `mpsc` would prove nothing about `serve`, so this reads the
+    /// dispatch `serve` actually performs: a `send(...).await` here would park the reader and
+    /// stop every other chain on the stream, and that regression is a one-word edit away.
     #[test]
-    fn a_full_chain_queue_never_parks_the_reader() {
-        let (sender, _receiver) = mpsc::channel::<u8>(1);
-        sender.try_send(1).expect("the first fits");
+    fn the_reader_dispatches_without_waiting() {
+        let source = include_str!("push_stream.rs");
+        let dispatch = source
+            .split_once("match queue.try_send(queued)")
+            .map(|(before, _)| before);
         assert!(
-            matches!(sender.try_send(2), Err(mpsc::error::TrySendError::Full(_))),
-            "a full queue must report rather than wait, or the reader blocks on one chain",
+            dispatch.is_some(),
+            "the reader must dispatch with `try_send`; a blocking `send` would let one chain's \
+             full queue stall every other chain sharing the stream",
         );
     }
 
