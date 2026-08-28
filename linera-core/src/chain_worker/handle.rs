@@ -51,7 +51,9 @@ use linera_base::{
     identifiers::ChainId,
     time::Duration,
 };
-use linera_execution::{QueryContext, ServiceRuntimeEndpoint, ServiceSyncRuntime};
+use linera_execution::{
+    thread_pool::SERVICE_ACTOR, QueryContext, ServiceRuntimeEndpoint, ServiceSyncRuntime,
+};
 use linera_storage::Storage;
 use tokio::sync::{OwnedRwLockReadGuard, RwLock};
 
@@ -108,7 +110,7 @@ impl ServiceRuntimeActor {
                 runtime_request_sender,
             },
             task: thread_pool
-                .run((), move |()| async move {
+                .run(SERVICE_ACTOR, (), move |()| async move {
                     // The dummy context is overwritten by `prepare_for_query`
                     // before the first actual query is executed.
                     ServiceSyncRuntime::new(
