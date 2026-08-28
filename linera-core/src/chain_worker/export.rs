@@ -52,7 +52,7 @@ use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{Blob, BlockHeight, Epoch, TimeDelta, Timestamp},
     identifiers::{BlobId, ChainId, StreamId},
-    time::{timer::timeout, Duration, Instant},
+    time::{timer::timeout, Duration},
 };
 use linera_chain::types::{CertificateValue as _, ConfirmedBlockCertificate};
 use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
@@ -2184,6 +2184,13 @@ impl<N: ValidatorNode> SharedStream<N> {
     ///
     /// The identity check matters: another job may already have replaced a dead stream, and
     /// clearing unconditionally would throw away the replacement it just opened.
+    /// Marks this destination as one that does not serve the stream, so later runs go straight
+    /// to the per-certificate path instead of paying a stream-open first.
+    fn latch_unsupported(&self) {
+        self.unsupported
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
     async fn discard(&self, stream: &Arc<N::PushStream>) {
         let mut guard = self.stream.lock().await;
         if guard
@@ -2329,7 +2336,8 @@ where
             .ok_or(NodeError::EmptyCertificateRun)?
             .inner()
             .chain_id();
-        let started = Instant::now();
+        #[cfg(with_metrics)]
+        let started = linera_base::time::Instant::now();
         let mut result = self.stream_run(certificates).await;
         // The same once-per-cause loop as `send_confirmed_certificate`, over the run: a run stops
         // at the destination's first refusal, so its next `BlobsNotFound` names the *next*
@@ -2417,8 +2425,18 @@ where
             Ok(result) => result,
             Err(_) => Err(NodeError::PushStreamClosed),
         };
-        if matches!(result, Err(NodeError::PushStreamClosed)) {
-            self.stream.discard(&stream).await;
+        // Any transport-level refusal means this stream is finished, not just a closed one: a
+        // peer that killed it mid-run answers with whatever status it chose, and leaving it
+        // installed would fail every later run against a stream nobody is reading.
+        match &result {
+            Err(NodeError::PushStreamUnsupported) => {
+                self.stream.latch_unsupported();
+                self.stream.discard(&stream).await;
+            }
+            Err(NodeError::PushStreamClosed | NodeError::GrpcError { .. }) => {
+                self.stream.discard(&stream).await;
+            }
+            _ => {}
         }
         result
     }
@@ -2470,7 +2488,14 @@ where
                         .await?;
                     sent_blobs = true;
                 }
-                result => return Ok(result?),
+                result => {
+                    let info = result?;
+                    #[cfg(with_metrics)]
+                    metrics::CERTIFICATES_PUSHED
+                        .with_label_values(&[&self.address])
+                        .inc();
+                    return Ok(info);
+                }
             }
             result = self
                 .remote_node
