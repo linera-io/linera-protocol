@@ -596,11 +596,11 @@ enum ServerCommand {
         #[arg(long, default_value_t = BlockExportConfig::default().certificate_upload_batch_size)]
         block_export_batch_size: u64,
 
-        /// How many certificates block export sends the destination in one request. Bounded by
-        /// what the destination can execute inside the proxy's 4 s request timeout, so raise it
-        /// only as far as the slowest validator in the committee can keep up with.
-        #[arg(long, default_value_t = BlockExportConfig::default().certificates_per_push)]
-        block_export_certificates_per_push: u64,
+        /// The most certificates block export puts in one request. A ceiling, not a tuned value:
+        /// each destination climbs towards it and halves away from it as its request timeouts
+        /// say, so it only has to sit above what the fastest validator can apply in one request.
+        #[arg(long, default_value_t = BlockExportConfig::default().max_certificates_per_push)]
+        block_export_max_certificates_per_push: u64,
 
         /// The most certificate bytes block export puts in one request. Caps a run below the
         /// 16 MiB gRPC message limit, which the block-size policy alone does not.
@@ -822,7 +822,7 @@ async fn run(options: ServerOptions) {
             export_blocks_to_committee,
             block_export_transport,
             block_export_batch_size,
-            block_export_certificates_per_push,
+            block_export_max_certificates_per_push,
             block_export_push_bytes,
             block_export_max_catch_up_blocks,
             block_export_queue_size,
@@ -860,7 +860,7 @@ async fn run(options: ServerOptions) {
                 block_export_config: export_blocks_to_committee.then(|| {
                     let config = BlockExportConfig {
                         certificate_upload_batch_size: block_export_batch_size,
-                        certificates_per_push: block_export_certificates_per_push,
+                        max_certificates_per_push: block_export_max_certificates_per_push,
                         push_bytes: block_export_push_bytes,
                         queue_size: block_export_queue_size,
                         queue_bytes: block_export_queue_bytes,

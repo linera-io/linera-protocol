@@ -168,6 +168,15 @@ pub(crate) mod metrics {
                 &["validator"],
             );
 
+        /// The AIMD run length each destination has settled on: what it can actually apply inside
+        /// one request, which is the number `max_certificates_per_push` should be set above.
+        pub static DESTINATION_RUN_LENGTH: IntGaugeVec =
+            register_int_gauge_vec(
+                "block_export_destination_run_length",
+                "Certificates per push per destination validator (AIMD on request failures)",
+                &["validator"],
+            );
+
         /// How many concurrent sends each destination is currently allowed.
         pub static DESTINATION_WINDOW: IntGaugeVec =
             register_int_gauge_vec(
@@ -259,10 +268,10 @@ pub struct BlockExportConfig {
     /// client's 500: a chunk lives inside one send job, and `max_catch_up_blocks` bounds the
     /// round anyway.
     pub certificate_upload_batch_size: u64,
-    /// How many certificates one push carries, which is what lifts catch-up off its floor of one
-    /// block per network round trip. Bounded by what the destination can execute inside the 4 s
-    /// every hop from this shard to its worker allows, not by the wire.
-    pub certificates_per_push: u64,
+    /// The most certificates one push may carry — the AIMD run length's ceiling, not a tuned
+    /// value. Each destination climbs towards it from 1 and halves away from it on failure, so
+    /// this only has to be above what the fastest committee member can apply inside one request.
+    pub max_certificates_per_push: u64,
     /// The most certificate bytes one push may carry, below the 16 MiB a gRPC message allows and
     /// the encode footprint `max_in_flight_total` concurrent sends multiply. The block-size policy
     /// alone lets a run exceed both, and a run that cannot be encoded stalls rather than slows.
@@ -308,7 +317,7 @@ impl BlockExportConfig {
             // `slice::chunks(0)` panics.
             return Err("block export batch size must be greater than zero".into());
         }
-        if self.certificates_per_push == 0 {
+        if self.max_certificates_per_push == 0 {
             // No certificate would ever be sent, and catch-up would spin without progressing.
             return Err("block export certificates per push must be greater than zero".into());
         }
@@ -372,7 +381,7 @@ impl Default for BlockExportConfig {
     fn default() -> Self {
         BlockExportConfig {
             certificate_upload_batch_size: 100,
-            certificates_per_push: 20,
+            max_certificates_per_push: 100,
             push_bytes: 1024 * 1024,
             queue_size: 1024,
             queue_bytes: 256 * 1024 * 1024,
@@ -854,6 +863,13 @@ struct DestState<N> {
     /// How many concurrent sends the AIMD control currently allows: +1 per success up to the
     /// configured ceiling, halved per transport failure down to 1.
     window: usize,
+    /// How many certificates one push carries, on the same AIMD discipline as `window`. What a
+    /// destination applies inside one request is a property of that destination, so the only
+    /// honest way to learn it is to try; the floor of 1 is what every push was before batching.
+    ///
+    /// Starts at 1 rather than at the ceiling, unlike `window`: overshooting here costs a whole
+    /// request timeout per attempt, and the climb back is a second or two of successful rounds.
+    run_length: u64,
     /// Backoff for *destination-scoped* failures: transport errors and timeouts.
     retry_at: Option<Timestamp>,
     failures: u32,
@@ -872,6 +888,21 @@ struct DestState<N> {
 }
 
 impl<N> DestState<N> {
+    /// Additive increase after a destination answered: one more concurrent send, one more
+    /// certificate per push, each capped at its configured ceiling.
+    fn widen(&mut self, config: &BlockExportConfig) {
+        self.window = (self.window + 1).min(config.max_in_flight_per_destination);
+        self.run_length = (self.run_length + 1).min(config.max_certificates_per_push);
+    }
+
+    /// Multiplicative decrease after a destination failed us. Both halve: a request that overran
+    /// the destination's timeout is indistinguishable here from one it refused, and a shorter run
+    /// is the only remedy for the former that the sender controls.
+    fn narrow(&mut self) {
+        self.window = (self.window / 2).max(1);
+        self.run_length = (self.run_length / 2).max(1);
+    }
+
     /// The chains to consider this round, resuming where the last one stopped and wrapping around.
     ///
     /// The rotation is the point: `lagging` is ordered, so walking it from the start every tick
@@ -1275,7 +1306,7 @@ where
             SendOutcome::Reached(_) => {
                 dest.failures = 0;
                 dest.retry_at = None;
-                dest.window = (dest.window + 1).min(self.config.max_in_flight_per_destination);
+                dest.widen(&self.config);
                 self.total_window = (self.total_window + 1).min(self.config.max_in_flight_total);
                 #[cfg(with_metrics)]
                 metrics::SENDS_SUCCEEDED
@@ -1305,7 +1336,7 @@ where
                     validator = %dest.address, %chain_id, %error,
                     "Failed to export to a validator; backing it off and re-resolving",
                 );
-                dest.window = (dest.window / 2).max(1);
+                dest.narrow();
                 back_off(&mut dest.failures, &mut dest.retry_at, now, &self.config);
                 // Re-resolve so a relayed transport draws the next proxy from the rotation; the
                 // backoff above still applies if the validator itself is the problem. Resolved
@@ -1330,6 +1361,10 @@ where
         metrics::DESTINATION_WINDOW
             .with_label_values(&[&dest.address])
             .set(dest.window as i64);
+        #[cfg(with_metrics)]
+        metrics::DESTINATION_RUN_LENGTH
+            .with_label_values(&[&dest.address])
+            .set(dest.run_length as i64);
 
         if let Some(record) = self.chains.get_mut(&chain_id) {
             record.last_activity = now;
@@ -1714,6 +1749,9 @@ where
             metrics::DESTINATION_WINDOW
                 .remove_label_values(&[address])
                 .ok();
+            metrics::DESTINATION_RUN_LENGTH
+                .remove_label_values(&[address])
+                .ok();
             metrics::SEND_LATENCY.remove_label_values(&[address]).ok();
             metrics::CERTIFICATE_SEND_LATENCY
                 .remove_label_values(&[address])
@@ -1766,6 +1804,7 @@ where
                                 generation: self.next_generation,
                                 in_flight: 0,
                                 window: self.config.max_in_flight_per_destination,
+                                run_length: 1,
                                 retry_at: None,
                                 failures: 0,
                                 lagging,
@@ -1919,7 +1958,7 @@ where
             },
             storage: storage.clone(),
             certificate_upload_batch_size: config.certificate_upload_batch_size,
-            certificates_per_push: config.certificates_per_push,
+            certificates_per_push: dest.run_length,
             push_bytes: config.push_bytes,
             #[cfg(with_metrics)]
             address: dest.address.clone(),
@@ -2428,7 +2467,7 @@ mod tests {
                 ..BlockExportConfig::default()
             },
             BlockExportConfig {
-                certificates_per_push: 0,
+                max_certificates_per_push: 0,
                 ..BlockExportConfig::default()
             },
             BlockExportConfig {
@@ -2870,11 +2909,45 @@ mod tests {
             generation: 1,
             in_flight: 0,
             window: 1,
+            run_length: 1,
             retry_at: None,
             failures: 0,
             lagging: BTreeSet::new(),
             lagging_cursor: None,
         }
+    }
+
+    /// The run length has to find each destination's own limit, because nothing else can.
+    ///
+    /// A static default is either too small for the fast validators or a guaranteed timeout for the
+    /// slow ones. The floor matters most: at 1 a push carries what it did before batching, so the
+    /// worst this control can do to a peer is give it back the old behaviour.
+    #[test]
+    fn the_run_length_climbs_to_the_ceiling_and_halves_to_a_floor_of_one() {
+        let config = BlockExportConfig {
+            max_certificates_per_push: 8,
+            max_in_flight_per_destination: 4,
+            ..BlockExportConfig::default()
+        };
+        let mut dest = test_dest_state();
+        assert_eq!((dest.run_length, dest.window), (1, 1));
+
+        // Additive increase, and neither knob overshoots its own ceiling however long it runs.
+        for _ in 0..20 {
+            dest.widen(&config);
+        }
+        assert_eq!(dest.run_length, config.max_certificates_per_push);
+        assert_eq!(dest.window, config.max_in_flight_per_destination);
+
+        // Multiplicative decrease, all the way down, and it stops at 1 rather than reaching 0 —
+        // a run of zero certificates would spin without ever sending anything.
+        let mut lengths = vec![dest.run_length];
+        for _ in 0..5 {
+            dest.narrow();
+            lengths.push(dest.run_length);
+        }
+        assert_eq!(lengths, [8, 4, 2, 1, 1, 1]);
+        assert_eq!(dest.window, 1);
     }
 
     /// The backoff must escalate across consecutive failures — computing it from a reset counter
