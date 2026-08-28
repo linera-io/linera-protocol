@@ -4776,6 +4776,7 @@ where
         },
         storage: builder.validator_storage(0),
         certificate_upload_batch_size: 100,
+        rate: Default::default(),
         // Not a divisor of the round's bound, so a round splits into a full push and a short
         // one and the cursor has to survive between them.
         certificates_per_push: 2,
@@ -4860,6 +4861,7 @@ where
         },
         storage: builder.validator_storage(0),
         certificate_upload_batch_size: 100,
+        rate: Default::default(),
         // Large enough that a working batch push would close the gap in one request, so the
         // assertion below is about the fallback and not about the run bound.
         certificates_per_push: 100,
@@ -4920,6 +4922,7 @@ where
         },
         storage: builder.validator_storage(0),
         certificate_upload_batch_size: 100,
+        rate: Default::default(),
         // The whole backlog in one push, so every blob after the first has to be recovered
         // inside a single run rather than by a later round starting over.
         certificates_per_push: 100,
@@ -5065,6 +5068,7 @@ where
         },
         storage,
         certificate_upload_batch_size: 100,
+        rate: Default::default(),
         certificates_per_push: 20,
         #[cfg(with_metrics)]
         address: "test".to_owned(),
@@ -5178,6 +5182,7 @@ where
         },
         storage,
         certificate_upload_batch_size: 100,
+        rate: Default::default(),
         certificates_per_push: 20,
         #[cfg(with_metrics)]
         address: "test".to_owned(),

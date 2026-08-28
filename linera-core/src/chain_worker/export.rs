@@ -52,7 +52,7 @@ use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{Blob, BlockHeight, Epoch, TimeDelta, Timestamp},
     identifiers::{BlobId, ChainId, StreamId},
-    time::{timer::timeout, Duration},
+    time::{timer::timeout, Duration, Instant},
 };
 use linera_chain::types::{CertificateValue as _, ConfirmedBlockCertificate};
 use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
@@ -268,10 +268,14 @@ pub struct BlockExportConfig {
     /// client's 500: a chunk lives inside one send job, and `max_catch_up_blocks` bounds the
     /// round anyway.
     pub certificate_upload_batch_size: u64,
-    /// The most certificates one push may carry — the AIMD run length's ceiling, not a tuned
-    /// value. Each destination climbs towards it from 1 and halves away from it on failure, so
-    /// this only has to be above what the fastest committee member can apply inside one request.
+    /// The most certificates one push may carry — a ceiling on the measured run length, not a
+    /// tuned value, so it only has to sit above what the fastest committee member can apply
+    /// inside one request.
     pub max_certificates_per_push: u64,
+    /// How long one push is sized to take at the destination's measured speed. Well under the
+    /// request timeout on purpose: a destination's response time fluctuates around its average,
+    /// so a push aimed at the whole budget reads ordinary variance as failure.
+    pub push_target: Duration,
     /// How many blocks the export queue holds before dropping new ones for catch-up to repair.
     pub queue_size: usize,
     /// The most blob payload bytes queued blocks may pin before new ones are dropped for
@@ -312,6 +316,11 @@ impl BlockExportConfig {
         if self.certificate_upload_batch_size == 0 {
             // `slice::chunks(0)` panics.
             return Err("block export batch size must be greater than zero".into());
+        }
+        if self.push_target.is_zero() {
+            // Every run would be sized at zero certificates and clamp back to one, silently
+            // undoing batching.
+            return Err("block export push target must be greater than zero".into());
         }
         if self.max_certificates_per_push == 0 {
             // No certificate would ever be sent, and catch-up would spin without progressing.
@@ -374,6 +383,7 @@ impl Default for BlockExportConfig {
         BlockExportConfig {
             certificate_upload_batch_size: 100,
             max_certificates_per_push: 100,
+            push_target: Duration::from_millis(1300),
             queue_size: 1024,
             queue_bytes: 256 * 1024 * 1024,
             max_in_flight_per_destination: 8,
@@ -854,12 +864,13 @@ struct DestState<N> {
     /// How many concurrent sends the AIMD control currently allows: +1 per success up to the
     /// configured ceiling, halved per transport failure down to 1.
     window: usize,
-    /// How many certificates one push carries, on the same AIMD discipline as `window`. What a
-    /// destination applies inside one request is a property of that destination, so the only
-    /// honest way to learn it is to try; the floor of 1 is what every push was before batching.
-    ///
-    /// Starts at 1 rather than at the ceiling, unlike `window`: overshooting here costs a whole
-    /// request timeout per attempt, and the climb back is a second or two of successful rounds.
+    /// Certificates per second this destination has been accepting, smoothed across pushes.
+    /// `None` until it has answered once. `run_length` is derived from it, so there is one
+    /// estimate of the destination's speed rather than two that can disagree.
+    throughput: Option<f64>,
+    /// How many certificates one push carries: what `throughput` says fits in `push_target`.
+    /// The floor of 1 is what every push carried before batching, so the worst this can do to a
+    /// destination is hand it back the old behaviour.
     run_length: u64,
     /// Backoff for *destination-scoped* failures: transport errors and timeouts.
     retry_at: Option<Timestamp>,
@@ -879,19 +890,40 @@ struct DestState<N> {
 }
 
 impl<N> DestState<N> {
-    /// Additive increase after a destination answered: one more concurrent send, one more
-    /// certificate per push, each capped at its configured ceiling.
-    fn widen(&mut self, config: &BlockExportConfig) {
+    /// Folds one job's observation into the destination's speed, and widens the in-flight window.
+    ///
+    /// A job that pushed nothing says nothing about speed — most rounds find the destination
+    /// already current — so only the window moves.
+    fn observe(&mut self, rate: PushRate, config: &BlockExportConfig) {
         self.window = (self.window + 1).min(config.max_in_flight_per_destination);
-        self.run_length = (self.run_length + 1).min(config.max_certificates_per_push);
+        let Some(measured) = rate.per_second() else {
+            return;
+        };
+        self.throughput = Some(match self.throughput {
+            Some(previous) => (1.0 - THROUGHPUT_IMPACT) * previous + THROUGHPUT_IMPACT * measured,
+            None => measured,
+        });
+        self.resize(config);
     }
 
-    /// Multiplicative decrease after a destination failed us. Both halve: a request that overran
-    /// the destination's timeout is indistinguishable here from one it refused, and a shorter run
-    /// is the only remedy for the former that the sender controls.
-    fn narrow(&mut self) {
+    /// Halves the estimate after a destination failed us, and the in-flight window with it.
+    ///
+    /// A failure is the one observation with no duration to learn from: a run that overran the
+    /// request timeout delivered nothing, so the only reading is that the estimate was too high.
+    fn penalise(&mut self, config: &BlockExportConfig) {
         self.window = (self.window / 2).max(1);
-        self.run_length = (self.run_length / 2).max(1);
+        self.throughput = self.throughput.map(|rate| rate / 2.0);
+        self.resize(config);
+    }
+
+    /// Re-derives the run length: what the destination's measured speed fits in `push_target`.
+    fn resize(&mut self, config: &BlockExportConfig) {
+        let Some(throughput) = self.throughput else {
+            return;
+        };
+        let fits = throughput * config.push_target.as_secs_f64();
+        // `as u64` saturates at the bounds and turns NaN into 0, all of which the clamp absorbs.
+        self.run_length = (fits as u64).clamp(1, config.max_certificates_per_push);
     }
 
     /// The chains to consider this round, resuming where the last one stopped and wrapping around.
@@ -927,8 +959,8 @@ impl<N> DestState<N> {
 
 /// How one send ended, scoped to what the error tells us about.
 enum SendOutcome {
-    /// The validator answered; its reported next height.
-    Reached(BlockHeight),
+    /// The validator answered; its reported next height, and what the job saw of its speed.
+    Reached(BlockHeight, PushRate),
     /// The failure is about this chain on this destination, not about the destination.
     ChainScoped(Box<chain_client::Error>),
     /// The failure is about the destination itself.
@@ -937,6 +969,34 @@ enum SendOutcome {
     LocalScoped(Box<chain_client::Error>),
     /// The destination cannot accept this chain and resending will never change that.
     Unrecoverable(ParkReason, Box<chain_client::Error>),
+}
+
+/// How heavily one observation moves a destination's throughput estimate.
+///
+/// 0.1 is go-ethereum's `p2p/msgrate` `measurementImpact`, where it is described as reacting
+/// slower to sudden network changes but staying stable against temporary hiccups.
+const THROUGHPUT_IMPACT: f64 = 0.1;
+
+/// What one job observed of a destination's speed: certificates it accepted, and how long they
+/// took. Zero certificates is the common case — most rounds find the destination already current —
+/// and carries no information about its speed.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct PushRate {
+    certificates: u64,
+    elapsed: Duration,
+}
+
+impl PushRate {
+    fn record(&mut self, certificates: usize, elapsed: Duration) {
+        self.certificates = self.certificates.saturating_add(certificates as u64);
+        self.elapsed = self.elapsed.saturating_add(elapsed);
+    }
+
+    /// Certificates per second, or `None` when the job sent nothing to measure.
+    fn per_second(&self) -> Option<f64> {
+        let seconds = self.elapsed.as_secs_f64();
+        (self.certificates > 0 && seconds > 0.0).then(|| self.certificates as f64 / seconds)
+    }
 }
 
 /// Why a chain is parked at a destination.
@@ -1294,10 +1354,10 @@ where
         // a transport failure must shrink the window and set the backoff even for a chain the
         // queue has since forgotten.
         match &outcome {
-            SendOutcome::Reached(_) => {
+            SendOutcome::Reached(_, rate) => {
                 dest.failures = 0;
                 dest.retry_at = None;
-                dest.widen(&self.config);
+                dest.observe(*rate, &self.config);
                 self.total_window = (self.total_window + 1).min(self.config.max_in_flight_total);
                 #[cfg(with_metrics)]
                 metrics::SENDS_SUCCEEDED
@@ -1327,7 +1387,7 @@ where
                     validator = %dest.address, %chain_id, %error,
                     "Failed to export to a validator; backing it off and re-resolving",
                 );
-                dest.narrow();
+                dest.penalise(&self.config);
                 back_off(&mut dest.failures, &mut dest.retry_at, now, &self.config);
                 // Re-resolve so a relayed transport draws the next proxy from the rotation; the
                 // backoff above still applies if the validator itself is the problem. Resolved
@@ -1365,7 +1425,7 @@ where
                     chain_dest.in_flight = None;
                 }
                 match &outcome {
-                    SendOutcome::Reached(next_height) => {
+                    SendOutcome::Reached(next_height, _) => {
                         if let Some(acked) =
                             chain_dest.record_reached(*next_height, record_tip, now, &self.config)
                         {
@@ -1795,6 +1855,7 @@ where
                                 generation: self.next_generation,
                                 in_flight: 0,
                                 window: self.config.max_in_flight_per_destination,
+                                throughput: None,
                                 run_length: 1,
                                 retry_at: None,
                                 failures: 0,
@@ -1950,6 +2011,7 @@ where
             storage: storage.clone(),
             certificate_upload_batch_size: config.certificate_upload_batch_size,
             certificates_per_push: dest.run_length,
+            rate: PushRate::default(),
             #[cfg(with_metrics)]
             address: dest.address.clone(),
         };
@@ -1982,7 +2044,7 @@ where
                 }
             };
             let outcome = match result {
-                Ok(next_height) => SendOutcome::Reached(next_height),
+                Ok(next_height) => SendOutcome::Reached(next_height, sender.rate),
                 Err(error) if is_local_scoped(&error) => SendOutcome::LocalScoped(Box::new(error)),
                 // Before the scoped arms: an unrecoverable answer is about neither our storage nor
                 // the destination's health, and must not move either backoff.
@@ -2135,6 +2197,9 @@ pub(crate) struct BlockSender<S, N> {
     pub(crate) storage: S,
     pub(crate) certificate_upload_batch_size: u64,
     pub(crate) certificates_per_push: u64,
+    /// What this job saw of the destination's speed, fed back so the next run length is sized
+    /// from measurement rather than from a constant.
+    pub(crate) rate: PushRate,
     /// Destination address, carried only to label per-push latency and throughput.
     #[cfg(with_metrics)]
     pub(crate) address: String,
@@ -2353,6 +2418,7 @@ where
         let delivery = CrossChainMessageDelivery::NonBlocking;
         // Covers the blob-recovery retries below too, for the same reason as the single-certificate
         // push: what matters is how long the run took to land, not how many attempts it needed.
+        let started = Instant::now();
         #[cfg(with_metrics)]
         let push_latency = metrics::CERTIFICATE_SEND_LATENCY.with_label_values(&[&self.address]);
         #[cfg(with_metrics)]
@@ -2387,6 +2453,7 @@ where
                 }
                 result => {
                     let info = result?;
+                    self.rate.record(certificates.len(), started.elapsed());
                     #[cfg(with_metrics)]
                     metrics::CERTIFICATES_PUSHED
                         .with_label_values(&[&self.address])
@@ -2448,6 +2515,10 @@ mod tests {
             },
             BlockExportConfig {
                 max_certificates_per_push: 0,
+                ..BlockExportConfig::default()
+            },
+            BlockExportConfig {
+                push_target: Duration::ZERO,
                 ..BlockExportConfig::default()
             },
             BlockExportConfig {
@@ -2885,6 +2956,7 @@ mod tests {
             generation: 1,
             in_flight: 0,
             window: 1,
+            throughput: None,
             run_length: 1,
             retry_at: None,
             failures: 0,
@@ -2893,37 +2965,85 @@ mod tests {
         }
     }
 
-    /// The run length has to find each destination's own limit, because nothing else can.
+    /// A run is sized from the destination's measured speed, so two peers converge on different
+    /// lengths without either being configured.
     ///
-    /// A static default is either too small for the fast validators or a guaranteed timeout for the
-    /// slow ones. The floor matters most: at 1 a push carries what it did before batching, so the
-    /// worst this control can do to a peer is give it back the old behaviour.
+    /// This is the whole reason the run length is not a constant: what a validator applies inside
+    /// one request is a property of that validator, and conway's own committee spans a 300x range.
     #[test]
-    fn the_run_length_climbs_to_the_ceiling_and_halves_to_a_floor_of_one() {
+    fn the_run_length_follows_each_destination_own_speed() {
         let config = BlockExportConfig {
-            max_certificates_per_push: 8,
-            max_in_flight_per_destination: 4,
+            max_certificates_per_push: 1000,
+            push_target: Duration::from_secs(1),
+            ..BlockExportConfig::default()
+        };
+
+        // A peer that answered 100 certificates in a second is offered ~100 for a 1 s target.
+        let mut quick = test_dest_state();
+        quick.observe(rate_of(100, Duration::from_secs(1)), &config);
+        assert_eq!(quick.run_length, 100);
+
+        // A peer a tenth as fast is offered a tenth as many, from the same code and no config.
+        let mut slow = test_dest_state();
+        slow.observe(rate_of(10, Duration::from_secs(1)), &config);
+        assert_eq!(slow.run_length, 10);
+
+        // Smoothing, not replacement: one anomalous sample moves the estimate by a tenth, so a
+        // single slow response cannot collapse a healthy peer's run.
+        quick.observe(rate_of(0, Duration::from_secs(1)), &config);
+        assert_eq!(
+            quick.run_length, 100,
+            "a job that pushed nothing measures nothing and must leave the estimate alone",
+        );
+        quick.observe(rate_of(50, Duration::from_secs(1)), &config);
+        assert_eq!(
+            quick.run_length, 95,
+            "one sample moves the estimate by ~10%"
+        );
+    }
+
+    /// The floor is what makes the control safe: at 1 a push carries exactly what it carried
+    /// before batching, so the worst it can do to a destination is hand back the old behaviour.
+    #[test]
+    fn a_failing_destination_halves_to_a_floor_of_one() {
+        let config = BlockExportConfig {
+            max_certificates_per_push: 1000,
+            push_target: Duration::from_secs(1),
             ..BlockExportConfig::default()
         };
         let mut dest = test_dest_state();
-        assert_eq!((dest.run_length, dest.window), (1, 1));
+        dest.observe(rate_of(16, Duration::from_secs(1)), &config);
 
-        // Additive increase, and neither knob overshoots its own ceiling however long it runs.
-        for _ in 0..20 {
-            dest.widen(&config);
-        }
-        assert_eq!(dest.run_length, config.max_certificates_per_push);
-        assert_eq!(dest.window, config.max_in_flight_per_destination);
-
-        // Multiplicative decrease, all the way down, and it stops at 1 rather than reaching 0 —
-        // a run of zero certificates would spin without ever sending anything.
         let mut lengths = vec![dest.run_length];
-        for _ in 0..5 {
-            dest.narrow();
+        for _ in 0..6 {
+            dest.penalise(&config);
             lengths.push(dest.run_length);
         }
-        assert_eq!(lengths, [8, 4, 2, 1, 1, 1]);
+        assert_eq!(lengths, [16, 8, 4, 2, 1, 1, 1]);
         assert_eq!(dest.window, 1);
+    }
+
+    /// A destination that has never answered has nothing to size a run from, so it must not be
+    /// handed the ceiling on a guess — the first push is the measurement.
+    #[test]
+    fn an_unmeasured_destination_starts_at_one() {
+        let config = BlockExportConfig {
+            max_certificates_per_push: 1000,
+            ..BlockExportConfig::default()
+        };
+        let mut dest = test_dest_state();
+        assert_eq!(dest.run_length, 1);
+        dest.penalise(&config);
+        assert_eq!(
+            dest.run_length, 1,
+            "failing before any measurement cannot push the run below its floor",
+        );
+    }
+
+    fn rate_of(certificates: usize, elapsed: Duration) -> PushRate {
+        let mut rate = PushRate::default();
+        rate.record(certificates, elapsed);
+        rate
     }
 
     /// The backoff must escalate across consecutive failures — computing it from a reset counter

@@ -854,6 +854,9 @@ async fn run(options: ServerOptions) {
                     let config = BlockExportConfig {
                         certificate_upload_batch_size: block_export_batch_size,
                         max_certificates_per_push: block_export_max_certificates_per_push,
+                        // A third of the request budget, so ordinary variance in a destination's
+                        // response time does not read as failure.
+                        push_target: block_export_recv_timeout / 3,
                         queue_size: block_export_queue_size,
                         queue_bytes: block_export_queue_bytes,
                         max_in_flight_per_destination: block_export_max_in_flight,
