@@ -87,8 +87,8 @@ linera-rpc = { path = ".", default-features = false, features = [
 opentelemetry_sdk.workspace = true
 proptest.workspace = true
 serde-reflection.workspace = true
-test-strategy.workspace = true
 test-log.workspace = true
+test-strategy.workspace = true
 tokio = { workspace = true, features = [
     "macros",
     "net",

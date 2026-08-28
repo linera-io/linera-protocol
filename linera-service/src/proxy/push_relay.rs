@@ -85,9 +85,24 @@ where
                     sender
                 }
             };
-            if sender.send(request).await.is_err() {
-                warn!("A shard's push stream closed; dropping it");
-                shards.remove(&key);
+            // `try_send`, not `send`: waiting for one shard's queue to drain would park this
+            // loop and stop every chain on every *other* shard with it — the head-of-line stall
+            // that carrying many chains on one stream exists to avoid.
+            match sender.try_send(request) {
+                Ok(()) => {}
+                Err(mpsc::error::TrySendError::Full(_)) => {
+                    warn!("A shard is not keeping up with the push stream; ending it");
+                    let _ = responses
+                        .send(Err(Status::resource_exhausted(
+                            "a shard is not keeping up with the certificate push stream",
+                        )))
+                        .await;
+                    break;
+                }
+                Err(mpsc::error::TrySendError::Closed(_)) => {
+                    warn!("A shard's push stream closed; dropping it");
+                    shards.remove(&key);
+                }
             }
         }
     });

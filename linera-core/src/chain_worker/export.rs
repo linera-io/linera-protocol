@@ -52,7 +52,7 @@ use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{Blob, BlockHeight, Epoch, TimeDelta, Timestamp},
     identifiers::{BlobId, ChainId, StreamId},
-    time::{timer::timeout, Duration},
+    time::{timer::timeout, Duration, Instant},
 };
 use linera_chain::types::{CertificateValue as _, ConfirmedBlockCertificate};
 use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
@@ -158,6 +158,16 @@ pub(crate) mod metrics {
             register_histogram_vec(
                 "block_export_certificate_send_latency",
                 "Time (ms) for one certificate round trip to one destination validator",
+                &["validator"],
+                exponential_bucket_latencies(60_000.0),
+            );
+
+        /// Time for one streamed run, which is one round trip however many certificates it
+        /// carried. Distinct from `CERTIFICATE_SEND_LATENCY`, which stays per certificate.
+        pub static RUN_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "block_export_run_latency",
+                "Time (ms) for one streamed run to one destination validator",
                 &["validator"],
                 exponential_bucket_latencies(60_000.0),
             );
@@ -288,6 +298,10 @@ pub struct BlockExportConfig {
     /// bounds what a live block may wait behind, and a validator that just joined reports height
     /// 0, so its catch-up is otherwise arbitrarily large.
     pub max_catch_up_blocks: u64,
+    /// How long one run may go unanswered before its stream is treated as dead. Generous next to
+    /// a request timeout: a run is many certificates and the destination applies them all before
+    /// the last answer comes back.
+    pub push_timeout: Duration,
     /// How long a converged chain's record is kept before being forgotten. Long enough for the
     /// chain's worker to fold the final heights into `exported_heights` on its next save; after
     /// it, a lost cursor costs one query to rebuild.
@@ -326,6 +340,10 @@ impl BlockExportConfig {
                 "block export total in-flight budget must be at least the per-destination ceiling"
                     .into(),
             );
+        }
+        if self.push_timeout.is_zero() {
+            // Every run would time out before it could be answered.
+            return Err("block export push timeout must be greater than zero".into());
         }
         if self.max_catch_up_blocks == 0 {
             // Every gap would stay open forever, silently.
@@ -367,6 +385,7 @@ impl Default for BlockExportConfig {
             max_retry_delay: Duration::from_secs(60),
             idle_catch_up_interval: Duration::from_millis(200),
             max_catch_up_blocks: 200,
+            push_timeout: Duration::from_secs(60),
             converged_chain_retention: Duration::from_secs(300),
         }
     }
@@ -1723,6 +1742,7 @@ where
             metrics::CERTIFICATES_PUSHED
                 .remove_label_values(&[address])
                 .ok();
+            metrics::RUN_LATENCY.remove_label_values(&[address]).ok();
             metrics::DESTINATION_LAG
                 .remove_label_values(&[address])
                 .ok();
@@ -1920,6 +1940,7 @@ where
             storage: storage.clone(),
             certificate_upload_batch_size: config.certificate_upload_batch_size,
             stream,
+            push_timeout: config.push_timeout,
             #[cfg(with_metrics)]
             address: dest.address.clone(),
         };
@@ -2107,33 +2128,55 @@ fn backoff_delay(attempt: u32, config: &BlockExportConfig) -> TimeDelta {
 ///
 /// Opened once and reused: a stream per job would pay the setup round trip that streaming exists
 /// to avoid, and would give each job its own window instead of one per peer.
-pub(crate) struct SharedStream<N: ValidatorNode>(
-    Arc<tokio::sync::Mutex<Option<Arc<N::PushStream>>>>,
-);
+pub(crate) struct SharedStream<N: ValidatorNode> {
+    stream: Arc<tokio::sync::Mutex<Option<Arc<N::PushStream>>>>,
+    /// Set once a destination refuses the stream, so the rest of a catch-up against an older
+    /// binary costs one round trip per certificate rather than a wasted stream-open before each
+    /// run. Never cleared: a validator that gains the endpoint is picked up when this process
+    /// next builds its node.
+    unsupported: Arc<std::sync::atomic::AtomicBool>,
+}
 
 impl<N: ValidatorNode> Clone for SharedStream<N> {
     fn clone(&self) -> Self {
-        Self(self.0.clone())
+        Self {
+            stream: self.stream.clone(),
+            unsupported: self.unsupported.clone(),
+        }
     }
 }
 
 impl<N: ValidatorNode> Default for SharedStream<N> {
     fn default() -> Self {
-        Self(Arc::new(tokio::sync::Mutex::new(None)))
+        Self {
+            stream: Arc::new(tokio::sync::Mutex::new(None)),
+            unsupported: Arc::default(),
+        }
     }
 }
 
 impl<N: ValidatorNode> SharedStream<N> {
     /// The destination's stream, opening one if this is the first job to need it.
     async fn get(&self, node: &N) -> Result<Arc<N::PushStream>, NodeError> {
-        let mut guard = self.0.lock().await;
+        if self.unsupported.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err(NodeError::PushStreamUnsupported);
+        }
+        let mut guard = self.stream.lock().await;
         match guard.as_ref() {
             Some(stream) => Ok(stream.clone()),
-            None => {
-                let opened = Arc::new(node.open_push_stream().await?);
-                *guard = Some(opened.clone());
-                Ok(opened)
-            }
+            None => match node.open_push_stream().await {
+                Ok(opened) => {
+                    let opened = Arc::new(opened);
+                    *guard = Some(opened.clone());
+                    Ok(opened)
+                }
+                Err(NodeError::PushStreamUnsupported) => {
+                    self.unsupported
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                    Err(NodeError::PushStreamUnsupported)
+                }
+                Err(error) => Err(error),
+            },
         }
     }
 
@@ -2142,7 +2185,7 @@ impl<N: ValidatorNode> SharedStream<N> {
     /// The identity check matters: another job may already have replaced a dead stream, and
     /// clearing unconditionally would throw away the replacement it just opened.
     async fn discard(&self, stream: &Arc<N::PushStream>) {
-        let mut guard = self.0.lock().await;
+        let mut guard = self.stream.lock().await;
         if guard
             .as_ref()
             .is_some_and(|current| Arc::ptr_eq(current, stream))
@@ -2165,6 +2208,8 @@ pub(crate) struct BlockSender<S, N: ValidatorNode> {
     pub(crate) certificate_upload_batch_size: u64,
     /// The destination's push stream, shared with every other job going there.
     pub(crate) stream: SharedStream<N>,
+    /// How long one run may go unanswered before the stream is treated as dead.
+    pub(crate) push_timeout: Duration,
     /// Destination address, carried only to label per-certificate latency.
     #[cfg(with_metrics)]
     pub(crate) address: String,
@@ -2284,10 +2329,7 @@ where
             .ok_or(NodeError::EmptyCertificateRun)?
             .inner()
             .chain_id();
-        #[cfg(with_metrics)]
-        let push_latency = metrics::CERTIFICATE_SEND_LATENCY.with_label_values(&[&self.address]);
-        #[cfg(with_metrics)]
-        let _push_latency = push_latency.measure_latency();
+        let started = Instant::now();
         let mut result = self.stream_run(certificates).await;
         // The same once-per-cause loop as `send_confirmed_certificate`, over the run: a run stops
         // at the destination's first refusal, so its next `BlobsNotFound` names the *next*
@@ -2301,12 +2343,10 @@ where
         loop {
             match result {
                 // No stream to this destination, so the run goes one certificate at a time.
+                // That path times and counts each certificate itself, so this arm must not also
+                // time the run or the two would double-count.
                 Err(NodeError::PushStreamUnsupported) => {
-                    let mut info = None;
-                    for certificate in certificates {
-                        info = Some(self.send_confirmed_certificate(certificate, &[]).await?);
-                    }
-                    return Ok(info.ok_or(NodeError::EmptyCertificateRun)?);
+                    return self.push_one_at_a_time(certificates).await;
                 }
                 Err(NodeError::BlobsNotFound(blob_ids))
                     if blob_ids.iter().any(|id| !uploaded.contains(id)) =>
@@ -2327,11 +2367,37 @@ where
                     metrics::CERTIFICATES_PUSHED
                         .with_label_values(&[&self.address])
                         .inc_by(certificates.len() as u64);
+                    #[cfg(with_metrics)]
+                    metrics::RUN_LATENCY
+                        .with_label_values(&[&self.address])
+                        .observe(started.elapsed().as_millis() as f64);
                     return Ok(info);
                 }
             }
             result = self.stream_run(certificates).await;
         }
+    }
+
+    /// Sends the run one certificate at a time, as catch-up did before streaming.
+    ///
+    /// Each answer moves the cursor, so a certificate the destination has since reported holding
+    /// is skipped rather than re-sent — the rule the per-certificate loop this replaces applied,
+    /// and without it a destination that raced ahead is handed blocks it already has.
+    async fn push_one_at_a_time(
+        &mut self,
+        certificates: &[CacheArc<ConfirmedBlockCertificate>],
+    ) -> Result<Box<crate::data_types::ChainInfo>, chain_client::Error> {
+        let mut info = None;
+        let mut next_height = None;
+        for certificate in certificates {
+            if next_height.is_some_and(|next| certificate.block().header.height < next) {
+                continue;
+            }
+            let reached = self.send_confirmed_certificate(certificate, &[]).await?;
+            next_height = Some(reached.next_block_height);
+            info = Some(reached);
+        }
+        Ok(info.ok_or(NodeError::EmptyCertificateRun)?)
     }
 
     /// Writes a run to the destination's stream, opening one if this is the first.
@@ -2343,7 +2409,14 @@ where
         certificates: &[CacheArc<ConfirmedBlockCertificate>],
     ) -> Result<ChainInfoResponse, NodeError> {
         let stream = self.stream.get(&self.remote_node.node).await?;
-        let result = stream.push(certificates.to_vec()).await;
+        // A stream that was accepted and then stops answering this chain would otherwise hold
+        // this job — and its in-flight slot — forever, since nothing else bounds a push in time.
+        // Timing out drops the stream so the next round reopens it, and hands the destination to
+        // the queue's backoff, which is what decides whether it is worth attempting at all.
+        let result = match timeout(self.push_timeout, stream.push(certificates.to_vec())).await {
+            Ok(result) => result,
+            Err(_) => Err(NodeError::PushStreamClosed),
+        };
         if matches!(result, Err(NodeError::PushStreamClosed)) {
             self.stream.discard(&stream).await;
         }
@@ -2465,6 +2538,10 @@ mod tests {
             },
             BlockExportConfig {
                 max_catch_up_blocks: 0,
+                ..BlockExportConfig::default()
+            },
+            BlockExportConfig {
+                push_timeout: Duration::ZERO,
                 ..BlockExportConfig::default()
             },
             BlockExportConfig {

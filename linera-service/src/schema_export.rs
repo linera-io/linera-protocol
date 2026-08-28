@@ -24,7 +24,7 @@ use linera_core::{
     client::ChainClient,
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{
-        CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
+        CrossChainMessageDelivery, NoPushStream, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider,
     },
 };
