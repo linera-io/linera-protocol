@@ -58,7 +58,6 @@ clap.workspace = true
 ed25519-dalek.workspace = true
 futures.workspace = true
 linera-base.workspace = true
-linera-cache.workspace = true
 linera-chain.workspace = true
 linera-core.workspace = true
 linera-execution.workspace = true
@@ -79,6 +78,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml"] }
+linera-cache.workspace = true
 linera-rpc = { path = ".", default-features = false, features = [
     "server",
     "test",
