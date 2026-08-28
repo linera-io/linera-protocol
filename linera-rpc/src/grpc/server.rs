@@ -42,8 +42,9 @@ use super::{
 use crate::propagation::{get_traffic_type_from_request, OtelContextLayer};
 use crate::{
     config::{CrossChainConfig, NotificationConfig, ShardId, ValidatorInternalNetworkConfig},
-    cross_chain_message_queue, HandleConfirmedCertificateRequest, HandleLiteCertRequest,
-    HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
+    cross_chain_message_queue, HandleConfirmedCertificateRequest,
+    HandleConfirmedCertificatesRequest, HandleLiteCertRequest, HandleTimeoutCertificateRequest,
+    HandleValidatedCertificateRequest,
 };
 
 type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
@@ -893,6 +894,68 @@ where
             chain_id = ?request.get_ref().chain_id()
         )
     )]
+    async fn handle_confirmed_certificates(
+        &self,
+        request: Request<api::HandleConfirmedCertificatesRequest>,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        let traffic_type = Self::get_traffic_type(&request);
+        let proto = request.into_inner();
+        let supports_aggregated = proto.supports_aggregated_missing;
+        let HandleConfirmedCertificatesRequest {
+            certificates,
+            wait_for_outgoing_messages,
+        } = proto.try_into()?;
+        let mut last_info = None;
+        for certificate in certificates {
+            trace!(?certificate, "Handling certificate");
+            let (sender, receiver) = wait_for_outgoing_messages.then(oneshot::channel).unzip();
+            match self
+                .state
+                .clone()
+                .handle_confirmed_certificate(certificate, ProcessConfirmedBlockMode::Auto, sender)
+                .await
+            {
+                Ok((info, actions)) => {
+                    self.handle_network_actions(actions);
+                    if let Some(receiver) = receiver {
+                        if let Err(e) = receiver.await {
+                            error!("Failed to wait for message delivery: {e}");
+                        }
+                    }
+                    last_info = Some(info);
+                }
+                // The run stops at the first refusal rather than skipping past it: the
+                // certificates above build on this block, so they would be rejected for the
+                // same reason. What did land stays, and the caller re-reads the height.
+                Err(error) => {
+                    Self::log_request_error(
+                        "handle_confirmed_certificates",
+                        traffic_type,
+                        &error.error_type(),
+                    );
+                    self.log_error(&error, "Failed to handle confirmed certificate");
+                    return Ok(Response::new(
+                        adapt_dependency_error(NodeError::from(error), supports_aggregated)
+                            .try_into()?,
+                    ));
+                }
+            }
+        }
+        Self::log_request_success("handle_confirmed_certificates", traffic_type);
+        let info =
+            last_info.ok_or_else(|| Status::invalid_argument("no certificates to handle"))?;
+        Ok(Response::new(info.try_into()?))
+    }
+
+    #[instrument(
+        target = "grpc_server",
+        skip_all,
+        err,
+        fields(
+            nickname = self.state.nickname(),
+            chain_id = ?request.get_ref().chain_id()
+        )
+    )]
     async fn handle_validated_certificate(
         &self,
         request: Request<api::HandleValidatedCertificateRequest>,
@@ -1152,6 +1215,12 @@ impl GrpcProxyable for LiteCertificate {
 }
 
 impl GrpcProxyable for api::HandleConfirmedCertificateRequest {
+    fn chain_id(&self) -> Option<ChainId> {
+        self.chain_id.clone()?.try_into().ok()
+    }
+}
+
+impl GrpcProxyable for api::HandleConfirmedCertificatesRequest {
     fn chain_id(&self) -> Option<ChainId> {
         self.chain_id.clone()?.try_into().ok()
     }

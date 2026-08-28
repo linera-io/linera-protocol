@@ -86,6 +86,10 @@ impl ValidatorNode for SimpleClient {
         )
     }
 
+    fn supports_batch_push(&self) -> bool {
+        false
+    }
+
     /// Initiates a new block.
     async fn handle_block_proposal(
         &self,
@@ -132,6 +136,14 @@ impl ValidatorNode for SimpleClient {
         };
         let request = RpcMessage::ConfirmedCertificate(Box::new(request));
         self.query(request).await
+    }
+
+    async fn handle_confirmed_certificates(
+        &self,
+        _certificates: Vec<CacheArc<ConfirmedBlockCertificate>>,
+        _delivery: CrossChainMessageDelivery,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        Err(NodeError::BatchPushUnsupported)
     }
 
     /// Processes a timeout certificate.

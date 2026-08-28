@@ -58,6 +58,15 @@ impl ValidatorNode for Client {
         }
     }
 
+    fn supports_batch_push(&self) -> bool {
+        match self {
+            Client::Grpc(grpc_client) => grpc_client.supports_batch_push(),
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => simple_client.supports_batch_push(),
+        }
+    }
+
     async fn handle_block_proposal(
         &self,
         proposal: BlockProposal,
@@ -121,6 +130,27 @@ impl ValidatorNode for Client {
             Client::Simple(simple_client) => {
                 simple_client
                     .handle_confirmed_certificate(certificate, delivery)
+                    .await
+            }
+        }
+    }
+
+    async fn handle_confirmed_certificates(
+        &self,
+        certificates: Vec<CacheArc<ConfirmedBlockCertificate>>,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        match self {
+            Client::Grpc(grpc_client) => {
+                grpc_client
+                    .handle_confirmed_certificates(certificates, delivery)
+                    .await
+            }
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => {
+                simple_client
+                    .handle_confirmed_certificates(certificates, delivery)
                     .await
             }
         }

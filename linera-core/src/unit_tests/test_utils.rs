@@ -108,6 +108,10 @@ where
         format!("local:{}", self.public_key)
     }
 
+    fn supports_batch_push(&self) -> bool {
+        true
+    }
+
     async fn handle_block_proposal(
         &self,
         proposal: BlockProposal,
@@ -159,6 +163,21 @@ where
             validator.do_handle_certificate(CacheArc::unwrap_or_clone(certificate), sender)
         })
         .await
+    }
+
+    async fn handle_confirmed_certificates(
+        &self,
+        certificates: Vec<CacheArc<GenericCertificate<ConfirmedBlock>>>,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        let mut info = None;
+        for certificate in certificates {
+            info = Some(
+                self.handle_confirmed_certificate(certificate, delivery)
+                    .await?,
+            );
+        }
+        info.ok_or(NodeError::EmptyCertificateBatch)
     }
 
     async fn handle_chain_info_query(

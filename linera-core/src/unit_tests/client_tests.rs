@@ -4776,6 +4776,10 @@ where
         },
         storage: builder.validator_storage(0),
         certificate_upload_batch_size: 100,
+        // Not a divisor of the round's bound, so a round splits into a full push and a short
+        // one and the cursor has to survive between them.
+        certificates_per_push: 2,
+        push_bytes: 1024 * 1024,
         #[cfg(with_metrics)]
         address: "test".to_owned(),
     };
@@ -4809,6 +4813,67 @@ where
     }
     // 11 blocks in chunks of 3: three full rounds and a remainder of two.
     assert_eq!(rounds, 4);
+    Ok(())
+}
+
+/// Every certificate of a run gets its blobs, not just the first one.
+///
+/// A destination reports the missing blobs of one certificate at a time, so a run stopping at its
+/// first refusal names the *next* certificate's blobs on every recovery. Recovering once — all
+/// that one certificate per request amounted to — strands a blob-per-block chain after the first.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_export_recovers_blobs_for_every_certificate_of_a_run<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use crate::remote_node::RemoteNode;
+
+    /// Enough that a single recovery cannot carry the run, and small enough to fit one push.
+    const BLOBS: usize = 4;
+
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let chain_id = sender.chain_id();
+
+    // Validator 3 misses every publication, so it holds none of these blobs.
+    builder.set_fault_type([3], FaultType::Offline);
+    for index in 0..BLOBS {
+        sender
+            .publish_data_blob(format!("blob {index}").into_bytes())
+            .await
+            .unwrap_ok_committed();
+    }
+    let target = sender.chain_info().await?.next_block_height;
+    builder.set_fault_type([3], FaultType::Honest);
+    assert_eq!(builder.next_block_height(3, chain_id).await, BlockHeight(0));
+
+    let node = builder.node(3);
+    let mut sender_task = crate::chain_worker::export::BlockSender {
+        remote_node: RemoteNode {
+            public_key: node.name(),
+            node,
+        },
+        storage: builder.validator_storage(0),
+        certificate_upload_batch_size: 100,
+        // The whole backlog in one push, so every blob after the first has to be recovered
+        // inside a single run rather than by a later round starting over.
+        certificates_per_push: 100,
+        push_bytes: 1024 * 1024,
+        #[cfg(with_metrics)]
+        address: "test".to_owned(),
+    };
+
+    let reached = sender_task
+        .send_missing_blocks(chain_id, target, None, 100)
+        .await?;
+    assert_eq!(
+        reached, target,
+        "one run must land every certificate, uploading each one's blobs as it is asked for",
+    );
     Ok(())
 }
 
@@ -4940,6 +5005,8 @@ where
         },
         storage,
         certificate_upload_batch_size: 100,
+        certificates_per_push: 20,
+        push_bytes: 1024 * 1024,
         #[cfg(with_metrics)]
         address: "test".to_owned(),
     };
@@ -5052,6 +5119,10 @@ where
         },
         storage,
         certificate_upload_batch_size: 100,
+        certificates_per_push: 20,
+        // A budget no certificate can fit in, which is how a block larger than a whole push
+        // presents. Every certificate must still go, one per push, rather than the run wedging.
+        push_bytes: 1,
         #[cfg(with_metrics)]
         address: "test".to_owned(),
     };

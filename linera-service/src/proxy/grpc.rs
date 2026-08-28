@@ -761,6 +761,21 @@ where
     #[instrument(
         skip_all,
         err(Display),
+        fields(method = "handle_confirmed_certificates")
+    )]
+    async fn handle_confirmed_certificates(
+        &self,
+        request: Request<api::HandleConfirmedCertificatesRequest>,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        let (mut client, inner) = self.worker_client(request)?;
+        client
+            .handle_confirmed_certificates(Self::create_forwarding_request(inner))
+            .await
+    }
+
+    #[instrument(
+        skip_all,
+        err(Display),
         fields(method = "handle_validated_certificate")
     )]
     async fn handle_validated_certificate(
@@ -1160,7 +1175,7 @@ where
 
 /// Performs, on behalf of this validator's shards, the requests they must send to other
 /// validators, returning each answer verbatim — including the peer's errors, which export depends
-/// on. Served only on the internal listener, limited to the four requests block export makes.
+/// on. Served only on the internal listener, limited to the requests block export makes.
 #[async_trait]
 impl<S> ValidatorRelay for GrpcProxy<S>
 where
@@ -1193,6 +1208,25 @@ where
         self.peer(&request.destination, "relay_confirmed_certificate")
             .await?
             .handle_confirmed_certificate(Request::new(inner))
+            .await
+    }
+
+    #[instrument(
+        skip_all,
+        err(Display),
+        fields(method = "relay_confirmed_certificates")
+    )]
+    async fn relay_confirmed_certificates(
+        &self,
+        request: Request<api::RelayConfirmedCertificatesRequest>,
+    ) -> Result<Response<ChainInfoResult>, Status> {
+        let request = request.into_inner();
+        let inner = request
+            .inner
+            .ok_or_else(|| Status::invalid_argument("missing confirmed certificates"))?;
+        self.peer(&request.destination, "relay_confirmed_certificates")
+            .await?
+            .handle_confirmed_certificates(Request::new(inner))
             .await
     }
 

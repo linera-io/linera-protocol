@@ -23,6 +23,9 @@ service ValidatorRelay {
   // Forward a confirmed certificate to another validator.
   rpc RelayConfirmedCertificate(RelayConfirmedCertificateRequest) returns (ChainInfoResult);
 
+  // Forward a run of confirmed certificates for one chain to another validator.
+  rpc RelayConfirmedCertificates(RelayConfirmedCertificatesRequest) returns (ChainInfoResult);
+
   // Ask another validator for the state of a chain.
   rpc RelayChainInfoQuery(RelayChainInfoQueryRequest) returns (ChainInfoResult);
 
@@ -42,6 +45,13 @@ message RelayConfirmedCertificateRequest {
   // The public network address of the destination validator.
   string destination = 1;
   HandleConfirmedCertificateRequest inner = 2;
+}
+
+// A run of confirmed certificates for one chain, and the validator it is for.
+message RelayConfirmedCertificatesRequest {
+  // The public network address of the destination validator.
+  string destination = 1;
+  HandleConfirmedCertificatesRequest inner = 2;
 }
 
 // A chain info query, and the validator it is for.
@@ -70,6 +80,11 @@ service ValidatorWorker {
   rpc HandleLiteCertificate(LiteCertificate) returns (ChainInfoResult);
 
   rpc HandleConfirmedCertificate(HandleConfirmedCertificateRequest) returns (ChainInfoResult);
+
+  // Handle a run of confirmed certificates for one chain, applied in order, stopping at the
+  // first refusal and returning that error. What already landed stays applied, and an error
+  // says nothing about how much did, so a caller re-reads the chain's height.
+  rpc HandleConfirmedCertificates(HandleConfirmedCertificatesRequest) returns (ChainInfoResult);
 
   rpc HandleValidatedCertificate(HandleValidatedCertificateRequest) returns (ChainInfoResult);
 
@@ -100,6 +115,11 @@ service ValidatorNode {
   rpc HandleLiteCertificate(LiteCertificate) returns (ChainInfoResult);
 
   rpc HandleConfirmedCertificate(HandleConfirmedCertificateRequest) returns (ChainInfoResult);
+
+  // Handle a run of confirmed certificates for one chain, applied in order, stopping at the
+  // first refusal and returning that error. What already landed stays applied, and an error
+  // says nothing about how much did, so a caller re-reads the chain's height.
+  rpc HandleConfirmedCertificates(HandleConfirmedCertificatesRequest) returns (ChainInfoResult);
 
   rpc HandleValidatedCertificate(HandleValidatedCertificateRequest) returns (ChainInfoResult);
 
@@ -388,6 +408,22 @@ message HandleConfirmedCertificateRequest {
   Certificate certificate = 2;
 
   // Wait until all outgoing cross-chain messages from this certificate have
+  // been received by the target chains.
+  bool wait_for_outgoing_messages = 3;
+
+  // Whether the sender understands the aggregated `MissingCrossChainUpdates` error.
+  bool supports_aggregated_missing = 4;
+}
+
+// A run of confirmed certificates for one chain, applied in order.
+message HandleConfirmedCertificatesRequest {
+  // The ID of the chain (used for routing).
+  ChainId chain_id = 1;
+
+  // Certified statements from the committee, in ascending height order.
+  repeated Certificate certificates = 2;
+
+  // Wait until all outgoing cross-chain messages from these certificates have
   // been received by the target chains.
   bool wait_for_outgoing_messages = 3;
 

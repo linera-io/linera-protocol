@@ -82,6 +82,22 @@ pub trait ValidatorNode {
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 
+    /// Whether this node will carry a run of certificates in one request, so a caller can send
+    /// them one at a time without first paying a round trip to find out.
+    fn supports_batch_push(&self) -> bool;
+
+    /// Processes a run of confirmed certificates for one chain, in the order given, and returns
+    /// the chain info after the last one that landed.
+    ///
+    /// The run must be non-empty and all for one chain. A destination applies them until one
+    /// fails, so a caller that gets an error re-reads the height rather than assuming none
+    /// landed. `BatchPushUnsupported` means nothing was sent and the caller should fall back.
+    async fn handle_confirmed_certificates(
+        &self,
+        certificates: Vec<CacheArc<ConfirmedBlockCertificate>>,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<ChainInfoResponse, NodeError>;
+
     /// Processes a validated certificate.
     async fn handle_validated_certificate(
         &self,
@@ -361,6 +377,12 @@ pub enum NodeError {
         chain_id: ChainId,
         bundles: Vec<(ChainId, BlockHeight)>,
     },
+
+    #[error("A batch push carried no certificates")]
+    EmptyCertificateBatch,
+
+    #[error("This node does not carry a run of certificates in one request")]
+    BatchPushUnsupported,
 }
 
 /// Parsed data from an `InvalidTimestamp` error.
@@ -441,7 +463,9 @@ impl NodeError {
             | NodeError::EmptyBlobsNotFound
             | NodeError::ResponseHandlingError { .. }
             | NodeError::MissingCertificatesByHeights { .. }
-            | NodeError::TooManyCertificatesReturned { .. } => false,
+            | NodeError::TooManyCertificatesReturned { .. }
+            | NodeError::EmptyCertificateBatch
+            | NodeError::BatchPushUnsupported => false,
         }
     }
 }

@@ -7,7 +7,7 @@ use std::{
     future::Future,
     iter,
     sync::{
-        atomic::{AtomicU32, Ordering},
+        atomic::{AtomicBool, AtomicU32, Ordering},
         Arc,
     },
 };
@@ -50,11 +50,11 @@ use linera_core::{
 use linera_storage::Arc as CacheArc;
 use linera_version::VersionInfo;
 use tonic::{Code, IntoRequest, Request, Status};
-use tracing::{debug, instrument, trace, Level};
+use tracing::{debug, info, instrument, trace, Level};
 
 use super::{
     api::{self, validator_node_client::ValidatorNodeClient, SubscriptionRequest},
-    transport, GRPC_MAX_MESSAGE_SIZE,
+    batch_push_request, transport, GRPC_MAX_MESSAGE_SIZE,
 };
 
 /// Maximum number of stream IDs per `previous_event_blocks` request, to avoid exceeding
@@ -79,6 +79,10 @@ pub struct GrpcClient {
     /// Tracks when each validator address last had a subscription failure, so that
     /// other chains don't independently retry the same dead validator.
     subscription_cooldowns: Arc<papaya::HashMap<String, Instant>>,
+    /// Set once this validator answers `Unimplemented` to a batch push, so the rest of a catch-up
+    /// against an older binary costs one round trip per block rather than two. Never cleared: a
+    /// validator that gains the method is picked up when this process next builds its node.
+    no_batch_push: Arc<AtomicBool>,
 }
 
 impl GrpcClient {
@@ -101,6 +105,7 @@ impl GrpcClient {
             max_retries,
             max_backoff,
             subscription_cooldowns,
+            no_batch_push: Arc::default(),
         }
     }
 
@@ -164,6 +169,26 @@ impl GrpcClient {
         Fut: Future<Output = Result<tonic::Response<S>, Status>>,
         R: IntoRequest<R> + Clone,
     {
+        self.try_delegate(f, request)
+            .await?
+            .map_err(|status| NodeError::GrpcError {
+                error: format!("remote request [{handler}] failed with status: {status:?}"),
+            })
+    }
+
+    /// Like [`Self::delegate`], but hands back the final `Status` instead of a message, for the
+    /// callers that dispatch on the code — a validator that lacks a method answers
+    /// `Unimplemented`, which is a fact about the peer rather than a failed request.
+    async fn try_delegate<F, Fut, R, S>(
+        &self,
+        f: F,
+        request: impl TryInto<R> + fmt::Debug + Clone,
+    ) -> Result<Result<S, Status>, NodeError>
+    where
+        F: Fn(ValidatorNodeClient<transport::Channel>, Request<R>) -> Fut,
+        Fut: Future<Output = Result<tonic::Response<S>, Status>>,
+        R: IntoRequest<R> + Clone,
+    {
         let mut retry_count = 0;
         let request_inner = request.try_into().map_err(|_| NodeError::GrpcError {
             error: "could not convert request to proto".to_string(),
@@ -187,12 +212,8 @@ impl GrpcClient {
                     linera_base::time::timer::sleep(delay).await;
                     continue;
                 }
-                Err(s) => {
-                    return Err(NodeError::GrpcError {
-                        error: format!("remote request [{handler}] failed with status: {s:?}"),
-                    });
-                }
-                Ok(result) => return Ok(result.into_inner()),
+                Err(s) => return Ok(Err(s)),
+                Ok(result) => return Ok(Ok(result.into_inner())),
             };
         }
     }
@@ -262,6 +283,10 @@ impl ValidatorNode for GrpcClient {
         self.address.clone()
     }
 
+    fn supports_batch_push(&self) -> bool {
+        !self.no_batch_push.load(Ordering::Relaxed)
+    }
+
     #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn handle_block_proposal(
         &self,
@@ -300,6 +325,45 @@ impl ValidatorNode for GrpcClient {
             handle_confirmed_certificate,
             request
         )?)
+    }
+
+    #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
+    async fn handle_confirmed_certificates(
+        &self,
+        certificates: Vec<CacheArc<ConfirmedBlockCertificate>>,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
+        if self.no_batch_push.load(Ordering::Relaxed) {
+            return Err(NodeError::BatchPushUnsupported);
+        }
+        let request = batch_push_request(&certificates, delivery.wait_for_outgoing_messages())?;
+        debug!(
+            handler = "handle_confirmed_certificates",
+            certificates = certificates.len(),
+            "sending gRPC request"
+        );
+        let result = self
+            .try_delegate(
+                |mut client, req| async move { client.handle_confirmed_certificates(req).await },
+                request,
+            )
+            .await?;
+        match result {
+            Ok(response) => GrpcClient::try_into_chain_info(response),
+            Err(status) if status.code() == Code::Unimplemented => {
+                info!(
+                    address = self.address,
+                    "validator has no batch push; sending its blocks one at a time"
+                );
+                self.no_batch_push.store(true, Ordering::Relaxed);
+                Err(NodeError::BatchPushUnsupported)
+            }
+            Err(status) => Err(NodeError::GrpcError {
+                error: format!(
+                    "remote request [handle_confirmed_certificates] failed with status: {status:?}"
+                ),
+            }),
+        }
     }
 
     #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]

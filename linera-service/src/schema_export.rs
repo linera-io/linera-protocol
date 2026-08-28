@@ -45,6 +45,10 @@ impl ValidatorNode for DummyValidatorNode {
         "dummy".to_string()
     }
 
+    fn supports_batch_push(&self) -> bool {
+        false
+    }
+
     async fn handle_block_proposal(
         &self,
         _: BlockProposal,
@@ -70,6 +74,14 @@ impl ValidatorNode for DummyValidatorNode {
     async fn handle_confirmed_certificate(
         &self,
         _: CacheArc<GenericCertificate<ConfirmedBlock>>,
+        _delivery: CrossChainMessageDelivery,
+    ) -> Result<ChainInfoResponse, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
+
+    async fn handle_confirmed_certificates(
+        &self,
+        _: Vec<CacheArc<GenericCertificate<ConfirmedBlock>>>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)

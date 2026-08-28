@@ -46,7 +46,8 @@ use linera_rpc::{
         ShardConfig, ShardId, TlsConfig, ValidatorInternalNetworkConfig,
         ValidatorPublicNetworkConfig,
     },
-    grpc, simple, NodeOptions,
+    grpc::{self, GRPC_MAX_MESSAGE_SIZE},
+    simple, NodeOptions,
 };
 use linera_sdk::linera_base_types::{AccountSecretKey, ValidatorKeypair};
 use linera_service::{
@@ -590,10 +591,21 @@ enum ServerCommand {
         )]
         block_export_transport: BlockExportTransport,
 
-        /// How many certificates are read from storage and pushed per batch when a block export
-        /// has to catch a lagging validator up. Only used with `--export-blocks-to-committee`.
+        /// How many certificates are read from storage per read when a block export has to catch
+        /// a lagging validator up. Only used with `--export-blocks-to-committee`.
         #[arg(long, default_value_t = BlockExportConfig::default().certificate_upload_batch_size)]
         block_export_batch_size: u64,
+
+        /// How many certificates block export sends the destination in one request. Bounded by
+        /// what the destination can execute inside the proxy's 4 s request timeout, so raise it
+        /// only as far as the slowest validator in the committee can keep up with.
+        #[arg(long, default_value_t = BlockExportConfig::default().certificates_per_push)]
+        block_export_certificates_per_push: u64,
+
+        /// The most certificate bytes block export puts in one request. Caps a run below the
+        /// 16 MiB gRPC message limit, which the block-size policy alone does not.
+        #[arg(long, default_value_t = BlockExportConfig::default().push_bytes)]
+        block_export_push_bytes: usize,
 
         /// How many missing blocks block export pushes to one validator per round. Bounds how
         /// long a freshly-joined validator's backfill can delay a live block.
@@ -810,6 +822,8 @@ async fn run(options: ServerOptions) {
             export_blocks_to_committee,
             block_export_transport,
             block_export_batch_size,
+            block_export_certificates_per_push,
+            block_export_push_bytes,
             block_export_max_catch_up_blocks,
             block_export_queue_size,
             block_export_queue_bytes,
@@ -846,6 +860,8 @@ async fn run(options: ServerOptions) {
                 block_export_config: export_blocks_to_committee.then(|| {
                     let config = BlockExportConfig {
                         certificate_upload_batch_size: block_export_batch_size,
+                        certificates_per_push: block_export_certificates_per_push,
+                        push_bytes: block_export_push_bytes,
                         queue_size: block_export_queue_size,
                         queue_bytes: block_export_queue_bytes,
                         max_in_flight_per_destination: block_export_max_in_flight,
@@ -857,6 +873,14 @@ async fn run(options: ServerOptions) {
                         converged_chain_retention: block_export_converged_retention,
                     };
                     config.check().expect("invalid block export configuration");
+                    // Not in `check()`: linera-core cannot see the transport's limit, and a run
+                    // that overruns it fails to encode identically on every retry, which stalls
+                    // the chain instead of slowing it.
+                    assert!(
+                        config.push_bytes < GRPC_MAX_MESSAGE_SIZE,
+                        "--block-export-push-bytes must be below the {GRPC_MAX_MESSAGE_SIZE}-byte \
+                         gRPC message limit",
+                    );
                     config
                 }),
                 block_export_transport,

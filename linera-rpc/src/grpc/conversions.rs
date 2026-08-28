@@ -26,13 +26,14 @@ use linera_core::{
     node::NodeError,
     worker::Notification,
 };
+use linera_storage::Arc as CacheArc;
 use thiserror::Error;
 use tonic::{Code, Status};
 
 use super::api::{self, PendingBlobRequest};
 use crate::{
-    HandleConfirmedCertificateRequest, HandleLiteCertRequest, HandleTimeoutCertificateRequest,
-    HandleValidatedCertificateRequest,
+    HandleConfirmedCertificateRequest, HandleConfirmedCertificatesRequest, HandleLiteCertRequest,
+    HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
 };
 
 #[derive(Error, Debug)]
@@ -50,6 +51,8 @@ pub enum GrpcProtoConversionError {
     InconsistentChainId,
     #[error("Unrecognized certificate type")]
     InvalidCertificateType,
+    #[error("A batch push carried no certificates")]
+    EmptyCertificateBatch,
     #[error(
         "Chain info queries asking for committees are reserved for local clients; \
          validators serve committees via the event stream and the committee blob store"
@@ -496,6 +499,62 @@ impl TryFrom<HandleConfirmedCertificateRequest> for api::HandleConfirmedCertific
     }
 }
 
+impl TryFrom<api::HandleConfirmedCertificatesRequest> for HandleConfirmedCertificatesRequest {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(request: api::HandleConfirmedCertificatesRequest) -> Result<Self, Self::Error> {
+        let req_chain_id: ChainId = request
+            .chain_id
+            .ok_or(GrpcProtoConversionError::MissingField)?
+            .try_into()?;
+        ensure!(
+            !request.certificates.is_empty(),
+            GrpcProtoConversionError::EmptyCertificateBatch
+        );
+        let mut certificates = Vec::with_capacity(request.certificates.len());
+        for certificate in request.certificates {
+            let certificate: ConfirmedBlockCertificate = certificate.try_into()?;
+            // The chain id routes the whole batch, so one certificate for another chain would
+            // reach a worker that does not own it.
+            ensure!(
+                certificate.inner().chain_id() == req_chain_id,
+                GrpcProtoConversionError::InconsistentChainId
+            );
+            certificates.push(certificate);
+        }
+        Ok(HandleConfirmedCertificatesRequest {
+            certificates,
+            wait_for_outgoing_messages: request.wait_for_outgoing_messages,
+        })
+    }
+}
+
+/// Builds a batch push from borrowed certificates.
+///
+/// Borrowed rather than owned so a sender that discovers the destination has no batch push still
+/// holds the certificates to send one at a time.
+pub(crate) fn batch_push_request(
+    certificates: &[CacheArc<ConfirmedBlockCertificate>],
+    wait_for_outgoing_messages: bool,
+) -> Result<api::HandleConfirmedCertificatesRequest, GrpcProtoConversionError> {
+    let chain_id = certificates
+        .first()
+        .ok_or(GrpcProtoConversionError::EmptyCertificateBatch)?
+        .inner()
+        .chain_id();
+    let certificates = certificates
+        .iter()
+        .map(|certificate| api::Certificate::try_from(&**certificate))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(api::HandleConfirmedCertificatesRequest {
+        chain_id: Some(chain_id.into()),
+        certificates,
+        wait_for_outgoing_messages,
+        // This binary understands the aggregated `MissingCrossChainUpdates` error.
+        supports_aggregated_missing: true,
+    })
+}
+
 impl TryFrom<HandleValidatedCertificateRequest> for api::HandleValidatedCertificateRequest {
     type Error = GrpcProtoConversionError;
 
@@ -587,10 +646,10 @@ impl TryFrom<TimeoutCertificate> for api::Certificate {
     }
 }
 
-impl TryFrom<ConfirmedBlockCertificate> for api::Certificate {
+impl TryFrom<&ConfirmedBlockCertificate> for api::Certificate {
     type Error = GrpcProtoConversionError;
 
-    fn try_from(certificate: ConfirmedBlockCertificate) -> Result<Self, Self::Error> {
+    fn try_from(certificate: &ConfirmedBlockCertificate) -> Result<Self, Self::Error> {
         let round = bincode::serialize(&certificate.round)?;
         let signatures = bincode::serialize(certificate.signatures())?;
 
@@ -602,6 +661,14 @@ impl TryFrom<ConfirmedBlockCertificate> for api::Certificate {
             signatures,
             kind: api::CertificateKind::Confirmed as i32,
         })
+    }
+}
+
+impl TryFrom<ConfirmedBlockCertificate> for api::Certificate {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(certificate: ConfirmedBlockCertificate) -> Result<Self, Self::Error> {
+        (&certificate).try_into()
     }
 }
 

@@ -16,7 +16,7 @@ use std::{
     collections::BTreeMap,
     str::FromStr as _,
     sync::{
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
     },
 };
@@ -32,11 +32,12 @@ use linera_core::node::{
     ValidatorNodeProvider,
 };
 use linera_version::VersionInfo;
-use tonic::Request;
-use tracing::{debug, instrument, Level};
+use tonic::{Code, Request};
+use tracing::{debug, info, instrument, Level};
 
 use super::{
     api::{self, validator_relay_client::ValidatorRelayClient},
+    batch_push_request,
     pool::GrpcConnectionPool,
     transport, GrpcError, GRPC_MAX_MESSAGE_SIZE,
 };
@@ -65,6 +66,10 @@ pub struct RelayClient {
     /// The same validator as a URL, used only to name it in logs and metrics.
     address: String,
     client: ValidatorRelayClient<transport::Channel>,
+    /// Set once a batch push comes back `Unimplemented` — from our own proxy or from the
+    /// destination, the answer being the same either way. Never cleared: a peer that gains the
+    /// method is picked up when this process next builds its node.
+    no_batch_push: Arc<AtomicBool>,
 }
 
 impl RelayClient {
@@ -97,6 +102,10 @@ impl ValidatorNode for RelayClient {
 
     fn address(&self) -> String {
         self.address.clone()
+    }
+
+    fn supports_batch_push(&self) -> bool {
+        !self.no_batch_push.load(Ordering::Relaxed)
     }
 
     #[instrument(target = "relay_client", skip_all, err(level = Level::DEBUG), fields(destination = self.address))]
@@ -148,6 +157,46 @@ impl ValidatorNode for RelayClient {
             .await?
             .into_inner();
         Self::try_into_chain_info(result)
+    }
+
+    #[instrument(target = "relay_client", skip_all, err(level = Level::DEBUG), fields(destination = self.address))]
+    async fn handle_confirmed_certificates(
+        &self,
+        certificates: Vec<linera_storage::Arc<types::ConfirmedBlockCertificate>>,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
+        if self.no_batch_push.load(Ordering::Relaxed) {
+            return Err(NodeError::BatchPushUnsupported);
+        }
+        let request = api::RelayConfirmedCertificatesRequest {
+            destination: self.destination.clone(),
+            inner: Some(batch_push_request(
+                &certificates,
+                delivery.wait_for_outgoing_messages(),
+            )?),
+        };
+        debug!(
+            handler = "relay_confirmed_certificates",
+            certificates = certificates.len(),
+            "sending gRPC request"
+        );
+        match self
+            .client
+            .clone()
+            .relay_confirmed_certificates(Request::new(request))
+            .await
+        {
+            Ok(result) => Self::try_into_chain_info(result.into_inner()),
+            Err(status) if status.code() == Code::Unimplemented => {
+                info!(
+                    destination = self.address,
+                    "no batch push on this path; sending blocks one at a time"
+                );
+                self.no_batch_push.store(true, Ordering::Relaxed);
+                Err(NodeError::BatchPushUnsupported)
+            }
+            Err(status) => Err(status.into()),
+        }
     }
 
     #[instrument(target = "relay_client", skip_all, err(level = Level::DEBUG), fields(destination = self.address))]
@@ -357,6 +406,7 @@ impl ValidatorNodeProvider for RelayNodeProvider {
             client: ValidatorRelayClient::new(channel)
                 .max_encoding_message_size(GRPC_MAX_MESSAGE_SIZE)
                 .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE),
+            no_batch_push: Arc::default(),
         })
     }
 }

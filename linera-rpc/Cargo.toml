@@ -85,8 +85,16 @@ linera-rpc = { path = ".", default-features = false, features = [
 opentelemetry_sdk.workspace = true
 proptest.workspace = true
 serde-reflection.workspace = true
+test-log.workspace = true
 test-strategy.workspace = true
-tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
+tokio = { workspace = true, features = [
+    "macros",
+    "net",
+    "rt",
+    "rt-multi-thread",
+    "test-util",
+] }
+tokio-stream = { workspace = true, features = ["net"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 http.workspace = true

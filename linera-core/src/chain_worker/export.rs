@@ -54,7 +54,7 @@ use linera_base::{
     identifiers::{BlobId, ChainId, StreamId},
     time::{timer::timeout, Duration},
 };
-use linera_chain::types::ConfirmedBlockCertificate;
+use linera_chain::types::{CertificateValue as _, ConfirmedBlockCertificate};
 use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
 use linera_storage::{Arc as CacheArc, Clock as _, Storage};
 use tokio::sync::mpsc;
@@ -146,17 +146,26 @@ pub(crate) mod metrics {
                 exponential_bucket_latencies(600_000.0),
             );
 
-        /// Time for a SINGLE certificate push, which is one round trip to the destination.
+        /// Time for ONE push: a single live block, or a run of up to `certificates_per_push`.
         ///
         /// This is the destination's actual responsiveness, independent of how much catch-up the
-        /// round carried: a peer that is far behind makes long rounds out of fast round trips, and
-        /// only this metric can tell that apart from a peer that is genuinely slow to answer.
+        /// round carried. Divide `CERTIFICATES_PUSHED` by its count for the run length a push
+        /// actually carried.
         pub static CERTIFICATE_SEND_LATENCY: HistogramVec =
             register_histogram_vec(
                 "block_export_certificate_send_latency",
-                "Time (ms) for one certificate round trip to one destination validator",
+                "Time (ms) for one push round trip to one destination validator",
                 &["validator"],
                 exponential_bucket_latencies(60_000.0),
+            );
+
+        /// Certificates the destination accepted, as opposed to pushes: with batching the two
+        /// differ by up to `certificates_per_push`, and this is the one that reads as blocks/s.
+        pub static CERTIFICATES_PUSHED: IntCounterVec =
+            register_int_counter_vec(
+                "block_export_certificates_pushed",
+                "Certificates accepted by a destination validator",
+                &["validator"],
             );
 
         /// How many concurrent sends each destination is currently allowed.
@@ -250,6 +259,14 @@ pub struct BlockExportConfig {
     /// client's 500: a chunk lives inside one send job, and `max_catch_up_blocks` bounds the
     /// round anyway.
     pub certificate_upload_batch_size: u64,
+    /// How many certificates one push carries, which is what lifts catch-up off its floor of one
+    /// block per network round trip. Bounded by what the destination can execute inside the 4 s
+    /// every hop from this shard to its worker allows, not by the wire.
+    pub certificates_per_push: u64,
+    /// The most certificate bytes one push may carry, below the 16 MiB a gRPC message allows and
+    /// the encode footprint `max_in_flight_total` concurrent sends multiply. The block-size policy
+    /// alone lets a run exceed both, and a run that cannot be encoded stalls rather than slows.
+    pub push_bytes: usize,
     /// How many blocks the export queue holds before dropping new ones for catch-up to repair.
     pub queue_size: usize,
     /// The most blob payload bytes queued blocks may pin before new ones are dropped for
@@ -290,6 +307,14 @@ impl BlockExportConfig {
         if self.certificate_upload_batch_size == 0 {
             // `slice::chunks(0)` panics.
             return Err("block export batch size must be greater than zero".into());
+        }
+        if self.certificates_per_push == 0 {
+            // No certificate would ever be sent, and catch-up would spin without progressing.
+            return Err("block export certificates per push must be greater than zero".into());
+        }
+        if self.push_bytes == 0 {
+            // Every run would degenerate to one certificate, silently undoing batching.
+            return Err("block export push byte budget must be greater than zero".into());
         }
         if self.queue_size == 0 {
             // Every block would be dropped and export would run on catch-up alone.
@@ -347,6 +372,8 @@ impl Default for BlockExportConfig {
     fn default() -> Self {
         BlockExportConfig {
             certificate_upload_batch_size: 100,
+            certificates_per_push: 20,
+            push_bytes: 1024 * 1024,
             queue_size: 1024,
             queue_bytes: 256 * 1024 * 1024,
             max_in_flight_per_destination: 8,
@@ -1691,6 +1718,9 @@ where
             metrics::CERTIFICATE_SEND_LATENCY
                 .remove_label_values(&[address])
                 .ok();
+            metrics::CERTIFICATES_PUSHED
+                .remove_label_values(&[address])
+                .ok();
             metrics::SENDS_SUCCEEDED
                 .remove_label_values(&[address])
                 .ok();
@@ -1889,6 +1919,8 @@ where
             },
             storage: storage.clone(),
             certificate_upload_batch_size: config.certificate_upload_batch_size,
+            certificates_per_push: config.certificates_per_push,
+            push_bytes: config.push_bytes,
             #[cfg(with_metrics)]
             address: dest.address.clone(),
         };
@@ -2073,7 +2105,9 @@ pub(crate) struct BlockSender<S, N> {
     pub(crate) remote_node: RemoteNode<N>,
     pub(crate) storage: S,
     pub(crate) certificate_upload_batch_size: u64,
-    /// Destination address, carried only to label per-certificate latency.
+    pub(crate) certificates_per_push: u64,
+    pub(crate) push_bytes: usize,
+    /// Destination address, carried only to label per-push latency and throughput.
     #[cfg(with_metrics)]
     pub(crate) address: String,
 }
@@ -2146,15 +2180,25 @@ where
             let certificates = self
                 .storage
                 .read_certificates_by_heights(chain_id, chunk)
-                .await?;
-            for certificate in certificates.into_iter().flatten() {
+                .await?
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
+            let mut rest = certificates.as_slice();
+            loop {
                 // The validator's own responses move the cursor, so skip anything it has since
-                // reported holding rather than re-sending it.
-                if certificate.block().header.height < next_height {
-                    continue;
+                // reported holding rather than re-sending it. Storage answers in the order
+                // asked and `heights` ascends, so one partition point covers the whole chunk.
+                let held = rest
+                    .partition_point(|certificate| certificate.block().header.height < next_height);
+                rest = &rest[held..];
+                let take = self.push_len(rest);
+                if take == 0 {
+                    break;
                 }
-                let info = self.send_confirmed_certificate(&certificate, &[]).await?;
-                next_height = info.next_block_height;
+                let (push, remaining) = rest.split_at(take);
+                next_height = self.push_certificates(push).await?.next_block_height;
+                rest = remaining;
             }
         }
         Ok(next_height)
@@ -2196,8 +2240,10 @@ where
         loop {
             match result {
                 Err(NodeError::BlobsNotFound(blob_ids)) if !sent_blobs => {
-                    self.remote_node
-                        .check_blobs_not_found(certificate, &blob_ids)?;
+                    self.remote_node.check_blobs_not_found(
+                        &certificate.inner().required_blob_ids(),
+                        &blob_ids,
+                    )?;
                     let blobs = self.resolve_blobs(&blob_ids, held).await?;
                     self.remote_node
                         .node
@@ -2205,11 +2251,133 @@ where
                         .await?;
                     sent_blobs = true;
                 }
-                result => return Ok(result?),
+                result => {
+                    let info = result?;
+                    #[cfg(with_metrics)]
+                    metrics::CERTIFICATES_PUSHED
+                        .with_label_values(&[&self.address])
+                        .inc();
+                    return Ok(info);
+                }
             }
             result = self
                 .remote_node
                 .handle_confirmed_certificate(certificate.clone(), delivery)
+                .await;
+        }
+    }
+
+    /// How many of `certificates` one push carries: at most `certificates_per_push` of them, and
+    /// at most `push_bytes` — but never fewer than one, so an oversized certificate still moves
+    /// rather than wedging the chain.
+    fn push_len(&self, certificates: &[CacheArc<ConfirmedBlockCertificate>]) -> usize {
+        let mut bytes = 0usize;
+        for (index, certificate) in certificates
+            .iter()
+            .take(self.certificates_per_push as usize)
+            .enumerate()
+        {
+            // A certificate whose size cannot be computed is treated as filling the budget, so it
+            // is pushed on its own and the destination's answer is what decides its fate.
+            let size = bcs::serialized_size(&**certificate).unwrap_or(self.push_bytes);
+            bytes = bytes.saturating_add(size);
+            if bytes > self.push_bytes {
+                return index.max(1);
+            }
+        }
+        certificates.len().min(self.certificates_per_push as usize)
+    }
+
+    /// Pushes a run of certificates for one chain, and returns the chain info the destination
+    /// reports afterwards.
+    ///
+    /// A destination without the batch push takes them one at a time instead, which is what the
+    /// whole run did before batching: timed individually, sent in the compact lite form where the
+    /// destination signed the block, and each recovering its own missing blobs.
+    async fn push_certificates(
+        &mut self,
+        certificates: &[CacheArc<ConfirmedBlockCertificate>],
+    ) -> Result<Box<crate::data_types::ChainInfo>, chain_client::Error> {
+        if !self.remote_node.node.supports_batch_push() {
+            return self.push_one_at_a_time(certificates).await;
+        }
+        match self.push_run(certificates).await {
+            // Learned only by asking, and only once per destination: the node has latched it, so
+            // the branch above takes every later run.
+            Err(chain_client::Error::RemoteNodeError(NodeError::BatchPushUnsupported)) => {
+                self.push_one_at_a_time(certificates).await
+            }
+            result => result,
+        }
+    }
+
+    /// Sends the run one certificate per request, exactly as catch-up did before batching.
+    async fn push_one_at_a_time(
+        &mut self,
+        certificates: &[CacheArc<ConfirmedBlockCertificate>],
+    ) -> Result<Box<crate::data_types::ChainInfo>, chain_client::Error> {
+        let mut info = None;
+        for certificate in certificates {
+            info = Some(self.send_confirmed_certificate(certificate, &[]).await?);
+        }
+        Ok(info.ok_or(NodeError::EmptyCertificateBatch)?)
+    }
+
+    /// Pushes the whole run in one request, uploading blobs the destination reports missing.
+    ///
+    /// An error leaves an unknown number of them landed, which costs nothing: the caller's cursor
+    /// always comes from the destination, never from what was sent.
+    async fn push_run(
+        &mut self,
+        certificates: &[CacheArc<ConfirmedBlockCertificate>],
+    ) -> Result<Box<crate::data_types::ChainInfo>, chain_client::Error> {
+        let delivery = CrossChainMessageDelivery::NonBlocking;
+        // Covers the blob-recovery retries below too, for the same reason as the single-certificate
+        // push: what matters is how long the run took to land, not how many attempts it needed.
+        #[cfg(with_metrics)]
+        let push_latency = metrics::CERTIFICATE_SEND_LATENCY.with_label_values(&[&self.address]);
+        #[cfg(with_metrics)]
+        let _push_latency = push_latency.measure_latency();
+        // Which certificate of the run the destination stopped on is not reported, so a requested
+        // blob is checked against everything the run needs.
+        let required = certificates
+            .iter()
+            .flat_map(|certificate| certificate.inner().required_blob_ids())
+            .collect::<BTreeSet<_>>();
+        let mut result = self
+            .remote_node
+            .handle_confirmed_certificates(certificates.to_vec(), delivery)
+            .await;
+        // A run stops at the destination's first refusal, so its next `BlobsNotFound` names the
+        // *next* certificate's blobs — recovering once would strand a blob-per-block chain after
+        // one of them. Terminates: `required` is finite and every pass adds an id.
+        let mut uploaded = BTreeSet::new();
+        loop {
+            match result {
+                Err(NodeError::BlobsNotFound(blob_ids))
+                    if blob_ids.iter().any(|id| !uploaded.contains(id)) =>
+                {
+                    self.remote_node
+                        .check_blobs_not_found(&required, &blob_ids)?;
+                    let blobs = self.resolve_blobs(&blob_ids, &[]).await?;
+                    self.remote_node
+                        .node
+                        .upload_blobs(blobs.into_iter().map(CacheArc::into_std).collect())
+                        .await?;
+                    uploaded.extend(blob_ids);
+                }
+                result => {
+                    let info = result?;
+                    #[cfg(with_metrics)]
+                    metrics::CERTIFICATES_PUSHED
+                        .with_label_values(&[&self.address])
+                        .inc_by(certificates.len() as u64);
+                    return Ok(info);
+                }
+            }
+            result = self
+                .remote_node
+                .handle_confirmed_certificates(certificates.to_vec(), delivery)
                 .await;
         }
     }
@@ -2257,6 +2425,14 @@ mod tests {
         let invalid = [
             BlockExportConfig {
                 certificate_upload_batch_size: 0,
+                ..BlockExportConfig::default()
+            },
+            BlockExportConfig {
+                certificates_per_push: 0,
+                ..BlockExportConfig::default()
+            },
+            BlockExportConfig {
+                push_bytes: 0,
                 ..BlockExportConfig::default()
             },
             BlockExportConfig {

@@ -186,6 +186,15 @@ impl ValidatorNode for DummyValidator {
         Box<dyn futures::Stream<Item = Result<linera_rpc::grpc::api::BlobContent, Status>> + Send>,
     >;
 
+    /// The standalone exporter pushes one certificate at a time, so this dummy answers the
+    /// batch push the way a validator running an older binary would.
+    async fn handle_confirmed_certificates(
+        &self,
+        _request: Request<linera_rpc::grpc::api::HandleConfirmedCertificatesRequest>,
+    ) -> Result<Response<linera_rpc::grpc::api::ChainInfoResult>, Status> {
+        Err(Status::unimplemented("handle_confirmed_certificates"))
+    }
+
     async fn handle_confirmed_certificate(
         &self,
         request: Request<linera_rpc::grpc::api::HandleConfirmedCertificateRequest>,

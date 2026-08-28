@@ -830,6 +830,10 @@ NodeError:
                 TUPLE:
                   - TYPENAME: ChainId
                   - TYPENAME: BlockHeight
+    32:
+      EmptyCertificateBatch: UNIT
+    33:
+      BatchPushUnsupported: UNIT
 OpenChainConfig:
   STRUCT:
     - ownership:

@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::{BTreeSet, HashSet, VecDeque};
 
 use custom_debug_derive::Debug;
 use futures::future::try_join_all;
@@ -74,6 +74,26 @@ impl<N: ValidatorNode> RemoteNode<N> {
         let response = self
             .node
             .handle_confirmed_certificate(certificate, delivery)
+            .await?;
+        self.check_and_return_info(response, chain_id)
+    }
+
+    /// Sends a run of certificates for one chain, and returns the chain info the validator
+    /// reports afterwards. The run stops at the destination's first refusal, so an error says
+    /// nothing about how many landed and the caller re-reads the height.
+    pub(crate) async fn handle_confirmed_certificates(
+        &self,
+        certificates: Vec<CacheArc<ConfirmedBlockCertificate>>,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<Box<ChainInfo>, NodeError> {
+        let chain_id = certificates
+            .first()
+            .ok_or(NodeError::EmptyCertificateBatch)?
+            .inner()
+            .chain_id();
+        let response = self
+            .node
+            .handle_confirmed_certificates(certificates, delivery)
             .await?;
         self.check_and_return_info(response, chain_id)
     }
@@ -288,15 +308,15 @@ impl<N: ValidatorNode> RemoteNode<N> {
         Ok(certificates)
     }
 
-    /// Checks that requesting these blobs when trying to handle this certificate is legitimate,
-    /// i.e. that there are no duplicates and the blobs are actually required.
-    pub fn check_blobs_not_found<T: CertificateValue>(
+    /// Checks that a validator's request for these blobs is legitimate: no duplicates, and every
+    /// one of them in `required`. The caller chooses that scope — one certificate's requirements
+    /// on the single-certificate path, the whole run's union on the batch push.
+    pub fn check_blobs_not_found(
         &self,
-        certificate: &GenericCertificate<T>,
+        required: &BTreeSet<BlobId>,
         blob_ids: &[BlobId],
     ) -> Result<(), NodeError> {
         ensure!(!blob_ids.is_empty(), NodeError::EmptyBlobsNotFound);
-        let required = certificate.inner().required_blob_ids();
         for blob_id in blob_ids {
             if !required.contains(blob_id) {
                 info!(

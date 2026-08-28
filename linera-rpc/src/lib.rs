@@ -54,6 +54,16 @@ pub struct HandleConfirmedCertificateRequest {
     pub wait_for_outgoing_messages: bool,
 }
 
+/// A request to handle a run of confirmed-block certificates for one chain.
+#[derive(Clone, Debug)]
+#[cfg_attr(with_testing, derive(Eq, PartialEq))]
+pub struct HandleConfirmedCertificatesRequest {
+    /// The confirmed-block certificates to handle, in ascending height order.
+    pub certificates: Vec<linera_chain::types::ConfirmedBlockCertificate>,
+    /// Whether to wait for the resulting cross-chain messages to be delivered.
+    pub wait_for_outgoing_messages: bool,
+}
+
 /// A request to handle a validated-block certificate.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
