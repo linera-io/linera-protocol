@@ -735,7 +735,7 @@ where
         "unknown"
     }
 
-    fn log_error(&self, error: &linera_core::worker::WorkerError, context: &str) {
+    pub(crate) fn log_error(&self, error: &linera_core::worker::WorkerError, context: &str) {
         let nickname = self.state.nickname();
         if error.is_local() {
             error!(nickname, %error, "{}", context);
