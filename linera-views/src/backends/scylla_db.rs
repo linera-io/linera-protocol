@@ -4,8 +4,8 @@
 //! Implements [`crate::store::KeyValueStore`] for the ScyllaDB database.
 //!
 //! The current connection is done via a Session and a corresponding primary key called
-//! "namespace". The maximum number of concurrent queries is controlled by
-//! `max_concurrent_queries`.
+//! "namespace". `max_concurrent_queries` bounds how many store operations run at once, while
+//! `MAX_CONCURRENT_CHUNK_QUERIES` bounds the chunk queries issued within one multi-key read.
 
 use std::{
     collections::{BTreeSet, HashMap},
