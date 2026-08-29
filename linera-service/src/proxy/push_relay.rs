@@ -62,7 +62,7 @@ where
             let (key, mut client) = match shard_client(&request) {
                 Ok(shard) => shard,
                 Err(status) => {
-                    let _ = responses.send(Err(status)).await;
+                    responses.send(Err(status)).await.ok();
                     break;
                 }
             };
@@ -76,7 +76,7 @@ where
                     {
                         Ok(outbound) => outbound.into_inner(),
                         Err(status) => {
-                            let _ = responses.send(Err(status)).await;
+                            responses.send(Err(status)).await.ok();
                             break;
                         }
                     };
@@ -92,11 +92,12 @@ where
                 Ok(()) => {}
                 Err(mpsc::error::TrySendError::Full(_)) => {
                     warn!("A shard is not keeping up with the push stream; ending it");
-                    let _ = responses
+                    responses
                         .send(Err(Status::resource_exhausted(
                             "a shard is not keeping up with the certificate push stream",
                         )))
-                        .await;
+                        .await
+                        .ok();
                     break;
                 }
                 Err(mpsc::error::TrySendError::Closed(_)) => {
@@ -128,11 +129,12 @@ where
                 inner: Some(api::relay_push_request::Inner::Destination(destination)),
             })) => destination,
             Some(Ok(_)) => {
-                let _ = responses
+                responses
                     .send(Err(Status::invalid_argument(
                         "the first message of a relayed push must name the destination",
                     )))
-                    .await;
+                    .await
+                    .ok();
                 return;
             }
             Some(Err(error)) => {
@@ -144,7 +146,7 @@ where
         let mut client = match peer_client(&destination).await {
             Ok(client) => client,
             Err(status) => {
-                let _ = responses.send(Err(status)).await;
+                responses.send(Err(status)).await.ok();
                 return;
             }
         };
@@ -155,7 +157,7 @@ where
         {
             Ok(outbound) => outbound.into_inner(),
             Err(status) => {
-                let _ = responses.send(Err(status)).await;
+                responses.send(Err(status)).await.ok();
                 return;
             }
         };
