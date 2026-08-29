@@ -257,7 +257,7 @@ async fn apply_chain<S>(
                 result: Some(result),
             },
             Err(error) => {
-                let _ = responses
+                responses
                     .send(Err(Status::internal(error.to_string())))
                     .await
                     .ok();
@@ -309,42 +309,51 @@ mod tests {
 
     /// Everything the reader handed over must survive retirement, not just the first item.
     ///
-    /// This has to reach the `Err(_) => close + drain` arm to prove anything, so the item is put
-    /// in the queue only *after* the deadline has already passed — the previous version of this
-    /// test sent first, which meant `recv()` returned on the `Ok` arm and the drain was never
-    /// exercised at all. Deleting `queue.close()` leaves the sender open and the assertion on
-    /// `is_closed` fails; deleting the whole `Err` arm strands the item and the first assertion
-    /// fails.
+    /// Staged with reserved permits rather than a timer race. Under `start_paused` the clock
+    /// jumps to the *earliest* pending deadline, so a writer sleeping longer than the receiver's
+    /// idle can never win — the previous rewrite of this test deadlocked itself that way and was
+    /// deterministically red. A reserved permit deposits into an already-closed queue, which is
+    /// exactly the state the close-and-drain arm has to cope with.
+    ///
+    /// Deleting `queue.close()` leaves the sender open and the last assertion fails; deleting the
+    /// whole `Err` arm strands both items and the first assertion fails.
     #[test_log::test(tokio::test(start_paused = true))]
     async fn retirement_drains_what_arrived_at_the_deadline() {
         let (sender, mut queue) = mpsc::channel::<u8>(CHAIN_QUEUE);
+        let first = sender
+            .clone()
+            .reserve_owned()
+            .await
+            .expect("the queue is open");
+        let second = sender
+            .clone()
+            .reserve_owned()
+            .await
+            .expect("the queue has room");
 
-        // Hand items over from another task while the receiver is already parked on its
-        // deadline, so the close-and-drain arm is the one that has to return them.
+        // Deposited only once the receiver has given up waiting, so the drain is what returns it.
         let handing_over = tokio::spawn(async move {
             tokio::time::sleep(CHAIN_IDLE * 2).await;
-            sender.try_send(1).expect("the queue is empty");
-            sender.try_send(2).expect("the queue has room");
-            sender
+            first.send(1);
+            second.send(2);
         });
 
         assert_eq!(
             next_or_retire(&mut queue, CHAIN_IDLE).await,
+            None,
+            "an idle queue retires rather than waiting for a writer that has not arrived",
+        );
+        handing_over.await.expect("the writer does not panic");
+        assert_eq!(
+            next_or_retire(&mut queue, CHAIN_IDLE).await,
             Some(1),
-            "an item that arrived while the queue was retiring must still be returned",
+            "an item handed over as the queue retired must still be returned",
         );
         assert_eq!(
             next_or_retire(&mut queue, CHAIN_IDLE).await,
             Some(2),
-            "and so must every other item already queued behind it",
+            "and so must every other item already reserved behind it",
         );
-        assert_eq!(
-            next_or_retire(&mut queue, CHAIN_IDLE).await,
-            None,
-            "a drained, closed queue is finished",
-        );
-
-        let sender = handing_over.await.expect("the writer does not panic");
         assert!(
             sender.is_closed(),
             "retiring must close the queue so its entry can be pruned",
