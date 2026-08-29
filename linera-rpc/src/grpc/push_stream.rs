@@ -56,6 +56,13 @@ const CHAIN_IDLE: Duration = Duration::from_secs(1);
 /// sits well above that: reaching it is abuse rather than load.
 const CHAINS_PER_STREAM: usize = 256;
 
+/// The window a sender is held to has to fit the queue that enforces it, or a sender behaving
+/// exactly as told would be cut off for it — and one chain must not be able to fill the whole
+/// stream's budget by itself. Checked at compile time rather than in a test: these are constants,
+/// so a violation is a build error rather than something to discover at run time.
+const _: () = assert!(linera_core::node::PUSH_WINDOW <= CHAIN_QUEUE);
+const _: () = assert!(CHAIN_QUEUE <= STREAM_QUEUE);
+
 /// Answers flowing back to the sender. Bounded so a sender that stops reading cannot make us
 /// accumulate answers without limit; the tasks producing them block instead.
 const RESPONSE_QUEUE: usize = 256;
@@ -357,21 +364,6 @@ mod tests {
         assert!(
             sender.is_closed(),
             "retiring must close the queue so its entry can be pruned",
-        );
-    }
-
-    /// The per-chain window a sender is held to has to fit in the queue that enforces it, or a
-    /// sender behaving exactly as told would be cut off for it.
-    #[test]
-    fn the_window_a_sender_is_given_fits_the_queue_that_enforces_it() {
-        assert!(
-            linera_core::node::PUSH_WINDOW <= CHAIN_QUEUE,
-            "a sender allowed {} in flight cannot be refused by a queue of {CHAIN_QUEUE}",
-            linera_core::node::PUSH_WINDOW,
-        );
-        assert!(
-            CHAIN_QUEUE <= STREAM_QUEUE,
-            "one chain must not be able to fill the whole stream's budget by itself",
         );
     }
 }
