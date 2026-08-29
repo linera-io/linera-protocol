@@ -45,11 +45,13 @@ web-default = ["web", "wasmer", "indexed-db"]
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
 bcs.workspace = true
 clap.workspace = true
 futures.workspace = true
 hdrhistogram = { workspace = true }
 linera-base.workspace = true
+linera-cache.workspace = true
 linera-chain.workspace = true
 linera-core.workspace = true
 linera-execution.workspace = true

@@ -61,8 +61,7 @@ where
     D::Store: ReadableKeyValueStore + WritableKeyValueStore + Clone + 'static,
 {
     let database = D::connect_test_namespace().await.unwrap();
-    let store = database.open_shared(&[]).unwrap();
-    let context = ViewContext::<(), D::Store>::create_root_context(store, ())
+    let context = ViewContext::<(), D::Store>::create_root_context(&database, &[], ())
         .await
         .unwrap();
     let mut total_time = Duration::ZERO;
@@ -133,8 +132,7 @@ where
     D::Store: ReadableKeyValueStore + WritableKeyValueStore + Clone + 'static,
 {
     let database = D::connect_test_namespace().await.unwrap();
-    let store = database.open_shared(&[]).unwrap();
-    let context = ViewContext::<(), D::Store>::create_root_context(store, ())
+    let context = ViewContext::<(), D::Store>::create_root_context(&database, &[], ())
         .await
         .unwrap();
     let mut total_time = Duration::ZERO;
@@ -210,8 +208,7 @@ where
 
     for _ in 0..iterations {
         let database = D::connect_test_namespace().await.unwrap();
-        let store = database.open_shared(&[]).unwrap();
-        let context = ViewContext::<(), D::Store>::create_root_context(store, ())
+        let context = ViewContext::<(), D::Store>::create_root_context(&database, &[], ())
             .await
             .unwrap();
 
@@ -247,8 +244,7 @@ where
 
     for _ in 0..iterations {
         let database = D::connect_test_namespace().await.unwrap();
-        let store = database.open_shared(&[]).unwrap();
-        let context = ViewContext::<(), D::Store>::create_root_context(store, ())
+        let context = ViewContext::<(), D::Store>::create_root_context(&database, &[], ())
             .await
             .unwrap();
 

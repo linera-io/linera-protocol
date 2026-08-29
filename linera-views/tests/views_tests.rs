@@ -84,8 +84,7 @@ impl StateStorage for MemoryTestStorage {
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
-        let store = self.database.open_exclusive(&root_key)?;
-        let context = ViewContext::create_root_context(store, id).await?;
+        let context = ViewContext::create_root_context(&self.database, &root_key, id).await?;
         StateView::load(context).await
     }
 }
@@ -137,8 +136,7 @@ impl StateStorage for LruMemoryStorage {
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
-        let store = self.database.open_exclusive(&root_key)?;
-        let context = ViewContext::create_root_context(store, id).await?;
+        let context = ViewContext::create_root_context(&self.database, &root_key, id).await?;
         StateView::load(context).await
     }
 }
@@ -165,8 +163,7 @@ impl StateStorage for RocksDbTestStorage {
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
-        let store = self.database.open_exclusive(&root_key)?;
-        let context = ViewContext::create_root_context(store, id).await?;
+        let context = ViewContext::create_root_context(&self.database, &root_key, id).await?;
         StateView::load(context).await
     }
 }
@@ -193,8 +190,7 @@ impl StateStorage for ScyllaDbTestStorage {
     async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
         self.accessed_chains.insert(id);
         let root_key = bcs::to_bytes(&id)?;
-        let store = self.database.open_exclusive(&root_key)?;
-        let context = ViewContext::create_root_context(store, id).await?;
+        let context = ViewContext::create_root_context(&self.database, &root_key, id).await?;
         StateView::load(context).await
     }
 }
