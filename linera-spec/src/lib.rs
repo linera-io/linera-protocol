@@ -101,14 +101,15 @@
 //!
 //! # The safety/liveness split
 //!
-//! The two arguments are deliberately disjoint in their assumptions, and the module layout
-//! reflects that:
+//! Safety and liveness are deliberately disjoint in their assumptions, and the module layout
+//! reflects that. A third group of results sits below both and draws on each.
 //!
 //! ```text
 //!  MaxByzantineWeight, UnforgeableSignatures,           EventualSynchrony, ClockAccuracy,
 //!  DurablePersistence, SequentialChainState,            CorrectValidatorAvailability,
-//!  EpochAgreement, DeterministicExecution               ActiveCorrectDriver, LeaderFairness,
-//!         |                                             RoundTimeoutGrowth, FullReachability
+//!  StorageAtomicity, EpochAgreement,                    ActiveCorrectDriver, LeaderFairness,
+//!  DeterministicExecution                               RoundTimeoutGrowth, FullReachability
+//!         |                                                     |
 //!         v                                                     |
 //!   quorum properties                                           |
 //!         |                                                     |
@@ -118,17 +119,35 @@
 //!                                       v                        v
 //!                                    SAFETY                   LIVENESS
 //!                              CommitAgreement            UnboundedProgress
-//!                                       |
-//!                                       v
-//!                                 ACCOUNTABILITY
-//!                                AccountableSafety
+//!                                    |  |                        |
+//!                                    v  |                        |
+//!                              ACCOUNTABILITY                    |
+//!                             AccountableSafety                  |
+//!                                       |                        |
+//!                                       +-----------+------------+
+//!                                                   |
+//!                                                   v
+//!                                             AVAILABILITY
+//!                                     checkpoints, messaging,
+//!                                    notifications, crash recovery
+//!                                   (+ BlobRetention, BoundedRecovery)
 //! ```
 //!
-//! Everything in the right-hand column can fail — the network can partition forever, every client
-//! can go away, clocks can drift — without endangering [`CommitAgreement`]. Nothing in the
-//! left-hand column can fail without endangering it. Accountability hangs below safety rather
-//! than above it: it consumes *fewer* assumptions than [`CommitAgreement`] does, because its job
-//! is to hold in the one regime where safety does not.
+//! **The two columns are independent.** Everything in the right-hand one can fail — the network can
+//! partition forever, every client can go away, clocks can drift — without endangering
+//! [`CommitAgreement`]. Nothing in the left-hand one can fail without endangering it. Accountability
+//! hangs below safety rather than above it: it consumes *fewer* assumptions than [`CommitAgreement`]
+//! does, because its job is to hold in the one regime where safety does not.
+//!
+//! **The third group is not a third column, because it spans both.** What a certified block
+//! guarantees to a node that was absent is a question about storage *and* about reachability:
+//! [`CertifiedBlockIsAvailable`] takes [`BlockOutputsArePersisted`] — hence [`StorageAtomicity`],
+//! from the left — together with [`CorrectValidatorAvailability`] and [`EventualSynchrony`] from the
+//! right. The same holds of crash recovery: what a restarted validator
+//! must re-derive is fixed by the left column, and how quickly it must do so by the right.
+//!
+//! So a result in this group may be weakened by a failure in either column, and none of it protects
+//! [`CommitAgreement`] — which is the property the split exists to isolate.
 //!
 //! # Known gaps
 //!
@@ -228,6 +247,10 @@
 //! [`DeterministicExecution`]: linera_chain::manager::proof::model::DeterministicExecution
 //! [`EpochAgreement`]: linera_chain::manager::proof::model::EpochAgreement
 //! [`CommitteeKnowledgeIsWellFounded`]: linera_chain::proof::epochs::CommitteeKnowledgeIsWellFounded
+//! [`EventualSynchrony`]: linera_core::proof::assumptions::EventualSynchrony
+//! [`CorrectValidatorAvailability`]: linera_core::proof::assumptions::CorrectValidatorAvailability
+//! [`StorageAtomicity`]: linera_chain::manager::proof::model::StorageAtomicity
+//! [`CertifiedBlockIsAvailable`]: linera_core::proof::availability::CertifiedBlockIsAvailable
 //! [`EventFloorTracksCheckpoints`]: linera_chain::proof::checkpoints::EventFloorTracksCheckpoints
 //! [`ConsensusInstance`]: linera_chain::manager::proof::model::ConsensusInstance
 //! [`CertifiedBlockWasExecuted`]: linera_chain::manager::proof::commit::CertifiedBlockWasExecuted
