@@ -59,6 +59,7 @@
 //! | Liveness proof | [`linera_core::proof::liveness`] |
 //! | Availability, crash recovery and catch-up | [`linera_core::proof::availability`] |
 //! | Client notifications | [`linera_core::proof::notifications`] |
+//! | Storage validity and convergence | [`linera_core::proof::storage`] |
 //! | What a checkpoint preserves | [`linera_chain::proof::checkpoints`] |
 //!
 //! # How to read a statement
@@ -128,9 +129,9 @@
 //!                                                   |
 //!                                                   v
 //!                                             AVAILABILITY
-//!                                     checkpoints, messaging,
-//!                                    notifications, crash recovery
-//!                                   (+ BlobRetention, BoundedRecovery)
+//!                                 storage, checkpoints, messaging,
+//!                                    notifications, convergence
+//!                                  (+ BlobRetention, BoundedRecovery)
 //! ```
 //!
 //! **The two columns are independent.** Everything in the right-hand one can fail — the network can
@@ -143,8 +144,9 @@
 //! guarantees to a node that was absent is a question about storage *and* about reachability:
 //! [`CertifiedBlockIsAvailable`] takes [`BlockOutputsArePersisted`] — hence [`StorageAtomicity`],
 //! from the left — together with [`CorrectValidatorAvailability`] and [`EventualSynchrony`] from the
-//! right. The same holds of crash recovery: what a restarted validator
-//! must re-derive is fixed by the left column, and how quickly it must do so by the right.
+//! right. [`StorageConvergesAtEqualHeights`] is the sharpest case: it
+//! needs [`MaxByzantineWeight`] and [`StorageAtomicity`] to fix what two correct validators must
+//! agree on, and a *liveness*-shaped quiescence hypothesis that it explicitly cannot discharge.
 //!
 //! So a result in this group may be weakened by a failure in either column, and none of it protects
 //! [`CommitAgreement`] — which is the property the split exists to isolate.
@@ -200,6 +202,9 @@
 //!   as they would have without one ([`linera_chain::proof::checkpoints`]).
 //! * **The grounding of committee knowledge** — that no committee certifies its own introduction,
 //!   which is what makes induction on the epoch legitimate ([`CommitteeKnowledgeIsWellFounded`]).
+//! * **Storage validity** — what entitles a reader to act on stored bytes, by the kind of validity
+//!   proof each carries, and the one result about two validators rather than one: at equal heights
+//!   they agree on everything the protocol determines ([`StorageConvergesAtEqualHeights`]).
 //!
 //! Client notifications are specified too ([`linera_core::proof::notifications`]), but as a channel
 //! the model treats as lossy rather than as a guarantee anything rests on.
@@ -251,6 +256,7 @@
 //! [`CorrectValidatorAvailability`]: linera_core::proof::assumptions::CorrectValidatorAvailability
 //! [`StorageAtomicity`]: linera_chain::manager::proof::model::StorageAtomicity
 //! [`CertifiedBlockIsAvailable`]: linera_core::proof::availability::CertifiedBlockIsAvailable
+//! [`StorageConvergesAtEqualHeights`]: linera_core::proof::storage::StorageConvergesAtEqualHeights
 //! [`EventFloorTracksCheckpoints`]: linera_chain::proof::checkpoints::EventFloorTracksCheckpoints
 //! [`ConsensusInstance`]: linera_chain::manager::proof::model::ConsensusInstance
 //! [`CertifiedBlockWasExecuted`]: linera_chain::manager::proof::commit::CertifiedBlockWasExecuted
