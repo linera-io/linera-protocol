@@ -377,3 +377,63 @@ pub trait BundleConsumedAtMostOnce:
 /// [`ResourceControlPolicy`]: linera_execution::ResourceControlPolicy
 /// [`BlobRetention`]: super::assumptions::BlobRetention
 pub trait BlobAdmissionIsBounded: CorrectValidator {}
+
+/// **Lemma (Bundles are delivered and consumed in order).** For a given (sender, recipient) pair,
+/// bundles enter an inbox in strictly increasing [`Cursor`] order and are consumed in strictly
+/// increasing cursor order. A bundle may be passed over only if every message in it is *skippable*.
+///
+/// *Proof.* Three guards, one per way order could break.
+///
+/// *Within a batch.* `ChainWorkerState::select_message_bundles` walks the incoming bundles and
+/// rejects the request with `WorkerError::InvalidCrossChainRequest` unless their heights are
+/// non-decreasing, so a batch is already ordered when it reaches the inbox.
+///
+/// *Across batches, on delivery.* `Inbox::add_bundle` requires `cursor >= next_cursor_to_add` and
+/// fails with `InboxError::IncorrectOrder` otherwise, then sets `next_cursor_to_add` to
+/// `cursor + 1`. Delivery positions are therefore strictly increasing.
+///
+/// *On consumption.* `Inbox::remove_bundle` requires `cursor >= next_cursor_to_remove` on the same
+/// terms. Before consuming, it drains queued bundles below that cursor — and each one must satisfy
+/// `is_skippable()`, or the block is rejected with `InboxError::UnskippableBundle`. ∎
+///
+/// **What "skippable" excludes is the point.** `PostedMessage::is_skippable` is false for
+/// `MessageKind::Protected` and `MessageKind::Tracked` unconditionally, and false for `Simple` or
+/// `Bouncing` messages carrying a non-zero grant. So a recipient may leave ordinary zero-grant
+/// messages unconsumed, and may not silently drop a protected or tracked one, or one carrying funds:
+/// consuming a later bundle forces it to account for those first. Ordering here is a *safety*
+/// property — it constrains which blocks are valid — not a delivery guarantee.
+///
+/// [`Cursor`]: linera_base::data_types::Cursor
+pub trait DeliveryAndConsumptionAreOrdered: InboxHoldsOnlySentBundles {}
+
+/// **Lemma (Delivery is repaired on demand, not guaranteed by the sender).** A validator makes a
+/// bounded effort to deliver a bundle to its own worker for the recipient chain, and no more. What
+/// makes delivery dependable is that a client needing the bundle can always cause it: the recipient
+/// side of [`MissingDependenciesAreRecoverable`] is a repair path, not merely a diagnosis.
+///
+/// *Proof.* Two halves.
+///
+/// *The sender's effort is bounded.* Outgoing cross-chain requests are handed to a bounded channel
+/// with `try_send`, which drops on overflow, and `forward_cross_chain_queries` abandons a request
+/// once `retries >= cross_chain_max_retries`. The persistent outbox keeps the entry, and
+/// `ChainWorkerState::create_network_actions` re-derives *all* pending requests from it — but every
+/// call site is a request handler for the sending chain, so nothing re-emits while that chain is
+/// idle. Delivery is therefore best effort in the same sense the notification channel is
+/// ([`NotificationChannelIsLossy`]), and for the same reason: no retry outlives the process that
+/// scheduled it.
+///
+/// *The recipient can force it.* A client proposing a block that consumes the bundle is told
+/// `MissingCrossChainUpdate` by any validator lacking it, and `send_block_proposal` answers by
+/// sending that validator the *sending chain's* certificates, which re-derives the delivery there.
+/// `CrossChainMessageDelivery::Blocking` lets a client wait for delivery on an ordinary
+/// `send_chain_information` request rather than guess. Both are per-validator and on demand. ∎
+///
+/// **So the guarantee is conditional on someone wanting the message.** A recipient that is not
+/// actively proposing gets no assurance its inbox is complete, and two correct validators can differ
+/// on an inbox indefinitely — the sender-side asymmetry that
+/// `super::storage::StorageConvergesAtEqualHeights` needs quiescence to rule out. Whether an idle
+/// sending chain should retry on its own is
+/// [issue #6799](https://github.com/linera-io/linera-protocol/issues/6799).
+///
+/// [`NotificationChannelIsLossy`]: super::notifications::NotificationChannelIsLossy
+pub trait DeliveryIsRepairedOnDemand: DeliveryAndConsumptionAreOrdered {}
