@@ -14,14 +14,12 @@
 //! stops the reader, which closes the HTTP/2 window and makes the sender wait, which is the
 //! backpressure this design relies on instead of estimating the receiver's speed.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use linera_base::identifiers::ChainId;
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{node::NodeError, ProcessConfirmedBlockMode};
 use linera_storage::Storage;
-use std::time::Duration;
-
 use tokio::{
     sync::{mpsc, OwnedSemaphorePermit, Semaphore},
     time::timeout,
@@ -44,19 +42,18 @@ pub const STREAM_QUEUE: usize = 1024;
 
 /// How long a chain's task waits for another certificate before retiring.
 ///
-/// Retiring is what makes [`CHAINS_PER_STREAM`] a bound on *concurrent* chains: while a task
-/// lives, the map holds its sender, so nothing can prune it. A stream legitimately carries
-/// thousands of chains over its life — every chain that ever falls behind this destination — and
-/// only a handful at a time, so without this the cap would count chains ever seen and refuse the
-/// stream partway through exactly the mass catch-up it exists to serve.
-const CHAIN_IDLE: Duration = Duration::from_secs(30);
+/// Retiring is what lets [`CHAINS_PER_STREAM`] bound the chains in flight rather than the chains
+/// ever seen: the map holds a chain's only sender while its task lives, so nothing can prune it.
+/// Only a round trip has to be survived — a sender writes a whole run without waiting — and every
+/// second of slack here is another second of finished chains counting against the cap.
+const CHAIN_IDLE: Duration = Duration::from_secs(1);
 
 /// Chains one stream may have tasks for at once.
 ///
 /// The id is attacker-chosen and the service is public, so without a cap a peer could name a
-/// million chains and make us hold a task and a queue for each. A stream legitimately carries far
-/// fewer at a time — the sender's own in-flight window bounds it — so reaching this is abuse or a
-/// bug rather than load.
+/// million chains and make us hold a task and a queue for each. The live set is roughly the
+/// sender's in-flight window times how many chains it retires through in [`CHAIN_IDLE`], so this
+/// sits well above that: reaching it is abuse rather than load.
 const CHAINS_PER_STREAM: usize = 256;
 
 /// Answers flowing back to the sender. Bounded so a sender that stops reading cannot make us
@@ -81,6 +78,7 @@ where
 
     tokio::spawn(async move {
         let mut chains: HashMap<ChainId, mpsc::Sender<Queued>> = HashMap::new();
+        let mut refused_a_chain = false;
         loop {
             // Taken before reading, not after: a permit acquired afterwards would mean the
             // certificate is already in hand and has to be held somewhere unbounded.
@@ -100,9 +98,10 @@ where
                 // A certificate we cannot even read is the sender's bug, and answering it would
                 // need a chain and height we do not have. Ending the stream makes it visible.
                 Err(error) => {
-                    let _ = responses
+                    responses
                         .send(Err(Status::invalid_argument(error.to_string())))
-                        .await;
+                        .await
+                        .ok();
                     break;
                 }
             };
@@ -110,14 +109,31 @@ where
             // Chains whose task has finished are forgotten here rather than accumulating for the
             // life of the stream.
             chains.retain(|_, queue| !queue.is_closed());
+            // Refusing the one certificate, not the stream: ending it here would punish every
+            // other chain the stream carries for one peer naming too many at once.
             if !chains.contains_key(&chain_id) && chains.len() >= CHAINS_PER_STREAM {
-                warn!(%chain_id, "Push stream naming more than {CHAINS_PER_STREAM} chains at once");
-                let _ = responses
-                    .send(Err(Status::resource_exhausted(format!(
+                // Once per stream: this arm `continue`s, so logging every refusal would let one
+                // peer drive unbounded output from a public endpoint.
+                if !refused_a_chain {
+                    refused_a_chain = true;
+                    warn!(%chain_id, "Push stream naming more than {CHAINS_PER_STREAM} chains");
+                }
+                let refusal = NodeError::GrpcError {
+                    error: format!(
                         "a push stream may carry at most {CHAINS_PER_STREAM} chains at once"
-                    ))))
-                    .await;
-                break;
+                    ),
+                };
+                if let Ok(result) = refusal.try_into() {
+                    let answer = api::PushCertificateResponse {
+                        chain_id: Some(chain_id.into()),
+                        height: Some(certificate.block().header.height.into()),
+                        result: Some(result),
+                    };
+                    if responses.send(Ok(answer)).await.is_err() {
+                        break;
+                    }
+                }
+                continue;
             }
             let queue = chains.entry(chain_id).or_insert_with(|| {
                 let (sender, receiver) = mpsc::channel(CHAIN_QUEUE);
@@ -146,12 +162,13 @@ where
                         %chain_id,
                         "Chain queue full: the sender is past its window or not reading answers"
                     );
-                    let _ = responses
+                    responses
                         .send(Err(Status::resource_exhausted(format!(
                             "more than {CHAIN_QUEUE} certificates outstanding for chain \
                              {chain_id}"
                         ))))
-                        .await;
+                        .await
+                        .ok();
                     break;
                 }
                 // The chain's task retired between the lookup and the send. Dropping the
@@ -178,6 +195,23 @@ where
     ReceiverStream::new(response_receiver)
 }
 
+/// The next item, or `None` once the queue has been idle for `idle` and is finished.
+///
+/// Retiring is what lets the stream forget a chain it has finished with; the sender re-creates
+/// the task on that chain's next certificate. The queue is **closed before** the last drain, so a
+/// certificate the reader accepted in the instant before the deadline is still returned rather
+/// than dropped — dropping it would leave its sender waiting out the whole push timeout for an
+/// answer that is never coming.
+async fn next_or_retire<T>(queue: &mut mpsc::Receiver<T>, idle: Duration) -> Option<T> {
+    match timeout(idle, queue.recv()).await {
+        Ok(item) => item,
+        Err(_) => {
+            queue.close();
+            queue.recv().await
+        }
+    }
+}
+
 /// A certificate waiting for its chain, holding the stream slot it occupies.
 struct Queued {
     certificate: ConfirmedBlockCertificate,
@@ -195,9 +229,7 @@ async fn apply_chain<S>(
 ) where
     S: Storage + Clone + Send + Sync + 'static,
 {
-    // Retiring on idle is what lets the stream forget a chain it has finished with; see
-    // `CHAIN_IDLE`. The sender re-creates the task on its next certificate.
-    while let Ok(Some(queued)) = timeout(CHAIN_IDLE, queue.recv()).await {
+    while let Some(queued) = next_or_retire(&mut queue, CHAIN_IDLE).await {
         let height = queued.certificate.block().header.height;
         let result = server
             .worker()
@@ -209,11 +241,12 @@ async fn apply_chain<S>(
                 info.try_into()
             }
             // An answer, not the end of the stream: certificates for every other chain on this
-            // stream must keep flowing when one chain's fail. Logged here as well as answered,
-            // because the sender's copy names the peer while this one names the chain and the
-            // worker that actually failed.
+            // stream must keep flowing when one chain's fail. Logged through the server's own
+            // policy rather than at a flat level: a remote-caused failure like `BlobsNotFound`
+            // is the designed blob-recovery handshake and belongs at debug, while a local one
+            // like a poisoned worker must stay at error so it still trips alerting.
             Err(error) => {
-                warn!(%chain_id, %error, "Failed to apply a pushed certificate");
+                server.log_error(&error, "Failed to apply a pushed certificate");
                 NodeError::from(error).try_into()
             }
         };
@@ -226,7 +259,8 @@ async fn apply_chain<S>(
             Err(error) => {
                 let _ = responses
                     .send(Err(Status::internal(error.to_string())))
-                    .await;
+                    .await
+                    .ok();
                 return;
             }
         };
@@ -243,27 +277,77 @@ async fn apply_chain<S>(
 mod tests {
     use super::*;
 
-    /// A chain's task must retire when idle, or the cap counts chains ever seen.
+    /// Retiring must close the queue, and must not drop what the reader already handed over.
     ///
-    /// The map holds a chain's only sender while its task lives, so `is_closed()` cannot become
-    /// true on its own. Without retirement the live set only grows and the stream is refused
-    /// partway through a mass catch-up — the workload it exists to serve.
+    /// Drives `next_or_retire` itself rather than a copy of its loop: the previous two versions
+    /// of this test asserted a property of a hand-written duplicate and stayed green under the
+    /// regression they named. Deleting the `timeout` in `next_or_retire` makes the second
+    /// assertion here hang, and deleting the `queue.close()` makes the third fail.
     #[test_log::test(tokio::test(start_paused = true))]
-    async fn an_idle_chain_task_retires_so_its_entry_can_be_pruned() {
-        let (sender, mut receiver) = mpsc::channel::<u8>(CHAIN_QUEUE);
-        let task = tokio::spawn(async move {
-            while let Ok(Some(_)) = timeout(CHAIN_IDLE, receiver.recv()).await {}
-        });
+    async fn retiring_closes_the_queue_and_keeps_what_it_was_given() {
+        let (sender, mut queue) = mpsc::channel::<u8>(CHAIN_QUEUE);
 
-        assert!(
-            !sender.is_closed(),
-            "a live task must keep its entry, or a busy chain would be pruned mid-run",
+        sender.try_send(1).expect("the queue is empty");
+        assert_eq!(
+            next_or_retire(&mut queue, CHAIN_IDLE).await,
+            Some(1),
+            "a queued item must be returned without waiting for the deadline",
         );
-        tokio::time::sleep(CHAIN_IDLE * 2).await;
-        task.await.expect("the task retires rather than panicking");
+
+        // Nothing more arrives, so the deadline retires the queue.
+        assert_eq!(
+            next_or_retire(&mut queue, CHAIN_IDLE).await,
+            None,
+            "an idle queue must retire so its entry can be pruned and its slot freed",
+        );
         assert!(
             sender.is_closed(),
-            "an idle task must retire so `retain` can prune its entry and free a slot",
+            "retiring must close the queue, or `retain` can never prune the entry and the cap \
+             counts chains ever seen",
+        );
+    }
+
+    /// Everything the reader handed over must survive retirement, not just the first item.
+    ///
+    /// This has to reach the `Err(_) => close + drain` arm to prove anything, so the item is put
+    /// in the queue only *after* the deadline has already passed — the previous version of this
+    /// test sent first, which meant `recv()` returned on the `Ok` arm and the drain was never
+    /// exercised at all. Deleting `queue.close()` leaves the sender open and the assertion on
+    /// `is_closed` fails; deleting the whole `Err` arm strands the item and the first assertion
+    /// fails.
+    #[test_log::test(tokio::test(start_paused = true))]
+    async fn retirement_drains_what_arrived_at_the_deadline() {
+        let (sender, mut queue) = mpsc::channel::<u8>(CHAIN_QUEUE);
+
+        // Hand items over from another task while the receiver is already parked on its
+        // deadline, so the close-and-drain arm is the one that has to return them.
+        let handing_over = tokio::spawn(async move {
+            tokio::time::sleep(CHAIN_IDLE * 2).await;
+            sender.try_send(1).expect("the queue is empty");
+            sender.try_send(2).expect("the queue has room");
+            sender
+        });
+
+        assert_eq!(
+            next_or_retire(&mut queue, CHAIN_IDLE).await,
+            Some(1),
+            "an item that arrived while the queue was retiring must still be returned",
+        );
+        assert_eq!(
+            next_or_retire(&mut queue, CHAIN_IDLE).await,
+            Some(2),
+            "and so must every other item already queued behind it",
+        );
+        assert_eq!(
+            next_or_retire(&mut queue, CHAIN_IDLE).await,
+            None,
+            "a drained, closed queue is finished",
+        );
+
+        let sender = handing_over.await.expect("the writer does not panic");
+        assert!(
+            sender.is_closed(),
+            "retiring must close the queue so its entry can be pruned",
         );
     }
 

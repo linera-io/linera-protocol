@@ -2180,10 +2180,6 @@ impl<N: ValidatorNode> SharedStream<N> {
         }
     }
 
-    /// Forgets `stream` if it is still the current one, so the next job opens a fresh one.
-    ///
-    /// The identity check matters: another job may already have replaced a dead stream, and
-    /// clearing unconditionally would throw away the replacement it just opened.
     /// Marks this destination as one that does not serve the stream, so later runs go straight
     /// to the per-certificate path instead of paying a stream-open first.
     fn latch_unsupported(&self) {
@@ -2191,6 +2187,10 @@ impl<N: ValidatorNode> SharedStream<N> {
             .store(true, std::sync::atomic::Ordering::Relaxed);
     }
 
+    /// Forgets `stream` if it is still the current one, so the next job opens a fresh one.
+    ///
+    /// The identity check matters: another job may already have replaced a dead stream, and
+    /// clearing unconditionally would throw away the replacement it just opened.
     async fn discard(&self, stream: &Arc<N::PushStream>) {
         let mut guard = self.stream.lock().await;
         if guard
@@ -2382,8 +2382,27 @@ where
                     return Ok(info);
                 }
             }
-            result = self.stream_run(certificates).await;
+            // Resume from where the destination stopped rather than replaying the run: it keeps
+            // whatever already landed, so re-sending those is pure waste, and a run needing k
+            // uploads would otherwise transmit k times its own length.
+            let resume = self
+                .remote_node
+                .handle_chain_info_query(ChainInfoQuery::new(chain_id))
+                .await
+                .map(|info| info.next_block_height)
+                .unwrap_or(BlockHeight::ZERO);
+            let remaining = certificates
+                .partition_point(|certificate| certificate.block().header.height < resume);
+            if remaining >= certificates.len() {
+                break;
+            }
+            result = self.stream_run(&certificates[remaining..]).await;
         }
+        let info = self
+            .remote_node
+            .handle_chain_info_query(ChainInfoQuery::new(chain_id))
+            .await?;
+        Ok(info)
     }
 
     /// Sends the run one certificate at a time, as catch-up did before streaming.

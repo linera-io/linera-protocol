@@ -38,10 +38,13 @@ const WRITE_QUEUE: usize = PUSH_WINDOW;
 /// What a caller is waiting for: the answer to one chain's certificate at one height.
 type Waiter = oneshot::Sender<Result<ChainInfoResponse, NodeError>>;
 
+/// Who is waiting for which chain's answer, and at what height.
+type Waiters = Arc<Mutex<HashMap<ChainId, Vec<(BlockHeight, Waiter)>>>>;
+
 /// A live push stream to one validator.
 pub struct PushStream {
     certificates: mpsc::Sender<api::PushCertificateRequest>,
-    waiters: Arc<Mutex<HashMap<ChainId, Vec<(BlockHeight, Waiter)>>>>,
+    waiters: Waiters,
 }
 
 impl PushStream {
@@ -141,7 +144,7 @@ impl CertificatePushStream for PushStream {
 ///   own absence caused at the last one, so the blobs would never be uploaded.
 async fn route_responses(
     mut responses: impl Stream<Item = Result<api::PushCertificateResponse, Status>> + Unpin,
-    waiters: Arc<Mutex<HashMap<ChainId, Vec<(BlockHeight, Waiter)>>>>,
+    waiters: Waiters,
 ) {
     let mut ended = None;
     while let Some(message) = responses.next().await {
@@ -179,7 +182,7 @@ async fn route_responses(
             woken
         };
         for (_, waiter) in woken {
-            let _ = waiter.send(result.clone());
+            waiter.send(result.clone()).ok();
         }
     }
     // Nothing more is coming, so anyone still waiting must be told rather than left hanging.
@@ -190,7 +193,9 @@ async fn route_responses(
     );
     for (_, chain) in table {
         for (_, waiter) in chain {
-            let _ = waiter.send(Err(ended.clone().unwrap_or(NodeError::PushStreamClosed)));
+            waiter
+                .send(Err(ended.clone().unwrap_or(NodeError::PushStreamClosed)))
+                .ok();
         }
     }
 }

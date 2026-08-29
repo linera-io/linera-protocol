@@ -79,7 +79,6 @@ tracing.workspace = true
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml"] }
-linera-cache.workspace = true
 linera-rpc = { path = ".", default-features = false, features = [
     "server",
     "test",
