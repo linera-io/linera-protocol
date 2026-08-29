@@ -13,6 +13,10 @@ blocks. A slot holder can also need a second slot before it releases its first â
 querying a service oracle does exactly that â€” so the wait can be indefinite rather than merely
 long. This module reports the wait while it is still happening, which is what separates a
 saturated pool from a wedged one.
+
+Reporting a wait needs a clock, so *waiting* for a slot requires a Tokio runtime with timers
+enabled, which the pool itself never did. Taking a free slot deliberately keeps the old contract
+and needs no runtime at all, so the requirement only appears once the pool is already saturated.
 */
 
 use std::{future::Future, pin::Pin};
@@ -125,7 +129,8 @@ impl ThreadPool {
         }
     }
 
-    /// Runs `code` on a pool thread, waiting for a slot if none is free.
+    /// Runs `code` on a pool thread, waiting for a slot if none is free. Waiting requires a Tokio
+    /// runtime with timers enabled; taking a free slot does not.
     pub async fn run<Context: Post, F: Future<Output: Post> + 'static>(
         &self,
         purpose: &'static str,
@@ -155,8 +160,8 @@ impl ThreadPool {
     ) -> T {
         let start = Instant::now();
         pin_mut!(acquisition);
-        // A free slot is the common case and must stay timer-free: `timer::sleep` panics on
-        // construction outside a Tokio runtime, which taking a slot has never required.
+        // Take a free slot without reaching the timer below, which would otherwise impose a
+        // Tokio runtime on the common path: `timer::sleep` panics on construction without one.
         let slot = match acquisition.as_mut().now_or_never() {
             Some(slot) => slot,
             None => self.warn_until_acquired(purpose, start, acquisition).await,
