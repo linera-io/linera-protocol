@@ -226,7 +226,9 @@ mod tests {
         let (release, released) = oneshot::channel();
         let occupant = pool
             .run_send(CONTRACT, (), move |()| async move {
-                let _ = released.await;
+                released
+                    .await
+                    .expect("the test releases the slot before dropping the sender");
             })
             .await;
         assert_eq!(
