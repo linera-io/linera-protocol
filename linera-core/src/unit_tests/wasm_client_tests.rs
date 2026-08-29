@@ -34,7 +34,9 @@ use linera_base::{
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
 };
-use linera_chain::{data_types::MessageAction, ChainError, ChainExecutionContext};
+use linera_chain::{
+    data_types::MessageAction, types::ConfirmedBlockCertificate, ChainError, ChainExecutionContext,
+};
 use linera_execution::{
     wasm_test, ExecutionError, Message, MessageKind, Operation, QueryOutcome,
     ResourceControlPolicy, SystemMessage, SystemOperation, WasmRuntime,
@@ -1339,6 +1341,107 @@ async fn test_memory_checkpoint_comprehensive(wasm_runtime: WasmRuntime) -> anyh
 #[test_log::test(tokio::test)]
 async fn test_rocks_db_checkpoint_comprehensive(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
     run_test_checkpoint(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await).await
+}
+
+/// Returns the `used_blobs` list of a checkpoint certificate's oracle response.
+fn checkpoint_used_blob_ids(certificate: &ConfirmedBlockCertificate) -> Vec<BlobId> {
+    match certificate
+        .block()
+        .body
+        .oracle_responses
+        .first()
+        .and_then(|responses| responses.first())
+    {
+        Some(OracleResponse::Checkpoint { used_blobs, .. }) => used_blobs.clone(),
+        other => panic!("expected OracleResponse::Checkpoint, got {other:?}"),
+    }
+}
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn test_memory_app_call_after_checkpoint_bootstrap_when_expired(
+    wasm_runtime: WasmRuntime,
+) -> anyhow::Result<()> {
+    run_test_app_call_after_checkpoint_bootstrap_when_expired(
+        MemoryStorageBuilder::with_wasm_runtime(wasm_runtime),
+    )
+    .await
+}
+
+/// A dormant application must survive the expiry of its blobs' `used_blobs` records:
+/// after two checkpoints without any use of the application, the latest checkpoint's
+/// `used_blobs` no longer lists its description and bytecode blobs, so a validator
+/// bootstrapped from that checkpoint has neither. An application call whose quorum
+/// requires that validator's vote must still commit: the proposing client holds all
+/// the content and supplies the missing blobs by pushing the blocks that published
+/// them.
+async fn run_test_app_call_after_checkpoint_bootstrap_when_expired<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let keys = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, keys).await?;
+
+    // Validator 0 misses the whole chain; it only ever learns the chain description.
+    builder.set_fault_type([0], FaultType::NoChains);
+
+    let creator = builder.add_root_chain(0, Amount::from_tokens(10)).await?;
+    let validator_0_key = builder.node(0).name();
+
+    // Publish the counter bytecode and instantiate the application: its bytecode and
+    // description blobs get recorded in `used_blobs`.
+    let module_id = creator.publish_wasm_example("counter").await?;
+    let module_id = module_id.with_abi::<counter::CounterAbi, (), u64>();
+    let (application_id, _) = creator
+        .create_application(module_id, &(), &10_u64, vec![])
+        .await
+        .unwrap_ok_committed();
+    let description_blob_id = application_id.forget_abi().description_blob_id();
+
+    // Two checkpoints without any use of the application: the first still lists its
+    // description blob, the second drops the expired record.
+    let checkpoint_1 = creator.checkpoint().await.unwrap().unwrap();
+    assert!(
+        checkpoint_used_blob_ids(&checkpoint_1).contains(&description_blob_id),
+        "checkpoint #1 must vouch for the application description blob",
+    );
+    let checkpoint_2 = creator.checkpoint().await.unwrap().unwrap();
+    assert!(
+        !checkpoint_used_blob_ids(&checkpoint_2).contains(&description_blob_id),
+        "checkpoint #2 must have forgotten the dormant application's description blob",
+    );
+
+    // Bring validator 0 back; take validator 1 down. Quorum (3 of 4) now requires
+    // validator 0, which gets bootstrapped from checkpoint #2 by the next proposal —
+    // a checkpoint that no longer vouches for the application's blobs.
+    builder.set_fault_type([0], FaultType::Honest);
+    builder.set_fault_type([1], FaultType::Offline);
+
+    let increment = counter::CounterOperation::Increment { value: 5 };
+    let result = creator
+        .execute_operation(Operation::user(application_id, &increment)?)
+        .await;
+
+    let validator_0_storage = builder
+        .validator_storages
+        .get(&validator_0_key)
+        .expect("validator 0 storage")
+        .clone();
+    assert!(
+        result.is_ok(),
+        "calling a dormant application must remain possible when the proposing client \
+        holds its blobs, even with a checkpoint-bootstrapped validator in the quorum; \
+        got: {:?}; validator 0 has the description blob: {}",
+        result.err(),
+        validator_0_storage
+            .contains_blob(description_blob_id)
+            .await?,
+    );
+
+    Ok(())
 }
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
