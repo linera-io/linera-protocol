@@ -15,11 +15,11 @@ long. This module reports the wait while it is still happening, which is what se
 saturated pool from a wedged one.
 */
 
-use std::future::Future;
+use std::{future::Future, pin::Pin};
 
 use futures::{
     future::{self, Either},
-    pin_mut,
+    pin_mut, FutureExt as _,
 };
 use linera_base::time::{Duration, Instant};
 use tracing::warn;
@@ -147,29 +147,43 @@ impl ThreadPool {
             .await
     }
 
-    /// Awaits a slot acquisition, recording how long it took and warning every
-    /// [`SLOW_ACQUISITION_WARN_INTERVAL`] until it succeeds. The warning is raced against the
-    /// acquisition because reporting on completion says nothing when the slot never arrives.
+    /// Awaits a slot acquisition and records how long it took.
     async fn reporting_the_wait<T>(
         &self,
         purpose: &'static str,
         acquisition: impl Future<Output = T>,
     ) -> T {
-        #[cfg(with_metrics)]
-        let _waiting = metrics::WaitingGuard::new(purpose);
         let start = Instant::now();
         pin_mut!(acquisition);
+        // A free slot is the common case and must stay timer-free: `timer::sleep` panics on
+        // construction outside a Tokio runtime, which taking a slot has never required.
+        let slot = match acquisition.as_mut().now_or_never() {
+            Some(slot) => slot,
+            None => self.warn_until_acquired(purpose, start, acquisition).await,
+        };
+        #[cfg(with_metrics)]
+        metrics::ACQUISITION_LATENCY
+            .with_label_values(&[purpose])
+            .observe(start.elapsed().as_secs_f64() * 1000.0);
+        slot
+    }
+
+    /// Warns every [`SLOW_ACQUISITION_WARN_INTERVAL`] until the slot arrives. The warning is
+    /// raced against the acquisition because reporting on completion says nothing at all in the
+    /// case that never completes.
+    async fn warn_until_acquired<T>(
+        &self,
+        purpose: &'static str,
+        start: Instant,
+        mut acquisition: Pin<&mut impl Future<Output = T>>,
+    ) -> T {
+        #[cfg(with_metrics)]
+        let _waiting = metrics::WaitingGuard::new(purpose);
         loop {
             let warn_after = linera_base::time::timer::sleep(SLOW_ACQUISITION_WARN_INTERVAL);
             pin_mut!(warn_after);
             match future::select(acquisition.as_mut(), warn_after).await {
-                Either::Left((slot, _)) => {
-                    #[cfg(with_metrics)]
-                    metrics::ACQUISITION_LATENCY
-                        .with_label_values(&[purpose])
-                        .observe(start.elapsed().as_secs_f64() * 1000.0);
-                    return slot;
-                }
+                Either::Left((slot, _)) => return slot,
                 Either::Right((_, _)) => warn!(
                     purpose,
                     capacity = self.capacity,
@@ -181,8 +195,22 @@ impl ThreadPool {
     }
 }
 
-#[cfg(all(test, with_metrics))]
+#[cfg(test)]
 mod tests {
+    use super::*;
+
+    /// Taking a free slot must not require a Tokio runtime: `timer::sleep` panics outside one,
+    /// and the pool needed no runtime before this instrumentation existed.
+    #[test]
+    fn a_free_slot_is_acquired_without_a_tokio_runtime() {
+        let pool = ThreadPool::new(1);
+        let task = futures::executor::block_on(pool.run_send(CONTRACT, (), |()| async { 7u8 }));
+        assert_eq!(futures::executor::block_on(task).unwrap(), 7);
+    }
+}
+
+#[cfg(all(test, with_metrics))]
+mod metrics_tests {
     use futures::{channel::oneshot, poll};
 
     use super::*;
