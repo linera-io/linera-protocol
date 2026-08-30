@@ -252,7 +252,7 @@ pub trait DurablePersistence {}
 /// storage" but "no reading another chain's state": a cross-chain dependency is either delivered
 /// as a message or read from one of those two stores, never observed in the producing chain's
 /// [`ChainManager`](crate::manager::ChainManager) or inboxes.
-/// [`IncomingBundlesAreSelfDerived`] is the form that takes for the message case.
+/// [`IncomingBundlesMatchTheLocalInbox`] is the form that takes for the message case.
 ///
 /// The specification relies on the composition whenever it reasons about "the state immediately
 /// before" a vote — for instance in [`UnlockingJustification`], where the guard evaluated by
@@ -265,7 +265,7 @@ pub trait DurablePersistence {}
 /// chain; in both cases they compute the same owner and write the same shared keys. Nothing in
 /// the code detects either, so this is a deployment obligation, not an enforced invariant.
 ///
-/// [`IncomingBundlesAreSelfDerived`]: crate::manager::proof::commit::IncomingBundlesAreSelfDerived
+/// [`IncomingBundlesMatchTheLocalInbox`]: crate::manager::proof::commit::IncomingBundlesMatchTheLocalInbox
 /// [`UnlockingJustification`]: crate::manager::proof::safety::UnlockingJustification
 /// [`ChainManager::check_proposed_block`]: crate::manager::ChainManager::check_proposed_block
 /// [`ChainManager::create_vote`]: crate::manager::ChainManager::create_vote

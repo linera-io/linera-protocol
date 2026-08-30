@@ -198,7 +198,7 @@ pub trait CertifiedBlockWasExecuted:
 ///
 /// * if it **executed** the sender's block, `execute_contiguous_block` re-executed it and rejected
 ///   a mismatch against the certificate ([`CertifiedBlockWasExecuted`] and the note there), so the
-///   bundles are self-derived;
+///   bundles are the validator's own work;
 /// * if it only **preprocessed** the sender's block, `preprocess_certified_block` updated outboxes
 ///   and event streams *without executing*, so the bundles are taken from the sender's certificate
 ///   at face value.
@@ -213,4 +213,69 @@ pub trait CertifiedBlockWasExecuted:
 /// [`ChainError::MissingCrossChainUpdates`]: crate::ChainError::MissingCrossChainUpdates
 /// [`MaxByzantineWeight`]: crate::manager::proof::model::MaxByzantineWeight
 /// [`AccountabilityScope`]: crate::justification::proof::AccountabilityScope
-pub trait IncomingBundlesAreSelfDerived: ProposalGate + CertifiedBlockWasExecuted {}
+pub trait IncomingBundlesMatchTheLocalInbox: ProposalGate + CertifiedBlockWasExecuted {}
+
+/// **Lemma (Event reads resolve against the validator's own storage).** When a correct validator
+/// votes on a proposal that reads an event, the value it votes for is the one in *its own* storage
+/// under the [`EventId`] the block cites — resolved locally, exactly as an oracle call is, and
+/// never taken from the proposer.
+///
+/// This is what stands between a proposer and a block that claims to have read something nobody
+/// published. It is the event analogue of [`IncomingBundlesMatchTheLocalInbox`], but the mechanism is
+/// not the same one, and the difference decides how a discrepancy shows up.
+///
+/// *A bundle is checked; an event is produced.* A [`ProposedBlock`] names the incoming bundles it
+/// consumes, so a validator can compare them against its inbox and reject on mismatch. It carries
+/// no `oracle_responses` — those exist only in [`BlockExecutionOutcome`] — so there is nothing to
+/// compare an event against. The validator simply reads its own storage and records what it finds.
+///
+/// So the two fail differently. A wrong bundle is *rejected*: `remove_bundles_from_inboxes` requires
+/// presence and equality. A wrong event is not rejected at all — the validator computes a different
+/// outcome, hence a different [`Block`], and votes for that instead. The proposer's intended block
+/// simply never gathers a quorum. Both keep a fabricated value out of a certificate; only the first
+/// produces an error anyone can point at.
+///
+/// *Code correspondence.*
+///
+/// | | |
+/// |---|---|
+/// | transition | the event oracle in `ExecutionStateActor`, reached from `ChainWorkerState::execute_block` during `try_handle_block_proposal` |
+/// | reads | the validator's own event storage, through `ExecutionRuntimeContext::get_event` |
+/// | writes | the block's `oracle_responses`, appending `OracleResponse::Event` |
+/// | precondition | none beyond [`ProposalGate`] |
+///
+/// *Proof.* Validating a proposal executes the block afresh, with no recorded outcome to replay
+/// ([`CertifiedBlockWasExecuted`]). `TransactionTracker::oracle` therefore finds no replayed
+/// response and runs its closure, which calls `get_event` on this validator's own storage and
+/// fails with `ExecutionError::EventsNotFound` when the event is absent. The value it records is
+/// the value that came back. So a validator cannot vote for a block whose event it does not hold,
+/// nor for content differing from its own. ∎
+///
+/// **Replay checks the identifier, not the content.** When a block *does* carry a recorded outcome
+/// — a regular retry, or a certified block being applied — `oracle` returns the recorded response
+/// without consulting storage, and `to_event` only checks that the recorded [`EventId`] matches the
+/// one requested, returning `ExecutionError::OracleResponseMismatch` otherwise. The bytes are taken
+/// as given.
+///
+/// That asymmetry matches the one [`IncomingBundlesMatchTheLocalInbox`] records for
+/// `must_be_present = false`, and it is deliberate for the same reason: by the time a block is
+/// certified, a quorum has already voted, and this lemma has done its work at voting time. It is
+/// also why a fabricated `events` field is beyond [`AccountabilityScope`] — the fabrication is
+/// caught by the voters or not at all, and leaves no evidence afterwards.
+///
+/// **What this does not say.** That the event was legitimately published by the chain the
+/// [`EventId`] names is not checked here; it follows from how the event entered storage in the
+/// first place, which is `linera_core::proof::storage::AdmissionChecksTheValidityProof` — events
+/// are written only in the branch guarded by `certificate.check`, so they inherit the publishing
+/// block's certification rather than carrying a proof of their own. Nor does it say the event is
+/// still *readable*: a checkpoint may have pruned it below the stream's floor
+/// ([`EventFloorTracksCheckpoints`]).
+///
+/// [`EventId`]: linera_base::identifiers::EventId
+/// [`ProposedBlock`]: crate::data_types::ProposedBlock
+/// [`BlockExecutionOutcome`]: crate::data_types::BlockExecutionOutcome
+/// [`Block`]: crate::block::Block
+/// [`ProposalGate`]: crate::manager::proof::voting::ProposalGate
+/// [`AccountabilityScope`]: crate::justification::proof::AccountabilityScope
+/// [`EventFloorTracksCheckpoints`]: crate::proof::checkpoints::EventFloorTracksCheckpoints
+pub trait EventReadsResolveLocally: ProposalGate + CertifiedBlockWasExecuted {}
