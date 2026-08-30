@@ -193,7 +193,7 @@ pub trait LockingBlobsTravelWithTheLock: CorrectValidator + CorrectValidatorAvai
 ///
 /// This is what makes the retry loops in `linera_core::updater` converge rather than spin, and it
 /// is the substance behind [`ValidationQuorumForms`]'s claim that a step completes in `2Δ`: a
-/// straggler is not waited out, it is *supplied*.
+/// straggler is not waited out, it is *supplied*, by the party that already holds what it lacks.
 ///
 /// *Proof.* The classes are exactly the errors those loops match, and the recovery route differs
 /// by where the data originates:
@@ -208,29 +208,43 @@ pub trait LockingBlobsTravelWithTheLock: CorrectValidator + CorrectValidatorAvai
 /// | `WrongRound`, `UnexpectedBlockHeight` — validator behind | acceptance | consensus state for this chain | pushed by `send_chain_information` |
 /// | `WrongRound`, `UnexpectedBlockHeight` — *requester* behind | acceptance | nothing; the requester is wrong | pulled: `sync_remote_if_needed` reports [`LocalNodeLagging`] and the client synchronizes |
 ///
-/// All but `MissingCrossChainUpdates` and `EventsNotFound` are *self-suppliable*: the requester
-/// holds the data already, so the push cannot fail for want of it. Usually that is by
-/// construction, because it built the block or verified the certificate. The one case where it is
-/// not is a lock the requester is *recovering* rather than one it created: there the blobs were
-/// collected during synchronization, by [`LockingBlobsTravelWithTheLock`]. Either way these
-/// classes cannot stall. ∎
+/// **Every class is self-suppliable.** In each row the requester already holds what the validator
+/// lacks, so the push cannot fail for want of the data, and no class waits on a third party. The
+/// pushes read local storage and nothing else: `read_certificates_for_heights` for chain
+/// information, `read_blobs_from_storage` for blobs, `get_next_height_to_preprocess` to decide how
+/// far to send a publishing chain.
 ///
-/// **Those two are not, and that is where general liveness is weakest.** Their data originates
-/// on a *third* chain. A client that does not follow the sending or publishing chain cannot push
-/// what the validator is missing, and the push simply fails.
+/// *Why the requester holds it.* Two arguments, one per operation.
 ///
-/// There is a second, independent route for them, which is why this is a weakness rather than a
-/// hole: the validator's own worker for the sending chain populates the inbox as it processes that
-/// chain ([`IncomingBundlesAreSelfDerived`]), and events likewise arrive as the publishing chain
-/// is processed. So the data reaches the validator either because someone pushes it or because the
-/// validator catches up on the originating chain — and progress on *this* chain waits on whichever
-/// happens first.
+/// * *Accepting a proposal.* The requester built the proposal, which means its own local node
+///   executed the block. Execution consumes exactly these dependencies, so holding them is a
+///   precondition of having a proposal to send. `linera_core::updater` states the messaging case as
+///   an invariant of local storage: it is "guaranteed to hold every block we needed to build a
+///   proposal", because a bundle can only be consumed after its ordered message-bearing
+///   predecessors were downloaded. The same holds of an event a block reads — the block could not
+///   have executed without it, and having it means having processed the publishing chain's block.
+/// * *Executing a certified block.* The block is certified, so its dependencies are retrievable by
+///   [`CertifiedBlockIsAvailable`], and a requester that processed the certificate wrote them as it
+///   went ([`BlockOutputsArePersisted`]). The blob arm says so outright — "the certificate is
+///   confirmed, so the blobs must be in storage" — and treats a miss as an error rather than a
+///   condition to wait out.
 ///
-/// Neither route is bounded by anything the specification currently states.
-/// [`ValidationQuorumForms`] assumes the proposal is accepted once every correct validator is in
-/// the round; for a block consuming a message from a chain that some validator has not yet
-/// processed, that is an additional condition, and no assumption in
-/// [`super::assumptions`] supplies it.
+/// The one case where holding the data is not immediate is a lock the requester is *recovering*
+/// rather than one it created: there the blobs were collected during synchronization, by
+/// [`LockingBlobsTravelWithTheLock`]. ∎
+///
+/// **A requester need not follow a whole chain to supply what came from it.** This is what makes
+/// the argument hold for the two classes whose data originates on a third chain. A chain the
+/// requester merely *receives* from is stored only at its message-bearing heights, and
+/// `send_chain_information` pushes exactly those, skipping heights it does not have; the validator
+/// executes the contiguous prefix and *preprocesses* any block above a gap, which is enough to
+/// deliver that block's bundles. So the requester supplies a sparse chain it never fully held, and
+/// the validator is still able to act.
+///
+/// This is also why the set to push is derived from local storage rather than from the error.
+/// `MissingCrossChainUpdates` names only the bundles the current proposal needs and omits
+/// already-consumed ancestors that the validator must execute first; `send_chain_information`
+/// sends the whole locally-held range instead, so the omission does not matter.
 ///
 /// **Why the pushes terminate.** Each class carries a well-founded measure.
 /// `send_confirmed_certificate` latches `sent_admin_chain` / `sent_blobs` / `sent_blocks`, so each
