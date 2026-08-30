@@ -289,7 +289,9 @@ mod tests {
     /// Drives `next_or_retire` itself rather than a copy of its loop: the previous two versions
     /// of this test asserted a property of a hand-written duplicate and stayed green under the
     /// regression they named. Deleting the `timeout` in `next_or_retire` makes the second
-    /// assertion here hang, and deleting the `queue.close()` makes the third fail.
+    /// assertion here hang, and deleting the `queue.close()` makes the second fail — the retiring
+    /// await is bounded so that mutation surfaces as a failure rather than a hung test binary,
+    /// which would take every other test in the crate down with it.
     #[test_log::test(tokio::test(start_paused = true))]
     async fn retiring_closes_the_queue_and_keeps_what_it_was_given() {
         let (sender, mut queue) = mpsc::channel::<u8>(CHAIN_QUEUE);
@@ -301,10 +303,12 @@ mod tests {
             "a queued item must be returned without waiting for the deadline",
         );
 
-        // Nothing more arrives, so the deadline retires the queue.
+        // Nothing more arrives, so the deadline retires the queue. Bounded: without
+        // `queue.close()` the post-timeout `recv()` waits on a live sender and an empty queue
+        // with no timer left to advance the paused clock, so it would hang rather than fail.
         assert_eq!(
-            next_or_retire(&mut queue, CHAIN_IDLE).await,
-            None,
+            tokio::time::timeout(CHAIN_IDLE * 4, next_or_retire(&mut queue, CHAIN_IDLE)).await,
+            Ok(None),
             "an idle queue must retire so its entry can be pruned and its slot freed",
         );
         assert!(
