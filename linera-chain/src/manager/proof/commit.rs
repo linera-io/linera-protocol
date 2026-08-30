@@ -198,7 +198,7 @@ pub trait CertifiedBlockWasExecuted:
 ///
 /// * if it **executed** the sender's block, `execute_contiguous_block` re-executed it and rejected
 ///   a mismatch against the certificate ([`CertifiedBlockWasExecuted`] and the note there), so the
-///   bundles are self-derived;
+///   bundles are the validator's own work;
 /// * if it only **preprocessed** the sender's block, `preprocess_certified_block` updated outboxes
 ///   and event streams *without executing*, so the bundles are taken from the sender's certificate
 ///   at face value.
@@ -213,7 +213,7 @@ pub trait CertifiedBlockWasExecuted:
 /// [`ChainError::MissingCrossChainUpdates`]: crate::ChainError::MissingCrossChainUpdates
 /// [`MaxByzantineWeight`]: crate::manager::proof::model::MaxByzantineWeight
 /// [`AccountabilityScope`]: crate::justification::proof::AccountabilityScope
-pub trait IncomingBundlesAreSelfDerived: ProposalGate + CertifiedBlockWasExecuted {}
+pub trait IncomingBundlesMatchTheLocalInbox: ProposalGate + CertifiedBlockWasExecuted {}
 
 /// **Lemma (Event reads resolve against the validator's own storage).** When a correct validator
 /// votes on a proposal that reads an event, the value it votes for is the one in *its own* storage
@@ -221,7 +221,7 @@ pub trait IncomingBundlesAreSelfDerived: ProposalGate + CertifiedBlockWasExecute
 /// never taken from the proposer.
 ///
 /// This is what stands between a proposer and a block that claims to have read something nobody
-/// published. It is the event analogue of [`IncomingBundlesAreSelfDerived`], but the mechanism is
+/// published. It is the event analogue of [`IncomingBundlesMatchTheLocalInbox`], but the mechanism is
 /// not the same one, and the difference decides how a discrepancy shows up.
 ///
 /// *A bundle is checked; an event is produced.* A [`ProposedBlock`] names the incoming bundles it
@@ -257,7 +257,7 @@ pub trait IncomingBundlesAreSelfDerived: ProposalGate + CertifiedBlockWasExecute
 /// one requested, returning `ExecutionError::OracleResponseMismatch` otherwise. The bytes are taken
 /// as given.
 ///
-/// That asymmetry matches the one [`IncomingBundlesAreSelfDerived`] records for
+/// That asymmetry matches the one [`IncomingBundlesMatchTheLocalInbox`] records for
 /// `must_be_present = false`, and it is deliberate for the same reason: by the time a block is
 /// certified, a quorum has already voted, and this lemma has done its work at voting time. It is
 /// also why a fabricated `events` field is beyond [`AccountabilityScope`] — the fabrication is

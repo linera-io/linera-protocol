@@ -162,7 +162,7 @@
 //! * [`AccountabilityScope`] — incorrect block execution is not attributable, and its effects are
 //!   not confined to one chain: a wrong `messages` or `events` field is consumed by other chains
 //!   whose resulting blocks are themselves properly certified. The protections are
-//!   [`CertifiedBlockWasExecuted`] and [`IncomingBundlesAreSelfDerived`], and unlike the
+//!   [`CertifiedBlockWasExecuted`] and [`IncomingBundlesMatchTheLocalInbox`], and unlike the
 //!   accountability results both need [`MaxByzantineWeight`]. Tracked in
 //!   [issue #6675](https://github.com/linera-io/linera-protocol/issues/6675).
 //!
@@ -210,7 +210,7 @@
 //!   [`DeterministicExecution`] is assumed rather than proved, and *termination* of execution is
 //!   not stated at all. What is guaranteed is that a certified block was executed by some correct
 //!   validator ([`CertifiedBlockWasExecuted`]), that a voter matched every consumed bundle against
-//!   its own inbox ([`IncomingBundlesAreSelfDerived`]), and that the inputs execution needs can be
+//!   its own inbox ([`IncomingBundlesMatchTheLocalInbox`]), and that the inputs execution needs can be
 //!   supplied to a validator lacking them ([`MissingDependenciesAreRecoverable`]), and that its
 //!   outputs — published blobs, events and the certificate — reach storage before the block counts
 //!   as processed ([`BlockOutputsArePersisted`]).
@@ -220,7 +220,7 @@
 //!   runtime check at the retry. Everywhere else the two are kept apart.
 //! * **Cross-chain messaging** — largely covered, except for unconditional delivery. An inbox holds
 //!   only bundles its origin really sent ([`InboxHoldsOnlySentBundles`]); a voter matches every
-//!   consumed bundle against its own inbox ([`IncomingBundlesAreSelfDerived`]); no two blocks
+//!   consumed bundle against its own inbox ([`IncomingBundlesMatchTheLocalInbox`]); no two blocks
 //!   consume the same bundle ([`BundleConsumedAtMostOnce`]); delivery and consumption follow cursor
 //!   order, and only an entirely skippable bundle may be passed over
 //!   ([`DeliveryAndConsumptionAreOrdered`]); a sender may drop what its recipient has checkpointed
@@ -277,7 +277,7 @@
 //! [`InboxEntriesAreNeverReclaimed`]: linera_core::proof::storage::InboxEntriesAreNeverReclaimed
 //! [`ConsensusInstance`]: linera_chain::manager::proof::model::ConsensusInstance
 //! [`CertifiedBlockWasExecuted`]: linera_chain::manager::proof::commit::CertifiedBlockWasExecuted
-//! [`IncomingBundlesAreSelfDerived`]: linera_chain::manager::proof::commit::IncomingBundlesAreSelfDerived
+//! [`IncomingBundlesMatchTheLocalInbox`]: linera_chain::manager::proof::commit::IncomingBundlesMatchTheLocalInbox
 //! [`FullReachability`]: linera_core::proof::assumptions::FullReachability
 //! [`MissingDependenciesAreRecoverable`]: linera_core::proof::availability::MissingDependenciesAreRecoverable
 //! [`BlockOutputsArePersisted`]: linera_core::proof::availability::BlockOutputsArePersisted

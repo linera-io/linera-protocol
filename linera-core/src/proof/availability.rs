@@ -11,7 +11,7 @@
 //! [`CommitAgreement`]: linera_chain::manager::proof::safety::CommitAgreement
 
 use linera_chain::manager::proof::{
-    commit::{CommittedBlock, IncomingBundlesAreSelfDerived},
+    commit::{CommittedBlock, IncomingBundlesMatchTheLocalInbox},
     model::{CorrectValidator, SequentialChainState, StorageAtomicity},
 };
 
@@ -217,7 +217,7 @@ pub trait LockingBlobsTravelWithTheLock: CorrectValidator + CorrectValidatorAvai
 /// The inbox row is the one that needs care, because "valid" there means more than "the bundle
 /// exists". `remove_bundles_from_inboxes` runs with `must_be_present = true`, so the bundle must
 /// already be in *that validator's* inbox and equal to what it holds
-/// ([`IncomingBundlesAreSelfDerived`]); and consumption must respect cursor order, skipping only
+/// ([`IncomingBundlesMatchTheLocalInbox`]); and consumption must respect cursor order, skipping only
 /// bundles every message of which is skippable ([`DeliveryAndConsumptionAreOrdered`]). A client
 /// therefore cannot make a proposal valid by supplying a bundle in isolation: it supplies the
 /// sending chain's blocks, and the validator derives the inbox from them itself.
@@ -288,7 +288,7 @@ pub trait LockingBlobsTravelWithTheLock: CorrectValidator + CorrectValidatorAvai
 /// dependency that nobody can supply therefore surfaces as an error rather than looping.
 ///
 /// [`LocalNodeLagging`]: crate::client::chain_client::Error::LocalNodeLagging
-/// [`IncomingBundlesAreSelfDerived`]: linera_chain::manager::proof::commit::IncomingBundlesAreSelfDerived
+/// [`IncomingBundlesMatchTheLocalInbox`]: linera_chain::manager::proof::commit::IncomingBundlesMatchTheLocalInbox
 /// [`ValidationQuorumForms`]: super::progress::ValidationQuorumForms
 pub trait MissingDependenciesAreRecoverable:
     LockingBlobsTravelWithTheLock + CorrectValidatorAvailability + EventualSynchrony
@@ -353,7 +353,7 @@ pub trait EffectsSurviveRestart:
 /// chain's inboxes. `select_message_bundles` additionally drops bundles whose epoch has been
 /// revoked, unless they were already anticipated. ∎
 ///
-/// This is the premise [`IncomingBundlesAreSelfDerived`] leaves open: that lemma proves a voter
+/// This is the premise [`IncomingBundlesMatchTheLocalInbox`] leaves open: that lemma proves a voter
 /// matches consumed bundles against its own inbox, which is worth exactly as much as the inbox's
 /// own provenance.
 ///
@@ -381,7 +381,7 @@ pub trait InboxHoldsOnlySentBundles: CorrectValidator + SequentialChainState {}
 ///   part of the restored state.
 ///
 /// Consumption itself removes the bundle: `remove_bundles_from_inboxes` pops it from
-/// `added_bundles`, and by [`IncomingBundlesAreSelfDerived`] a correct validator does not vote for
+/// `added_bundles`, and by [`IncomingBundlesMatchTheLocalInbox`] a correct validator does not vote for
 /// a block consuming a bundle that is not there. ∎
 ///
 /// **Scoped to one validator.** Every clause above is about one validator's own inboxes. That all
@@ -392,7 +392,7 @@ pub trait InboxHoldsOnlySentBundles: CorrectValidator + SequentialChainState {}
 /// [`Cursor`]: linera_base::data_types::Cursor
 /// [`UniqueChain`]: linera_chain::manager::proof::safety::UniqueChain
 pub trait BundleConsumedAtMostOnce:
-    InboxHoldsOnlySentBundles + EffectsSurviveRestart + IncomingBundlesAreSelfDerived
+    InboxHoldsOnlySentBundles + EffectsSurviveRestart + IncomingBundlesMatchTheLocalInbox
 {
 }
 
