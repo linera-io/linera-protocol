@@ -241,8 +241,8 @@
 //!   [`ConsensusInstance`] records what is assumed about it.
 //! * **Resource control and fees** — metering, declared block limits, and fee conservation.
 //! * **Event streams** — the reader side is covered, the publisher side is not. A voter resolves
-//!   every event a block reads against its own storage, at the exact identifier cited
-//!   ([`EventReadsAreSelfDerived`]); an event is written only under the publishing block's
+//!   every event a block reads against its own storage rather than trusting the proposer
+//!   ([`EventReadsResolveLocally`]); an event is written only under the publishing block's
 //!   certification, so it inherits that proof rather than carrying one
 //!   ([`AdmissionChecksTheValidityProof`]); and a stream's readable indices across a checkpoint are
 //!   fixed by [`EventFloorTracksCheckpoints`], with summarization by
@@ -268,7 +268,7 @@
 //! [`CertifiedBlockIsAvailable`]: linera_core::proof::availability::CertifiedBlockIsAvailable
 //! [`StorageConvergesAtEqualHeights`]: linera_core::proof::storage::StorageConvergesAtEqualHeights
 //! [`EventFloorTracksCheckpoints`]: linera_chain::proof::checkpoints::EventFloorTracksCheckpoints
-//! [`EventReadsAreSelfDerived`]: linera_chain::manager::proof::commit::EventReadsAreSelfDerived
+//! [`EventReadsResolveLocally`]: linera_chain::manager::proof::commit::EventReadsResolveLocally
 //! [`AdmissionChecksTheValidityProof`]: linera_core::proof::storage::AdmissionChecksTheValidityProof
 //! [`CheckpointSummarizesUserStreams`]: linera_chain::proof::checkpoints::CheckpointSummarizesUserStreams
 //! [`DeliveryAndConsumptionAreOrdered`]: linera_core::proof::availability::DeliveryAndConsumptionAreOrdered

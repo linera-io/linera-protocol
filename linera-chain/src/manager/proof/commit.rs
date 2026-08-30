@@ -215,14 +215,25 @@ pub trait CertifiedBlockWasExecuted:
 /// [`AccountabilityScope`]: crate::justification::proof::AccountabilityScope
 pub trait IncomingBundlesAreSelfDerived: ProposalGate + CertifiedBlockWasExecuted {}
 
-/// **Lemma (An event a block reads is matched against the validator's own storage).** A correct
-/// validator casts a validation or fast-confirmation vote for a block that reads an event only if
-/// that event is in its own storage under the exact [`EventId`] the block cites, and the bytes it
-/// votes for are the bytes it holds.
+/// **Lemma (Event reads resolve against the validator's own storage).** When a correct validator
+/// votes on a proposal that reads an event, the value it votes for is the one in *its own* storage
+/// under the [`EventId`] the block cites — resolved locally, exactly as an oracle call is, and
+/// never taken from the proposer.
 ///
-/// This is the event counterpart of [`IncomingBundlesAreSelfDerived`], and it carries the same
-/// weight: it is what stands between a proposer and a block that claims to have read something no
-/// one published.
+/// This is what stands between a proposer and a block that claims to have read something nobody
+/// published. It is the event analogue of [`IncomingBundlesAreSelfDerived`], but the mechanism is
+/// not the same one, and the difference decides how a discrepancy shows up.
+///
+/// *A bundle is checked; an event is produced.* A [`ProposedBlock`] names the incoming bundles it
+/// consumes, so a validator can compare them against its inbox and reject on mismatch. It carries
+/// no `oracle_responses` — those exist only in [`BlockExecutionOutcome`] — so there is nothing to
+/// compare an event against. The validator simply reads its own storage and records what it finds.
+///
+/// So the two fail differently. A wrong bundle is *rejected*: `remove_bundles_from_inboxes` requires
+/// presence and equality. A wrong event is not rejected at all — the validator computes a different
+/// outcome, hence a different [`Block`], and votes for that instead. The proposer's intended block
+/// simply never gathers a quorum. Both keep a fabricated value out of a certificate; only the first
+/// produces an error anyone can point at.
 ///
 /// *Code correspondence.*
 ///
@@ -236,9 +247,9 @@ pub trait IncomingBundlesAreSelfDerived: ProposalGate + CertifiedBlockWasExecute
 /// *Proof.* Validating a proposal executes the block afresh, with no recorded outcome to replay
 /// ([`CertifiedBlockWasExecuted`]). `TransactionTracker::oracle` therefore finds no replayed
 /// response and runs its closure, which calls `get_event` on this validator's own storage and
-/// fails with `ExecutionError::EventsNotFound` when the event is absent. The value recorded in the
-/// block is the value that came back. So a validator cannot vote for a block whose event it does
-/// not hold, and cannot vote for content differing from its own. ∎
+/// fails with `ExecutionError::EventsNotFound` when the event is absent. The value it records is
+/// the value that came back. So a validator cannot vote for a block whose event it does not hold,
+/// nor for content differing from its own. ∎
 ///
 /// **Replay checks the identifier, not the content.** When a block *does* carry a recorded outcome
 /// — a regular retry, or a certified block being applied — `oracle` returns the recorded response
@@ -246,7 +257,7 @@ pub trait IncomingBundlesAreSelfDerived: ProposalGate + CertifiedBlockWasExecute
 /// one requested, returning `ExecutionError::OracleResponseMismatch` otherwise. The bytes are taken
 /// as given.
 ///
-/// That asymmetry is the same one [`IncomingBundlesAreSelfDerived`] records for
+/// That asymmetry matches the one [`IncomingBundlesAreSelfDerived`] records for
 /// `must_be_present = false`, and it is deliberate for the same reason: by the time a block is
 /// certified, a quorum has already voted, and this lemma has done its work at voting time. It is
 /// also why a fabricated `events` field is beyond [`AccountabilityScope`] — the fabrication is
@@ -261,7 +272,10 @@ pub trait IncomingBundlesAreSelfDerived: ProposalGate + CertifiedBlockWasExecute
 /// ([`EventFloorTracksCheckpoints`]).
 ///
 /// [`EventId`]: linera_base::identifiers::EventId
+/// [`ProposedBlock`]: crate::data_types::ProposedBlock
+/// [`BlockExecutionOutcome`]: crate::data_types::BlockExecutionOutcome
+/// [`Block`]: crate::block::Block
 /// [`ProposalGate`]: crate::manager::proof::voting::ProposalGate
 /// [`AccountabilityScope`]: crate::justification::proof::AccountabilityScope
 /// [`EventFloorTracksCheckpoints`]: crate::proof::checkpoints::EventFloorTracksCheckpoints
-pub trait EventReadsAreSelfDerived: ProposalGate + CertifiedBlockWasExecuted {}
+pub trait EventReadsResolveLocally: ProposalGate + CertifiedBlockWasExecuted {}
