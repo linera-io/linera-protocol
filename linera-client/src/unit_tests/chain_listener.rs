@@ -937,7 +937,12 @@ async fn test_chain_listener_auto_assigns_on_new_chains() -> anyhow::Result<()> 
 
     let open = async |ownership: ChainOwnership| -> anyhow::Result<ChainId> {
         match client0
-            .open_chain(ownership, ApplicationPermissions::default(), Amount::ZERO)
+            .open_chain(
+                ownership,
+                ApplicationPermissions::default(),
+                AccountOwner::CHAIN,
+                Amount::ZERO,
+            )
             .await?
         {
             ClientOutcome::Committed((description, _)) => Ok(description.id()),

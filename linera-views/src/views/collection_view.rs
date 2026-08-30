@@ -24,7 +24,7 @@ use crate::{
     hashable_wrapper::WrappedHashableContainerView,
     historical_hash_wrapper::HistoricallyHashableView,
     store::ReadableKeyValueStore as _,
-    views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
+    views::{collection_entry, ClonableView, HashableView, Hasher, View, ViewError},
 };
 
 #[cfg(with_metrics)]
@@ -101,21 +101,6 @@ impl<W> std::ops::Deref for ReadGuardedView<'_, W> {
             ReadGuardedView::NotLoaded { _updates, view } => view,
         }
     }
-}
-
-/// We need to find new base keys in order to implement `CollectionView`.
-/// We do this by appending a value to the base key.
-///
-/// Sub-views in a collection share a common key prefix, like in other view types. However,
-/// just concatenating the shared prefix with sub-view keys makes it impossible to distinguish if a
-/// given key belongs to child sub-view or a grandchild sub-view (consider for example if a
-/// collection is stored inside the collection).
-#[repr(u8)]
-enum KeyTag {
-    /// Prefix for specifying an index and serves to indicate the existence of an entry in the collection.
-    Index = MIN_VIEW_TAG,
-    /// Prefix for specifying as the prefix for the sub-view.
-    Subview,
 }
 
 impl<W: View> View for ByteCollectionView<W::Context, W> {
@@ -228,15 +213,11 @@ impl<W: ClonableView> ClonableView for ByteCollectionView<W::Context, W> {
 
 impl<W: View> ByteCollectionView<W::Context, W> {
     fn get_index_key(&self, index: &[u8]) -> Vec<u8> {
-        self.context
-            .base_key()
-            .base_tag_index(KeyTag::Index as u8, index)
+        collection_entry::index_key(&self.context, index)
     }
 
     fn get_subview_key(&self, index: &[u8]) -> Vec<u8> {
-        self.context
-            .base_key()
-            .base_tag_index(KeyTag::Subview as u8, index)
+        collection_entry::subview_key(&self.context, index)
     }
 
     fn add_index(&self, batch: &mut Batch, index: &[u8]) {
@@ -268,10 +249,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
                 match entry {
                     Update::Set(view) => Ok(view),
                     Update::Removed => {
-                        let key = self
-                            .context
-                            .base_key()
-                            .base_tag_index(KeyTag::Subview as u8, short_key);
+                        let key = collection_entry::subview_key(&self.context, short_key);
                         let context = self.context.clone_with_base_key(key);
                         // Obtain a view and set its pending state to the default (e.g. empty) state
                         let view = W::new(context)?;
@@ -284,10 +262,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
                 }
             }
             btree_map::Entry::Vacant(entry) => {
-                let key = self
-                    .context
-                    .base_key()
-                    .base_tag_index(KeyTag::Subview as u8, short_key);
+                let key = collection_entry::subview_key(&self.context, short_key);
                 let context = self.context.clone_with_base_key(key);
                 let view = if self.delete_storage_first {
                     W::new(context)?
@@ -339,26 +314,20 @@ impl<W: View> ByteCollectionView<W::Context, W> {
                 })),
             },
             None => {
-                let key_index = self
-                    .context
-                    .base_key()
-                    .base_tag_index(KeyTag::Index as u8, short_key);
-                if !self.delete_storage_first
-                    && self.context.store().contains_key(&key_index).await?
-                {
-                    let key = self
-                        .context
-                        .base_key()
-                        .base_tag_index(KeyTag::Subview as u8, short_key);
-                    let context = self.context.clone_with_base_key(key);
-                    let view = W::load(context).await?;
-                    Ok(Some(ReadGuardedView::NotLoaded {
-                        _updates: updates,
-                        view,
-                    }))
-                } else {
-                    Ok(None)
+                if self.delete_storage_first {
+                    return Ok(None);
                 }
+                // The index marker and the subview's initialization keys are read together, so
+                // that loading an entry costs a single round trip whether or not it exists.
+                let (subview_context, keys) =
+                    collection_entry::entry_keys::<W>(&self.context, short_key)?;
+                let values = self.context.store().read_multi_values_bytes(&keys).await?;
+                let subview = collection_entry::post_load_entry::<W>(subview_context, &values)?;
+                let entry = subview.map(|view| ReadGuardedView::NotLoaded {
+                    _updates: updates,
+                    view,
+                });
+                Ok(entry)
             }
         }
     }
@@ -388,8 +357,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
         short_keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<ReadGuardedView<'_, W>>>, ViewError> {
         let mut results = Vec::with_capacity(short_keys.len());
-        let mut keys_to_check = Vec::new();
-        let mut keys_to_check_metadata = Vec::new();
+        let mut entries_to_load = Vec::new();
         let updates = self.updates.read().await;
 
         for (position, short_key) in short_keys.into_iter().enumerate() {
@@ -409,49 +377,38 @@ impl<W: View> ByteCollectionView<W::Context, W> {
                 None => {
                     results.push(None); // Placeholder, may be updated later
                     if !self.delete_storage_first {
-                        let key = self
-                            .context
-                            .base_key()
-                            .base_tag_index(KeyTag::Subview as u8, &short_key);
-                        let subview_context = self.context.clone_with_base_key(key);
-                        let key = self
-                            .context
-                            .base_key()
-                            .base_tag_index(KeyTag::Index as u8, &short_key);
-                        keys_to_check.push(key);
-                        keys_to_check_metadata.push((position, subview_context));
+                        entries_to_load.push((position, short_key));
                     }
                 }
             }
         }
 
-        let found_keys = self.context.store().contains_keys(&keys_to_check).await?;
-        let entries_to_load = keys_to_check_metadata
-            .into_iter()
-            .zip(found_keys)
-            .filter_map(|(metadata, found)| found.then_some(metadata))
-            .collect::<Vec<_>>();
-
-        let mut keys_to_load = Vec::with_capacity(entries_to_load.len() * W::NUM_INIT_KEYS);
-        for (_, context) in &entries_to_load {
-            keys_to_load.extend(W::pre_load(context)?);
-        }
-        let values = self
-            .context
-            .store()
-            .read_multi_values_bytes(&keys_to_load)
-            .await?;
-
-        for (loaded_values, (position, context)) in values
-            .chunks_exact_or_repeat(W::NUM_INIT_KEYS)
-            .zip(entries_to_load)
-        {
-            let view = W::post_load(context, loaded_values)?;
-            let updates = self.updates.read().await;
-            results[position] = Some(ReadGuardedView::NotLoaded {
-                _updates: updates,
-                view,
-            });
+        if !entries_to_load.is_empty() {
+            // The index markers and the subviews' initialization keys are read together, so
+            // that loading entries costs a single round trip whether or not they exist.
+            let entry_len = collection_entry::entry_len::<W>();
+            let mut keys = Vec::with_capacity(entries_to_load.len() * entry_len);
+            let mut subview_contexts = Vec::with_capacity(entries_to_load.len());
+            for (_, short_key) in &entries_to_load {
+                let (subview_context, entry) =
+                    collection_entry::entry_keys::<W>(&self.context, short_key)?;
+                keys.extend(entry);
+                subview_contexts.push(subview_context);
+            }
+            let values = self.context.store().read_multi_values_bytes(&keys).await?;
+            for ((position, _), (entry_values, subview_context)) in entries_to_load
+                .into_iter()
+                .zip(values.chunks_exact(entry_len).zip(subview_contexts))
+            {
+                if let Some(view) =
+                    collection_entry::post_load_entry::<W>(subview_context, entry_values)?
+                {
+                    results[position] = Some(ReadGuardedView::NotLoaded {
+                        _updates: self.updates.read().await,
+                        view,
+                    });
+                }
+            }
         }
 
         Ok(results)
@@ -533,10 +490,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
                     // Therefore we have `self.delete_storage_first = false`.
                     assert!(!self.delete_storage_first);
                     results.push((short_key.clone(), None));
-                    let key = self
-                        .context
-                        .base_key()
-                        .base_tag_index(KeyTag::Subview as u8, short_key);
+                    let key = collection_entry::subview_key(&self.context, short_key);
                     let subview_context = self.context.clone_with_base_key(key);
                     keys_to_load.extend(W::pre_load(&subview_context)?);
                     keys_to_load_metadata.push((position, subview_context, short_key.clone()));
@@ -589,10 +543,7 @@ impl<W: View> ByteCollectionView<W::Context, W> {
     /// # })
     /// ```
     pub fn reset_entry_to_default(&mut self, short_key: &[u8]) -> Result<(), ViewError> {
-        let key = self
-            .context
-            .base_key()
-            .base_tag_index(KeyTag::Subview as u8, short_key);
+        let key = collection_entry::subview_key(&self.context, short_key);
         let context = self.context.clone_with_base_key(key);
         let view = W::new(context)?;
         self.updates
@@ -620,19 +571,17 @@ impl<W: View> ByteCollectionView<W::Context, W> {
     /// ```
     pub async fn contains_key(&self, short_key: &[u8]) -> Result<bool, ViewError> {
         let updates = self.updates.read().await;
-        Ok(match updates.get(short_key) {
+        let contains = match updates.get(short_key) {
             Some(entry) => match entry {
                 Update::Set(_view) => true,
                 _entry @ Update::Removed => false,
             },
             None => {
-                let key_index = self
-                    .context
-                    .base_key()
-                    .base_tag_index(KeyTag::Index as u8, short_key);
+                let key_index = collection_entry::index_key(&self.context, short_key);
                 !self.delete_storage_first && self.context.store().contains_key(&key_index).await?
             }
-        })
+        };
+        Ok(contains)
     }
 
     /// Marks the entry as removed. If absent then nothing is done.
@@ -844,10 +793,7 @@ impl<W: HashableView> HashableView for ByteCollectionView<W::Context, W> {
                     view.hash_mut().await?
                 }
                 None => {
-                    let key = self
-                        .context
-                        .base_key()
-                        .base_tag_index(KeyTag::Subview as u8, &key);
+                    let key = collection_entry::subview_key(&self.context, &key);
                     let context = self.context.clone_with_base_key(key);
                     let mut view = W::load(context).await?;
                     view.hash_mut().await?
@@ -876,10 +822,7 @@ impl<W: HashableView> HashableView for ByteCollectionView<W::Context, W> {
                     view.hash().await?
                 }
                 None => {
-                    let key = self
-                        .context
-                        .base_key()
-                        .base_tag_index(KeyTag::Subview as u8, &key);
+                    let key = collection_entry::subview_key(&self.context, &key);
                     let context = self.context.clone_with_base_key(key);
                     let view = W::load(context).await?;
                     view.hash().await?

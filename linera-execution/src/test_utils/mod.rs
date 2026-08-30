@@ -56,6 +56,7 @@ pub fn dummy_chain_description_with_ownership_and_balance(
     let origin = ChainOrigin::Root(index);
     let config = InitialChainConfig {
         application_permissions: Default::default(),
+        account: AccountOwner::CHAIN,
         balance,
         epoch: Epoch::ZERO,
         ownership,

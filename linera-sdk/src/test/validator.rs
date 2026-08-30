@@ -101,6 +101,7 @@ impl TestValidator {
         let new_chain_config = InitialChainConfig {
             ownership: ChainOwnership::single(key_pair.public().into()),
             epoch,
+            account: AccountOwner::CHAIN,
             balance: Amount::from_tokens(1_000_000),
             application_permissions: ApplicationPermissions::default(),
         };
@@ -319,6 +320,7 @@ impl TestValidator {
 
         let open_chain_config = OpenChainConfig {
             ownership: ChainOwnership::single(owner),
+            account: AccountOwner::CHAIN,
             balance: Amount::from_tokens(10),
             application_permissions: ApplicationPermissions::default(),
         };

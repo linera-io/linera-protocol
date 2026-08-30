@@ -3,7 +3,7 @@
 
 //! Event streams across a checkpoint boundary.
 
-use crate::manager::proof::model::SerializedChainState;
+use crate::manager::proof::model::SequentialChainState;
 
 /// **Invariant (A stream's readable floor is its first index since the last checkpoint).** For
 /// every event stream of a chain, [`StreamCounts::first_index`] is the index of the first event
@@ -49,7 +49,7 @@ use crate::manager::proof::model::SerializedChainState;
 /// [`previous_event_blocks`]: crate::block::BlockBody::previous_event_blocks
 /// [`previous_event_blocks_hash`]: crate::block::BlockHeader::previous_event_blocks_hash
 /// [`OracleResponse::Event`]: linera_base::data_types::OracleResponse::Event
-pub trait EventFloorTracksCheckpoints: SerializedChainState {}
+pub trait EventFloorTracksCheckpoints: SequentialChainState {}
 
 /// **Lemma (A checkpoint summarizes every user stream that published since the previous one).**
 /// At a checkpoint, each application holding an event stream that has published since the previous
@@ -130,7 +130,7 @@ pub trait CheckpointSummarizesUserStreams: EventFloorTracksCheckpoints {}
 /// The checkpoint block's certificate therefore *re-certifies* those older blocks, which is what
 /// keeps them acceptable after the committee that signed them has been removed —
 /// [`CheckpointRecertifiesReferencedBlocks`].
-pub trait CheckpointPreservesConsumptionBoundary: SerializedChainState {}
+pub trait CheckpointPreservesConsumptionBoundary: SequentialChainState {}
 
 /// **Lemma (A checkpoint leaves blob availability unchanged).** Checkpointing neither strands a
 /// blob the chain can still reach nor silently requires one a bootstrapping node cannot obtain.
@@ -156,7 +156,7 @@ pub trait CheckpointPreservesConsumptionBoundary: SerializedChainState {}
 /// node the right to skip replaying history; it does not buy free storage.
 ///
 /// [`OracleResponse::Checkpoint`]: linera_base::data_types::OracleResponse::Checkpoint
-pub trait CheckpointPreservesBlobAvailability: SerializedChainState {}
+pub trait CheckpointPreservesBlobAvailability: SequentialChainState {}
 
 /// **Lemma (A checkpoint restores exactly the execution state it captured).** Applying a
 /// checkpoint's blobs reproduces the chain's execution state as it stood immediately before the
@@ -222,7 +222,7 @@ pub trait CheckpointPreservesBlobAvailability: SerializedChainState {}
 /// [`ChainStateView`]: crate::ChainStateView
 /// [`SafetyStateRecovery`]: crate::manager::proof::locking::SafetyStateRecovery
 /// [`ExecutionStateView`]: linera_execution::ExecutionStateView
-pub trait CheckpointRestoresExecutionState: SerializedChainState {}
+pub trait CheckpointRestoresExecutionState: SequentialChainState {}
 
 /// **Lemma (A sender may forget messages its recipient has checkpointed).** A chain's checkpoint
 /// dump names only those of its blocks that still carry outgoing bundles no recipient has

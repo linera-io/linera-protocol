@@ -567,11 +567,11 @@ impl<C: Context> KeyValueStoreView<C> {
     /// let mut view = KeyValueStoreView::load(context).await.unwrap();
     /// view.insert(vec![0, 1], vec![0]).await.unwrap();
     /// view.insert(vec![0, 2], vec![0]).await.unwrap();
-    /// let count = view.count().await.unwrap();
+    /// let count = view.iterative_count().await.unwrap();
     /// assert_eq!(count, 2);
     /// # })
     /// ```
-    pub async fn count(&self) -> Result<usize, ViewError> {
+    pub async fn iterative_count(&self) -> Result<usize, ViewError> {
         let mut count = 0;
         self.for_each_index(|_index| {
             count += 1;

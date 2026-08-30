@@ -14,6 +14,7 @@
 //! | [`progress`] | the individual steps a correct driver can force after GST |
 //! | [`liveness`] | the liveness theorems, and what they exclude |
 //! | [`notifications`] | what a notification tells a client, and why no proof relies on one |
+//! | [`storage`] | what may be assumed about anything read back from storage |
 //!
 //! The `linera-spec` crate gives the reading order across both crates.
 //!
@@ -30,3 +31,4 @@ pub mod availability;
 pub mod liveness;
 pub mod notifications;
 pub mod progress;
+pub mod storage;

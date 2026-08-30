@@ -14,6 +14,7 @@ use crate::scylla_db::ScyllaDbDatabase;
 use crate::store::{KeyValueDatabase, TestKeyValueDatabase};
 use crate::{
     batch::Batch,
+    collection_view::CollectionView,
     context::{Context, MemoryContext},
     lazy_register_view::LazyRegisterView,
     queue_view::QueueView,
@@ -204,8 +205,7 @@ impl TestContextFactory for RocksDbContextFactory {
         let config = RocksDbDatabase::new_test_config().await?;
         let namespace = generate_test_namespace();
         let database = RocksDbDatabase::recreate_and_connect(&config, &namespace).await?;
-        let store = database.open_shared(&[])?;
-        let context = ViewContext::create_root_context(store, ()).await?;
+        let context = ViewContext::create_root_context(&database, &[], ()).await?;
 
         Ok(context)
     }
@@ -222,8 +222,7 @@ impl TestContextFactory for ScyllaDbContextFactory {
         let config = ScyllaDbDatabase::new_test_config().await?;
         let namespace = generate_test_namespace();
         let database = ScyllaDbDatabase::recreate_and_connect(&config, &namespace).await?;
-        let store = database.open_shared(&[])?;
-        let context = ViewContext::create_root_context(store, ()).await?;
+        let context = ViewContext::create_root_context(&database, &[], ()).await?;
         Ok(context)
     }
 }
@@ -452,6 +451,96 @@ async fn test_reentrant_collection_view_has_pending_changes_after_try_load_entri
     assert!(!entries[1].has_pending_changes().await);
 
     assert!(view.has_pending_changes().await);
+
+    Ok(())
+}
+
+/// Checks that a [`CollectionView`] batch load serves every index from storage in order when
+/// some of them are absent. Index 3 exists but was never written to, so only its index marker
+/// is stored.
+#[tokio::test]
+async fn test_collection_view_try_load_entries_with_absent_entries() -> anyhow::Result<()> {
+    let context = MemoryContext::new_for_testing(());
+    let mut view = CollectionView::<_, u8, RegisterView<_, String>>::load(context.clone()).await?;
+
+    view.load_entry_mut(&1).await?.set("first".to_owned());
+    view.load_entry_mut(&3).await?;
+    view.load_entry_mut(&5).await?.set("fifth".to_owned());
+    save_view(&context, &mut view).await?;
+
+    // Reopening the collection empties the pending updates, so the entries below are all read
+    // back from storage rather than served from memory.
+    let view = CollectionView::<_, u8, RegisterView<_, String>>::load(context.clone()).await?;
+    let expected = [
+        None,
+        Some("first".to_owned()),
+        None,
+        Some(String::new()),
+        None,
+        Some("fifth".to_owned()),
+        None,
+    ];
+
+    let entries = view.try_load_entries([&0, &1, &2, &3, &4, &5, &6]).await?;
+    let read = entries
+        .iter()
+        .map(|entry| entry.as_ref().map(|entry| entry.get().clone()))
+        .collect::<Vec<_>>();
+    assert_eq!(read, expected);
+
+    drop(entries);
+    for (index, expected) in (0..=6).zip(expected) {
+        let entry = view.try_load_entry(&index).await?;
+        assert_eq!(entry.map(|entry| entry.get().clone()), expected);
+    }
+
+    Ok(())
+}
+
+/// Checks that a [`ReentrantCollectionView`] batch load serves every index from storage in order
+/// when some of them are absent. Index 3 exists but was never written to, so only its index
+/// marker is stored.
+#[tokio::test]
+async fn test_reentrant_collection_view_try_load_entries_with_absent_entries() -> anyhow::Result<()>
+{
+    let context = MemoryContext::new_for_testing(());
+    let mut view =
+        ReentrantCollectionView::<_, u8, RegisterView<_, String>>::load(context.clone()).await?;
+
+    populate_reentrant_collection_view(
+        &mut view,
+        [(1, "first".to_owned()), (5, "fifth".to_owned())],
+    )
+    .await?;
+    view.try_load_entry_mut(&3).await?;
+    save_view(&context, &mut view).await?;
+
+    // Reopening the collection empties the pending updates, so the entries below are all read
+    // back from storage rather than served from memory.
+    let view =
+        ReentrantCollectionView::<_, u8, RegisterView<_, String>>::load(context.clone()).await?;
+    let expected = [
+        None,
+        Some("first".to_owned()),
+        None,
+        Some(String::new()),
+        None,
+        Some("fifth".to_owned()),
+        None,
+    ];
+
+    let entries = view.try_load_entries([&0, &1, &2, &3, &4, &5, &6]).await?;
+    let read = entries
+        .iter()
+        .map(|entry| entry.as_ref().map(|entry| entry.get().clone()))
+        .collect::<Vec<_>>();
+    assert_eq!(read, expected);
+
+    drop(entries);
+    for (index, expected) in (0..=6).zip(expected) {
+        let entry = view.try_load_entry(&index).await?;
+        assert_eq!(entry.map(|entry| entry.get().clone()), expected);
+    }
 
     Ok(())
 }

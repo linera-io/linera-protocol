@@ -271,6 +271,8 @@ struct PendingRequest {
     owner: AccountOwner,
     /// For daily claims, the existing chain to transfer tokens to.
     target_chain_id: Option<ChainId>,
+    /// The account on the user's chain to credit.
+    destination: AccountOwner,
     /// The amount of tokens to send.
     amount: Amount,
     /// For daily claims, the period number to store.
@@ -437,15 +439,31 @@ where
     S: Storage + Send + Sync + 'static,
 {
     /// Creates a new chain with the given authentication key, and transfers tokens to it.
-    async fn claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
-        record_claim_latency(self.do_claim(owner)).await
+    ///
+    /// The tokens are credited to `destination` on the new chain, defaulting to the chain
+    /// account itself. A chain funded only in an owner's account can pay fees just for the
+    /// blocks that owner authenticates.
+    async fn claim(
+        &self,
+        owner: AccountOwner,
+        destination: Option<AccountOwner>,
+    ) -> Result<ChainDescription, Error> {
+        record_claim_latency(self.do_claim(owner, destination.unwrap_or(AccountOwner::CHAIN))).await
     }
 
     /// Transfers a daily amount of tokens to the user's existing chain.
     /// The user must have already claimed a chain. Each user can claim once per 24-hour
     /// period, measured from their initial claim time.
-    async fn daily_claim(&self, owner: AccountOwner) -> Result<ClaimOutcome, Error> {
-        record_claim_latency(self.do_daily_claim(owner)).await
+    ///
+    /// The tokens are credited to `destination` on that chain, following the same rule as the
+    /// initial claim.
+    async fn daily_claim(
+        &self,
+        owner: AccountOwner,
+        destination: Option<AccountOwner>,
+    ) -> Result<ClaimOutcome, Error> {
+        record_claim_latency(self.do_daily_claim(owner, destination.unwrap_or(AccountOwner::CHAIN)))
+            .await
     }
 }
 
@@ -453,7 +471,11 @@ impl<S> MutationRoot<S>
 where
     S: Storage + Send + Sync + 'static,
 {
-    async fn do_claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
+    async fn do_claim(
+        &self,
+        owner: AccountOwner,
+        destination: AccountOwner,
+    ) -> Result<ChainDescription, Error> {
         // Check if this owner already has a chain.
         #[cfg(with_metrics)]
         let histogram = metrics::DATABASE_OPERATION_LATENCY.with_label_values(&["get_chain_id"]);
@@ -480,6 +502,7 @@ where
             requests.push_back(PendingRequest {
                 owner,
                 target_chain_id: None,
+                destination,
                 amount: self.initial_claim_amount,
                 daily_period: 0,
                 responder: tx,
@@ -522,7 +545,11 @@ where
         }
     }
 
-    async fn do_daily_claim(&self, owner: AccountOwner) -> Result<ClaimOutcome, Error> {
+    async fn do_daily_claim(
+        &self,
+        owner: AccountOwner,
+        destination: AccountOwner,
+    ) -> Result<ClaimOutcome, Error> {
         // Each early return below is a *refusal*, not a failure, and must be counted
         // under its own `result` label: these paths return before the queue round-trip
         // that increments `CLAIM_REQUESTS_TOTAL`, so without the explicit counters
@@ -564,6 +591,7 @@ where
         self.enqueue_daily_request(
             owner,
             initial_claim.chain_id,
+            destination,
             self.daily_claim_amount,
             period,
         )
@@ -574,6 +602,7 @@ where
         &self,
         owner: AccountOwner,
         target_chain_id: ChainId,
+        destination: AccountOwner,
         amount: Amount,
         daily_period: u64,
     ) -> Result<ClaimOutcome, Error> {
@@ -586,6 +615,7 @@ where
             requests.push_back(PendingRequest {
                 owner,
                 target_chain_id: Some(target_chain_id),
+                destination,
                 amount,
                 daily_period,
                 responder: tx,
@@ -907,13 +937,14 @@ where
                     owner: AccountOwner::CHAIN,
                     recipient: Account {
                         chain_id: target_chain_id,
-                        owner: request.owner,
+                        owner: request.destination,
                     },
                     amount: request.amount,
                 })
             } else {
                 let config = OpenChainConfig {
                     ownership: ChainOwnership::single(request.owner),
+                    account: request.destination,
                     balance: request.amount,
                     application_permissions: ApplicationPermissions::default(),
                 };

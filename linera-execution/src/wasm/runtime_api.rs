@@ -580,18 +580,20 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Opens a new chain, configuring it with the provided `chain_ownership`,
-    /// `application_permissions` and initial `balance` (debited from the current chain).
+    /// Opens a new chain, configuring it with the provided `chain_ownership` and
+    /// `application_permissions`, and crediting `balance` (debited from the current chain) to
+    /// `account` on the new chain.
     fn open_chain(
         caller: &mut Caller,
         chain_ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
+        account: AccountOwner,
         balance: Amount,
     ) -> Result<ChainId, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .open_chain(chain_ownership, application_permissions, balance)
+            .open_chain(chain_ownership, application_permissions, account, balance)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

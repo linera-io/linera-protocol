@@ -35,6 +35,7 @@ pub use linera_wallet_json::PersistentWallet as Wallet;
 #[cfg(with_metrics)]
 pub fn init_metrics() {
     linera_base::init_metrics();
+    linera_cache::init_metrics();
     linera_chain::init_metrics();
     linera_core::init_metrics();
     linera_execution::init_metrics();
@@ -44,4 +45,5 @@ pub fn init_metrics() {
     linera_storage::init_metrics();
     linera_views::init_metrics();
     node_service::query_cache_metrics::init_metrics();
+    task_processor::metrics::init_metrics();
 }

@@ -917,12 +917,107 @@ impl<B> TestBuilder<B>
 where
     B: StorageBuilder,
 {
+    /// The simulated clock every storage here shares, so a test can drive the export queue's
+    /// tick in virtual time instead of sleeping through it.
+    pub fn clock(&self) -> &TestClock {
+        self.storage_builder.clock()
+    }
+
     /// Creates a test setup with `count` validators, `with_faulty_validators` of which are faulty.
     pub async fn new(
+        storage_builder: B,
+        count: usize,
+        with_faulty_validators: usize,
+        signer: TestSigner,
+    ) -> Result<Self, anyhow::Error> {
+        Self::build(
+            storage_builder,
+            count,
+            with_faulty_validators,
+            signer,
+            None,
+            None,
+        )
+        .await
+    }
+
+    /// Creates a test setup like [`TestBuilder::new`], in which every validator also pushes the
+    /// blocks it executes to the rest of the committee.
+    pub async fn new_with_block_export(
+        storage_builder: B,
+        count: usize,
+        with_faulty_validators: usize,
+        signer: TestSigner,
+    ) -> Result<Self, anyhow::Error> {
+        Self::build(
+            storage_builder,
+            count,
+            with_faulty_validators,
+            signer,
+            Some(Self::test_block_export_config()),
+            None,
+        )
+        .await
+    }
+
+    /// Creates a test setup like [`TestBuilder::new_with_block_export`] with an explicit chain
+    /// worker TTL, for asserting that workers expire even while export is enabled.
+    pub async fn new_with_block_export_and_ttl(
+        storage_builder: B,
+        count: usize,
+        with_faulty_validators: usize,
+        signer: TestSigner,
+        chain_worker_ttl: Duration,
+    ) -> Result<Self, anyhow::Error> {
+        Self::build(
+            storage_builder,
+            count,
+            with_faulty_validators,
+            signer,
+            Some(Self::test_block_export_config()),
+            Some(chain_worker_ttl),
+        )
+        .await
+    }
+
+    /// Creates a test setup like [`TestBuilder::new_with_block_export`], with the export tuned by
+    /// the caller. Used to shrink `max_catch_up_blocks` far below its default so that a backlog a
+    /// test can actually produce still takes several rounds to drain.
+    pub async fn new_with_block_export_config(
+        storage_builder: B,
+        count: usize,
+        with_faulty_validators: usize,
+        signer: TestSigner,
+        config: crate::BlockExportConfig,
+    ) -> Result<Self, anyhow::Error> {
+        Self::build(
+            storage_builder,
+            count,
+            with_faulty_validators,
+            signer,
+            Some(config),
+            None,
+        )
+        .await
+    }
+
+    /// The export settings the block-export tests run with: production backoff is measured in
+    /// seconds, which would make every test that exercises a failing destination wait it out.
+    pub fn test_block_export_config() -> crate::BlockExportConfig {
+        crate::BlockExportConfig {
+            retry_delay: Duration::from_millis(20),
+            max_retry_delay: Duration::from_millis(200),
+            ..crate::BlockExportConfig::default()
+        }
+    }
+
+    async fn build(
         mut storage_builder: B,
         count: usize,
         with_faulty_validators: usize,
         mut signer: TestSigner,
+        block_export: Option<crate::BlockExportConfig>,
+        chain_worker_ttl: Option<Duration>,
     ) -> Result<Self, anyhow::Error> {
         let mut validators = Vec::new();
         for _ in 0..count {
@@ -935,7 +1030,9 @@ where
             .map(|(validating, account)| (validating.public_key, *account))
             .collect::<Vec<_>>();
         let initial_committee = Committee::make_simple(for_committee);
-        let mut validator_clients = Vec::new();
+        // Created up front and filled in below, so that each validator's export tasks can resolve
+        // the others through it even though those clients do not exist yet.
+        let node_provider = NodeProvider(Arc::new(std::sync::Mutex::new(Vec::new())));
         let mut validator_storages = HashMap::new();
         let mut validator_key_pairs = HashMap::new();
         let mut faulty_validators = HashSet::new();
@@ -945,16 +1042,31 @@ where
             let secret_key_copy = validator_keypair.secret_key.copy();
             let config = ChainWorkerConfig {
                 nickname: format!("Node {i}"),
+                // Export folds progress into the chain state when the worker next saves, so
+                // give workers a lifetime instead of dropping them after every request, and fold
+                // unthrottled so assertions see progress as it happens.
+                ttl: chain_worker_ttl
+                    .or_else(|| block_export.is_some().then(|| Duration::from_secs(60))),
+                exported_heights_fold_interval: Duration::ZERO,
                 ..ChainWorkerConfig::default()
             }
             .with_key_pair(Some(validator_keypair.secret_key));
-            let state = WorkerState::new(storage.clone(), config, None);
+            let mut state = WorkerState::new(storage.clone(), config, None);
+            if let Some(export_config) = block_export.clone() {
+                let handle = crate::spawn_block_export_queue(
+                    storage.clone(),
+                    Arc::new(node_provider.clone()),
+                    export_config,
+                    Some(validator_public_key),
+                );
+                state = state.with_block_export(handle);
+            }
             let mut validator = LocalValidatorClient::new(validator_public_key, state);
             if i < with_faulty_validators {
                 faulty_validators.insert(validator_public_key);
                 validator.set_fault_type(FaultType::NoChains);
             }
-            validator_clients.push(validator);
+            node_provider.0.lock().unwrap().push(validator);
             validator_storages.insert(validator_public_key, storage);
             validator_key_pairs.insert(validator_public_key, secret_key_copy);
         }
@@ -968,7 +1080,7 @@ where
             admin_description: None,
             network_description: None,
             genesis_storage_builder: GenesisStorageBuilder::default(),
-            node_provider: NodeProvider::from_iter(validator_clients),
+            node_provider,
             validator_storages,
             validator_key_pairs,
             chain_client_storages: Vec::new(),
@@ -1057,6 +1169,7 @@ where
         let open_chain_config = InitialChainConfig {
             ownership: make_ownership(public_key.into()),
             epoch: Epoch(0),
+            account: AccountOwner::CHAIN,
             balance,
             application_permissions: ApplicationPermissions::default(),
         };
@@ -1134,6 +1247,13 @@ where
     /// Returns a clone of the node provider backing this test setup.
     pub fn make_node_provider(&self) -> NodeProvider<B::Storage> {
         self.node_provider.clone()
+    }
+
+    /// Returns the storage of the validator at `index`, which holds every block that validator
+    /// has processed.
+    pub fn validator_storage(&mut self, index: usize) -> B::Storage {
+        let public_key = self.node(index).public_key;
+        self.validator_storages.get(&public_key).unwrap().clone()
     }
 
     /// Returns a clone of the validator client at the given index.
@@ -1281,6 +1401,36 @@ where
             }
         }
         assert!(count >= target_count);
+    }
+
+    /// Returns how far the validator at `index` believes it has exported the given chain to each
+    /// of the other validators.
+    pub async fn exported_heights(
+        &self,
+        index: usize,
+        chain_id: ChainId,
+    ) -> BTreeMap<ValidatorPublicKey, BlockHeight> {
+        let validator = self.node_provider.all_nodes()[index].clone();
+        let guard = validator.client.lock().await;
+        let chain = guard.state.chain_state_view(chain_id).await.unwrap();
+        chain.exported_heights.get().clone().into()
+    }
+
+    /// Returns how many chain workers the validator at `index` currently has resident.
+    pub async fn resident_chain_workers(&self, index: usize) -> usize {
+        let validator = self.node_provider.all_nodes()[index].clone();
+        let guard = validator.client.lock().await;
+        guard.state.resident_chain_worker_count()
+    }
+
+    /// Returns the next block height the validator at `index` has for the given chain.
+    pub async fn next_block_height(&self, index: usize, chain_id: ChainId) -> BlockHeight {
+        let validator = self.node_provider.all_nodes()[index].clone();
+        let response = validator
+            .handle_chain_info_query(ChainInfoQuery::new(chain_id))
+            .await
+            .unwrap();
+        response.info.next_block_height
     }
 
     /// Panics if any validator has a nonempty outbox for the given chain.

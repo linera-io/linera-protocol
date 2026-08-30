@@ -416,23 +416,22 @@ where
             }
 
             OpenChain {
-                ownership,
-                balance,
+                config,
                 parent_id,
                 block_height,
-                application_permissions,
                 timestamp,
                 callback,
             } => {
-                let config = OpenChainConfig {
-                    ownership,
-                    balance,
-                    application_permissions,
-                };
                 let chain_id = self
                     .state
                     .system
-                    .open_chain(config, parent_id, block_height, timestamp, self.txn_tracker)
+                    .open_chain(
+                        *config,
+                        parent_id,
+                        block_height,
+                        timestamp,
+                        self.txn_tracker,
+                    )
                     .await?;
                 callback.respond(chain_id);
             }
@@ -819,7 +818,7 @@ where
             } => {
                 let view = self.state.users.try_load_entry(&application).await?;
                 let result = match view {
-                    Some(view) => view.count().await? == 0,
+                    Some(view) => view.iterative_count().await? == 0,
                     None => true,
                 };
                 callback.respond(result);
@@ -1490,12 +1489,9 @@ pub enum ExecutionRequest {
     },
 
     OpenChain {
-        ownership: ChainOwnership,
-        #[debug(skip_if = Amount::is_zero)]
-        balance: Amount,
+        config: Box<OpenChainConfig>,
         parent_id: ChainId,
         block_height: BlockHeight,
-        application_permissions: ApplicationPermissions,
         timestamp: Timestamp,
         #[debug(skip)]
         callback: Sender<ChainId>,

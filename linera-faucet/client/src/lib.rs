@@ -12,17 +12,16 @@ use std::collections::BTreeMap;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{Amount, ArithmeticError, ChainDescription, Timestamp},
-    identifiers::ChainId,
+    identifiers::{AccountOwner, ChainId},
 };
 use linera_client::config::GenesisConfig;
 use linera_execution::{committee::ValidatorState, Committee, ResourceControlPolicy};
 use linera_version::VersionInfo;
-use thiserror_context::Context;
 
 /// The kinds of error that the faucet client can return.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
-pub enum ErrorInner {
+pub enum Error {
     /// A response from the faucet could not be parsed as JSON.
     #[error("JSON parsing error: {0:?}")]
     Json(#[from] serde_json::Error),
@@ -35,21 +34,15 @@ pub enum ErrorInner {
     /// An arithmetic operation overflowed.
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
-}
-
-pub use error::Error;
-
-mod error {
-    // `impl_context!` generates a public `Error` newtype (with accessors) that cannot carry
-    // doc comments, so this wrapper module is exempted from the crate's `missing_docs` policy.
-    // `expect` (rather than `allow`) flags this if the macro ever stops generating such items.
-    #![expect(missing_docs)]
-
-    use thiserror_context::Context;
-
-    use super::ErrorInner;
-
-    thiserror_context::impl_context!(Error(ErrorInner));
+    /// A GraphQL query could not be sent to the faucet.
+    #[error("failed to execute query {query:?}: {source}")]
+    Query {
+        /// The query that could not be sent.
+        query: String,
+        /// The underlying HTTP failure.
+        #[source]
+        source: reqwest::Error,
+    },
 }
 
 /// The result of a successful claim mutation.
@@ -72,6 +65,16 @@ pub struct InitialClaim {
     pub chain_id: ChainId,
     /// The block timestamp when the chain was created.
     pub timestamp: Timestamp,
+}
+
+/// Returns the `destination` argument to append to a claim mutation, which is omitted for the
+/// chain account so that queries stay compatible with faucets that predate the argument.
+fn destination_argument(destination: &AccountOwner) -> String {
+    if destination.is_chain() {
+        String::new()
+    } else {
+        format!(", destination: \"{destination}\"")
+    }
 }
 
 /// A faucet instance that can be queried.
@@ -117,7 +120,10 @@ impl Faucet {
             }))
             .send()
             .await
-            .with_context(|| format!("executing query {query:?}"))?
+            .map_err(|source| Error::Query {
+                query: query.to_string(),
+                source,
+            })?
             .error_for_status()?
             .json()
             .await?;
@@ -135,12 +141,11 @@ impl Faucet {
                 .collect::<Vec<_>>();
 
             if messages.is_empty() {
-                Err(ErrorInner::GraphQl(errors).into())
+                Err(Error::GraphQl(errors))
             } else {
-                Err(
-                    ErrorInner::GraphQl(vec![serde_json::Value::String(messages.join("; "))])
-                        .into(),
-                )
+                Err(Error::GraphQl(vec![serde_json::Value::String(
+                    messages.join("; "),
+                )]))
             }
         } else {
             Ok(response
@@ -173,27 +178,46 @@ impl Faucet {
         Ok(self.query::<Response>("query { version }").await?.version)
     }
 
-    /// Claims a new chain for the given owner, returning its chain description.
-    pub async fn claim(
+    /// Claims a new chain for the given owner, returning its chain description. The tokens are
+    /// credited to the new chain's own account.
+    pub async fn claim(&self, owner: &AccountOwner) -> Result<ChainDescription, Error> {
+        self.claim_to(owner, &AccountOwner::CHAIN).await
+    }
+
+    /// Claims a new chain for the given owner, crediting the tokens to `destination` on it.
+    ///
+    /// A chain funded only in an owner's account can pay fees just for the blocks that owner
+    /// authenticates.
+    pub async fn claim_to(
         &self,
-        owner: &linera_base::identifiers::AccountOwner,
+        owner: &AccountOwner,
+        destination: &AccountOwner,
     ) -> Result<ChainDescription, Error> {
         #[derive(serde::Deserialize)]
         struct Response {
             claim: ChainDescription,
         }
         Ok(self
-            .query::<Response>(format!("mutation {{ claim(owner: \"{owner}\") }}"))
+            .query::<Response>(format!(
+                "mutation {{ claim(owner: \"{owner}\"{}) }}",
+                destination_argument(destination)
+            ))
             .await?
             .claim)
     }
 
-    /// Claims daily tokens for the given owner.
+    /// Claims daily tokens for the given owner, credited to their chain's own account.
     /// The user must have already claimed a chain. Each user can claim once per
     /// 24-hour period.
-    pub async fn daily_claim(
+    pub async fn daily_claim(&self, owner: &AccountOwner) -> Result<ClaimOutcome, Error> {
+        self.daily_claim_to(owner, &AccountOwner::CHAIN).await
+    }
+
+    /// Claims daily tokens for the given owner, crediting them to `destination` on their chain.
+    pub async fn daily_claim_to(
         &self,
-        owner: &linera_base::identifiers::AccountOwner,
+        owner: &AccountOwner,
+        destination: &AccountOwner,
     ) -> Result<ClaimOutcome, Error> {
         #[derive(serde::Deserialize)]
         #[serde(rename_all = "camelCase")]
@@ -202,16 +226,16 @@ impl Faucet {
         }
 
         Ok(self
-            .query::<Response>(format!("mutation {{ dailyClaim(owner: \"{owner}\") }}"))
+            .query::<Response>(format!(
+                "mutation {{ dailyClaim(owner: \"{owner}\"{}) }}",
+                destination_argument(destination)
+            ))
             .await?
             .daily_claim)
     }
 
     /// Returns the initial claim for the given owner, if any.
-    pub async fn initial_claim(
-        &self,
-        owner: &linera_base::identifiers::AccountOwner,
-    ) -> Result<Option<InitialClaim>, Error> {
+    pub async fn initial_claim(&self, owner: &AccountOwner) -> Result<Option<InitialClaim>, Error> {
         #[derive(serde::Deserialize)]
         #[serde(rename_all = "camelCase")]
         struct Response {
@@ -229,10 +253,7 @@ impl Faucet {
     /// Returns the earliest time at which the owner can make a daily claim.
     /// If the returned timestamp is in the past (or now), the user can claim immediately.
     /// Returns `None` if the user has not yet completed the initial claim.
-    pub async fn next_daily_claim(
-        &self,
-        owner: &linera_base::identifiers::AccountOwner,
-    ) -> Result<Option<Timestamp>, Error> {
+    pub async fn next_daily_claim(&self, owner: &AccountOwner) -> Result<Option<Timestamp>, Error> {
         #[derive(serde::Deserialize)]
         #[serde(rename_all = "camelCase")]
         struct Response {

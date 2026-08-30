@@ -338,6 +338,7 @@ mod test {
             Blob, BlobContent, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Round,
             Timestamp,
         },
+        identifiers::AccountOwner,
         port::get_free_port,
     };
     use linera_chain::{
@@ -721,6 +722,7 @@ mod test {
                 InitialChainConfig {
                     ownership: Default::default(),
                     epoch: Default::default(),
+                    account: AccountOwner::CHAIN,
                     balance: Default::default(),
                     application_permissions: Default::default(),
                 },

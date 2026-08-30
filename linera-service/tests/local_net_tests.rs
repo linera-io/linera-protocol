@@ -1019,7 +1019,7 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
 
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
-    use linera_service::cli::command::{BenchmarkCommand, BenchmarkOptions};
+    use linera_service::cli::command::{BenchmarkCommand, BenchmarkOptions, ClientMode};
 
     config.num_other_initial_chains = 2;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
@@ -1069,6 +1069,42 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
                 bps: 2,
                 runtime_in_seconds: Some(5),
                 fungible_application_id: Some(application_id.forget_abi()),
+                close_chains: true,
+                ..Default::default()
+            },
+        })
+        .await?;
+
+    // And once more with the storage-free client, which proposes blocks straight to the
+    // validators instead of going through a ChainClient. It shares every other part of the
+    // harness, so this is what proves the two are actually interchangeable.
+    client
+        .benchmark(BenchmarkCommand::Single {
+            options: BenchmarkOptions {
+                num_chains: 2,
+                transactions_per_block: 10,
+                bps: 2,
+                runtime_in_seconds: Some(5),
+                client_mode: ClientMode::Lite,
+                close_chains: true,
+                ..Default::default()
+            },
+        })
+        .await?;
+
+    // Cross-chain traffic at a pinned fan-out, with roughly half the transfers staying on
+    // their own chain: exercises the destination window, the inbox draining the lite client
+    // does by default, and `avoid_self` on the generator.
+    client
+        .benchmark(BenchmarkCommand::Single {
+            options: BenchmarkOptions {
+                num_chains: 2,
+                transactions_per_block: 10,
+                bps: 2,
+                runtime_in_seconds: Some(5),
+                client_mode: ClientMode::Lite,
+                fan_out: Some(1),
+                mixed_self_transfers: true,
                 close_chains: true,
                 ..Default::default()
             },

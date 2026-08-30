@@ -6,7 +6,7 @@ use linera_core::client::ChainClient;
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
-use crate::{Environment, JsResult};
+use crate::{Environment, Result};
 
 #[wasm_bindgen]
 pub struct Application {
@@ -40,7 +40,7 @@ impl Application {
     #[wasm_bindgen]
     // TODO(#5253) allow passing bytes here rather than just strings
     // TODO(#5152) a lot of this logic is shared with `linera_service::node_service`
-    pub async fn query(&self, query: &str, options: Option<QueryOptions>) -> JsResult<String> {
+    pub async fn query(&self, query: &str, options: Option<QueryOptions>) -> Result<String> {
         tracing::debug!("querying application: {query}");
         let QueryOptions { block_hash } = options.unwrap_or_default();
         let chain_client = self.chain_client.clone();

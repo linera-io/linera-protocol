@@ -40,6 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should-run: ${{ steps.files-changed.outputs.paths }}
+      should-run-code: ${{ steps.files-changed.outputs.code }}
     steps:
       - uses: actions/checkout@v6.0.2
         with:
@@ -61,9 +62,36 @@ jobs:
               # Workflow-only PRs don't need heavy code tests; merge to main
               # validates the workflow itself by running it for real.
               - '!.github/workflows/**'
+            # Same as `paths`, and additionally excluding the correctness
+            # specification. Those files hold only marker traits: public traits
+            # with no members, no implementors and no call sites, carrying the
+            # specification in their doc comments. Nothing observable at runtime
+            # can change there, so the test suite cannot fail on an edit the
+            # clippy, doc and fmt lints pass. Those lints keep running: they are
+            # what catches a supertrait cycle (E0391), a broken intra-doc link,
+            # or misformatted doc prose.
+            #
+            # A PR touching any other file -- including Cargo.lock -- still runs
+            # everything, because `predicate-quantifier: every` keeps a file only
+            # when it matches all patterns.
+            code:
+              - '!docker/**'
+              - '!configuration/**'
+              - '!docs/**'
+              - '!mdbook/**'
+              - '!CONTRIBUTING.md'
+              - '!INSTALL.md'
+              - '!README.md'
+              - '!.github/workflows/**'
+              - '!linera-spec/**'
+              - '!linera-chain/src/proof/**'
+              - '!linera-chain/src/manager/proof/**'
+              - '!linera-chain/src/data_types/proof/**'
+              - '!linera-chain/src/justification/proof.rs'
+              - '!linera-core/src/proof/**'
   execution-wasmtime-test:
     needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
+    if: needs.changed-files.outputs.should-run-code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -76,7 +104,7 @@ jobs:
 
   bridge-tests:
     needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
+    if: needs.changed-files.outputs.should-run-code == 'true'
     runs-on: linera-io-self-hosted-ci
     timeout-minutes: 25
 
@@ -141,7 +169,7 @@ jobs:
 
   metrics-test:
     needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
+    if: needs.changed-files.outputs.should-run-code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -154,7 +182,7 @@ jobs:
 
   wasm-application-test:
     needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
+    if: needs.changed-files.outputs.should-run-code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -173,7 +201,7 @@ jobs:
 
   linera-sdk-tests-fixtures:
     needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
+    if: needs.changed-files.outputs.should-run-code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -197,7 +225,7 @@ jobs:
 
   default-features-and-witty-integration-test:
     needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
+    if: needs.changed-files.outputs.should-run-code == 'true'
     runs-on: linera-io-self-hosted-ci
     timeout-minutes: 40
 
@@ -219,7 +247,7 @@ jobs:
 
   check-outdated-cli-md:
     needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
+    if: needs.changed-files.outputs.should-run-code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -239,7 +267,7 @@ jobs:
 
   ethereum-tests:
     needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
+    if: needs.changed-files.outputs.should-run-code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -303,7 +331,7 @@ jobs:
 
   storage-service-tests:
     needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
+    if: needs.changed-files.outputs.should-run-code == 'true'
     runs-on: linera-io-self-hosted-ci
     timeout-minutes: 40
     steps:
@@ -326,6 +354,9 @@ jobs:
     - name: Run the storage-service tests
       run: |
         cargo test --features storage-service,opentelemetry -- storage_service --nocapture
+    - name: Run the block export integration test
+      run: |
+        cargo test -p linera-service --test block_export_tests --features storage-service,metrics -- --ignored --nocapture
 
   check-wit-files:
     needs: changed-files
@@ -350,6 +381,18 @@ jobs:
       run: |
         ./scripts/check_chain_loads.sh
 
+  lint-spec-modules:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+    - uses: actions/checkout@v6.0.2
+    - name: Check that specification modules contain only marker traits
+      run: |
+        ./scripts/check_spec_modules.sh
+
   lint-metrics-registration:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
@@ -364,7 +407,7 @@ jobs:
 
   lint-metrics-features:
     needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
+    if: needs.changed-files.outputs.should-run-code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -473,7 +516,7 @@ jobs:
 
   lint-wasm-applications:
     needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
+    if: needs.changed-files.outputs.should-run-code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -537,7 +580,7 @@ jobs:
 
   lint-check-linera-service-graphql-schema:
     needs: changed-files
-    if: needs.changed-files.outputs.should-run == 'true'
+    if: needs.changed-files.outputs.should-run-code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 

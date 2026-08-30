@@ -46,3 +46,15 @@ test("releases resources on asyncDispose()", async () => {
   const client2 = await new linera.Client(wallet2, signer);
   await client2.asyncDispose();
 }, 150000)
+
+test("chains lists the wallet's chains", async () => {
+  await linera.initialize();
+  const faucet = await new linera.Faucet(import.meta.env.LINERA_FAUCET_URL);
+  const signer = linera.signer.PrivateKey.createRandom();
+  const wallet = await faucet.createWallet();
+
+  const chainId = await faucet.claimChain(wallet, signer.address());
+  const client = await new linera.Client(wallet, signer);
+
+  expect(await client.chains()).toContain(chainId);
+}, 150000);

@@ -12,7 +12,7 @@
 
 use linera_chain::manager::proof::{
     commit::{CommittedBlock, IncomingBundlesAreSelfDerived},
-    model::{CorrectValidator, SerializedChainState, StorageAtomicity},
+    model::{CorrectValidator, SequentialChainState, StorageAtomicity},
 };
 
 use super::assumptions::{
@@ -62,7 +62,7 @@ use super::assumptions::{
 ///
 /// **What becomes visible early.** Certificates, blobs and events are written to storage shared
 /// across chains — the channel by which chains observe each other at all — while the tip and the
-/// inboxes are per-chain state no other worker reads ([`SerializedChainState`]). Between the two
+/// inboxes are per-chain state no other worker reads ([`SequentialChainState`]). Between the two
 /// writes, then, a block's outputs are globally readable while the producing chain has not yet
 /// recorded the block locally. That is harmless because `certificate.check` precedes every one of
 /// these writes: what becomes visible early is content a quorum has already certified, and by
@@ -186,51 +186,98 @@ pub trait BoundedCatchUp: CertifiedBlockIsAvailable + BoundedRecovery {}
 /// [`ValidatedBlockCertificate`]: linera_chain::types::ValidatedBlockCertificate
 pub trait LockingBlobsTravelWithTheLock: CorrectValidator + CorrectValidatorAvailability {}
 
-/// **Lemma (Missing dependencies are recoverable).** A validator needs data in hand for either of
-/// two operations: *accepting a block proposal*, which means executing it, and *executing a
-/// certified block*. When it lacks that data, what is missing falls into a closed set of classes,
-/// each with a route by which it arrives.
+/// **Lemma (A client can obtain everything a submission depends on).** A client can always find, on
+/// the network, the data it needs in order to submit
 ///
-/// This is what makes the retry loops in `linera_core::updater` converge rather than spin, and it
-/// is the substance behind [`ValidationQuorumForms`]'s claim that a step completes in `2Δ`: a
-/// straggler is not waited out, it is *supplied*.
+/// 1. a **valid block proposal** — one every correct validator will accept — or
+/// 2. a **confirmed certificate**, to a validator that does not yet have it;
 ///
-/// *Proof.* The classes are exactly the errors those loops match, and the recovery route differs
-/// by where the data originates:
+/// and having found it, it can hand that data to any validator that is missing it.
 ///
-/// | class | blocks | what is missing | route |
+/// The two halves are *discovery* and *supply*, and they are separate claims. Discovery is what a
+/// client does before it has a block at all; supply is what happens when a validator turns out to
+/// be behind. The second is easy once the first has happened, because building the proposal is what
+/// puts the data in the client's own storage.
+///
+/// # What a valid proposal requires
+///
+/// Validity is not one condition, so the dependencies are not one kind. `try_handle_block_proposal`
+/// checks the following in order, and each check is a demand on data the validator must already
+/// hold. The right-hand column is how a client comes to hold it too.
+///
+/// | the proposal is valid only if | the validator needs | error when it lacks it | how a client finds it |
 /// |---|---|---|---|
-/// | `BlobsNotFound` | both | a blob the block publishes or reads | pushed by the requester: `send_pending_blobs` when accepting a proposal, `upload_blobs` from local storage when executing a certified block |
-/// | `EventsNotFound` | both | an event the block read | the **publishing** chain's certificates; the admin chain is special-cased for epoch events |
-/// | `BlocksNotFound` | execution | ancestor block bytes a checkpoint trust-marked | pushed from the requester's storage |
-/// | `MissingCrossChainUpdates` | acceptance | the incoming bundles the block consumes | the **sending** chains' certificates |
-/// | `InactiveChain` | acceptance | the chain does not exist at that validator | pushed with the chain's creation |
-/// | `WrongRound`, `UnexpectedBlockHeight` — validator behind | acceptance | consensus state for this chain | pushed by `send_chain_information` |
-/// | `WrongRound`, `UnexpectedBlockHeight` — *requester* behind | acceptance | nothing; the requester is wrong | pulled: `sync_remote_if_needed` reports [`LocalNodeLagging`] and the client synchronizes |
+/// | the chain exists at all | the chain description blob | `InactiveChain` | from the creating chain's block |
+/// | its height and parent hash continue the chain (`verify_block_chaining`) | that chain's certified prefix | `UnexpectedBlockHeight` | `ChainClient::synchronize_chain_state` |
+/// | its round is one this validator can accept ([`ProposalGate`]) | the consensus state at that height | `WrongRound` | the same, plus `ChainClient::prepare_chain` |
+/// | it declares the chain's current epoch (`check_block_epoch`) | the committee for that epoch, hence the admin chain's epoch event | `EventsNotFound` on the epoch stream | by following the admin chain, which every client does |
+/// | every incoming bundle it consumes is present in the inbox, equal, and in cursor order | the *sending* chains' message-bearing blocks, already delivered into that inbox | `MissingCrossChainUpdates` | `ChainClient::find_received_certificates` |
+/// | its transactions execute correctly | every blob the block publishes or reads, and every event it reads | `BlobsNotFound`, `EventsNotFound` | `download_blob` / `download_pending_blob`, and `Client::sync_events_from_node` |
 ///
-/// All but `MissingCrossChainUpdates` and `EventsNotFound` are *self-suppliable*: the requester
-/// holds the data already, so the push cannot fail for want of it. Usually that is by
-/// construction, because it built the block or verified the certificate. The one case where it is
-/// not is a lock the requester is *recovering* rather than one it created: there the blobs were
-/// collected during synchronization, by [`LockingBlobsTravelWithTheLock`]. Either way these
-/// classes cannot stall. ∎
+/// The inbox row is the one that needs care, because "valid" there means more than "the bundle
+/// exists". `remove_bundles_from_inboxes` runs with `must_be_present = true`, so the bundle must
+/// already be in *that validator's* inbox and equal to what it holds
+/// ([`IncomingBundlesAreSelfDerived`]); and consumption must respect cursor order, skipping only
+/// bundles every message of which is skippable ([`DeliveryAndConsumptionAreOrdered`]). A client
+/// therefore cannot make a proposal valid by supplying a bundle in isolation: it supplies the
+/// sending chain's blocks, and the validator derives the inbox from them itself.
 ///
-/// **Those two are not, and that is where general liveness is weakest.** Their data originates
-/// on a *third* chain. A client that does not follow the sending or publishing chain cannot push
-/// what the validator is missing, and the push simply fails.
+/// # Discovery
 ///
-/// There is a second, independent route for them, which is why this is a weakness rather than a
-/// hole: the validator's own worker for the sending chain populates the inbox as it processes that
-/// chain ([`IncomingBundlesAreSelfDerived`]), and events likewise arrive as the publishing chain
-/// is processed. So the data reaches the validator either because someone pushes it or because the
-/// validator catches up on the originating chain — and progress on *this* chain waits on whichever
-/// happens first.
+/// Each row's last column is a request to the network, not a lookup in something the client is
+/// assumed to have. The client learns of incoming messages by asking validators for their received
+/// logs (`find_received_certificates`), of blobs by downloading them, of events by
+/// `sync_events_from_node`, and of its own chain's state by synchronizing it.
 ///
-/// Neither route is bounded by anything the specification currently states.
-/// [`ValidationQuorumForms`] assumes the proposal is accepted once every correct validator is in
-/// the round; for a block consuming a message from a chain that some validator has not yet
-/// processed, that is an additional condition, and no assumption in
-/// [`super::assumptions`] supplies it.
+/// *This half is quorum-dependent, and the code says so.* `find_received_certificates` is
+/// documented as best effort: it finds only certificates confirmed among sufficiently many
+/// validators of the sending chain's *current* committee — which holds "whenever a sender's chain
+/// is still in use and is regularly upgraded to new committees". A message from a chain that has
+/// since gone quiet across a reconfiguration is the case that is not covered, which is the
+/// availability question in [`super::assumptions::BlobRetention`]'s family rather than a defect in
+/// the supply argument below.
+///
+/// # Supply
+///
+/// *Every dependency is by then available at the requester, locally.* Building the proposal means
+/// the client's own local node executed the block, and execution consumes exactly the data in the
+/// table; so holding it is a precondition of having a proposal to submit, not a coincidence.
+/// `linera_core::updater` states the messaging case as an invariant of local storage: it is
+/// "guaranteed to hold every block we needed to build a proposal", because a bundle can only be
+/// consumed after its ordered message-bearing predecessors were downloaded.
+///
+/// For case (2) the argument is shorter: the block is certified, so its dependencies are
+/// retrievable at all ([`CertifiedBlockIsAvailable`]), and a client that processed the certificate
+/// wrote them as it went ([`BlockOutputsArePersisted`]). The blob arm of `send_confirmed_certificate`
+/// says so outright — "the certificate is confirmed, so the blobs must be in storage" — and treats
+/// a miss as an error rather than something to wait for.
+///
+/// This is a *local* availability claim, and it is stronger than the network-wide one:
+/// [`CertifiedBlockIsAvailable`] says the data can be obtained from some quorum, whereas here it is
+/// already in the hand of the party that must supply it. That is why the pushes read local storage
+/// and nothing else — `read_certificates_for_heights`, `read_blobs_from_storage`,
+/// `get_next_height_to_preprocess` — and why no class waits on a third party. ∎
+///
+/// The one case where local availability is not immediate is a lock the client is *recovering*
+/// rather than one it created: there the blobs were collected during synchronization, by
+/// [`LockingBlobsTravelWithTheLock`].
+///
+/// # Two things this makes possible
+///
+/// **A client need not follow a whole chain to supply what came from it.** A chain it merely
+/// receives from is stored only at its message-bearing heights, and `send_chain_information` pushes
+/// exactly those, silently skipping heights it does not have; the validator executes the contiguous
+/// prefix and *preprocesses* any block above a gap, which is enough to deliver that block's
+/// bundles. So a sparse chain the client never fully held is still enough to make the inbox row
+/// true at the validator.
+///
+/// **The set to push is derived from local storage, not from the error.**
+/// `MissingCrossChainUpdates` names only the bundles the current proposal needs and omits
+/// already-consumed ancestors the validator must execute first, so deriving the push from it would
+/// be unreliable; `send_chain_information` sends the whole locally-held range instead.
+///
+/// [`ProposalGate`]: linera_chain::manager::proof::voting::ProposalGate
+/// [`DeliveryAndConsumptionAreOrdered`]: super::availability::DeliveryAndConsumptionAreOrdered
 ///
 /// **Why the pushes terminate.** Each class carries a well-founded measure.
 /// `send_confirmed_certificate` latches `sent_admin_chain` / `sent_blobs` / `sent_blocks`, so each
@@ -288,7 +335,7 @@ pub trait MissingDependenciesAreRecoverable:
 /// [`StorageAtomicity`]: linera_chain::manager::proof::model::StorageAtomicity
 /// [`CorrectValidator`]: linera_chain::manager::proof::model::CorrectValidator
 pub trait EffectsSurviveRestart:
-    StorageAtomicity + SerializedChainState + CorrectValidator
+    StorageAtomicity + SequentialChainState + CorrectValidator
 {
 }
 
@@ -302,7 +349,7 @@ pub trait EffectsSurviveRestart:
 /// `linera_rpc` routes each to the shard owning the target chain, so the request comes from
 /// another worker of the same validator, which built it in `build_network_actions` from its own
 /// persisted outbox for a block it had processed ([`EffectsSurviveRestart`], sender half). No
-/// other validator's word enters, and by [`SerializedChainState`] no other process writes this
+/// other validator's word enters, and by [`SequentialChainState`] no other process writes this
 /// chain's inboxes. `select_message_bundles` additionally drops bundles whose epoch has been
 /// revoked, unless they were already anticipated. ∎
 ///
@@ -311,7 +358,7 @@ pub trait EffectsSurviveRestart:
 /// own provenance.
 ///
 /// [`MessageBundle`]: linera_chain::data_types::MessageBundle
-pub trait InboxHoldsOnlySentBundles: CorrectValidator + SerializedChainState {}
+pub trait InboxHoldsOnlySentBundles: CorrectValidator + SequentialChainState {}
 
 /// **Lemma (A bundle is consumed at most once).** No two blocks of a chain consume the same
 /// [`MessageBundle`] from the same origin, even though delivery is at-least-once.
@@ -377,3 +424,63 @@ pub trait BundleConsumedAtMostOnce:
 /// [`ResourceControlPolicy`]: linera_execution::ResourceControlPolicy
 /// [`BlobRetention`]: super::assumptions::BlobRetention
 pub trait BlobAdmissionIsBounded: CorrectValidator {}
+
+/// **Lemma (Bundles are delivered and consumed in order).** For a given (sender, recipient) pair,
+/// bundles enter an inbox in strictly increasing [`Cursor`] order and are consumed in strictly
+/// increasing cursor order. A bundle may be passed over only if every message in it is *skippable*.
+///
+/// *Proof.* Three guards, one per way order could break.
+///
+/// *Within a batch.* `ChainWorkerState::select_message_bundles` walks the incoming bundles and
+/// rejects the request with `WorkerError::InvalidCrossChainRequest` unless their heights are
+/// non-decreasing, so a batch is already ordered when it reaches the inbox.
+///
+/// *Across batches, on delivery.* `Inbox::add_bundle` requires `cursor >= next_cursor_to_add` and
+/// fails with `InboxError::IncorrectOrder` otherwise, then sets `next_cursor_to_add` to
+/// `cursor + 1`. Delivery positions are therefore strictly increasing.
+///
+/// *On consumption.* `Inbox::remove_bundle` requires `cursor >= next_cursor_to_remove` on the same
+/// terms. Before consuming, it drains queued bundles below that cursor — and each one must satisfy
+/// `is_skippable()`, or the block is rejected with `InboxError::UnskippableBundle`. ∎
+///
+/// **What "skippable" excludes is the point.** `PostedMessage::is_skippable` is false for
+/// `MessageKind::Protected` and `MessageKind::Tracked` unconditionally, and false for `Simple` or
+/// `Bouncing` messages carrying a non-zero grant. So a recipient may leave ordinary zero-grant
+/// messages unconsumed, and may not silently drop a protected or tracked one, or one carrying funds:
+/// consuming a later bundle forces it to account for those first. Ordering here is a *safety*
+/// property — it constrains which blocks are valid — not a delivery guarantee.
+///
+/// [`Cursor`]: linera_base::data_types::Cursor
+pub trait DeliveryAndConsumptionAreOrdered: InboxHoldsOnlySentBundles {}
+
+/// **Lemma (Delivery is repaired on demand, not guaranteed by the sender).** A validator makes a
+/// bounded effort to deliver a bundle to its own worker for the recipient chain, and no more. What
+/// makes delivery dependable is that a client needing the bundle can always cause it: the recipient
+/// side of [`MissingDependenciesAreRecoverable`] is a repair path, not merely a diagnosis.
+///
+/// *Proof.* Two halves.
+///
+/// *The sender's effort is bounded.* Outgoing cross-chain requests are handed to a bounded channel
+/// with `try_send`, which drops on overflow, and `forward_cross_chain_queries` abandons a request
+/// once `retries >= cross_chain_max_retries`. The persistent outbox keeps the entry, and
+/// `ChainWorkerState::create_network_actions` re-derives *all* pending requests from it — but every
+/// call site is a request handler for the sending chain, so nothing re-emits while that chain is
+/// idle. Delivery is therefore best effort in the same sense the notification channel is
+/// ([`NotificationChannelIsLossy`]), and for the same reason: no retry outlives the process that
+/// scheduled it.
+///
+/// *The recipient can force it.* A client proposing a block that consumes the bundle is told
+/// `MissingCrossChainUpdate` by any validator lacking it, and `send_block_proposal` answers by
+/// sending that validator the *sending chain's* certificates, which re-derives the delivery there.
+/// `CrossChainMessageDelivery::Blocking` lets a client wait for delivery on an ordinary
+/// `send_chain_information` request rather than guess. Both are per-validator and on demand. ∎
+///
+/// **So the guarantee is conditional on someone wanting the message.** A recipient that is not
+/// actively proposing gets no assurance its inbox is complete, and two correct validators can differ
+/// on an inbox indefinitely — the sender-side asymmetry that
+/// `super::storage::StorageConvergesAtEqualHeights` needs quiescence to rule out. Whether an idle
+/// sending chain should retry on its own is
+/// [issue #6799](https://github.com/linera-io/linera-protocol/issues/6799).
+///
+/// [`NotificationChannelIsLossy`]: super::notifications::NotificationChannelIsLossy
+pub trait DeliveryIsRepairedOnDemand: DeliveryAndConsumptionAreOrdered {}

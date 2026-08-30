@@ -31,7 +31,6 @@ use tracing::{instrument, Level};
 use crate::{
     client::chain_client,
     data_types::{ChainInfo, ChainInfoQuery},
-    environment::Environment,
     local_node::LocalNodeClient,
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode},
     remote_node::RemoteNode,
@@ -134,17 +133,17 @@ impl CommunicateAction {
 /// node must not mutate the client's own state. When a validator turns out to be *ahead* of the
 /// local node, the updater signals that with [`chain_client::Error::LocalNodeLagging`] and lets
 /// the caller decide whether to pull the missing state.
-pub struct RemoteNodeUpdater<Env>
+pub struct RemoteNodeUpdater<S, N>
 where
-    Env: Environment,
+    S: Storage,
 {
-    pub remote_node: RemoteNode<Env::ValidatorNode>,
-    pub local_node: LocalNodeClient<Env::Storage>,
+    pub remote_node: RemoteNode<N>,
+    pub local_node: LocalNodeClient<S>,
     pub admin_chain_id: ChainId,
     pub certificate_upload_batch_size: usize,
 }
 
-impl<Env: Environment> Clone for RemoteNodeUpdater<Env> {
+impl<S: Storage + Clone, N: Clone> Clone for RemoteNodeUpdater<S, N> {
     fn clone(&self) -> Self {
         RemoteNodeUpdater {
             remote_node: self.remote_node.clone(),
@@ -315,9 +314,10 @@ where
     })
 }
 
-impl<Env> RemoteNodeUpdater<Env>
+impl<S, N> RemoteNodeUpdater<S, N>
 where
-    Env: Environment + 'static,
+    S: Storage + Clone + 'static,
+    N: ValidatorNode + Clone + 'static,
 {
     /// Logs a warning if the error is not an expected part of the protocol flow.
     fn warn_if_unexpected(&self, err: &NodeError) {
@@ -334,6 +334,7 @@ where
         level = "trace", skip_all, err(level = Level::DEBUG),
         fields(chain_id = %certificate.block().header.chain_id)
     )]
+    /// Sends a single confirmed certificate, uploading its missing dependencies and retrying.
     async fn send_confirmed_certificate(
         &mut self,
         certificate: &CacheArc<ConfirmedBlockCertificate>,
@@ -370,7 +371,7 @@ where
                     let blobs = maybe_blobs.ok_or(NodeError::BlobsNotFound(blob_ids))?;
                     self.remote_node
                         .node
-                        .upload_blobs(blobs.into_iter().map(|b| b.into_std()).collect())
+                        .upload_blobs(blobs.into_iter().map(CacheArc::into_std).collect())
                         .await?;
                     sent_blobs = true;
                 }
@@ -766,9 +767,11 @@ where
 
     async fn update_admin_chain(&mut self) -> Result<(), chain_client::Error> {
         let local_admin_info = self.local_node.chain_info(self.admin_chain_id).await?;
+        let admin_chain_id = self.admin_chain_id;
+        let target = local_admin_info.next_block_height;
         Box::pin(self.send_chain_information(
-            self.admin_chain_id,
-            local_admin_info.next_block_height,
+            admin_chain_id,
+            target,
             CrossChainMessageDelivery::NonBlocking,
             None,
         ))
