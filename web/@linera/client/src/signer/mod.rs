@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module contains various implementation of the [`Signer`] trait usable in the browser.
-use std::fmt::Display;
-
 use linera_base::{
     crypto::{AccountSignature, CryptoHash},
     identifiers::AccountOwner,
@@ -11,53 +9,47 @@ use linera_base::{
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
-// TODO(#5150) remove this in favour of passing up arbitrary `JsValue` errors
-#[repr(u8)]
-#[wasm_bindgen(js_name = "SignerError")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Error {
-    MissingKey = 0,
-    SigningError = 1,
-    PublicKeyParse = 2,
-    JsConversion = 3,
-    UnexpectedSignatureFormat = 4,
-    InvalidAccountOwnerType = 5,
-    Unknown = 9,
-}
+use crate::error::Thrown;
 
-impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::MissingKey => write!(f, "No key found for the given owner"),
-            Error::SigningError => write!(f, "Error signing the value"),
-            Error::PublicKeyParse => write!(f, "Error parsing the public key"),
-            Error::JsConversion => write!(f, "Error converting JS value"),
-            Error::UnexpectedSignatureFormat => {
-                write!(f, "Unexpected signature format received from JS")
-            }
-            Error::InvalidAccountOwnerType => {
-                write!(f, "Invalid account owner type provided")
-            }
-            Error::Unknown => write!(f, "An unknown error occurred"),
-        }
-    }
+/// Errors arising from the JavaScript [`Signer`] interface.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    /// The signer threw. The thrown value is reported as it was received, including its
+    /// `cause` chain.
+    //
+    // Not `#[error(transparent)]`: that forwards `source` past the `Thrown` to its cause,
+    // so a caller walking the chain never sees the throw itself.
+    #[error("{0}")]
+    Thrown(#[from] Thrown),
+
+    /// The signer returned a value that is not a signature of the scheme this owner uses.
+    #[error(
+        "the signer returned a value that is not a valid {} signature for owner {0}",
+        signature_scheme(.0)
+    )]
+    SignatureFormat(AccountOwner),
+
+    /// `getPublicKey` returned a value that is not an Ed25519 public key.
+    #[error("the signer returned a value that is not a valid Ed25519 public key")]
+    PublicKeyFormat,
+
+    /// The signer signed with a key belonging to a different owner.
+    #[error("the signer signed for owner {actual}, but {requested} was requested")]
+    OwnerMismatch {
+        requested: AccountOwner,
+        actual: AccountOwner,
+    },
+
+    /// Signing was requested for an owner that has no signature scheme.
+    #[error("cannot sign for the reserved owner {0}")]
+    ReservedOwner(AccountOwner),
 }
 
 impl From<JsValue> for Error {
     fn from(value: JsValue) -> Self {
-        match value.as_f64().and_then(num_traits::cast) {
-            Some(0u8) => Error::MissingKey,
-            Some(1) => Error::SigningError,
-            Some(2) => Error::PublicKeyParse,
-            Some(3) => Error::JsConversion,
-            Some(4) => Error::UnexpectedSignatureFormat,
-            Some(5) => Error::InvalidAccountOwnerType,
-            _ => Error::Unknown,
-        }
+        Self::Thrown(value.into())
     }
 }
-
-impl std::error::Error for Error {}
 
 #[wasm_bindgen(typescript_custom_section)]
 const _: &str = r#"import type { Signer } from '../signer/index.js';"#;
@@ -105,7 +97,7 @@ impl linera_base::crypto::Signer for Signer {
             AccountOwner::Address20(address) => {
                 let signature = sig_str
                     .parse()
-                    .map_err(|_| Error::UnexpectedSignatureFormat)?;
+                    .map_err(|_| Error::SignatureFormat(*owner))?;
                 Ok(AccountSignature::EvmSecp256k1 {
                     signature,
                     address: *address,
@@ -113,20 +105,36 @@ impl linera_base::crypto::Signer for Signer {
             }
             AccountOwner::Address32(_) => {
                 let pub_str: String = self.get_public_key(*owner).await?.into();
-                let public_key = parse_ed25519_public_key(&pub_str).ok_or(Error::PublicKeyParse)?;
+                let public_key =
+                    parse_ed25519_public_key(&pub_str).ok_or(Error::PublicKeyFormat)?;
                 let signature =
-                    parse_ed25519_signature(&sig_str).ok_or(Error::UnexpectedSignatureFormat)?;
+                    parse_ed25519_signature(&sig_str).ok_or(Error::SignatureFormat(*owner))?;
                 // Error early if signer returns a valid signature with the wrong public key.
-                if AccountOwner::from(public_key) != *owner {
-                    return Err(Error::InvalidAccountOwnerType);
+                let actual = AccountOwner::from(public_key);
+                if actual != *owner {
+                    return Err(Error::OwnerMismatch {
+                        requested: *owner,
+                        actual,
+                    });
                 }
                 Ok(AccountSignature::Ed25519 {
                     signature,
                     public_key,
                 })
             }
-            AccountOwner::Reserved(_) => Err(Error::InvalidAccountOwnerType),
+            AccountOwner::Reserved(_) => Err(Error::ReservedOwner(*owner)),
         }
+    }
+}
+
+/// The signature scheme an owner's address encodes.
+fn signature_scheme(owner: &AccountOwner) -> &'static str {
+    match owner {
+        AccountOwner::Address20(_) => "secp256k1",
+        AccountOwner::Address32(_) => "Ed25519",
+        // Reserved owners are rejected as `ReservedOwner` before any signature is parsed,
+        // so this arm exists only to keep the match total.
+        AccountOwner::Reserved(_) => "unsupported",
     }
 }
 
