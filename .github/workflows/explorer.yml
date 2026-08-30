@@ -48,6 +48,15 @@ jobs:
               # Workflow-only PRs don't need heavy code tests; merge to main
               # validates the workflow itself by running it for real.
               - '!.github/workflows/**'
+              # Specification-only changes: doc comments on marker traits with no
+              # members, implementors or call sites. rust.yml still runs clippy,
+              # cargo doc and cargo fmt on them, which is all that can fail.
+              - '!linera-spec/**'
+              - '!linera-chain/src/proof/**'
+              - '!linera-chain/src/manager/proof/**'
+              - '!linera-chain/src/data_types/proof/**'
+              - '!linera-chain/src/justification/proof.rs'
+              - '!linera-core/src/proof/**'
 
   test:
     needs: changed-files
