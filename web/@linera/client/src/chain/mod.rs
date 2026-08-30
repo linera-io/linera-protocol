@@ -19,7 +19,7 @@ use serde::ser::Serialize as _;
 use wasm_bindgen::prelude::*;
 use web_sys::{js_sys, wasm_bindgen};
 
-use crate::{Environment, JsResult};
+use crate::{Environment, Error, Result};
 
 pub mod application;
 pub use application::Application;
@@ -236,7 +236,7 @@ struct HashedBlock<'a> {
 ///
 /// # Errors
 /// If the string is not a valid hash.
-fn block_hash_from_string(hash: &str) -> JsResult<CryptoHash> {
+fn block_hash_from_string(hash: &str) -> Result<CryptoHash> {
     Ok(hash.parse()?)
 }
 
@@ -244,9 +244,9 @@ fn block_hash_from_string(hash: &str) -> JsResult<CryptoHash> {
 ///
 /// # Errors
 /// If the number is not an exactly-representable non-negative integer.
-fn block_height_from_number(height: f64) -> JsResult<BlockHeight> {
+fn block_height_from_number(height: f64) -> Result<BlockHeight> {
     if !height.is_finite() || height < 0.0 || height.fract() != 0.0 || height > MAX_SAFE_INTEGER {
-        return Err(JsError::new("block height must be a non-negative integer"));
+        return Err(Error::new("block height must be a non-negative integer"));
     }
     #[expect(
         clippy::cast_possible_truncation,
@@ -268,7 +268,7 @@ impl Chain {
     /// # Panics
     /// If the handler function fails.
     #[wasm_bindgen(js_name = onNotification)]
-    pub fn on_notification(&self, handler: js_sys::Function) -> JsResult<()> {
+    pub fn on_notification(&self, handler: js_sys::Function) -> Result<()> {
         let mut notifications = self.chain_client.subscribe()?;
         wasm_bindgen_futures::spawn_local(async move {
             while let Some(notification) = notifications.next().await {
@@ -294,7 +294,7 @@ impl Chain {
     /// - if the options object is of the wrong form
     /// - if the transfer fails
     #[wasm_bindgen]
-    pub async fn transfer(&self, params: TransferParams) -> JsResult<()> {
+    pub async fn transfer(&self, params: TransferParams) -> Result<()> {
         let _hash = self
             .client
             .context
@@ -316,7 +316,7 @@ impl Chain {
     ///
     /// # Errors
     /// If the chain couldn't be established.
-    pub async fn balance(&self) -> JsResult<String> {
+    pub async fn balance(&self) -> Result<String> {
         Ok(self.chain_client.query_balance().await?.to_string())
     }
 
@@ -331,7 +331,7 @@ impl Chain {
     /// # Errors
     /// If the chain couldn't be established.
     #[wasm_bindgen(js_name = ownerBalance)]
-    pub async fn owner_balance(&self, owner: AccountOwner) -> JsResult<String> {
+    pub async fn owner_balance(&self, owner: AccountOwner) -> Result<String> {
         Ok(self
             .chain_client
             .query_owner_balance(owner)
@@ -343,7 +343,7 @@ impl Chain {
     ///
     /// # Errors
     /// If the chain couldn't be established.
-    pub async fn identity(&self) -> JsResult<AccountOwner> {
+    pub async fn identity(&self) -> Result<AccountOwner> {
         Ok(self.chain_client.identity().await?)
     }
 
@@ -357,7 +357,7 @@ impl Chain {
         &self,
         owner: AccountOwner,
         options: Option<AddOwnerOptions>,
-    ) -> JsResult<()> {
+    ) -> Result<()> {
         let AddOwnerOptions { weight } = options.unwrap_or_default();
         self.client
             .context
@@ -381,7 +381,7 @@ impl Chain {
     /// # Errors
     /// If synchronization fails, e.g. because validators are unreachable.
     #[wasm_bindgen]
-    pub async fn synchronize(&self) -> JsResult<()> {
+    pub async fn synchronize(&self) -> Result<()> {
         self.chain_client.synchronize_from_validators().await?;
         self.client
             .context
@@ -401,7 +401,7 @@ impl Chain {
     /// # Errors
     /// If the chain ownership cannot be retrieved.
     #[wasm_bindgen(js_name = isOwner)]
-    pub async fn is_owner(&self, owner: AccountOwner) -> JsResult<bool> {
+    pub async fn is_owner(&self, owner: AccountOwner) -> Result<bool> {
         let ownership = self.chain_client.query_chain_ownership().await?;
         Ok(ownership.is_owner(&owner))
     }
@@ -416,7 +416,7 @@ impl Chain {
     /// # Errors
     /// If the chain ownership cannot be retrieved.
     #[wasm_bindgen(js_name = ownerWeight)]
-    pub async fn owner_weight(&self, owner: AccountOwner) -> JsResult<Option<f64>> {
+    pub async fn owner_weight(&self, owner: AccountOwner) -> Result<Option<f64>> {
         let ownership = self.chain_client.query_chain_ownership().await?;
         let weight = ownership.owners.get(&owner).copied();
         #[expect(
@@ -441,10 +441,10 @@ impl Chain {
     /// If the chain is currently in the fast round, or the wallet fails to persist the
     /// cleared state.
     #[wasm_bindgen(js_name = clearPendingProposal)]
-    pub async fn clear_pending_proposal(&self) -> JsResult<()> {
+    pub async fn clear_pending_proposal(&self) -> Result<()> {
         let info = self.chain_client.chain_info().await?;
         if info.manager.current_round == Round::Fast {
-            return Err(JsError::new(
+            return Err(Error::new(
                 "cannot clear a pending proposal in the fast round",
             ));
         }
@@ -473,7 +473,7 @@ impl Chain {
     /// # Errors
     /// If the chain information cannot be retrieved.
     #[wasm_bindgen(js_name = nextRoundInfo)]
-    pub async fn next_round_info(&self) -> JsResult<RoundInfo> {
+    pub async fn next_round_info(&self) -> Result<RoundInfo> {
         let info = self.chain_client.chain_info().await?;
         let manager = &info.manager;
         let identity = self.chain_client.identity().await?;
@@ -503,7 +503,7 @@ impl Chain {
     /// # Errors
     /// If the chain is inactive, or the ownership change fails to commit.
     #[wasm_bindgen(js_name = setMultiLeaderRounds)]
-    pub async fn set_multi_leader_rounds(&self, rounds: u32) -> JsResult<()> {
+    pub async fn set_multi_leader_rounds(&self, rounds: u32) -> Result<()> {
         self.client
             .context
             .lock()
@@ -522,7 +522,7 @@ impl Chain {
     /// # Errors
     /// If a validator is unreachable.
     #[wasm_bindgen(js_name = validatorVersionInfo)]
-    pub async fn validator_version_info(&self) -> JsResult<JsValue> {
+    pub async fn validator_version_info(&self) -> Result<JsValue> {
         self.chain_client.synchronize_from_validators().await?;
         let result = self.chain_client.local_committee().await;
         let mut client = self.client.context.lock().await;
@@ -566,7 +566,7 @@ impl Chain {
     /// # Errors
     /// If the application ID is invalid.
     #[wasm_bindgen]
-    pub async fn application(&self, id: &str) -> JsResult<Application> {
+    pub async fn application(&self, id: &str) -> Result<Application> {
         web_sys::console::debug_1(&format!("connecting to Linera application {id}").into());
         Ok(Application {
             client: self.client.clone(),
@@ -585,7 +585,7 @@ impl Chain {
     /// # Errors
     /// If the chain information cannot be retrieved.
     #[wasm_bindgen(js_name = chainInfo)]
-    pub async fn chain_info(&self) -> JsResult<ChainSummary> {
+    pub async fn chain_info(&self) -> Result<ChainSummary> {
         let info = self.chain_client.chain_info().await?;
         Ok(ChainSummary {
             chain_id: info.chain_id,
@@ -603,7 +603,7 @@ impl Chain {
     /// # Errors
     /// If the chain's state cannot be read.
     #[wasm_bindgen]
-    pub async fn applications(&self) -> JsResult<Applications> {
+    pub async fn applications(&self) -> Result<Applications> {
         let applications = self
             .chain_client
             .chain_state_view()
@@ -643,7 +643,7 @@ impl Chain {
     /// # Errors
     /// If a block cannot be read from the local node.
     #[wasm_bindgen]
-    pub async fn blocks(&self, query: Option<BlocksQuery>) -> JsResult<BlockSummaries> {
+    pub async fn blocks(&self, query: Option<BlocksQuery>) -> Result<BlockSummaries> {
         let BlocksQuery { from, limit } = query.unwrap_or_default();
         let limit = limit.unwrap_or(DEFAULT_BLOCKS_LIMIT);
 
@@ -692,7 +692,7 @@ impl Chain {
     /// # Errors
     /// If the block cannot be read from the local node or cannot be serialized.
     #[wasm_bindgen]
-    pub async fn block(&self, hash: Option<String>) -> JsResult<JsValue> {
+    pub async fn block(&self, hash: Option<String>) -> Result<JsValue> {
         let hash = match hash {
             Some(hash) => Some(block_hash_from_string(&hash)?),
             None => self.chain_client.chain_info().await?.block_hash,
@@ -716,7 +716,7 @@ impl Chain {
     /// # Errors
     /// If `height` is not a non-negative integer, or storage cannot be read.
     #[wasm_bindgen(js_name = blockHashAtHeight)]
-    pub async fn block_hash_at_height(&self, height: f64) -> JsResult<Option<CryptoHash>> {
+    pub async fn block_hash_at_height(&self, height: f64) -> Result<Option<CryptoHash>> {
         let height = block_height_from_number(height)?;
         let hashes = self
             .chain_client
@@ -734,14 +734,14 @@ impl Chain {
     /// # Errors
     /// If the stream ID is malformed, or the events cannot be read.
     #[wasm_bindgen]
-    pub async fn events(&self, query: EventsQuery) -> JsResult<EventEntries> {
+    pub async fn events(&self, query: EventsQuery) -> Result<EventEntries> {
         let EventsQuery {
             stream_id,
             start_index,
         } = query;
         let stream_id: StreamId = stream_id
             .parse()
-            .map_err(|error| JsError::new(&format!("invalid stream ID: {error}")))?;
+            .map_err(|error| Error::new(&format!("invalid stream ID: {error}")))?;
         let events = self
             .chain_client
             .events_from_index(stream_id, start_index.unwrap_or(0))
@@ -769,12 +769,12 @@ impl Chain {
     /// # Errors
     /// If the blob ID is malformed, or storage cannot be read.
     #[wasm_bindgen(js_name = readBlob)]
-    pub async fn read_blob(&self, id: &str) -> JsResult<Option<Vec<u8>>> {
+    pub async fn read_blob(&self, id: &str) -> Result<Option<Vec<u8>>> {
         // `BlobId::from_str` fails with an `anyhow::Error`, which is not a `std::error::Error`
-        // and so has no blanket conversion into `JsError`.
+        // and so has no blanket conversion into `Error`.
         let blob_id: BlobId = id
             .parse()
-            .map_err(|error| JsError::new(&format!("invalid blob ID: {error}")))?;
+            .map_err(|error| Error::new(&format!("invalid blob ID: {error}")))?;
         let blob = self
             .chain_client
             .storage_client()

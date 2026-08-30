@@ -15,7 +15,7 @@
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
-use crate::JsResult;
+use crate::Result;
 
 /// A decoder for one application's operation, message, response and event payloads.
 #[wasm_bindgen]
@@ -29,7 +29,7 @@ impl Formats {
     /// # Errors
     /// If the bytes are not a BCS-encoded `Formats`.
     #[wasm_bindgen(js_name = fromBytes)]
-    pub fn from_bytes(bytes: &[u8]) -> JsResult<Formats> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Formats> {
         Ok(Formats(linera_sdk::bcs::from_bytes(bytes)?))
     }
 
@@ -38,7 +38,7 @@ impl Formats {
     /// # Errors
     /// If the bytes don't match the application's operation format.
     #[wasm_bindgen(js_name = decodeOperation)]
-    pub fn decode_operation(&self, bytes: &[u8]) -> JsResult<JsValue> {
+    pub fn decode_operation(&self, bytes: &[u8]) -> Result<JsValue> {
         Ok(serde_wasm_bindgen::to_value(
             &self.0.decode_operation(bytes)?,
         )?)
@@ -49,7 +49,7 @@ impl Formats {
     /// # Errors
     /// If the bytes don't match the application's response format.
     #[wasm_bindgen(js_name = decodeResponse)]
-    pub fn decode_response(&self, bytes: &[u8]) -> JsResult<JsValue> {
+    pub fn decode_response(&self, bytes: &[u8]) -> Result<JsValue> {
         Ok(serde_wasm_bindgen::to_value(
             &self.0.decode_response(bytes)?,
         )?)
@@ -60,7 +60,7 @@ impl Formats {
     /// # Errors
     /// If the bytes don't match the application's message format.
     #[wasm_bindgen(js_name = decodeMessage)]
-    pub fn decode_message(&self, bytes: &[u8]) -> JsResult<JsValue> {
+    pub fn decode_message(&self, bytes: &[u8]) -> Result<JsValue> {
         Ok(serde_wasm_bindgen::to_value(
             &self.0.decode_message(bytes)?,
         )?)
@@ -71,7 +71,7 @@ impl Formats {
     /// # Errors
     /// If the bytes don't match the application's event format.
     #[wasm_bindgen(js_name = decodeEventValue)]
-    pub fn decode_event_value(&self, bytes: &[u8]) -> JsResult<JsValue> {
+    pub fn decode_event_value(&self, bytes: &[u8]) -> Result<JsValue> {
         Ok(serde_wasm_bindgen::to_value(
             &self.0.decode_event_value(bytes)?,
         )?)
