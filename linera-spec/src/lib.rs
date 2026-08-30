@@ -218,11 +218,19 @@
 //!   Safety reaches into execution in exactly one place: [`FastRetryPreservesBlock`] closes the
 //!   step from "same proposal" to "same block" with [`DeterministicExecution`] rather than a
 //!   runtime check at the retry. Everywhere else the two are kept apart.
-//! * **Cross-chain messaging** as a subsystem — delivery in particular: nothing states that an
-//!   outbox is ever drained, so no bundle is guaranteed to arrive. What *is* stated is that an
-//!   inbox holds only bundles its origin really sent ([`InboxHoldsOnlySentBundles`]), that no two
-//!   blocks consume the same bundle ([`BundleConsumedAtMostOnce`]), and that each chain's own
-//!   block sequence is unique ([`UniqueChain`]).
+//! * **Cross-chain messaging** — largely covered, except for unconditional delivery. An inbox holds
+//!   only bundles its origin really sent ([`InboxHoldsOnlySentBundles`]); a voter matches every
+//!   consumed bundle against its own inbox ([`IncomingBundlesAreSelfDerived`]); no two blocks
+//!   consume the same bundle ([`BundleConsumedAtMostOnce`]); delivery and consumption follow cursor
+//!   order, and only an entirely skippable bundle may be passed over
+//!   ([`DeliveryAndConsumptionAreOrdered`]); a sender may drop what its recipient has checkpointed
+//!   ([`AcknowledgedMessagesMayBeForgotten`]), though inbox entries themselves are never reclaimed
+//!   ([`InboxEntriesAreNeverReclaimed`]).
+//!
+//!   What is *not* guaranteed is that a bundle arrives at all. A sender's effort is bounded and a
+//!   recipient must ask for what it needs ([`DeliveryIsRepairedOnDemand`]); an idle sending chain
+//!   never retries a failed delivery, which is
+//!   [issue #6799](https://github.com/linera-io/linera-protocol/issues/6799).
 //! * **Committee reconfiguration** — partly covered now. [`CommitteeKnowledgeIsWellFounded`] fixes
 //!   where a node's knowledge of a committee comes from, and [`MaxByzantineWeight`] is assumed of
 //!   every epoch whose committee has not been revoked, so the fault bound accumulates as epochs are
@@ -232,9 +240,17 @@
 //! * **Chain ownership and lifecycle** — who may propose at a height, and how that changes;
 //!   [`ConsensusInstance`] records what is assumed about it.
 //! * **Resource control and fees** — metering, declared block limits, and fee conservation.
-//! * **Event streams** as a subsystem — append-only-ness and the publisher-side guarantees behind
-//!   a cross-chain `OracleResponse::Event` read. What is stated concerns only the checkpoint
-//!   boundary: [`EventFloorTracksCheckpoints`] says which indices stay readable across one.
+//! * **Event streams** — the reader side is covered, the publisher side is not. A voter resolves
+//!   every event a block reads against its own storage, at the exact identifier cited
+//!   ([`EventReadsAreSelfDerived`]); an event is written only under the publishing block's
+//!   certification, so it inherits that proof rather than carrying one
+//!   ([`AdmissionChecksTheValidityProof`]); and a stream's readable indices across a checkpoint are
+//!   fixed by [`EventFloorTracksCheckpoints`], with summarization by
+//!   [`CheckpointSummarizesUserStreams`].
+//!
+//!   Unstated: that a stream is append-only and gap-free in general — contiguity is claimed only
+//!   from a stream's floor upward — and what an application may assume about the *ordering* of
+//!   events it subscribes to across chains.
 //!
 //! [`CommitAgreement`]: linera_chain::manager::proof::safety::CommitAgreement
 //! [`UniqueChain`]: linera_chain::manager::proof::safety::UniqueChain
@@ -252,6 +268,13 @@
 //! [`CertifiedBlockIsAvailable`]: linera_core::proof::availability::CertifiedBlockIsAvailable
 //! [`StorageConvergesAtEqualHeights`]: linera_core::proof::storage::StorageConvergesAtEqualHeights
 //! [`EventFloorTracksCheckpoints`]: linera_chain::proof::checkpoints::EventFloorTracksCheckpoints
+//! [`EventReadsAreSelfDerived`]: linera_chain::manager::proof::commit::EventReadsAreSelfDerived
+//! [`AdmissionChecksTheValidityProof`]: linera_core::proof::storage::AdmissionChecksTheValidityProof
+//! [`CheckpointSummarizesUserStreams`]: linera_chain::proof::checkpoints::CheckpointSummarizesUserStreams
+//! [`DeliveryAndConsumptionAreOrdered`]: linera_core::proof::availability::DeliveryAndConsumptionAreOrdered
+//! [`DeliveryIsRepairedOnDemand`]: linera_core::proof::availability::DeliveryIsRepairedOnDemand
+//! [`AcknowledgedMessagesMayBeForgotten`]: linera_chain::proof::checkpoints::AcknowledgedMessagesMayBeForgotten
+//! [`InboxEntriesAreNeverReclaimed`]: linera_core::proof::storage::InboxEntriesAreNeverReclaimed
 //! [`ConsensusInstance`]: linera_chain::manager::proof::model::ConsensusInstance
 //! [`CertifiedBlockWasExecuted`]: linera_chain::manager::proof::commit::CertifiedBlockWasExecuted
 //! [`IncomingBundlesAreSelfDerived`]: linera_chain::manager::proof::commit::IncomingBundlesAreSelfDerived

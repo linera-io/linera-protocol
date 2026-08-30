@@ -214,3 +214,54 @@ pub trait CertifiedBlockWasExecuted:
 /// [`MaxByzantineWeight`]: crate::manager::proof::model::MaxByzantineWeight
 /// [`AccountabilityScope`]: crate::justification::proof::AccountabilityScope
 pub trait IncomingBundlesAreSelfDerived: ProposalGate + CertifiedBlockWasExecuted {}
+
+/// **Lemma (An event a block reads is matched against the validator's own storage).** A correct
+/// validator casts a validation or fast-confirmation vote for a block that reads an event only if
+/// that event is in its own storage under the exact [`EventId`] the block cites, and the bytes it
+/// votes for are the bytes it holds.
+///
+/// This is the event counterpart of [`IncomingBundlesAreSelfDerived`], and it carries the same
+/// weight: it is what stands between a proposer and a block that claims to have read something no
+/// one published.
+///
+/// *Code correspondence.*
+///
+/// | | |
+/// |---|---|
+/// | transition | the event oracle in `ExecutionStateActor`, reached from `ChainWorkerState::execute_block` during `try_handle_block_proposal` |
+/// | reads | the validator's own event storage, through `ExecutionRuntimeContext::get_event` |
+/// | writes | the block's `oracle_responses`, appending `OracleResponse::Event` |
+/// | precondition | none beyond [`ProposalGate`] |
+///
+/// *Proof.* Validating a proposal executes the block afresh, with no recorded outcome to replay
+/// ([`CertifiedBlockWasExecuted`]). `TransactionTracker::oracle` therefore finds no replayed
+/// response and runs its closure, which calls `get_event` on this validator's own storage and
+/// fails with `ExecutionError::EventsNotFound` when the event is absent. The value recorded in the
+/// block is the value that came back. So a validator cannot vote for a block whose event it does
+/// not hold, and cannot vote for content differing from its own. ∎
+///
+/// **Replay checks the identifier, not the content.** When a block *does* carry a recorded outcome
+/// — a regular retry, or a certified block being applied — `oracle` returns the recorded response
+/// without consulting storage, and `to_event` only checks that the recorded [`EventId`] matches the
+/// one requested, returning `ExecutionError::OracleResponseMismatch` otherwise. The bytes are taken
+/// as given.
+///
+/// That asymmetry is the same one [`IncomingBundlesAreSelfDerived`] records for
+/// `must_be_present = false`, and it is deliberate for the same reason: by the time a block is
+/// certified, a quorum has already voted, and this lemma has done its work at voting time. It is
+/// also why a fabricated `events` field is beyond [`AccountabilityScope`] — the fabrication is
+/// caught by the voters or not at all, and leaves no evidence afterwards.
+///
+/// **What this does not say.** That the event was legitimately published by the chain the
+/// [`EventId`] names is not checked here; it follows from how the event entered storage in the
+/// first place, which is `linera_core::proof::storage::AdmissionChecksTheValidityProof` — events
+/// are written only in the branch guarded by `certificate.check`, so they inherit the publishing
+/// block's certification rather than carrying a proof of their own. Nor does it say the event is
+/// still *readable*: a checkpoint may have pruned it below the stream's floor
+/// ([`EventFloorTracksCheckpoints`]).
+///
+/// [`EventId`]: linera_base::identifiers::EventId
+/// [`ProposalGate`]: crate::manager::proof::voting::ProposalGate
+/// [`AccountabilityScope`]: crate::justification::proof::AccountabilityScope
+/// [`EventFloorTracksCheckpoints`]: crate::proof::checkpoints::EventFloorTracksCheckpoints
+pub trait EventReadsAreSelfDerived: ProposalGate + CertifiedBlockWasExecuted {}
