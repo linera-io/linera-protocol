@@ -394,15 +394,9 @@ pub struct BlockHeader {
     pub previous_event_blocks_hash: CryptoHash,
     /// The height of the most recent checkpoint block strictly below this one, if any.
     ///
-    /// A block cannot name itself here: its hash is not known while it is being executed. So a
-    /// block that *is* a checkpoint points at the one before it, and a reader takes the latest
-    /// checkpoint at or below a block from this field, or from the block itself when
+    /// A block that is itself a checkpoint points at the one before it, so a reader takes the
+    /// latest checkpoint at or below a block from this field, or from the block itself when
     /// [`BlockBody::starts_with_checkpoint`].
-    ///
-    /// This is what lets a sender that holds only certificates and storage -- a proxy, a block
-    /// exporter, a proposer delegate -- offer a lagging validator the checkpoint instead of
-    /// replaying the history below it. Reading it from a chain's own view would mean opening a
-    /// second [`ChainStateView`](crate::ChainStateView) for a chain a worker already owns.
     pub previous_checkpoint: Option<BlockHeight>,
     /// Cryptographic hash of all the oracle responses in the block.
     pub oracle_responses_hash: CryptoHash,
