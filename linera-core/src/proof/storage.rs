@@ -143,9 +143,9 @@ pub trait AdmissionChecksTheValidityProof:
 }
 
 /// **Invariant (Derived state agrees with the certified prefix).** The parts of a chain's state that
-/// are neither self-verifying nor quorum-attested — the block-height indexes, the outbox counters
-/// and queues, the inbox cursors — are functions of that chain's committed blocks, and equal the
-/// value that recomputing them from those blocks would give.
+/// are not certified — the block-height indexes, the outbox counters and queues, the inbox cursors —
+/// are functions of that chain's committed blocks, and equal the value that recomputing them from
+/// those blocks would give.
 ///
 /// **This is the class with no validity proof.** A wrong index or a wrong counter is not detectable
 /// by rehashing or by re-verifying signatures, because nobody attested it and nothing determines it

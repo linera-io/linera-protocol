@@ -208,13 +208,17 @@ pub trait LockingBlobsTravelWithTheLock: CorrectValidator + CorrectValidatorAvai
 /// | `WrongRound`, `UnexpectedBlockHeight` — validator behind | acceptance | consensus state for this chain | pushed by `send_chain_information` |
 /// | `WrongRound`, `UnexpectedBlockHeight` — *requester* behind | acceptance | nothing; the requester is wrong | pulled: `sync_remote_if_needed` reports [`LocalNodeLagging`] and the client synchronizes |
 ///
-/// **Every class is self-suppliable.** In each row the requester already holds what the validator
-/// lacks, so the push cannot fail for want of the data, and no class waits on a third party. The
-/// pushes read local storage and nothing else: `read_certificates_for_heights` for chain
+/// **Every dependency is already available at the requester.** In each row the requester holds what
+/// the validator lacks, so the push cannot fail for want of the data, and no class waits on a third
+/// party. The pushes read local storage and nothing else: `read_certificates_for_heights` for chain
 /// information, `read_blobs_from_storage` for blobs, `get_next_height_to_preprocess` to decide how
 /// far to send a publishing chain.
 ///
-/// *Why the requester holds it.* Two arguments, one per operation.
+/// This is a *local* availability claim, and it is stronger than the network-wide one:
+/// [`CertifiedBlockIsAvailable`] says the data can be obtained from some quorum, whereas here it is
+/// already in the hand of the party that needs to supply it.
+///
+/// *Why it is available there.* Two arguments, one per operation.
 ///
 /// * *Accepting a proposal.* The requester built the proposal, which means its own local node
 ///   executed the block. Execution consumes exactly these dependencies, so holding them is a
@@ -229,11 +233,11 @@ pub trait LockingBlobsTravelWithTheLock: CorrectValidator + CorrectValidatorAvai
 ///   confirmed, so the blobs must be in storage" — and treats a miss as an error rather than a
 ///   condition to wait out.
 ///
-/// The one case where holding the data is not immediate is a lock the requester is *recovering*
-/// rather than one it created: there the blobs were collected during synchronization, by
+/// The one case where availability is not immediate is a lock the requester is *recovering* rather
+/// than one it created: there the blobs were collected during synchronization, by
 /// [`LockingBlobsTravelWithTheLock`]. ∎
 ///
-/// **A requester need not follow a whole chain to supply what came from it.** This is what makes
+/// **A requester need not follow a whole chain to make its blocks available.** This is what makes
 /// the argument hold for the two classes whose data originates on a third chain. A chain the
 /// requester merely *receives* from is stored only at its message-bearing heights, and
 /// `send_chain_information` pushes exactly those, skipping heights it does not have; the validator
