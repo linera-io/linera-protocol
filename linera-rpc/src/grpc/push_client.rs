@@ -265,6 +265,40 @@ mod tests {
         }
     }
 
+    /// A successful answer, which wakes waiters at-or-*below* it.
+    fn success(chain_id: ChainId, height: u64) -> api::PushCertificateResponse {
+        let info = linera_core::data_types::ChainInfo {
+            chain_id,
+            epoch: linera_base::data_types::Epoch::ZERO,
+            description: None,
+            manager: Box::default(),
+            chain_balance: linera_base::data_types::Amount::ZERO,
+            block_hash: None,
+            timestamp: linera_base::data_types::Timestamp::default(),
+            next_block_height: BlockHeight(height + 1),
+            state_hash: None,
+            requested_committees: None,
+            requested_owner_balance: None,
+            requested_pending_message_bundles: vec![],
+            requested_sent_certificate_hashes: vec![],
+            count_received_log: 0,
+            requested_received_log: vec![],
+        };
+        let response = ChainInfoResponse {
+            info: Box::new(info),
+            signature: None,
+        };
+        api::PushCertificateResponse {
+            chain_id: Some(chain_id.into()),
+            height: Some(BlockHeight(height).into()),
+            result: Some(api::ChainInfoResult {
+                inner: Some(api::chain_info_result::Inner::ChainInfoResponse(
+                    response.try_into().expect("converts"),
+                )),
+            }),
+        }
+    }
+
     /// An answer carrying no result at all cannot be attributed, and waking a waiter with it
     /// would resolve a push on a message the destination never really sent.
     fn unattributable(chain_id: ChainId, height: u64) -> api::PushCertificateResponse {
@@ -313,7 +347,7 @@ mod tests {
         let mut above = stream.expect(chain(1), BlockHeight(11));
 
         responses
-            .start_send(answer(chain(1), 9))
+            .start_send(success(chain(1), 9))
             .expect("the channel is open");
         assert!(
             below.await.is_ok(),

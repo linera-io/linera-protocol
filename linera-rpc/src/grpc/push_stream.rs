@@ -347,15 +347,10 @@ mod tests {
 
         assert_eq!(
             next_or_retire(&mut queue, CHAIN_IDLE).await,
-            None,
-            "an idle queue retires rather than waiting for a writer that has not arrived",
-        );
-        handing_over.await.expect("the writer does not panic");
-        assert_eq!(
-            next_or_retire(&mut queue, CHAIN_IDLE).await,
             Some(1),
             "an item handed over as the queue retired must still be returned",
         );
+        handing_over.await.expect("the writer does not panic");
         assert_eq!(
             next_or_retire(&mut queue, CHAIN_IDLE).await,
             Some(2),

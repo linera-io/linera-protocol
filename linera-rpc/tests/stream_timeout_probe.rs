@@ -98,6 +98,9 @@ async fn a_channel_timeout_does_not_bound_a_stream_body() -> anyhow::Result<()> 
         "the stream did not outlive the timeout, so this proved nothing",
     );
 
+    // The open Watch stream is an in-flight request, and graceful shutdown waits for those — so
+    // the server future never resolves while it is alive.
+    drop(stream);
     shutdown.send(()).ok();
     server.await??;
     Ok(())
