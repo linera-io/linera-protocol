@@ -153,18 +153,12 @@
 //!
 //! # Known gaps
 //!
-//! Three places where the implementation does not deliver what a proof wants. Each needs a change
+//! Two places where the implementation does not deliver what a proof wants. Each needs a change
 //! to the code, or a weaker result, to close; none is closed by rereading.
 //!
 //! * [`FullReachability`] — the lock-recovery step wants the proposer to reach *every* correct
 //!   validator, while `synchronize_chain_state` guarantees only a quorum plus a grace period.
 //!   Affects liveness only.
-//! * [`MissingDependenciesAreRecoverable`] — a block that consumes a message or reads an event
-//!   depends on data originating on a *third* chain. Blobs, ancestors and chain state are
-//!   self-suppliable, so a lagging validator is simply handed them; these two classes are not. If
-//!   the proposer does not follow the sending or publishing chain either, the validator waits on
-//!   its own catch-up of that chain, which no assumption bounds — so
-//!   [`ValidationQuorumForms`]'s `2Δ` step does not apply to such blocks. Affects liveness only.
 //! * [`AccountabilityScope`] — incorrect block execution is not attributable, and its effects are
 //!   not confined to one chain: a wrong `messages` or `events` field is consumed by other chains
 //!   whose resulting blocks are themselves properly certified. The protections are
@@ -266,7 +260,6 @@
 //! [`BlockOutputsArePersisted`]: linera_core::proof::availability::BlockOutputsArePersisted
 //! [`InboxHoldsOnlySentBundles`]: linera_core::proof::availability::InboxHoldsOnlySentBundles
 //! [`BundleConsumedAtMostOnce`]: linera_core::proof::availability::BundleConsumedAtMostOnce
-//! [`ValidationQuorumForms`]: linera_core::proof::progress::ValidationQuorumForms
 //! [`FastRetryPreservesBlock`]: linera_chain::manager::proof::safety::FastRetryPreservesBlock
 //! [`ProposalGate`]: linera_chain::manager::proof::voting::ProposalGate
 //! [`VoteConstructionSites`]: linera_chain::manager::proof::voting::VoteConstructionSites
