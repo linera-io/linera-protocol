@@ -50,6 +50,21 @@ test("reports the message of a thrown `Error`", async () => {
   expect(error.message).toContain("the vault is on fire");
 }, 150000);
 
+test("carries the frames of the throw, not the frames that rebuilt it", async () => {
+  const original = new Error("the vault is on fire");
+  const error = await refusing(original);
+
+  // The frames must come from this file, where the signer threw, rather than from the
+  // wasm boundary that constructed the error JavaScript actually receives.
+  const frames = (error.stack ?? "").split("\n").slice(1).join("\n");
+  const originalFrames = (original.stack ?? "").split("\n").slice(1).join("\n");
+  expect(frames).toBe(originalFrames);
+  expect(frames).not.toContain("linera_web.wasm");
+
+  // The first line is rewritten to agree with `message`, as JavaScript tooling expects.
+  expect(error.stack?.split("\n")[0]).toBe(`Error: ${error.message}`);
+}, 150000);
+
 test("reports the `name` of a thrown error that is not a plain `Error`", async () => {
   const error = await refusing(
     new DOMException("the user said no", "NotAllowedError"),
