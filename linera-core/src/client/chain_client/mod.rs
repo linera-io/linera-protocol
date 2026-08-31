@@ -2335,7 +2335,7 @@ impl<Env: Environment> ChainClient<Env> {
             "process_pending_block_without_prepare completing"
         );
         debug!(round = %certificate.round, "Sending confirmed block to validators");
-        let certificate = self.client.storage_client().cache_certificate(certificate);
+        let certificate = self.client.storage_client().intern_certificate(certificate);
         self.update_validators(Some(&committee), Some(certificate.clone()))
             .await?;
         // Clear the pending proposal now that the block has been committed.
@@ -2399,7 +2399,7 @@ impl<Env: Environment> ChainClient<Env> {
             .client
             .finalize_block(&committee, certificate.clone())
             .await?;
-        let certificate = self.client.storage_client().cache_certificate(certificate);
+        let certificate = self.client.storage_client().intern_certificate(certificate);
         self.update_validators(Some(&committee), Some(certificate.clone()))
             .await?;
         Ok(ClientOutcome::Committed(Some(CacheArc::unwrap_or_clone(
