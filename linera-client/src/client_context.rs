@@ -124,7 +124,7 @@ impl ValidatorQueryResults {
                     println!("GraphQL API hash: {}", version_info.graphql_hash);
                 }
                 if ref_version.is_none_or(|ref_v| ref_v.wit_hash != version_info.wit_hash) {
-                    println!("WIT API hash: v{}", version_info.wit_hash);
+                    println!("WIT API hash: {}", version_info.wit_hash);
                 }
                 if ref_version.is_none_or(|ref_v| {
                     (&ref_v.git_commit, ref_v.git_dirty)
