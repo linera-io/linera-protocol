@@ -3,6 +3,8 @@
 
 use linera_storage::{StorageCacheConfig, DEFAULT_CLEANUP_INTERVAL_SECS};
 use linera_views::lru_prefix_cache::StorageCacheConfig as ViewsStorageCacheConfig;
+#[cfg(feature = "scylladb")]
+use linera_views::scylla_db::DEFAULT_MAX_CONCURRENT_CHUNK_QUERIES;
 #[cfg(feature = "rocksdb")]
 use {linera_views::rocks_db::RocksDbStatisticsLevel, std::str::FromStr as _};
 
@@ -81,6 +83,13 @@ pub struct CommonStorageOptions {
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1", global = true)]
     pub storage_replication_factor: u32,
+
+    /// The maximal number of chunk queries a single multi-key read sends at once. A large
+    /// read is split into fixed-size chunks; issuing every chunk simultaneously can exhaust
+    /// ScyllaDB's reader-concurrency semaphore and inflate read latency for other callers.
+    #[cfg(feature = "scylladb")]
+    #[arg(long, default_value_t = DEFAULT_MAX_CONCURRENT_CHUNK_QUERIES, global = true)]
+    pub scylladb_max_concurrent_chunk_queries: usize,
 
     /// Enable RocksDB's internal statistics collection and export them as Prometheus
     /// metrics. Off by default; enable it on nodes whose metrics are scraped.

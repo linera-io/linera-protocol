@@ -353,6 +353,7 @@ impl StorageConfig {
                 let inner_config = linera_views::scylla_db::ScyllaDbStoreInternalConfig {
                     uri: uri.clone(),
                     max_concurrent_queries: options.storage_max_concurrent_queries,
+                    max_concurrent_chunk_queries: options.scylladb_max_concurrent_chunk_queries,
                     replication_factor: options.storage_replication_factor,
                 };
                 let config = linera_views::scylla_db::ScyllaDbStoreConfig {
@@ -381,6 +382,7 @@ impl StorageConfig {
                 let inner_config = linera_views::scylla_db::ScyllaDbStoreInternalConfig {
                     uri: uri.clone(),
                     max_concurrent_queries: options.storage_max_concurrent_queries,
+                    max_concurrent_chunk_queries: options.scylladb_max_concurrent_chunk_queries,
                     replication_factor: options.storage_replication_factor,
                 };
                 let second_config = linera_views::scylla_db::ScyllaDbStoreConfig {
