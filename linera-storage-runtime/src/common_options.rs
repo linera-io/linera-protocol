@@ -1,14 +1,12 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::num::NonZeroUsize;
-
 use linera_storage::{StorageCacheConfig, DEFAULT_CLEANUP_INTERVAL_SECS};
 use linera_views::lru_prefix_cache::StorageCacheConfig as ViewsStorageCacheConfig;
-#[cfg(feature = "scylladb")]
-use linera_views::scylla_db::DEFAULT_MAX_CONCURRENT_CHUNK_QUERIES;
 #[cfg(feature = "rocksdb")]
 use {linera_views::rocks_db::RocksDbStatisticsLevel, std::str::FromStr as _};
+#[cfg(feature = "scylladb")]
+use {linera_views::scylla_db::DEFAULT_MAX_CONCURRENT_CHUNK_QUERIES, std::num::NonZeroUsize};
 
 /// Command-line options shared by all storage backends, controlling concurrency
 /// limits and cache sizes.
