@@ -92,6 +92,7 @@ fn generate_view_code(input: &ItemStruct, root: bool) -> Result<TokenStream2, Er
     let mut num_init_keys_quotes = Vec::new();
     let mut pre_load_keys_quotes = Vec::new();
     let mut post_load_keys_quotes = Vec::new();
+    let mut layout_field_quotes = Vec::new();
     let num_fields = input.fields.len();
     for (idx, e) in input.fields.iter().enumerate() {
         let name = e.ident.clone().unwrap();
@@ -124,6 +125,21 @@ fn generate_view_code(input: &ItemStruct, root: bool) -> Result<TokenStream2, Er
             }
         };
 
+        {
+            let field_name = name.to_string();
+            let field_index = idx as u32;
+            let field_type = &e.ty;
+            // The same threshold `derive_key_logic` uses to pick the index type below.
+            let field_index_type = if num_fields < 256 { "u8" } else { "u16" };
+            layout_field_quotes.push(quote! {
+                linera_views::views::layout::StructField {
+                    name: #field_name,
+                    index: #field_index,
+                    index_type: #field_index_type,
+                    layout: <#field_type as linera_views::views::layout::DescribeLayout>::layout(),
+                }
+            });
+        }
         pre_load_keys_quotes.push(quote! {
             #derive_key_logic
             keys.extend(#g :: pre_load(&context.clone_with_base_key(__linera_reserved_base_key))?);
@@ -235,6 +251,19 @@ fn generate_view_code(input: &ItemStruct, root: bool) -> Result<TokenStream2, Er
 
             fn clear(&mut self) {
                 #(#clear_quotes)*
+            }
+        }
+
+        impl #impl_generics linera_views::views::layout::DescribeLayout for #struct_name #type_generics
+        where
+            #context: linera_views::context::Context,
+            #(#input_constraints,)*
+            #(#field_types: linera_views::views::layout::DescribeLayout,)*
+        {
+            fn layout() -> linera_views::views::layout::ViewLayout {
+                linera_views::views::layout::ViewLayout::Struct(vec![
+                    #(#layout_field_quotes),*
+                ])
             }
         }
     })

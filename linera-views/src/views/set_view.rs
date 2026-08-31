@@ -1036,6 +1036,36 @@ mod graphql {
     }
 }
 
+impl<C> crate::views::layout::DescribeLayout for ByteSetView<C> {
+    fn layout() -> crate::views::layout::ViewLayout {
+        use crate::views::layout::{ValueFormat, ViewLayout};
+        ViewLayout::Indexed {
+            index: None,
+            layout: Box::new(ViewLayout::Value(ValueFormat::Marker)),
+        }
+    }
+}
+
+impl<C, I> crate::views::layout::DescribeLayout for SetView<C, I> {
+    fn layout() -> crate::views::layout::ViewLayout {
+        use crate::views::layout::{short_type_name, ValueFormat, ViewLayout};
+        ViewLayout::Indexed {
+            index: Some(short_type_name::<I>()),
+            layout: Box::new(ViewLayout::Value(ValueFormat::Marker)),
+        }
+    }
+}
+
+impl<C, I> crate::views::layout::DescribeLayout for CustomSetView<C, I> {
+    fn layout() -> crate::views::layout::ViewLayout {
+        use crate::views::layout::{short_type_name, ValueFormat, ViewLayout};
+        ViewLayout::Indexed {
+            index: Some(short_type_name::<I>()),
+            layout: Box::new(ViewLayout::Value(ValueFormat::Marker)),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

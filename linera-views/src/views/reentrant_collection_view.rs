@@ -2382,3 +2382,59 @@ mod graphql {
         }
     }
 }
+
+impl<W: View + crate::views::layout::DescribeLayout> crate::views::layout::DescribeLayout
+    for ReentrantByteCollectionView<W::Context, W>
+{
+    fn layout() -> crate::views::layout::ViewLayout {
+        use crate::views::{
+            collection_entry::KeyTag,
+            layout::{TaggedArm, ValueFormat, ViewLayout},
+        };
+        ViewLayout::Tagged(vec![
+            TaggedArm {
+                tag: KeyTag::Index as u8,
+                name: "Index",
+                layout: ViewLayout::Indexed {
+                    index: None,
+                    // The marker records that the entry exists; a present entry may store no
+                    // bytes of its own.
+                    layout: Box::new(ViewLayout::Value(ValueFormat::Marker)),
+                },
+            },
+            TaggedArm {
+                tag: KeyTag::Subview as u8,
+                name: "Subview",
+                layout: ViewLayout::Indexed {
+                    index: None,
+                    layout: Box::new(W::layout()),
+                },
+            },
+        ])
+    }
+}
+
+impl<C, I, W> crate::views::layout::DescribeLayout for ReentrantCollectionView<C, I, W>
+where
+    W: View + crate::views::layout::DescribeLayout,
+    ReentrantByteCollectionView<W::Context, W>: crate::views::layout::DescribeLayout,
+{
+    fn layout() -> crate::views::layout::ViewLayout {
+        use crate::views::layout::{short_type_name, ViewLayout};
+        // The typed wrapper serializes its index; the byte collection underneath sees the
+        // result as raw bytes.
+        match <ReentrantByteCollectionView<W::Context, W> as crate::views::layout::DescribeLayout>::layout() {
+            ViewLayout::Tagged(arms) => ViewLayout::Tagged(
+                arms.into_iter()
+                    .map(|mut arm| {
+                        if let ViewLayout::Indexed { index, .. } = &mut arm.layout {
+                            *index = Some(short_type_name::<I>());
+                        }
+                        arm
+                    })
+                    .collect(),
+            ),
+            other => other,
+        }
+    }
+}
