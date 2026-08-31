@@ -9,6 +9,7 @@
 
 use std::{
     collections::{BTreeSet, HashMap},
+    num::NonZeroUsize,
     ops::Deref,
     sync::{
         atomic::{AtomicI64, Ordering},
@@ -68,7 +69,9 @@ const MAX_MULTI_KEYS: usize = 100 - 1;
 /// range expands into many queries against the *same* partition. Issuing them all at once
 /// exhausts ScyllaDB's reader-concurrency semaphore and inflates read latency for every other
 /// caller without buying throughput, so the fan-out is capped instead.
-pub const DEFAULT_MAX_CONCURRENT_CHUNK_QUERIES: usize = 10;
+///
+/// Non-zero because `buffered(0)` admits no future and would hang forever.
+pub const DEFAULT_MAX_CONCURRENT_CHUNK_QUERIES: NonZeroUsize = NonZeroUsize::new(10).unwrap();
 
 /// The maximal size of an operation on ScyllaDB seems to be 16 MiB
 /// https://www.scylladb.com/2019/03/27/best-practices-for-scylla-applications/
@@ -740,7 +743,7 @@ pub struct ScyllaDbStoreInternal {
     semaphore: Option<Arc<Semaphore>>,
     root_key: Vec<u8>,
     /// Upper bound on chunk queries in flight for one multi-key read.
-    max_concurrent_chunk_queries: usize,
+    max_concurrent_chunk_queries: NonZeroUsize,
     /// Whether this store was opened with `open_exclusive`. When true, `write_batch`
     /// resolves in-batch prefix/insert collisions via per-statement `USING TIMESTAMP`;
     /// when false, it splits the batch into two sequential sub-batches with
@@ -757,7 +760,7 @@ pub struct ScyllaDbStoreInternal {
 pub struct ScyllaDbDatabaseInternal {
     store: Arc<ScyllaDbClient>,
     semaphore: Option<Arc<Semaphore>>,
-    max_concurrent_chunk_queries: usize,
+    max_concurrent_chunk_queries: NonZeroUsize,
 }
 
 impl WithError for ScyllaDbDatabaseInternal {
@@ -891,7 +894,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
             .map(|keys| store.contains_keys_internal(&self.root_key, keys.to_vec()))
             .collect::<Vec<_>>();
         let results: Vec<_> = stream::iter(handles)
-            .buffered(self.max_concurrent_chunk_queries)
+            .buffered(self.max_concurrent_chunk_queries.get())
             .try_collect()
             .await?;
         Ok(results.into_iter().flatten().collect())
@@ -911,7 +914,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
             .map(|keys| store.read_multi_values_internal(&self.root_key, keys.to_vec()))
             .collect::<Vec<_>>();
         let results: Vec<_> = stream::iter(handles)
-            .buffered(self.max_concurrent_chunk_queries)
+            .buffered(self.max_concurrent_chunk_queries.get())
             .try_collect()
             .await?;
         Ok(results.into_iter().flatten().collect())
@@ -1057,7 +1060,7 @@ pub struct ScyllaDbStoreInternalConfig {
     /// Maximum number of concurrent database queries allowed for this client.
     pub max_concurrent_queries: Option<usize>,
     /// Maximum number of chunk queries issued at once by a single multi-key read.
-    pub max_concurrent_chunk_queries: usize,
+    pub max_concurrent_chunk_queries: NonZeroUsize,
     /// The replication factor.
     pub replication_factor: u32,
 }
