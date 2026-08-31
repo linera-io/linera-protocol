@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::num::NonZeroUsize;
+
 use linera_views::{
     lru_prefix_cache::StorageCacheConfig,
     scylla_db::{
@@ -28,6 +30,10 @@ pub struct ScyllaDbConfig {
     /// The maximal number of simultaneous queries to the database
     #[arg(long)]
     max_concurrent_queries: Option<usize>,
+
+    /// The maximal number of chunk queries a single multi-key read sends at once.
+    #[arg(long, default_value_t = DEFAULT_MAX_CONCURRENT_CHUNK_QUERIES)]
+    pub max_concurrent_chunk_queries: NonZeroUsize,
 
     /// The maximal memory used in the storage cache in bytes.
     #[arg(long, default_value = "10000000")]
@@ -104,7 +110,7 @@ impl ScyllaDbRunner {
         let inner_config = ScyllaDbStoreInternalConfig {
             uri: config.client.uri.clone(),
             max_concurrent_queries: config.client.max_concurrent_queries,
-            max_concurrent_chunk_queries: DEFAULT_MAX_CONCURRENT_CHUNK_QUERIES,
+            max_concurrent_chunk_queries: config.client.max_concurrent_chunk_queries,
             replication_factor: config.client.replication_factor,
         };
         let store_config = ScyllaDbStoreConfig {
