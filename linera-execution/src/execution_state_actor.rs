@@ -34,6 +34,7 @@ use crate::{
     execution::UserAction,
     runtime::ContractSyncRuntime,
     system::{CreateApplicationResult, OpenChainConfig},
+    thread_pool::CONTRACT,
     util::{OracleResponseExt as _, RespondExt as _},
     ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext,
     ExecutionStateView, JsVec, Message, MessageContext, MessageKind, ModuleId, Operation,
@@ -1072,7 +1073,7 @@ where
             .context()
             .extra()
             .thread_pool()
-            .run_send(JsVec(codes), move |codes| async move {
+            .run_send(CONTRACT, JsVec(codes), move |codes| async move {
                 let runtime = ContractSyncRuntime::new(
                     execution_state_sender,
                     chain_id,
