@@ -54,9 +54,7 @@ where
     // fire-and-forget, so we deliver the output through a oneshot channel.
     #[cfg(not(web))]
     {
-        tokio::task::spawn(future)
-            .await
-            .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
+        join_detached(tokio::task::spawn(future)).await
     }
     #[cfg(web)]
     {
@@ -68,6 +66,21 @@ where
         });
         rx.await
             .expect("spawned task dropped without sending its result")
+    }
+}
+
+/// Awaits a detached task, propagating its panic but not its cancellation.
+///
+/// [`run_detached`] never lets the `JoinHandle` escape, so nothing can abort the task and a
+/// cancellation can only mean the runtime is shutting down. There is no value left to return and
+/// this future is about to be dropped with everything else, so it waits rather than reporting a
+/// teardown as a failure.
+#[cfg(not(web))]
+async fn join_detached<R>(handle: tokio::task::JoinHandle<R>) -> R {
+    match handle.await {
+        Ok(output) => output,
+        Err(error) if error.is_panic() => std::panic::resume_unwind(error.into_panic()),
+        Err(_) => future::pending().await,
     }
 }
 
@@ -142,5 +155,45 @@ impl<R: 'static> std::future::IntoFuture for Task<R> {
     fn into_future(self) -> Self::IntoFuture {
         self.output
             .map(|result| result.expect("we have the only AbortHandle"))
+    }
+}
+
+#[cfg(all(test, not(web)))]
+mod tests {
+    use std::time::Duration;
+
+    use super::*;
+
+    /// A cancelled detached task must not be reported as a panic.
+    ///
+    /// Cancellation is provoked with `abort` because the runtime shutdown that causes it in
+    /// production cannot be staged inside a test that still needs the runtime alive. Reverting
+    /// `join_detached` to `into_panic` makes this fail with "`JoinError` reason is not a panic".
+    #[tokio::test]
+    async fn a_cancelled_detached_task_waits_instead_of_panicking() {
+        let handle = tokio::task::spawn(future::pending::<()>());
+        handle.abort();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), join_detached(handle))
+                .await
+                .is_err(),
+            "a cancelled task has no value to yield, so joining it must not resolve",
+        );
+    }
+
+    /// The panic of a detached task must still reach whoever awaited it.
+    #[tokio::test]
+    async fn a_panicking_detached_task_still_propagates() {
+        let joined = tokio::task::spawn(async {
+            run_detached(async { panic!("the detached task failed") }).await
+        })
+        .await;
+        let error = joined.expect_err("the panic must not be swallowed");
+        let payload = error.into_panic();
+        assert_eq!(
+            payload.downcast_ref::<&str>().copied(),
+            Some("the detached task failed"),
+            "the original panic payload must survive the join",
+        );
     }
 }
