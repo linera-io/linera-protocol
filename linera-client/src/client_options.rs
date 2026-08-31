@@ -153,6 +153,11 @@ pub struct Options {
     #[arg(long)]
     pub allow_fast_blocks: bool,
 
+    /// Whether a proposer delegate also broadcasts the confirmed certificate to the validators,
+    /// rather than our broadcasting it ourselves once the delegate returns it.
+    #[arg(long)]
+    pub delegate_validator_updates: bool,
+
     /// (EXPERIMENTAL) Whether application services can persist in some cases between queries.
     #[arg(long)]
     pub long_lived_services: bool,
@@ -377,6 +382,7 @@ impl Options {
             notification_circuit_breaker_max_probe_interval: self
                 .notification_circuit_breaker_max_probe_interval,
             max_event_stream_queries: self.max_event_stream_queries,
+            delegate_validator_updates: self.delegate_validator_updates,
         }
     }
 

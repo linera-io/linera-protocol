@@ -88,6 +88,59 @@ service ValidatorWorker {
   rpc HandleCrossChainRequest(CrossChainRequest) returns (google.protobuf.Empty);
 }
 
+// A service that forms confirmation certificates on behalf of a client.
+//
+// The delegate holds no signing authority of its own. The client signs the proposal, the
+// validators sign the votes, and every value the delegate returns carries a quorum of validator
+// signatures that the client checks against its own committee. A faulty delegate can withhold or
+// delay, but it cannot confirm a block the owner did not sign or the validators did not accept.
+//
+// A delegate finishes the round its proposal was signed for: it collects the votes, finalizes a
+// validated certificate, and delivers the block's cross-chain messages, resolving from its own
+// storage whatever the validators turn out to be missing. The round is covered by the owner's
+// signature, so a delegate can never open one; anything that needs a new signature goes back to
+// the owner as the chain state the delegate observed.
+service ProposerDelegate {
+  // Carry a signed proposal through the rest of the round it was signed for.
+  rpc SubmitAndConfirm(DelegatedProposal) returns (DelegatedOutcomeResult);
+}
+
+// A signed proposal, together with everything a delegate needs to form a certificate from it.
+message DelegatedProposal {
+  // The ID of the chain (used for routing).
+  ChainId chain_id = 1;
+
+  // The signed proposal to carry.
+  BlockProposal proposal = 2;
+
+  // bincode-encoded `Block`: the proposed block paired with the execution outcome the client has
+  // already computed, so that the delegate can build the value a certificate is over without
+  // executing the block itself. A wrong outcome costs the sender the attempt and nothing else,
+  // since the resulting value hash does not match the votes.
+  bytes block = 3;
+
+  // The blobs the block publishes. A newly published blob has no other source, so the delegate
+  // uploads these to the validators that have not seen them.
+  repeated BlobContent blobs = 4;
+
+  // Whether to wait for the delivery of the block's outgoing cross-chain messages.
+  bool blocking_delivery = 5;
+}
+
+message DelegatedOutcomeResult {
+  oneof inner {
+    // The delegate finished the round: a confirmation certificate for the proposed block.
+    Certificate confirmed = 1;
+
+    // The delegate stopped at something that needs a new owner signature, and reports the chain
+    // state it observed. Only the certificates within it carry their own proof.
+    ChainInfoResponse needs_owner = 2;
+
+    // a bincode wrapper around `NodeError`
+    bytes error = 3;
+  }
+}
+
 // How to communicate with a validator or a local node.
 service ValidatorNode {
   // Propose a new block.

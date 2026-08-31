@@ -23,6 +23,7 @@ pub mod client;
 pub use client::Client;
 /// Data types exchanged between clients, workers, and validator nodes.
 pub mod data_types;
+pub mod delegate;
 pub mod join_set_ext;
 mod local_node;
 /// Traits for communicating with validator nodes.
