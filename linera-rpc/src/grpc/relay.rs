@@ -21,6 +21,7 @@ use std::{
     },
 };
 
+use futures::StreamExt as _;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlobContent, BlockHeight, NetworkDescription},
@@ -107,33 +108,23 @@ impl ValidatorNode for RelayClient {
     /// against the committee once per stream rather than once per certificate.
     async fn open_push_stream(&self) -> Result<Self::PushStream, NodeError> {
         let (certificates, queue) = push_client::write_half();
-        let (relayed, relayed_queue) = tokio::sync::mpsc::channel(1);
-        relayed
-            .send(api::RelayPushRequest {
-                inner: Some(api::relay_push_request::Inner::Destination(
-                    self.destination.clone(),
-                )),
-            })
-            .await
-            .map_err(|_| NodeError::PushStreamClosed)?;
-        // Wraps each certificate for the relay without the caller knowing there is one.
-        tokio::spawn(async move {
-            let mut queue = queue;
-            while let Some(certificate) = queue.recv().await {
-                let wrapped = api::RelayPushRequest {
-                    inner: Some(api::relay_push_request::Inner::Certificate(certificate)),
-                };
-                if relayed.send(wrapped).await.is_err() {
-                    return;
-                }
+        // The destination heads the stream; the rest is the caller's queue wrapped in place, so
+        // the relay costs no second channel and no pump task.
+        let first = api::RelayPushRequest {
+            inner: Some(api::relay_push_request::Inner::Destination(
+                self.destination.clone(),
+            )),
+        };
+        let destination = futures::stream::once(async move { first });
+        let wrapped = tokio_stream::wrappers::ReceiverStream::new(queue).map(|certificate| {
+            api::RelayPushRequest {
+                inner: Some(api::relay_push_request::Inner::Certificate(certificate)),
             }
         });
         let responses = self
             .client
             .clone()
-            .relay_confirmed_certificates(tokio_stream::wrappers::ReceiverStream::new(
-                relayed_queue,
-            ))
+            .relay_confirmed_certificates(destination.chain(wrapped))
             .await
             .map_err(push_client::open_error)?
             .into_inner();
