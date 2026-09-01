@@ -242,7 +242,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     async fn write_certificate_height_indices(
         &self,
         chain_id: ChainId,
-        certificates: &[ConfirmedBlockCertificate],
+        certificates: &[Arc<ConfirmedBlockCertificate>],
     ) -> Result<(), ViewError>;
 
     /// Looks up the block heights where the given events were published.

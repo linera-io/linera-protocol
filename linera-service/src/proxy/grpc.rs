@@ -665,7 +665,6 @@ where
             .map_err(Self::view_error_to_status)?
             .into_iter()
             .flatten()
-            .map(CacheArc::unwrap_or_clone)
             .collect::<Vec<_>>();
         self.0
             .storage

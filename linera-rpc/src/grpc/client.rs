@@ -633,16 +633,25 @@ impl ValidatorNode for GrpcClient {
             certs_collected.append(&mut received);
             // A validator whose height index points at the wrong blocks answers with certificates
             // we did not ask for, which removes nothing and leaves the request identical — so
-            // without this the loop re-sends it forever. Stop and let the caller's per-height
-            // check reject what we did collect.
+            // without this the loop re-sends it forever.
             if missing.len() == outstanding {
                 warn!(
-                    %chain_id, address = self.address, outstanding,
-                    "validator returned no requested height; abandoning download by heights",
+                    outstanding,
+                    "validator returned none of the requested heights"
                 );
                 break;
             }
         }
+        // Like the sibling `download_certificates`, refuse to return a partial result: callers
+        // index straight into this (`cli/validator.rs`), so answering `Ok` with certificates at
+        // heights nobody asked for turns a validator fault into a wrong answer or a panic.
+        ensure!(
+            missing.is_empty(),
+            NodeError::MissingCertificatesByHeights {
+                chain_id,
+                heights: missing.into_iter().collect(),
+            }
+        );
         certs_collected.sort_by_key(|cert| cert.inner().height());
         Ok(certs_collected)
     }

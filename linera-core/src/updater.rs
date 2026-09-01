@@ -1008,13 +1008,14 @@ where
             ResultReadCertificates::Certificates(certs) => {
                 // Index what the fallback found, so the direct lookup can serve it next time. Each
                 // height comes from the block itself, so this cannot repeat the old mispairing.
+                let certs = certs
+                    .into_iter()
+                    .map(|c| storage.cache_certificate(c))
+                    .collect::<Vec<_>>();
                 storage
                     .write_certificate_height_indices(chain_id, &certs)
                     .await?;
-                Ok(certs
-                    .into_iter()
-                    .map(|c| storage.cache_certificate(c))
-                    .collect())
+                Ok(certs)
             }
             ResultReadCertificates::InvalidHashes(hashes) => {
                 Err(chain_client::Error::ReadCertificatesError(hashes))
