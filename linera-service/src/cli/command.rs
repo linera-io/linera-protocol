@@ -163,8 +163,8 @@ pub struct BenchmarkOptions {
 
     /// Search for the highest rate the network sustains within `--target-p99-ms`, instead of
     /// holding `--bps` fixed. Reports the knee: the highest rate whose tail latency stayed
-    /// inside the budget, which is the number that means something. `--bps` becomes the
-    /// starting point for the climb.
+    /// inside the budget, which is the number that means something. The climb starts at
+    /// `--rate-start-bps`; `--bps` is ignored in this mode.
     #[arg(long)]
     pub rate_auto: bool,
 

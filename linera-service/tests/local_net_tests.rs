@@ -1130,13 +1130,28 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
             },
         })
         .await?;
+    // Either outcome is a real measurement. Whether the local net wedges before the search
+    // finishes bracketing is timing-dependent -- overshooting can leave a chain unable to
+    // commit again -- so requiring convergence specifically would make this case flaky for a
+    // reason that has nothing to do with the search.
     let knee = stderr
         .lines()
-        .find(|line| line.contains("rate search converged"))
-        .and_then(|line| line.split("knee_bps=").nth(1))
-        .and_then(|rest| rest.split_whitespace().next())
-        .and_then(|value| value.parse::<usize>().ok())
-        .context("the rate search never reported a converged knee")?;
+        .find_map(|line| {
+            let field = if line.contains("rate search converged") {
+                "knee_bps="
+            } else if line.contains("rate search cut short") {
+                "best_bps="
+            } else {
+                return None;
+            };
+            line.split(field)
+                .nth(1)?
+                .split_whitespace()
+                .next()?
+                .parse::<usize>()
+                .ok()
+        })
+        .context("the rate search reported neither a converged knee nor a lower bound")?;
     assert!(
         knee > 1,
         "the search converged at {knee} bps, no better than its start rate of 1: it found a \

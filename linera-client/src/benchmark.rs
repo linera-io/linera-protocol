@@ -463,7 +463,7 @@ impl<Env: Environment> Benchmark<Env> {
             &bps_counts,
             &notifier,
             transactions_per_block,
-            bps,
+            initial_bps,
             bps_shares.clone(),
             latencies.clone(),
             rate_search,
@@ -605,7 +605,7 @@ impl<Env: Environment> Benchmark<Env> {
         bps_counts: &[Arc<AtomicUsize>],
         notifier: &Arc<Notify>,
         transactions_per_block: usize,
-        bps: usize,
+        initial_bps: usize,
         bps_shares: Vec<Arc<AtomicUsize>>,
         latencies: LatencyRecorder,
         mut search: Option<rate::RateSearch>,
@@ -621,9 +621,11 @@ impl<Env: Environment> Benchmark<Env> {
             async move {
                 barrier.wait().await;
                 let mut one_second_interval = time::interval(time::Duration::from_secs(1));
-                // The rate the fleet is currently being asked for. Under `--rate-auto` the
-                // search moves this every interval, so the parameter `bps` is only the start.
-                let mut current_target = bps;
+                // The rate the fleet is currently being asked for, and the same value
+                // `bps_shares` was seeded with. Under `--rate-auto` the search moves it every
+                // window; seeding it from `--bps` instead would make the shortfall warning
+                // name a rate the fleet was never driven at.
+                let mut current_target = initial_bps;
                 // When the window being assembled started. At low rates one second holds too
                 // few samples for a p99, so a window can span several ticks.
                 let mut window_start = time::Instant::now();
@@ -1103,8 +1105,22 @@ impl<Env: Environment> Benchmark<Env> {
                     // A chain wedged by an uncertified proposal fails identically to an
                     // overshoot but never recovers. Only a streak that outlasts the
                     // controller's back-off distinguishes the two.
+                    //
+                    // Ending the run rather than returning Err: by this point the search has
+                    // usually confirmed a knee, and that measurement is the whole point of the
+                    // run. Erroring out discards it and reports nothing at all, which is
+                    // strictly less useful than the number plus a loud warning about why the
+                    // run stopped early.
                     if failing_for >= std::time::Duration::from_secs(max_commit_failure_secs) {
-                        return Err(error);
+                        error!(
+                            %error,
+                            failing_for_ms = failing_for.as_millis() as u64,
+                            "chain has failed every commit for the whole bound and is not \
+                             recovering; ending the run so the rate confirmed so far is still \
+                             reported"
+                        );
+                        shutdown_notifier.cancel();
+                        break;
                     }
                 }
                 Err(error) => return Err(error),
