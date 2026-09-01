@@ -1121,6 +1121,7 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
                 transactions_per_block: 10,
                 bps: 2,
                 rate_auto: true,
+                rate_start_bps: 1,
                 target_p99_ms: 2_000,
                 runtime_in_seconds: Some(120),
                 client_mode: ClientMode::Lite,
@@ -1137,9 +1138,9 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
         .and_then(|value| value.parse::<usize>().ok())
         .context("the rate search never reported a converged knee")?;
     assert!(
-        knee > 2,
-        "the search converged at {knee} bps, no better than its start rate: it found a ceiling \
-         rather than measuring one"
+        knee > 1,
+        "the search converged at {knee} bps, no better than its start rate of 1: it found a \
+         ceiling rather than measuring one"
     );
     // Printed so a CI log carries the measured knee, not just a pass.
     println!("rate search converged at {knee} bps");

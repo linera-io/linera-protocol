@@ -689,6 +689,33 @@ Start a single benchmark process, maintaining a given TPS
 * `--target-p99-ms <TARGET_P99_MS>` — The tail-latency budget for `--rate-auto`, in milliseconds
 
   Default value: `1000`
+* `--rate-start-bps <RATE_START_BPS>` — Where the `--rate-auto` climb starts, in blocks per second. Defaults to 1: the climb doubles, so starting low costs a handful of levels and avoids opening above the knee
+
+  Default value: `1`
+* `--rate-growth <RATE_GROWTH>` — Multiplier applied to the target while the network keeps up
+
+  Default value: `2`
+* `--rate-resolution <RATE_RESOLUTION>` — Stop once the bracket is this close, as a fraction of its lower bound
+
+  Default value: `0.1`
+* `--rate-confirmations <RATE_CONFIRMATIONS>` — Consecutive agreeing windows required before the search acts on a verdict
+
+  Default value: `2`
+* `--rate-min-achieved-fraction <RATE_MIN_ACHIEVED_FRACTION>` — A window delivering less than this fraction of its target counts as failing, even with good latency
+
+  Default value: `0.8`
+* `--rate-min-p99-samples <RATE_MIN_P99_SAMPLES>` — Blocks a window must hold before its p99 is believed. Below ~100 the reported tail is really a maximum
+
+  Default value: `200`
+* `--rate-max-window-secs <RATE_MAX_WINDOW_SECS>` — How long a window may wait for `--rate-min-p99-samples` before being judged on what it has. Bounds the search on networks too slow to ever reach the floor
+
+  Default value: `3`
+* `--rate-settle-secs <RATE_SETTLE_SECS>` — Warm-up held before the first judged window, on top of the chain-start ramp
+
+  Default value: `5`
+* `--rate-max-commit-failure-secs <RATE_MAX_COMMIT_FAILURE_SECS>` — How long one chain may fail every commit before the run is abandoned. Overshoot failures are measurements; only a streak outlasting the controller's back-off is a wedged chain
+
+  Default value: `30`
 * `--client-mode <CLIENT_MODE>` — Which client to drive the chains with
 
   Default value: `full`
@@ -742,6 +769,33 @@ Run multiple benchmark processes in parallel
 * `--target-p99-ms <TARGET_P99_MS>` — The tail-latency budget for `--rate-auto`, in milliseconds
 
   Default value: `1000`
+* `--rate-start-bps <RATE_START_BPS>` — Where the `--rate-auto` climb starts, in blocks per second. Defaults to 1: the climb doubles, so starting low costs a handful of levels and avoids opening above the knee
+
+  Default value: `1`
+* `--rate-growth <RATE_GROWTH>` — Multiplier applied to the target while the network keeps up
+
+  Default value: `2`
+* `--rate-resolution <RATE_RESOLUTION>` — Stop once the bracket is this close, as a fraction of its lower bound
+
+  Default value: `0.1`
+* `--rate-confirmations <RATE_CONFIRMATIONS>` — Consecutive agreeing windows required before the search acts on a verdict
+
+  Default value: `2`
+* `--rate-min-achieved-fraction <RATE_MIN_ACHIEVED_FRACTION>` — A window delivering less than this fraction of its target counts as failing, even with good latency
+
+  Default value: `0.8`
+* `--rate-min-p99-samples <RATE_MIN_P99_SAMPLES>` — Blocks a window must hold before its p99 is believed. Below ~100 the reported tail is really a maximum
+
+  Default value: `200`
+* `--rate-max-window-secs <RATE_MAX_WINDOW_SECS>` — How long a window may wait for `--rate-min-p99-samples` before being judged on what it has. Bounds the search on networks too slow to ever reach the floor
+
+  Default value: `3`
+* `--rate-settle-secs <RATE_SETTLE_SECS>` — Warm-up held before the first judged window, on top of the chain-start ramp
+
+  Default value: `5`
+* `--rate-max-commit-failure-secs <RATE_MAX_COMMIT_FAILURE_SECS>` — How long one chain may fail every commit before the run is abandoned. Overshoot failures are measurements; only a streak outlasting the controller's back-off is a wedged chain
+
+  Default value: `30`
 * `--client-mode <CLIENT_MODE>` — Which client to drive the chains with
 
   Default value: `full`

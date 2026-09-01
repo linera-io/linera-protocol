@@ -172,6 +172,47 @@ pub struct BenchmarkOptions {
     #[arg(long, default_value_t = 1000)]
     pub target_p99_ms: u64,
 
+    /// Where the `--rate-auto` climb starts, in blocks per second. Defaults to 1: the climb
+    /// doubles, so starting low costs a handful of levels and avoids opening above the knee.
+    #[arg(long, default_value_t = 1)]
+    pub rate_start_bps: usize,
+
+    /// Multiplier applied to the target while the network keeps up.
+    #[arg(long, default_value_t = 2.0)]
+    pub rate_growth: f64,
+
+    /// Stop once the bracket is this close, as a fraction of its lower bound.
+    #[arg(long, default_value_t = 0.1)]
+    pub rate_resolution: f64,
+
+    /// Consecutive agreeing windows required before the search acts on a verdict.
+    #[arg(long, default_value_t = 2)]
+    pub rate_confirmations: usize,
+
+    /// A window delivering less than this fraction of its target counts as failing, even with
+    /// good latency.
+    #[arg(long, default_value_t = 0.8)]
+    pub rate_min_achieved_fraction: f64,
+
+    /// Blocks a window must hold before its p99 is believed. Below ~100 the reported tail is
+    /// really a maximum.
+    #[arg(long, default_value_t = linera_client::benchmark::rate::MIN_P99_SAMPLES)]
+    pub rate_min_p99_samples: u64,
+
+    /// How long a window may wait for `--rate-min-p99-samples` before being judged on what it
+    /// has. Bounds the search on networks too slow to ever reach the floor.
+    #[arg(long, default_value_t = linera_client::benchmark::rate::MAX_WINDOW_SECS)]
+    pub rate_max_window_secs: u64,
+
+    /// Warm-up held before the first judged window, on top of the chain-start ramp.
+    #[arg(long, default_value_t = linera_client::benchmark::rate::SETTLE_SECS)]
+    pub rate_settle_secs: u64,
+
+    /// How long one chain may fail every commit before the run is abandoned. Overshoot failures
+    /// are measurements; only a streak outlasting the controller's back-off is a wedged chain.
+    #[arg(long, default_value_t = linera_client::benchmark::rate::MAX_COMMIT_FAILURE_SECS)]
+    pub rate_max_commit_failure_secs: u64,
+
     /// Which client to drive the chains with.
     #[arg(long, value_enum, default_value_t = ClientMode::Full)]
     pub client_mode: ClientMode,
@@ -227,6 +268,15 @@ impl Default for BenchmarkOptions {
             config_path: None,
             single_destination_per_block: false,
             rate_auto: false,
+            rate_start_bps: 1,
+            rate_growth: 2.0,
+            rate_resolution: 0.1,
+            rate_confirmations: 2,
+            rate_min_achieved_fraction: 0.8,
+            rate_min_p99_samples: linera_client::benchmark::rate::MIN_P99_SAMPLES,
+            rate_max_window_secs: linera_client::benchmark::rate::MAX_WINDOW_SECS,
+            rate_settle_secs: linera_client::benchmark::rate::SETTLE_SECS,
+            rate_max_commit_failure_secs: linera_client::benchmark::rate::MAX_COMMIT_FAILURE_SECS,
             target_p99_ms: 1000,
             client_mode: ClientMode::default(),
             fan_out: None,

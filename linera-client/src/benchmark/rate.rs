@@ -28,12 +28,15 @@ pub const MIN_P99_SAMPLES: u64 = 200;
 /// At campaign rates the floor is met in well under a second, so this only binds on slow runs.
 pub const MAX_WINDOW_SECS: u64 = 3;
 
-/// Consecutive failed commits on one chain before the run is abandoned.
+/// How long one chain may fail every commit before the run is abandoned.
 ///
-/// An overshoot failure is a measurement — the rate is simply not sustainable — but a chain
-/// wedged by an uncertified proposal fails identically and never recovers, silently dragging
-/// every later window down. A run of failures is that, not congestion.
-pub const MAX_CONSECUTIVE_COMMIT_FAILURES: u32 = 20;
+/// A duration, not a count: an overshoot failure is a measurement — the rate is not sustainable
+/// — but at a hard overshoot commits are rejected immediately, so a chain racks up dozens of
+/// consecutive failures in a few hundred milliseconds, well before the controller's next tick
+/// can lower the target. Counting them aborts healthy runs. What actually separates an
+/// overshoot from a chain wedged by an uncertified proposal is that the wedge never recovers,
+/// so the bound has to outlast a back-off: one tick plus `confirmations` windows.
+pub const MAX_COMMIT_FAILURE_SECS: u64 = 30;
 
 /// Warm-up held before the first observation, on top of the chain-start ramp.
 ///
@@ -42,6 +45,33 @@ pub const MAX_CONSECUTIVE_COMMIT_FAILURES: u32 = 20;
 /// pins the knee below `--bps` permanently, and — since the search now halves downward rather
 /// than reporting nothing — it does so while still returning a plausible-looking number.
 pub const SETTLE_SECS: u64 = 5;
+
+/// Knobs for the code that DRIVES the search, as opposed to the search itself.
+///
+/// Separate from [`RateSearchConfig`] because these are consumed by the control task and the
+/// workers; the state machine never sees them, which is what keeps it clock-free and testable.
+#[derive(Clone, Copy, Debug)]
+pub struct RateControlConfig {
+    /// Blocks a window must hold before its p99 is believed.
+    pub min_p99_samples: u64,
+    /// How long a window may wait for `min_p99_samples` before being judged on what it has.
+    pub max_window_secs: u64,
+    /// Warm-up held before the first observation, on top of the chain-start ramp.
+    pub settle_secs: u64,
+    /// How long one chain may fail every commit before the run is abandoned.
+    pub max_commit_failure_secs: u64,
+}
+
+impl Default for RateControlConfig {
+    fn default() -> Self {
+        Self {
+            min_p99_samples: MIN_P99_SAMPLES,
+            max_window_secs: MAX_WINDOW_SECS,
+            settle_secs: SETTLE_SECS,
+            max_commit_failure_secs: MAX_COMMIT_FAILURE_SECS,
+        }
+    }
+}
 
 /// The highest sustainable rate, as offered and as actually delivered.
 ///
@@ -111,7 +141,7 @@ impl Default for RateSearchConfig {
     fn default() -> Self {
         Self {
             target_p99: Duration::from_secs(1),
-            start_bps: 10,
+            start_bps: 1,
             growth: 2.0,
             resolution: 0.1,
             confirmations: 2,
@@ -418,6 +448,31 @@ mod tests {
             "reported {} delivered at an offered {target}, but only {} was committed",
             knee.achieved_bps,
             target as f64 * 0.85
+        );
+    }
+
+    /// A window where every commit failed delivers nothing, and the search must treat that as
+    /// the rate being unservable and come down. Without it the controller holds an unservable
+    /// rate indefinitely, which is what a real run did: both chains failing to reach quorum for
+    /// 30 seconds while the search never observed a thing.
+    #[test]
+    fn a_window_that_delivered_nothing_forces_the_search_down() {
+        let config = RateSearchConfig {
+            start_bps: 512,
+            ..RateSearchConfig::default()
+        };
+        let mut search = RateSearch::new(config);
+        let start = search.target_bps();
+        let dead = Observation {
+            achieved_bps: 0.0,
+            p99: ms(3_000),
+        };
+        for _ in 0..config.confirmations {
+            search.observe(dead);
+        }
+        assert!(
+            search.target_bps() < start,
+            "the search stayed at {start} after a window that committed nothing"
         );
     }
 

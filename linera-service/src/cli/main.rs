@@ -809,6 +809,15 @@ impl Runnable for Job {
                         let BenchmarkOptions {
                             rate_auto,
                             target_p99_ms,
+                            rate_start_bps,
+                            rate_growth,
+                            rate_resolution,
+                            rate_confirmations,
+                            rate_min_achieved_fraction,
+                            rate_min_p99_samples,
+                            rate_max_window_secs,
+                            rate_settle_secs,
+                            rate_max_commit_failure_secs,
                             client_mode,
                             fan_out,
                             mixed_self_transfers,
@@ -1042,11 +1051,20 @@ impl Runnable for Job {
                                 linera_client::benchmark::rate::RateSearch::new(
                                     linera_client::benchmark::rate::RateSearchConfig {
                                         target_p99: std::time::Duration::from_millis(target_p99_ms),
-                                        start_bps: bps,
-                                        ..Default::default()
+                                        start_bps: rate_start_bps,
+                                        growth: rate_growth,
+                                        resolution: rate_resolution,
+                                        confirmations: rate_confirmations,
+                                        min_achieved_fraction: rate_min_achieved_fraction,
                                     },
                                 )
                             }),
+                            linera_client::benchmark::rate::RateControlConfig {
+                                min_p99_samples: rate_min_p99_samples,
+                                max_window_secs: rate_max_window_secs,
+                                settle_secs: rate_settle_secs,
+                                max_commit_failure_secs: rate_max_commit_failure_secs,
+                            },
                             &shutdown_notifier,
                         )
                         .await?;

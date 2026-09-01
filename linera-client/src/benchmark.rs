@@ -6,10 +6,10 @@ pub mod rate;
 /// Per-interval latency, shared between the workers that measure it and the controller that
 /// reads it.
 ///
-/// A `Mutex<Histogram>` rather than anything cleverer: it is taken once per committed block,
-/// which is orders of magnitude rarer than the block itself is expensive, and the alternative
-/// (per-worker histograms merged on read) buys nothing measurable while making the p99 harder
-/// to reason about.
+/// One shared `Mutex<Histogram>`, taken once per committed block. Sharding per worker really is
+/// 5-10x faster on this line (measured: 22.7M vs 229M records/s at 32 threads), but the shared
+/// path still has ~3 orders of magnitude of headroom over any block rate one client can drive,
+/// so the ceiling is the commit path, not this lock.
 #[derive(Clone)]
 pub struct LatencyRecorder {
     histogram: Arc<std::sync::Mutex<hdrhistogram::Histogram<u64>>>,
@@ -413,6 +413,7 @@ impl<Env: Environment> Benchmark<Env> {
         delay_between_chains_ms: Option<u64>,
         chain_listener: Option<ChainListener<C>>,
         rate_search: Option<rate::RateSearch>,
+        rate_control: rate::RateControlConfig,
         shutdown_notifier: &CancellationToken,
     ) -> Result<(), BenchmarkError> {
         assert_eq!(
@@ -447,7 +448,13 @@ impl<Env: Environment> Benchmark<Env> {
 
         // One share per chain, held in an atomic so `--rate-auto` can move the whole fleet's
         // target mid-run: the controller rewrites these, the workers re-read them per block.
-        let bps_shares: Vec<Arc<AtomicUsize>> = Self::split_bps(bps, num_chains);
+        // Seeded from the search's own starting target when there is one: `--bps` is the fixed
+        // rate, `--rate-start-bps` is where the climb opens, and seeding from the wrong one
+        // makes the first window measure a rate the search does not think it asked for.
+        let initial_bps = rate_search
+            .as_ref()
+            .map_or(bps, |search| search.target_bps());
+        let bps_shares: Vec<Arc<AtomicUsize>> = Self::split_bps(initial_bps, num_chains);
         let latencies = LatencyRecorder::new();
 
         let bps_control_task = Self::bps_control_task(
@@ -462,6 +469,7 @@ impl<Env: Environment> Benchmark<Env> {
             rate_search,
             num_chains,
             delay_between_chains_ms,
+            rate_control,
         );
 
         let (runtime_control_task, runtime_control_sender) =
@@ -496,6 +504,7 @@ impl<Env: Environment> Benchmark<Env> {
                         runtime_control_sender_clone,
                         delay_between_chains_ms,
                         rate_auto,
+                        rate_control.max_commit_failure_secs,
                     ))
                     .await?;
 
@@ -602,6 +611,7 @@ impl<Env: Environment> Benchmark<Env> {
         mut search: Option<rate::RateSearch>,
         num_chains: usize,
         delay_between_chains_ms: Option<u64>,
+        rate_control: rate::RateControlConfig,
     ) -> task::JoinHandle<Option<rate::SearchOutcome>> {
         let shutdown_notifier = shutdown_notifier.clone();
         let bps_counts = bps_counts.to_vec();
@@ -624,7 +634,7 @@ impl<Env: Environment> Benchmark<Env> {
                     delay_between_chains_ms.unwrap_or(0) * (num_chains.saturating_sub(1)) as u64;
                 let settle_until = time::Instant::now()
                     + time::Duration::from_millis(ramp_ms)
-                    + time::Duration::from_secs(rate::SETTLE_SECS);
+                    + time::Duration::from_secs(rate_control.settle_secs);
                 let mut converged = None;
                 loop {
                     if shutdown_notifier.is_cancelled() {
@@ -670,13 +680,22 @@ impl<Env: Environment> Benchmark<Env> {
                         }
                         // Wait for enough samples to support a p99, but not forever: a slow
                         // network never reaches the floor, and a stalled search measures nothing.
-                        let floor = if window_start.elapsed().as_secs() >= rate::MAX_WINDOW_SECS {
+                        let aged_out =
+                            window_start.elapsed().as_secs() >= rate_control.max_window_secs;
+                        let floor = if aged_out {
                             1
                         } else {
-                            rate::MIN_P99_SAMPLES
+                            rate_control.min_p99_samples
                         };
-                        let Some((p99, samples)) = latencies.take_p99(floor) else {
-                            continue;
+                        let (p99, samples) = match latencies.take_p99(floor) {
+                            Some(measured) => measured,
+                            // An aged-out window with NO committed blocks is the most important
+                            // observation there is: every commit failed, so there are no
+                            // latencies to summarise. Skipping it leaves the search blind to
+                            // the one condition it must react to -- it would hold the
+                            // unservable rate forever, never learning to back off.
+                            None if aged_out => (window_start.elapsed(), 0),
+                            None => continue,
                         };
                         // Rate over the SAME window the p99 came from, counted from COMMITTED
                         // blocks: `samples` is the histogram's length, and the histogram is
@@ -1029,6 +1048,7 @@ impl<Env: Environment> Benchmark<Env> {
         runtime_control_sender: Option<mpsc::Sender<()>>,
         delay_between_chains_ms: Option<u64>,
         rate_auto: bool,
+        max_commit_failure_secs: u64,
     ) -> Result<(), BenchmarkError> {
         barrier.wait().await;
         if let Some(delay_between_chains_ms) = delay_between_chains_ms {
@@ -1044,7 +1064,8 @@ impl<Env: Environment> Benchmark<Env> {
         }
 
         let owner = chain_client.owner().await?;
-        let mut consecutive_failures = 0u32;
+        // When the current unbroken run of commit failures began; cleared by any success.
+        let mut failing_since: Option<Instant> = None;
 
         loop {
             // Deliberately NOT raced against the shutdown signal. `select!` drops the losing
@@ -1064,7 +1085,7 @@ impl<Env: Environment> Benchmark<Env> {
                 .await;
             match commit {
                 Ok(()) => {
-                    consecutive_failures = 0;
+                    failing_since = None;
                     latencies.record(started.elapsed());
                 }
                 // The search has to overshoot to bracket the knee, so a commit that fails at
@@ -1072,12 +1093,17 @@ impl<Env: Environment> Benchmark<Env> {
                 // the rate is judged unsustained. Only meaningful under `--rate-auto`, which
                 // will come back down; at a fixed rate there is nothing to back off to.
                 Err(error) if rate_auto => {
-                    consecutive_failures += 1;
-                    warn!(%error, consecutive_failures, "commit failed; counting this rate as unsustained");
+                    let since = *failing_since.get_or_insert_with(Instant::now);
+                    let failing_for = since.elapsed();
+                    warn!(
+                        %error,
+                        failing_for_ms = failing_for.as_millis() as u64,
+                        "commit failed; counting this rate as unsustained"
+                    );
                     // A chain wedged by an uncertified proposal fails identically to an
-                    // overshoot but never recovers, and would silently drag every later
-                    // measurement down. Repeated failures are that, not congestion.
-                    if consecutive_failures >= rate::MAX_CONSECUTIVE_COMMIT_FAILURES {
+                    // overshoot but never recovers. Only a streak that outlasts the
+                    // controller's back-off distinguishes the two.
+                    if failing_for >= std::time::Duration::from_secs(max_commit_failure_secs) {
                         return Err(error);
                     }
                 }
