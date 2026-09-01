@@ -624,7 +624,7 @@ where
         heights: Vec<BlockHeight>,
     ) -> Result<Vec<linera_base::crypto::CryptoHash>, Status> {
         let chain_info_request =
-            ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_by_heights(heights.clone());
+            ChainInfoQuery::new(chain_id).with_sent_certificate_hashes_by_heights(heights);
 
         let chain_info_response = self
             .handle_chain_info_query(Request::new(chain_info_request.try_into()?))
@@ -654,12 +654,21 @@ where
             }
         };
 
-        // Write back the height->hash indices we learned from the fallback
-        let indices: Vec<(BlockHeight, linera_base::crypto::CryptoHash)> =
-            heights.into_iter().zip(hashes.iter().copied()).collect();
+        // The shard drops the heights it does not hold and `heights` is whatever the caller put on
+        // the wire, so neither the length nor the order of the response can pair them; the index
+        // takes each height from the block itself instead.
+        let certificates = self
+            .0
+            .storage
+            .read_certificates(&hashes)
+            .await
+            .map_err(Self::view_error_to_status)?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
         self.0
             .storage
-            .write_certificate_height_indices(chain_id, &indices)
+            .write_certificate_height_indices(chain_id, &certificates)
             .await
             .map_err(Self::view_error_to_status)?;
 
