@@ -454,7 +454,10 @@ where
 {
     let mut rng = make_deterministic_rng();
     let namespace = generate_test_namespace();
-    let store = D::connect(&config, &namespace).await.unwrap();
+    // The namespace is freshly generated, so it has to be created before it can be opened.
+    let store = D::maybe_create_and_connect(&config, &namespace)
+        .await
+        .unwrap();
     let store = store.open_exclusive(&[]).unwrap();
     let key_prefix = vec![42, 54];
     let mut batch = Batch::new();
