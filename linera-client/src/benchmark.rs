@@ -682,22 +682,20 @@ impl<Env: Environment> Benchmark<Env> {
                         }
                         // Wait for enough samples to support a p99, but not forever: a slow
                         // network never reaches the floor, and a stalled search measures nothing.
-                        let aged_out =
-                            window_start.elapsed().as_secs() >= rate_control.max_window_secs;
-                        let floor = if aged_out {
-                            1
-                        } else {
-                            rate_control.min_p99_samples
-                        };
-                        let (p99, samples) = match latencies.take_p99(floor) {
-                            Some(measured) => measured,
-                            // An aged-out window with NO committed blocks is the most important
-                            // observation there is: every commit failed, so there are no
-                            // latencies to summarise. Skipping it leaves the search blind to
-                            // the one condition it must react to -- it would hold the
-                            // unservable rate forever, never learning to back off.
-                            None if aged_out => (window_start.elapsed(), 0),
-                            None => continue,
+                        let (p99, samples) = match rate_control
+                            .window_action(window_start.elapsed())
+                        {
+                            rate::WindowAction::Wait(floor) => match latencies.take_p99(floor) {
+                                Some(measured) => measured,
+                                None => continue,
+                            },
+                            // An aged-out window with NO committed blocks is the most
+                            // important observation there is: every commit failed, so there
+                            // is nothing to summarise. Skipping it leaves the search blind
+                            // to the one condition it must react to.
+                            rate::WindowAction::Judge => {
+                                latencies.take_p99(1).unwrap_or((window_start.elapsed(), 0))
+                            }
                         };
                         // Rate over the SAME window the p99 came from, counted from COMMITTED
                         // blocks: `samples` is the histogram's length, and the histogram is

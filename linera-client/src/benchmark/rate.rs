@@ -62,6 +62,31 @@ pub struct RateControlConfig {
     pub max_commit_failure_secs: u64,
 }
 
+/// What to do with the observation window as it currently stands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WindowAction {
+    /// Keep collecting until the histogram holds this many samples.
+    Wait(u64),
+    /// Judge it now, on whatever it holds — including nothing at all.
+    Judge,
+}
+
+impl RateControlConfig {
+    /// Whether a window open for `elapsed` should be judged yet.
+    ///
+    /// Past `max_window_secs` the answer is yes regardless of how little it holds, and an EMPTY
+    /// aged-out window is the case that matters: every commit failed, so there are no latencies
+    /// to summarise, and waiting for samples that will never arrive leaves the search unable to
+    /// learn that the rate it set is unservable.
+    pub fn window_action(&self, elapsed: Duration) -> WindowAction {
+        if elapsed.as_secs() >= self.max_window_secs {
+            WindowAction::Judge
+        } else {
+            WindowAction::Wait(self.min_p99_samples)
+        }
+    }
+}
+
 impl Default for RateControlConfig {
     fn default() -> Self {
         Self {
@@ -448,6 +473,25 @@ mod tests {
             "reported {} delivered at an offered {target}, but only {} was committed",
             knee.achieved_bps,
             target as f64 * 0.85
+        );
+    }
+
+    /// The floor applies only while the window is young; once it ages out the window is judged
+    /// on whatever it holds. Mutating the comparison here must fail this test — the inline
+    /// version of this decision was untestable, so the bug it hid survived five review rounds.
+    #[test]
+    fn an_aged_out_window_is_judged_however_little_it_holds() {
+        let config = RateControlConfig::default();
+        assert_eq!(
+            config.window_action(Duration::from_secs(0)),
+            WindowAction::Wait(config.min_p99_samples),
+            "a young window must still wait for enough samples to support a p99"
+        );
+        assert_eq!(
+            config.window_action(Duration::from_secs(config.max_window_secs)),
+            WindowAction::Judge,
+            "an aged-out window must be judged rather than waiting for samples that a dead \
+             fleet will never produce"
         );
     }
 
