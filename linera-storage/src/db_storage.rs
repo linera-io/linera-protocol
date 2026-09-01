@@ -2192,14 +2192,15 @@ where
             let block = match self.indexed_confirmed_block(hash, &raw.1) {
                 Ok(block) => block,
                 Err(error) => {
-                    // One undecodable block must not fail the whole request: treat it exactly like
-                    // a mispaired row and answer for the heights that are fine.
+                    // One undecodable block must not fail the whole request. But unreadable block
+                    // bytes do not prove the *row* wrong, so this drops the answer without
+                    // deleting the index — otherwise a corrupt or future-schema block would cost
+                    // us a mapping that is very likely correct.
                     warn!(
                         %chain_id, %hash, %error,
-                        "dropping a height index row whose block does not decode",
+                        "not answering from a height index row whose block does not decode",
                     );
                     for index in positions {
-                        stale.push((heights[*index], *hash));
                         result[*index] = None;
                     }
                     continue;
@@ -2281,9 +2282,9 @@ where
         let mut batch = MultiPartitionBatch::new();
         batch.put_key_values(RootKey::BlockByHeight(chain_id).bytes(), key_values);
         self.write_batch(batch).await?;
-        // Invalidate rather than overwrite: `ValueCache::insert` deduplicates, so on a live entry
-        // it keeps the cached value and drops ours, which would strand the stale hash we just
-        // corrected on disk.
+        // `replace`, not `insert`: `insert` deduplicates, so on a live entry it keeps the cached
+        // value and drops ours, stranding the stale hash we just corrected on disk. `remove` is
+        // not enough either — it keeps the weak index, which `get` uses to resurrect the value.
         for (height, hash) in heights {
             self.caches
                 .block_hash_by_height
@@ -2504,9 +2505,18 @@ where
         confirmed_block_bytes: &[u8],
     ) -> Result<Option<CacheArc<ConfirmedBlockCertificate>>, ViewError> {
         let lite = bcs::from_bytes::<LiteCertificate>(lite_cert_bytes)?;
-        let block = bcs::from_bytes::<ConfirmedBlock>(confirmed_block_bytes)?;
-        let hash = block.hash();
-        self.caches.confirmed_block.insert(&hash, block.clone());
+        let hash = lite.value.value_hash;
+        // The lite certificate names the block, so a cached one answers without decoding the block
+        // bytes at all — the height check in `read_certificates_by_heights_raw` runs first and
+        // seats exactly this entry, and decoding again would also deep-clone a block the dedup
+        // insert immediately drops.
+        if let Some(certificate) = self.caches.certificate.get(&hash) {
+            return Ok(Some(certificate));
+        }
+        let block = match self.caches.confirmed_block.get(&hash) {
+            Some(block) => CacheArc::unwrap_or_clone(block),
+            None => bcs::from_bytes::<ConfirmedBlock>(confirmed_block_bytes)?,
+        };
         let certificate = lite
             .with_value(block)
             .ok_or(ViewError::InconsistentEntries)?;

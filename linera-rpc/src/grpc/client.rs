@@ -625,11 +625,15 @@ impl ValidatorNode for GrpcClient {
                 break;
             }
 
-            // Remove only the heights we actually received from missing set.
+            // Keep only certificates we actually asked for. `missing.remove` alone filters
+            // nothing, so a validator answering with an extra block — or one from another chain
+            // at the same height — would have it appended and, after the sort below, returned
+            // first to callers that index straight into the result.
             let outstanding = missing.len();
-            for cert in &received {
-                missing.remove(&cert.inner().height());
-            }
+            received.retain(|cert| {
+                let block = cert.inner();
+                block.chain_id() == chain_id && missing.remove(&block.height())
+            });
             certs_collected.append(&mut received);
             // A validator whose height index points at the wrong blocks answers with certificates
             // we did not ask for, which removes nothing and leaves the request identical — so
