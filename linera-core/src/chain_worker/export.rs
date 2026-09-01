@@ -129,11 +129,32 @@ pub(crate) mod metrics {
                 exponential_bucket_latencies(60_000.0),
             );
 
-        /// Time for one push to one destination, including any catch-up it triggered.
+        /// Time for one catch-up ROUND against one destination — every certificate it pushed, not
+        /// one block. A round closes up to `max_catch_up_blocks` of the gap, so this scales with
+        /// how far behind the destination is and says nothing on its own about how responsive that
+        /// destination is. Use `CERTIFICATE_SEND_LATENCY` for that, and read this one as "how long
+        /// a unit of catch-up work takes".
+        ///
+        /// The ceiling is well above `max_retry_delay` so a slow round lands in a real bucket
+        /// instead of piling into `+Inf`: at 60 s every destination with a backlog pegged at the
+        /// top bucket and the quantiles stopped discriminating between them.
         pub static SEND_LATENCY: HistogramVec =
             register_histogram_vec(
                 "block_export_send_latency",
-                "Time (ms) to push one block to one destination validator",
+                "Time (ms) for one catch-up round against one destination validator",
+                &["validator"],
+                exponential_bucket_latencies(600_000.0),
+            );
+
+        /// Time for a SINGLE certificate push, which is one round trip to the destination.
+        ///
+        /// This is the destination's actual responsiveness, independent of how much catch-up the
+        /// round carried: a peer that is far behind makes long rounds out of fast round trips, and
+        /// only this metric can tell that apart from a peer that is genuinely slow to answer.
+        pub static CERTIFICATE_SEND_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "block_export_certificate_send_latency",
+                "Time (ms) for one certificate round trip to one destination validator",
                 &["validator"],
                 exponential_bucket_latencies(60_000.0),
             );
@@ -153,6 +174,18 @@ pub(crate) mod metrics {
             register_int_gauge(
                 "block_export_destinations",
                 "Committee members this validator is currently exporting to",
+            );
+
+        /// Chains parked against a destination because retrying cannot help — the destination
+        /// returned an error no amount of resending fixes. Split by reason so a corrupted peer is
+        /// distinguishable from whatever we learn to park for next. Only a restart clears these:
+        /// the repair is manual on the destination's side, so re-arming on a timer would just
+        /// resume failing against state nobody has fixed.
+        pub static PARKED_CHAINS: IntGaugeVec =
+            register_int_gauge_vec(
+                "block_export_parked_chains",
+                "Chains parked at a destination, by park reason",
+                &["validator", "reason"],
             );
 
         /// Lagging (chain, destination) *pairs*, which is what the queue's memory tracks — a chain
@@ -722,8 +755,10 @@ struct ChainDest {
     /// How many times this destination has reported a *lower* height than it had. Counted apart
     /// from `failures` because an advance clears those, and a peer alternating advance with
     /// regression would otherwise reset its own penalty on every second answer and never
-    /// escalate. Fits in `ChainDest`'s existing padding.
+    /// escalate.
     regressions: u32,
+    /// Set once the destination gives an answer no retry can fix; cleared only by a restart.
+    parked: Option<ParkReason>,
 }
 
 impl ChainDest {
@@ -851,6 +886,49 @@ enum SendOutcome {
     DestinationScoped(Box<chain_client::Error>),
     /// Our own storage failed. Nobody's health signal but ours.
     LocalScoped(Box<chain_client::Error>),
+    /// The destination cannot accept this chain and resending will never change that.
+    Unrecoverable(ParkReason, Box<chain_client::Error>),
+}
+
+/// Why a chain is parked at a destination.
+///
+/// Distinct from a chain-scoped backoff, which assumes the destination will catch up on its own:
+/// a park says retrying is pointless until a human repairs the destination.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ParkReason {
+    /// The destination's own copy of this chain is corrupt — it recomputed a block and got an
+    /// outcome the certificate contradicts. Resending the same certificate reproduces it exactly.
+    Corrupted,
+}
+
+impl ParkReason {
+    /// Stable metric label; keep these in sync with the exporter dashboard.
+    fn as_str(self) -> &'static str {
+        match self {
+            ParkReason::Corrupted => "corrupted",
+        }
+    }
+}
+
+/// Whether the destination's answer means "never retry this chain", and why.
+///
+/// Matching the rendered message is deliberate and cannot currently be avoided: `ChainError`
+/// crosses the wire through `From<ChainError> for NodeError`, whose catch-all arm converts every
+/// unmapped variant to `NodeError::ChainError { error: String }`. The type is destroyed by the
+/// *sender*, so there is nothing structured left to match on by the time it reaches us. Adding a
+/// dedicated `NodeError` variant would not help either: `NodeError` is bincode-encoded
+/// (`rpc.proto`, "a bincode wrapper around NodeError"), so variants are indexed positionally and a
+/// new one is a wire break — and the peers this exists to detect are precisely the ones on older
+/// builds, which would keep sending the stringly-typed form regardless.
+fn park_reason(error: &chain_client::Error) -> Option<ParkReason> {
+    match error {
+        chain_client::Error::RemoteNodeError(NodeError::ChainError { error })
+            if error.contains("Corrupted chain state") =>
+        {
+            Some(ParkReason::Corrupted)
+        }
+        _ => None,
+    }
 }
 
 /// The body of the process-wide export queue task.
@@ -1178,6 +1256,10 @@ where
                     .inc();
             }
             SendOutcome::ChainScoped(_) => {}
+            // One corrupt chain says nothing about the destination's health, and the peer answered
+            // us promptly to say so. Halving its window here would let a handful of bad chains
+            // throttle catch-up for every good one — the shape that made stakefi drain slowly.
+            SendOutcome::Unrecoverable(..) => {}
             SendOutcome::LocalScoped(error) => {
                 // Our storage, not the peer: leave the destination's window alone and halve the
                 // queue's own budget, so the pressure is relieved across every destination
@@ -1273,6 +1355,23 @@ where
                         );
                     }
                     SendOutcome::DestinationScoped(_) => {
+                        chain_dest.next_height = None;
+                    }
+                    SendOutcome::Unrecoverable(reason, error) => {
+                        // warn!, not debug!: unlike a chain-scoped backoff this never self-heals,
+                        // and the chain id is what the destination's operator needs to repair it.
+                        if chain_dest.parked.is_none() {
+                            warn!(
+                                %chain_id, %validator, %error, reason = reason.as_str(),
+                                "Destination cannot accept this chain and retrying cannot help; \
+                                 parking the pair until restart",
+                            );
+                            #[cfg(with_metrics)]
+                            metrics::PARKED_CHAINS
+                                .with_label_values(&[&dest.address, reason.as_str()])
+                                .inc();
+                        }
+                        chain_dest.parked = Some(*reason);
                         chain_dest.next_height = None;
                     }
                 }
@@ -1589,6 +1688,9 @@ where
                 .remove_label_values(&[address])
                 .ok();
             metrics::SEND_LATENCY.remove_label_values(&[address]).ok();
+            metrics::CERTIFICATE_SEND_LATENCY
+                .remove_label_values(&[address])
+                .ok();
             metrics::SENDS_SUCCEEDED
                 .remove_label_values(&[address])
                 .ok();
@@ -1787,6 +1889,8 @@ where
             },
             storage: storage.clone(),
             certificate_upload_batch_size: config.certificate_upload_batch_size,
+            #[cfg(with_metrics)]
+            address: dest.address.clone(),
         };
         let cursor = chain_dest.next_height;
         let max_catch_up = config.max_catch_up_blocks;
@@ -1819,8 +1923,13 @@ where
             let outcome = match result {
                 Ok(next_height) => SendOutcome::Reached(next_height),
                 Err(error) if is_local_scoped(&error) => SendOutcome::LocalScoped(Box::new(error)),
-                Err(error) if is_chain_scoped(&error) => SendOutcome::ChainScoped(Box::new(error)),
-                Err(error) => SendOutcome::DestinationScoped(Box::new(error)),
+                // Before the scoped arms: an unrecoverable answer is about neither our storage nor
+                // the destination's health, and must not move either backoff.
+                Err(error) => match park_reason(&error) {
+                    Some(reason) => SendOutcome::Unrecoverable(reason, Box::new(error)),
+                    None if is_chain_scoped(&error) => SendOutcome::ChainScoped(Box::new(error)),
+                    None => SendOutcome::DestinationScoped(Box::new(error)),
+                },
             };
             (chain_id, index, generation, outcome)
         };
@@ -1871,6 +1980,12 @@ where
             let Some(chain_dest) = record.dest(index) else {
                 continue;
             };
+            if chain_dest.parked.is_some() {
+                // Drop it from `lagging` as well: a parked pair never converges, so leaving it
+                // would make every future scan walk past it forever.
+                stale.push(chain_id);
+                continue;
+            }
             let behind = chain_dest.next_height.is_none_or(|next| next < record.tip);
             if behind
                 && chain_dest.in_flight.is_none()
@@ -1958,6 +2073,9 @@ pub(crate) struct BlockSender<S, N> {
     pub(crate) remote_node: RemoteNode<N>,
     pub(crate) storage: S,
     pub(crate) certificate_upload_batch_size: u64,
+    /// Destination address, carried only to label per-certificate latency.
+    #[cfg(with_metrics)]
+    pub(crate) address: String,
 }
 
 impl<S, N> BlockSender<S, N>
@@ -2061,6 +2179,13 @@ where
         held: &[CacheArc<Blob>],
     ) -> Result<Box<crate::data_types::ChainInfo>, chain_client::Error> {
         let delivery = CrossChainMessageDelivery::NonBlocking;
+        // Covers the blob-recovery retries below too: what the caller cares about is how long this
+        // certificate took to land, not how many attempts it needed.
+        #[cfg(with_metrics)]
+        let certificate_latency =
+            metrics::CERTIFICATE_SEND_LATENCY.with_label_values(&[&self.address]);
+        #[cfg(with_metrics)]
+        let _certificate_latency = certificate_latency.measure_latency();
         let mut result = self
             .remote_node
             .handle_optimized_confirmed_certificate(certificate, delivery)
@@ -2390,11 +2515,17 @@ mod tests {
         assert_eq!(honest.next_height, Some(BlockHeight(40)));
     }
 
-    /// The regression counter has to be free: this is per (chain, destination), and a down peer
-    /// holds one per tracked chain.
+    /// This is per (chain, destination) and a down peer holds one per tracked chain, so growth
+    /// here is deliberate or not at all.
+    ///
+    /// 56 -> 64 when `parked` was added: the previous fields packed exactly, leaving no padding to
+    /// absorb it. The cost is 8 bytes per pair — ~10 KB at conway's observed 210 tracked chains
+    /// across 6 destinations, under 1 MB even if every one of ~19k chains were tracked at once.
+    /// Paid rather than squeezing `regressions` down to `u16`, which would have kept 56 bytes but
+    /// changed a field unrelated to parking.
     #[test]
-    fn the_regression_counter_costs_no_memory() {
-        assert_eq!(size_of::<ChainDest>(), 56);
+    fn a_chain_destination_pair_stays_small() {
+        assert_eq!(size_of::<ChainDest>(), 64);
     }
 
     /// Our own storage failing is not the destination's fault, and not one pair's problem
@@ -2419,6 +2550,46 @@ mod tests {
             chain_client::Error::RemoteNodeError(NodeError::EventsNotFound(vec![]));
         assert!(is_chain_scoped(&events_missing));
         assert!(!is_local_scoped(&events_missing));
+    }
+
+    /// A destination reporting ITS chain corrupt must not be treated as an unhealthy destination.
+    ///
+    /// Before parking, this fell through to `DestinationScoped`, which halves the peer's AIMD
+    /// window — so a handful of corrupt chains throttled catch-up for every healthy chain at that
+    /// peer. Observed on testnet-conway 2026-08-25: stakefi had 10 corrupt chains out of ~19k and
+    /// drained far slower than a peer with none.
+    #[test]
+    fn a_corrupt_chain_at_the_destination_parks_rather_than_penalising_the_peer() {
+        let corrupted = chain_client::Error::RemoteNodeError(NodeError::ChainError {
+            error: "Corrupted chain state: computed block outcome differs from the certificate."
+                .to_owned(),
+        });
+        assert_eq!(park_reason(&corrupted), Some(ParkReason::Corrupted));
+        assert!(
+            !is_chain_scoped(&corrupted) && !is_local_scoped(&corrupted),
+            "parking must be decided before the scoped arms, or the peer's window is halved",
+        );
+
+        // A different ChainError is NOT unrecoverable: it keeps its old classification, so this
+        // change cannot silently swallow errors that retrying does fix.
+        let other = chain_client::Error::RemoteNodeError(NodeError::ChainError {
+            error: "Block proposal has size 999 which is too large".to_owned(),
+        });
+        assert_eq!(park_reason(&other), None);
+    }
+
+    /// A parked pair is skipped by the drain gate, and only a restart clears it.
+    #[test]
+    fn a_parked_pair_is_never_spawned_again() {
+        let mut chain_dest = ChainDest::default();
+        assert!(chain_dest.parked.is_none(), "pairs start unparked");
+        chain_dest.parked = Some(ParkReason::Corrupted);
+        assert!(
+            chain_dest.parked.is_some(),
+            "nothing in the retry path clears `parked`: the repair is manual on the peer's side, \
+             so re-arming on a timer would just resume failing against unfixed state",
+        );
+        assert_eq!(ParkReason::Corrupted.as_str(), "corrupted");
     }
 
     /// The queue-wide budget is offered to a different destination each round.

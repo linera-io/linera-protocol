@@ -45,15 +45,17 @@ use linera_base::{
 };
 use linera_client::{
     benchmark::{
-        BenchmarkConfig, FungibleTransferGenerator, NativeFungibleTransferGenerator,
-        OperationGenerator,
+        BenchmarkClient, BenchmarkConfig, FungibleTransferGenerator,
+        NativeFungibleTransferGenerator, OperationGenerator,
     },
     chain_listener::{ChainListener, ChainListenerConfig, ClientContext as _},
     config::{CommitteeConfig, GenesisConfig},
+    lite_client::{LiteBenchmarkClient, LiteChainClient},
 };
 use linera_core::{
     client::{chain_client, ListeningMode},
     data_types::ClientOutcome,
+    node::ValidatorNodeProvider as _,
     wallet,
     worker::Reason,
     JoinSetExt as _, LocalNodeError,
@@ -66,8 +68,8 @@ use linera_persistent::{self as persistent, Persist as _};
 use linera_service::{
     cli::{
         command::{
-            BenchmarkCommand, BenchmarkOptions, ChainCommand, ClientCommand, DatabaseToolCommand,
-            NetCommand, ProjectCommand, WalletCommand,
+            BenchmarkCommand, BenchmarkOptions, ChainCommand, ClientCommand, ClientMode,
+            DatabaseToolCommand, NetCommand, ProjectCommand, WalletCommand,
         },
         net_up_utils,
     },
@@ -76,7 +78,7 @@ use linera_service::{
     node_service::NodeService,
     project::{self, Project},
     storage::{AssertStorageV1, Runnable, RunnableWithStore, StorageCacheConfig, StorageMigration},
-    task_processor::TaskProcessor,
+    task_processor::{TaskProcessor, TaskProcessorConfig},
     util,
 };
 use linera_storage::{DbStorage, Storage};
@@ -720,6 +722,12 @@ impl Runnable for Job {
                         options: benchmark_options,
                     } => {
                         let BenchmarkOptions {
+                            client_mode,
+                            fan_out,
+                            mixed_self_transfers,
+                            skip_message_processing,
+                            max_incoming_bundles_per_block,
+                            light_certificates,
                             num_chains,
                             tokens_per_chain,
                             transactions_per_block,
@@ -806,45 +814,138 @@ impl Runnable for Job {
                         let shared_context =
                             std::sync::Arc::new(futures::lock::Mutex::new(context));
                         let (command_sender, command_receiver) = mpsc::unbounded_channel();
-                        let chain_listener = ChainListener::new(
-                            listener_config,
-                            shared_context.clone(),
-                            storage.clone(),
-                            shutdown_notifier.clone(),
-                            command_receiver,
-                            true, // Enabling background sync for benchmarks
-                        );
+                        let chain_listener = match client_mode {
+                            ClientMode::Full => Some(ChainListener::new(
+                                listener_config,
+                                shared_context.clone(),
+                                storage.clone(),
+                                shutdown_notifier.clone(),
+                                command_receiver,
+                                true, // Enabling background sync for benchmarks
+                            )),
+                            // The storage-free client keeps no local state to sync.
+                            ClientMode::Lite => None,
+                        };
                         let all_chain_ids: Vec<ChainId> =
                             chain_clients.iter().map(|c| c.chain_id()).collect();
                         let generators: Vec<Box<dyn OperationGenerator>> = chain_clients
                             .iter()
                             .map(|client| -> anyhow::Result<Box<dyn OperationGenerator>> {
                                 let source = client.chain_id();
-                                let destinations: Vec<ChainId> = all_chain_ids
+                                // Without --fan-out every chain messages every other, so
+                                // cross-chain cost is a side effect of --num-chains rather
+                                // than a variable that can be swept on its own.
+                                let others: Vec<ChainId> = all_chain_ids
                                     .iter()
                                     .copied()
                                     .filter(|id| *id != source)
                                     .collect();
+                                // Each source takes a window starting at its own index, so
+                                // every chain has the same in-degree. Truncating the same
+                                // list for every source instead would point all traffic at
+                                // the first `fan_out` chains and measure a hotspot.
+                                let destinations = match fan_out {
+                                    None => others,
+                                    Some(_) if others.is_empty() => others,
+                                    Some(fan_out) => {
+                                        let start = all_chain_ids
+                                            .iter()
+                                            .position(|id| *id == source)
+                                            .unwrap_or(0);
+                                        (0..fan_out.min(others.len()))
+                                            .map(|offset| others[(start + offset) % others.len()])
+                                            .collect()
+                                    }
+                                };
+                                // Restores the old `mixed` traffic mode: one self entry
+                                // per cross-chain entry, which the generator then shuffles,
+                                // giving a ~50/50 ratio rather than an alternation. It must
+                                // also be told not to skip its own chain.
+                                let destinations =
+                                    if mixed_self_transfers && !destinations.is_empty() {
+                                        destinations
+                                            .into_iter()
+                                            .flat_map(|other| [other, source])
+                                            .collect()
+                                    } else {
+                                        destinations
+                                    };
+
                                 if let Some(app_id) = fungible_application_id {
                                     Ok(Box::new(FungibleTransferGenerator::new(
                                         app_id,
                                         source,
                                         destinations,
                                         single_destination_per_block,
+                                        !mixed_self_transfers,
                                     )?))
                                 } else {
                                     Ok(Box::new(NativeFungibleTransferGenerator::new(
                                         source,
                                         destinations,
                                         single_destination_per_block,
+                                        !mixed_self_transfers,
                                     )?))
                                 }
                             })
                             .collect::<Result<_, _>>()?;
 
+                        // Both modes drive the same chains through the same harness; they
+                        // differ only in what proposes the blocks.
+                        let benchmark_clients: Vec<Arc<dyn BenchmarkClient>> = match client_mode {
+                            ClientMode::Full => chain_clients
+                                .iter()
+                                .cloned()
+                                .map(|client| Arc::new(client) as Arc<dyn BenchmarkClient>)
+                                .collect(),
+                            ClientMode::Lite => {
+                                let ctx = shared_context.lock().await;
+                                let committee = ctx.wallet().genesis_config().committee.clone();
+                                let nodes: Vec<_> = ctx
+                                    .make_node_provider()
+                                    .make_nodes(&committee)
+                                    .context("failed to create validator node clients")?
+                                    .collect();
+                                anyhow::ensure!(
+                                    !nodes.is_empty(),
+                                    "the committee has no validators"
+                                );
+                                // Shared by every chain this process drives; the lite
+                                // client uses it only to sign proposals.
+                                let core_client = ctx.client.clone();
+                                drop(ctx);
+
+                                // The full client always drains its inbox, so the lite
+                                // client must too or the two modes measure different
+                                // blocks. Only meaningful with cross-chain traffic.
+                                let process_messages = num_chains > 1 && !skip_message_processing;
+
+                                let mut clients: Vec<Arc<dyn BenchmarkClient>> =
+                                    Vec::with_capacity(chain_clients.len());
+                                for client in &chain_clients {
+                                    let owner = client.identity().await?;
+                                    let lite = LiteChainClient::seed(
+                                        client.chain_id(),
+                                        owner,
+                                        nodes.clone(),
+                                        committee.clone(),
+                                        core_client.clone(),
+                                        light_certificates,
+                                    )
+                                    .await?;
+                                    clients.push(Arc::new(LiteBenchmarkClient::new(
+                                        lite,
+                                        process_messages,
+                                        max_incoming_bundles_per_block,
+                                    )));
+                                }
+                                clients
+                            }
+                        };
+
                         linera_client::benchmark::Benchmark::run_benchmark(
                             bps,
-                            chain_clients.clone(),
+                            benchmark_clients,
                             generators,
                             transactions_per_block,
                             health_check_endpoints.clone(),
@@ -1199,6 +1300,7 @@ impl Runnable for Job {
                 operators,
                 controller_application_id,
                 task_retry_delay_secs,
+                slow_task_group_secs,
                 read_only,
                 query_cache_size,
                 allowed_subscriptions,
@@ -1228,7 +1330,10 @@ impl Runnable for Job {
                 let operators = Arc::new(operators);
 
                 // Start the task processor if operator applications are specified.
-                let retry_delay = TimeDelta::from_secs(task_retry_delay_secs);
+                let task_config = TaskProcessorConfig {
+                    retry_delay: TimeDelta::from_secs(task_retry_delay_secs),
+                    slow_group_threshold: TimeDelta::from_secs(slow_task_group_secs),
+                };
 
                 if !operator_application_ids.is_empty() {
                     let chain_client = context.make_chain_client(chain_id).await?;
@@ -1238,7 +1343,7 @@ impl Runnable for Job {
                         chain_client,
                         cancellation_token.clone(),
                         operators.clone(),
-                        retry_delay,
+                        task_config,
                         None,
                     );
                     tokio::spawn(processor.run());
@@ -1259,7 +1364,7 @@ impl Runnable for Job {
                         chain_client,
                         cancellation_token.clone(),
                         operators,
-                        retry_delay,
+                        task_config,
                         command_sender,
                     );
 
