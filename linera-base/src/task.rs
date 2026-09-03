@@ -71,16 +71,21 @@ where
 
 /// Awaits a detached task, propagating its panic but not its cancellation.
 ///
-/// [`run_detached`] never lets the `JoinHandle` escape, so nothing can abort the task and a
-/// cancellation can only mean the runtime is shutting down. There is no value left to return and
-/// this future is about to be dropped with everything else, so it waits rather than reporting a
-/// teardown as a failure.
+/// [`run_detached`] never lets the `JoinHandle` escape, so nothing can abort the task: a
+/// cancellation means `spawn` bound the task to an already-closed runtime, which hands back a
+/// handle that is dead on arrival. There is no value left to return and the shutdown that closed
+/// that list is about to drop this future too, so it waits rather than reporting a teardown as a
+/// failure — but it says so first, because that reasoning only holds while the awaiting task
+/// lives on the runtime that died.
 #[cfg(not(web))]
 async fn join_detached<R>(handle: tokio::task::JoinHandle<R>) -> R {
     match handle.await {
         Ok(output) => output,
         Err(error) if error.is_panic() => std::panic::resume_unwind(error.into_panic()),
-        Err(_) => future::pending().await,
+        Err(error) => {
+            tracing::warn!(%error, "detached task cancelled; waiting for the shutdown that caused it");
+            future::pending().await
+        }
     }
 }
 
