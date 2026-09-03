@@ -54,7 +54,9 @@ pub struct ExecutionStateViewInner<C> {
     pub system: SystemExecutionStateView<C>,
     /// User applications.
     pub users: ReentrantCollectionView<C, ApplicationId, KeyValueStoreView<C>>,
-    /// The heights of previous blocks that sent messages to the same recipients.
+    /// The heights of previous blocks that sent messages to the same recipients. A
+    /// checkpoint drops the entry of every recipient that has acknowledged all of them,
+    /// so an entry never points at a block a checkpoint stopped guaranteeing.
     pub previous_message_blocks: MapView<C, ChainId, BlockHeight>,
     /// The heights of previous blocks that published events to the same streams.
     pub previous_event_blocks: MapView<C, StreamId, BlockHeight>,
@@ -202,6 +204,43 @@ where
         // reset the set so the next own checkpoint only fires for origins that send
         // us a fresh non-`Checkpoint` message in the meantime.
         self.system.pending_checkpoint_ack_targets.clear();
+        self.prune_message_anchors().await?;
+        Ok(())
+    }
+
+    /// Drops the `previous_message_blocks` anchor of every recipient that has acknowledged
+    /// all the messages we sent it, i.e. every recipient absent from
+    /// `unfinalized_message_blocks`.
+    ///
+    /// A checkpoint only guarantees the availability of the blocks listed in the
+    /// checkpoint's `outbox_block_hashes`, which are exactly the ones still referenced by
+    /// `unfinalized_message_blocks`. An anchor pointing below the checkpoint at any other
+    /// block would dangle: a node that bootstrapped from the checkpoint never saw that
+    /// block, so resolving the anchor to a hash would fail.
+    ///
+    /// Only fully acknowledged recipients are dropped. A recipient with unacknowledged
+    /// bundles keeps its anchor, so the chain of `previous_message_blocks` links that lets
+    /// it detect and fetch skipped message blocks stays intact — unlike
+    /// `previous_event_blocks`, which the checkpoint clears outright because the summary
+    /// events supersede the pruned ones. Its anchor is also the highest height in its
+    /// `unfinalized_message_blocks` entry — both are written together for every
+    /// non-`CheckpointAck` bundle, and an acknowledgement only trims a prefix of the
+    /// cursors — so the anchor is covered by `outbox_block_hashes`.
+    async fn prune_message_anchors(&mut self) -> Result<(), ExecutionError> {
+        let mut acknowledged = Vec::new();
+        for recipient in self.previous_message_blocks.indices().await? {
+            if !self
+                .system
+                .unfinalized_message_blocks
+                .contains_key(&recipient)
+                .await?
+            {
+                acknowledged.push(recipient);
+            }
+        }
+        for recipient in acknowledged {
+            self.previous_message_blocks.remove(&recipient)?;
+        }
         Ok(())
     }
 
