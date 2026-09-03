@@ -157,6 +157,109 @@ where
     Ok(())
 }
 
+/// Verifies that a chain whose validator notification streams have ALL ended repairs
+/// them via the circuit-breaker probe timer, without a new block on the chain itself.
+///
+/// Regression test: `update_notification_streams` used to run only at listener startup
+/// and on the chain's own `NewBlock`, so an idle chain whose streams had all died could
+/// never re-subscribe — its scheduled probes were never executed, and it stayed deaf to
+/// incoming bundles until restarted (the 2026-08-12 PM control-chain incident).
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_probe_timer_repairs_severed_notification_streams<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
+    // Observe the receiver chain from an INDEPENDENT client, so that the only way it
+    // can learn about new bundles is through validator notification streams. (Clients
+    // created by `add_root_chain` share a local node with the sender, which would let
+    // notifications bypass the validators entirely.)
+    let observer = builder
+        .make_client(receiver.chain_id(), None, BlockHeight::ZERO)
+        .await?;
+    let mut notifications = observer.subscribe()?;
+    let (listener, _listen_handle, _) = observer.listen().await?;
+    tokio::spawn(listener);
+
+    // Prove the notification path is live before severing it: the streams are
+    // established lazily by the spawned listener, so severing without this step
+    // would race the initial subscription and cut nothing.
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_millis(1),
+            Account::chain(receiver.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+    let notification =
+        tokio::time::timeout(std::time::Duration::from_secs(30), notifications.next())
+            .await
+            .expect("timed out waiting for the pre-sever notification")
+            .expect("streams should be live");
+    assert_eq!(notification.chain_id, receiver.chain_id());
+
+    // Two full sever/repair rounds: the second round proves the probe timer re-arms
+    // after a successful recovery (a fix that fires exactly once would pass round one
+    // and fail round two).
+    for round in 0..2 {
+        // Sever every notification stream server-side, as a fleet-wide proxy restart
+        // does. The receiver chain never executes a block of its own (its bundles are
+        // never processed into blocks by anyone), so nothing but the probe timer can
+        // re-subscribe it.
+        builder.disconnect_notification_subscribers().await;
+
+        // Drive the probe timer. Each pass jumps the simulated clock beyond any
+        // scheduled probe deadline (even after maximal backoff) and then sends a
+        // transfer: while the receiver is deaf its incoming-bundle notification is
+        // lost, but as soon as a probe has re-subscribed, the notification comes
+        // through. Real time is only used to give the listener task a chance to run
+        // between steps.
+        let mut repaired = false;
+        for _ in 0..10 {
+            clock.add(TimeDelta::from_secs(3700));
+            sender
+                .transfer_to_account(
+                    AccountOwner::CHAIN,
+                    Amount::from_millis(1),
+                    Account::chain(receiver.chain_id()),
+                )
+                .await
+                .unwrap_ok_committed();
+            let outcome =
+                tokio::time::timeout(std::time::Duration::from_millis(500), notifications.next())
+                    .await;
+            if let Ok(Some(notification)) = outcome {
+                assert_eq!(notification.chain_id, receiver.chain_id());
+                repaired = true;
+                break;
+            }
+        }
+        assert!(
+            repaired,
+            "the notification streams were never repaired after sever round {round}"
+        );
+
+        // Drain notifications queued by the repair (each ingested certificate can emit
+        // several), so a stale one cannot masquerade as next round's repair proof.
+        while let Ok(Some(_)) =
+            tokio::time::timeout(std::time::Duration::from_millis(200), notifications.next()).await
+        {
+        }
+    }
+    Ok(())
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
