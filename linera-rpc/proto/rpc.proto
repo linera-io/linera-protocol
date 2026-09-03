@@ -23,6 +23,12 @@ service ValidatorRelay {
   // Forward a confirmed certificate to another validator.
   rpc RelayConfirmedCertificate(RelayConfirmedCertificateRequest) returns (ChainInfoResult);
 
+  // Carry a push stream to another validator, forwarding both directions verbatim.
+  //
+  // The first message must be a `destination`; the proxy opens the peer stream from it and pumps
+  // certificates onward. Shards never dial a peer themselves.
+  rpc RelayConfirmedCertificates(stream RelayPushRequest) returns (stream PushCertificateResponse);
+
   // Ask another validator for the state of a chain.
   rpc RelayChainInfoQuery(RelayChainInfoQueryRequest) returns (ChainInfoResult);
 
@@ -42,6 +48,17 @@ message RelayConfirmedCertificateRequest {
   // The public network address of the destination validator.
   string destination = 1;
   HandleConfirmedCertificateRequest inner = 2;
+}
+
+// One message of a relayed push stream: the destination, then certificates.
+message RelayPushRequest {
+  oneof inner {
+    // The public network address of the destination validator. Must be the first message, and
+    // may only be sent once.
+    string destination = 1;
+    // A certificate to forward on the stream opened by the first message.
+    PushCertificateRequest certificate = 2;
+  }
 }
 
 // A chain info query, and the validator it is for.
@@ -70,6 +87,14 @@ service ValidatorWorker {
   rpc HandleLiteCertificate(LiteCertificate) returns (ChainInfoResult);
 
   rpc HandleConfirmedCertificate(HandleConfirmedCertificateRequest) returns (ChainInfoResult);
+
+  // Accept a continuous stream of confirmed certificates for many chains at once, answering
+  // each with its outcome.
+  //
+  // A response is a message, never the end of the stream: certificates for one chain must keep
+  // flowing when another chain's fail. The stream ends only when the sender closes it or the
+  // transport breaks.
+  rpc PushConfirmedCertificates(stream PushCertificateRequest) returns (stream PushCertificateResponse);
 
   rpc HandleValidatedCertificate(HandleValidatedCertificateRequest) returns (ChainInfoResult);
 
@@ -100,6 +125,14 @@ service ValidatorNode {
   rpc HandleLiteCertificate(LiteCertificate) returns (ChainInfoResult);
 
   rpc HandleConfirmedCertificate(HandleConfirmedCertificateRequest) returns (ChainInfoResult);
+
+  // Accept a continuous stream of confirmed certificates for many chains at once, answering
+  // each with its outcome.
+  //
+  // A response is a message, never the end of the stream: certificates for one chain must keep
+  // flowing when another chain's fail. The stream ends only when the sender closes it or the
+  // transport breaks.
+  rpc PushConfirmedCertificates(stream PushCertificateRequest) returns (stream PushCertificateResponse);
 
   rpc HandleValidatedCertificate(HandleValidatedCertificateRequest) returns (ChainInfoResult);
 
@@ -393,6 +426,31 @@ message HandleConfirmedCertificateRequest {
 
   // Whether the sender understands the aggregated `MissingCrossChainUpdates` error.
   bool supports_aggregated_missing = 4;
+}
+
+// One certificate pushed on a stream.
+//
+// Certificates for a single chain must be sent in ascending height order; certificates for
+// different chains may be interleaved freely.
+message PushCertificateRequest {
+  // The ID of the chain (used for routing to its worker).
+  ChainId chain_id = 1;
+
+  // A certified statement from the committee.
+  Certificate certificate = 2;
+
+  // Whether the sender understands the aggregated `MissingCrossChainUpdates` error.
+  bool supports_aggregated_missing = 3;
+}
+
+// The outcome of one pushed certificate.
+//
+// Carries the chain and height it answers because responses for different chains interleave, and
+// a sender tracks a cursor per chain.
+message PushCertificateResponse {
+  ChainId chain_id = 1;
+  BlockHeight height = 2;
+  ChainInfoResult result = 3;
 }
 
 // A request for a pending blob.

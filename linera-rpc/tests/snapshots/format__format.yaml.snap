@@ -830,6 +830,18 @@ NodeError:
                 TUPLE:
                   - TYPENAME: ChainId
                   - TYPENAME: BlockHeight
+    32:
+      PushStreamUnsupported: UNIT
+    33:
+      PushStreamClosed: UNIT
+    34:
+      EmptyCertificateRun: UNIT
+    35:
+      PushRunTooLong:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - length: U64
 OpenChainConfig:
   STRUCT:
     - ownership:

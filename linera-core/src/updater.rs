@@ -20,7 +20,10 @@ use linera_base::{
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
     manager::LockingBlock,
-    types::{ConfirmedBlock, GenericCertificate, ValidatedBlock, ValidatedBlockCertificate},
+    types::{
+        CertificateValue as _, ConfirmedBlock, GenericCertificate, ValidatedBlock,
+        ValidatedBlockCertificate,
+    },
 };
 use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
 use linera_storage::{Arc as CacheArc, Clock, ResultReadCertificates, Storage};
@@ -380,8 +383,10 @@ where
                 }
                 Err(NodeError::BlobsNotFound(blob_ids)) if !sent_blobs => {
                     // The validator is missing the blobs required by the certificate.
-                    self.remote_node
-                        .check_blobs_not_found(certificate, &blob_ids)?;
+                    self.remote_node.check_blobs_not_found(
+                        &certificate.inner().required_blob_ids(),
+                        &blob_ids,
+                    )?;
                     let blobs = self
                         .local_node
                         .read_blobs_from_storage(&blob_ids)
@@ -421,7 +426,7 @@ where
         match &result {
             Err(original_err @ NodeError::BlobsNotFound(blob_ids)) => {
                 self.remote_node
-                    .check_blobs_not_found(&certificate, blob_ids)?;
+                    .check_blobs_not_found(&certificate.inner().required_blob_ids(), blob_ids)?;
                 // The certificate is for a validated block, i.e. for our locking block.
                 // Take the missing blobs from our local chain manager.
                 let blobs = self
