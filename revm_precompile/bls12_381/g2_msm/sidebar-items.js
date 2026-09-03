@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["PRECOMPILE"],"fn":["g2_msm"]};

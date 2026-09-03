@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["convert_from","from_generic","into_generic","map_inter","map_repr"],"trait":["Generic"]};

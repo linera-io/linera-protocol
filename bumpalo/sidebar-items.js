@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AllocOrInitError"],"struct":["AllocErr","Bump","ChunkIter","ChunkRawIter"]};

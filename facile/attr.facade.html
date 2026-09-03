@@ -1,0 +1,79 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Construct a façade trait based on an implementation."><title>facade in facile - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="facile" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc attr"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">facade</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../facile/index.html">facile</a><span class="version">0.1.1</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">facade</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#parameters" title="Parameters">Parameters</a><ul><li><a href="#visibility" title="`visibility`"><code>visibility</code></a></li><li><a href="#where" title="`where`"><code>where</code></a></li></ul></li><li><a href="#panics" title="Panics">Panics</a></li><li><a href="#type-parameters-and-associated-types" title="Type parameters and associated types">Type parameters and associated types</a></li><li><a href="#default-implementations" title="Default implementations">Default implementations</a></li><li><a href="#example" title="Example">Example</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate facile</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">facile</a></div><h1>Attribute Macro <span class="attr">facade</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/facile/lib.rs.html#228-372">Source</a> </span></div><pre class="rust item-decl"><code>#[facade]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Construct a façade trait based on an implementation.</p>
+<p>Given an implementation of a non-existent trait, extract a trait by that name
+from the signature of the implementation, and implement it as described.</p>
+<h2 id="parameters"><a class="doc-anchor" href="#parameters">§</a>Parameters</h2><h3 id="visibility"><a class="doc-anchor" href="#visibility">§</a><code>visibility</code></h3>
+<p>The visibility of the resulting trait, e.g. <code>pub</code> or <code>pub(super)</code>. If no
+visibility is provided then no explicit visibility will be applied to the trait.</p>
+<h3 id="where"><a class="doc-anchor" href="#where">§</a><code>where</code></h3>
+<p>A list of where predicates to apply to the trait definition, e.g. <code>T: Clone</code>,
+<code>Self: Send</code>. Generics on the implementation (<code>impl&lt;…&gt; where …</code>) apply to the
+<em>implementation</em> rather than the trait. If you want to constrain the trait
+itself, use this parameter. Bounds on <code>Self</code> can be used to provide supertraits
+(which are otherwise not supported by the syntax).</p>
+<h2 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h2>
+<p>If the input is not a trait implementation.</p>
+<h2 id="type-parameters-and-associated-types"><a class="doc-anchor" href="#type-parameters-and-associated-types">§</a>Type parameters and associated types</h2>
+<p>Type or lifetime parameters on the trait will be automatically lifted
+to the trait definition, and can be constrained with <code>where</code>.</p>
+<p>Since type parameters on the type aren’t in scope for the trait, you must assign
+them to an associated type and reference them through that (as <code>Self::AssocType</code>).</p>
+<p>In an extension of the usual impl syntax, associated types can be given both
+bounds (for the trait definitiion) and definitions (for the implementation), e.g.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">type </span>Future: Future = std::future::Ready&lt;()&gt;;</code></pre></div><h2 id="default-implementations"><a class="doc-anchor" href="#default-implementations">§</a>Default implementations</h2>
+<p>The <code>facade(default)</code> attribute can be used to indicate that a function depends
+only on the trait definition itself rather than any detail of the
+implementation, and should be provided as a <a href="https://doc.rust-lang.org/book/ch10-02-traits.html#using-default-implementations">default
+implementation</a>
+on the trait. This can be useful if you’re planning to add more implementations
+of the trait.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>Put the <code>facile::facade</code> annotation on a trait implementation with a
+non-existent trait name to generate a trait by that name and also implement it
+as written.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">struct </span>FooImpl&lt;F, P&gt; {
+    future: F,
+    pointer: P,
+}
+
+<span class="attr">#[facile::facade(
+    visibility = <span class="kw">pub</span>(<span class="kw">crate</span>),
+    <span class="kw">where</span>(F: Future&lt;Output = ()&gt;),
+)]
+</span><span class="kw">impl</span>&lt;F, P&gt; Foo&lt;F&gt; <span class="kw">for </span>FooImpl&lt;F, P&gt;
+<span class="kw">where
+    </span>F: Future&lt;Output = ()&gt; + Clone,
+    P: AsRef&lt;str&gt;,
+{
+    <span class="kw">type </span>Future: Future&lt;Output = ()&gt; = F;
+
+    <span class="kw">fn </span>future(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Future {
+        <span class="self">self</span>.future.clone()
+    }
+
+    <span class="kw">fn </span>as_str(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
+        <span class="self">self</span>.pointer.as_ref()
+    }
+
+    <span class="attr">#[facade(default)]
+    </span><span class="kw">async fn </span>run(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="macro">println!</span>(<span class="string">"running future: {}"</span>, <span class="self">self</span>.as_str());
+        <span class="self">self</span>.future().<span class="kw">await
+    </span>}
+}
+
+<span class="kw">struct </span>OtherFoo;
+<span class="kw">impl </span>Foo&lt;std::future::Ready&lt;()&gt;&gt; <span class="kw">for </span>OtherFoo {
+    <span class="kw">type </span>Future = std::future::Ready&lt;()&gt;;
+    <span class="kw">fn </span>future(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Future {
+        std::future::ready(())
+    }
+    <span class="kw">fn </span>as_str(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
+        <span class="string">"OtherFoo"
+    </span>}
+}
+
+<span class="kw">async fn </span>use_foo(foo: <span class="kw">impl </span>Foo&lt;std::future::Ready&lt;()&gt;&gt;) {
+    foo.run().<span class="kw">await
+</span>}</code></pre></div></div></details></section></div></main></body></html>

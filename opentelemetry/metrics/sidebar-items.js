@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AsyncInstrumentBuilder","Counter","Gauge","Histogram","HistogramBuilder","InstrumentBuilder","Meter","ObservableCounter","ObservableGauge","ObservableUpDownCounter","UpDownCounter"],"trait":["AsyncInstrument","InstrumentProvider","MeterProvider","SyncInstrument"],"type":["Callback"]};

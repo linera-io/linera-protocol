@@ -1,0 +1,41 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Invariant (Derived state agrees with the certified prefix). The parts of a chain’s state that are not certified — the block-height indexes, the outbox counters and queues, the inbox cursors — are functions of that chain’s committed blocks, and equal the value that recomputing them from those blocks would give."><title>DerivedStateAgreesWithCertifiedPrefix in linera_core::proof::storage - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="linera_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">DerivedStateAgreesWithCertifiedPrefix</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../linera_core/index.html">linera_<wbr>core</a><span class="version">0.16.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Derived<wbr>State<wbr>Agrees<wbr>With<wbr>Certified<wbr>Prefix</a></h2><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In linera_<wbr>core::<wbr>proof::<wbr>storage</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">linera_core</a>::<wbr><a href="../index.html">proof</a>::<wbr><a href="index.html">storage</a></div><h1>Trait <span class="trait">Derived<wbr>State<wbr>Agrees<wbr>With<wbr>Certified<wbr>Prefix</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/linera_core/proof/storage.rs.html#189-192">Source</a> </span></div><pre class="rust item-decl"><code>pub trait DerivedStateAgreesWithCertifiedPrefix:
+    <a class="trait" href="trait.AdmissionChecksTheValidityProof.html" title="trait linera_core::proof::storage::AdmissionChecksTheValidityProof">AdmissionChecksTheValidityProof</a>
+    + <a class="trait" href="../../../linera_chain/manager/proof/model/trait.StorageAtomicity.html" title="trait linera_chain::manager::proof::model::StorageAtomicity">StorageAtomicity</a>
+    + <a class="trait" href="../../../linera_chain/manager/proof/model/trait.MaxByzantineWeight.html" title="trait linera_chain::manager::proof::model::MaxByzantineWeight">MaxByzantineWeight</a> { }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><strong>Invariant (Derived state agrees with the certified prefix).</strong> The parts of a chain’s state that
+are not certified — the block-height indexes, the outbox counters and queues, the inbox cursors —
+are functions of that chain’s committed blocks, and equal the value that recomputing them from
+those blocks would give.</p>
+<p><strong>This is the class with no validity proof.</strong> A wrong index or a wrong counter is not detectable
+by rehashing or by re-verifying signatures, because nobody attested it and nothing determines it
+but the computation that produced it. It can only be <em>recomputed</em>. That is why this is stated as
+an invariant over transitions rather than as a property a reader can check.</p>
+<p><em>Proof.</em> Each is written only by the transition that commits a block, under the exclusive access
+of <a href="../../../linera_chain/manager/proof/model/trait.SequentialChainState.html" title="trait linera_chain::manager::proof::model::SequentialChainState"><code>SequentialChainState</code></a> and the atomicity of <a href="../../../linera_chain/manager/proof/model/trait.StorageAtomicity.html" title="trait linera_chain::manager::proof::model::StorageAtomicity"><code>StorageAtomicity</code></a>, so the sequence of values
+it takes follows the sequence of committed blocks; and by
+<code>linera_chain::manager::proof::safety::UniqueChain</code> that sequence is unique. The base case is an
+empty chain, where every one of these is empty or zero. ∎</p>
+<p><strong>Detection is partial, late, and by assertion.</strong> Because there is no proof to check, the
+implementation catches violations only where a reader happens to require an entry that should be
+there. <code>ChainError::CorruptedChainState</code> is raised at seven sites in <code>linera_chain::chain</code>,
+including:</p>
+<ul>
+<li><code>"message counter should be present"</code> — an outbox counter missing for a queue entry;</li>
+<li><code>"Missing outboxes"</code> — a <code>nonempty_outboxes</code> entry with no outbox behind it;</li>
+<li><code>"missing entry in block_hashes"</code>, at three separate call sites — the height index short of the
+tip.</li>
+</ul>
+<p>Each fires at the point of use, which may be arbitrarily long after the write that broke the
+invariant, and none of them fires for a value that is present but <em>wrong</em>. A counter that is
+merely too small is not detected at all until the queue drains past it.</p>
+<p><strong>Recovery is by recomputation, which is the only option available.</strong> <code>reconcile_tracked_outboxes</code>
+rebuilds the outbox index, and <code>ChainStateView::restore_outboxes_from_unfinalized</code> rebuilds
+<code>outboxes</code>, <code>outbox_counters</code> and <code>nonempty_outboxes</code> from the on-chain
+<code>unfinalized_message_blocks</code> after a checkpoint bootstrap. Both are re-derivations from data that
+<em>does</em> have a validity proof, which is what makes them trustworthy where the derived state was
+not.</p>
+<p><strong>Not covered here.</strong> Fields with no invariant at all, because they are legitimately local and
+may differ between correct validators or be dropped without fault: <code>pending_proposed_blobs</code> and
+<code>pending_validated_blobs</code> (cleared when the manager is reset), <code>pre_checkpoint_block_trust</code>
+(transient, emptied as the certificates arrive), and <code>received_log</code>, whose order depends on when
+certificates were received rather than on what was committed.</p>
+</div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../../trait.impl/linera_core/proof/storage/trait.DerivedStateAgreesWithCertifiedPrefix.js" async></script></section></div></main></body></html>

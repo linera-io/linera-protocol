@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CurrentAuthHandler","ListAppInstallationsAccessibleToUserBuilder","ListGistsForAuthenticatedUserBuilder","ListOrgMembershipsForAuthenticatedUserBuilder","ListReposForAuthenticatedUserBuilder","ListStarredGistsBuilder","ListStarredReposBuilder"]};

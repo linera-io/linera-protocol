@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["DirEntry","Error","FilterEntry","IntoIter","WalkDir"],"trait":["DirEntryExt"],"type":["Result"]};

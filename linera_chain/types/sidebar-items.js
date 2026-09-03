@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Certificate","CertificateKind"],"struct":["ConfirmedBlockCertificate","GenericCertificate","LiteCertificate","ValidatedBlockCertificate"],"trait":["CertificateValue","Certified"],"type":["TimeoutCertificate"]};

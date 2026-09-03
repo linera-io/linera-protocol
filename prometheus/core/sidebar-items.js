@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AtomicF64","AtomicI64","AtomicU64","Desc","GenericCounter","GenericGauge","GenericLocalCounter","GenericLocalCounterVec","MetricVec","Opts"],"trait":["Atomic","Collector","Describer","Metric","MetricVecBuilder","Number"],"type":["GenericCounterVec","GenericGaugeVec"]};

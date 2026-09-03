@@ -1,0 +1,54 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Perform an intra-procedural, depth-first, in-order traversal of the IR."><title>dfs_in_order in walrus::ir - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="walrus" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">dfs_in_order</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../walrus/index.html">walrus</a><span class="version">0.26.2</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">dfs_<wbr>in_<wbr>order</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#example" title="Example">Example</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In walrus::<wbr>ir</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">walrus</a>::<wbr><a href="index.html">ir</a></div><h1>Function <span class="fn">dfs_<wbr>in_<wbr>order</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/walrus/ir/traversals.rs.html#61-165">Source</a> </span></div><pre class="rust item-decl"><code>pub fn dfs_in_order&lt;'instr&gt;(
+    visitor: &amp;mut impl <a class="trait" href="trait.Visitor.html" title="trait walrus::ir::Visitor">Visitor</a>&lt;'instr&gt;,
+    func: &amp;'instr <a class="struct" href="../struct.LocalFunction.html" title="struct walrus::LocalFunction">LocalFunction</a>,
+    start: <a class="type" href="type.InstrSeqId.html" title="type walrus::ir::InstrSeqId">InstrSeqId</a>,
+)</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Perform an intra-procedural, depth-first, in-order traversal of the IR.</p>
+<ul>
+<li>
+<p><em>Intra-procedural</em>: Only traverses IR within a function. Does not cross
+function boundaries (although it will report edges to other functions via
+<code>visit_function_id</code> calls on the visitor, so you can use this as a
+building block for making global, inter-procedural analyses).</p>
+</li>
+<li>
+<p><em>Depth-first, in-order</em>: Visits instructions and instruction sequences in
+the order they are defined and nested. See <a href="https://en.wikipedia.org/wiki/Tree_traversal#In-order_(LNR)">Wikipedia</a> for
+details.</p>
+</li>
+</ul>
+<p>Calls <code>visitor</code> methods for every instruction, instruction sequence, and
+resource that the traversal visits.</p>
+<p>The traversals begins at the <code>start</code> instruction sequence and goes from
+there. To traverse everything in a function, pass <code>func.entry_block()</code> as
+<code>start</code>.</p>
+<p>This implementation is iterative — not recursive — and so it
+will not blow the call stack on deeply nested Wasm (although it may still
+OOM).</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>This example counts the number of instruction sequences in a function.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>walrus::LocalFunction;
+<span class="kw">use </span>walrus::ir::<span class="kw-2">*</span>;
+
+<span class="attr">#[derive(Default)]
+</span><span class="kw">struct </span>CountInstructionSequences {
+    count: usize,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'instr</span>&gt; Visitor&lt;<span class="lifetime">'instr</span>&gt; <span class="kw">for </span>CountInstructionSequences {
+    <span class="kw">fn </span>start_instr_seq(<span class="kw-2">&amp;mut </span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span><span class="lifetime">'instr </span>InstrSeq) {
+        <span class="self">self</span>.count += <span class="number">1</span>;
+    }
+}
+
+<span class="comment">// Get a function from somewhere.
+</span><span class="kw">let </span>my_func: <span class="kw-2">&amp;</span>LocalFunction = get_my_function();
+
+<span class="comment">// Create our visitor.
+</span><span class="kw">let </span><span class="kw-2">mut </span>visitor = CountInstructionSequences::default();
+
+<span class="comment">// Traverse everything in the function with our visitor.
+</span>dfs_in_order(<span class="kw-2">&amp;mut </span>visitor, my_func, my_func.entry_block());
+
+<span class="comment">// Use the aggregate results that `visitor` built up.
+</span><span class="macro">println!</span>(<span class="string">"The number of instruction sequences in `my_func` is {}"</span>, visitor.count);</code></pre></div></div></details></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["RelocationKind","RelocationKindResolver","RelocationTarget","RelocationTargetResolver"],"struct":["ArchivedRelocation","Relocation","RelocationResolver"],"trait":["RelocationLike"],"type":["Relocations"]};

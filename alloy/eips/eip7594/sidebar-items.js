@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BYTES_PER_CELL","CELLS_PER_EXT_BLOB","EIP_7594_WRAPPER_VERSION","FIELD_ELEMENTS_PER_CELL","FIELD_ELEMENTS_PER_EXT_BLOB","MAX_BLOBS_PER_TX_FUSAKA"],"enum":["BlobTransactionSidecarVariant"],"struct":["BlobTransactionSidecarEip7594"],"trait":["Decodable7594","Encodable7594"],"type":["Cell"]};

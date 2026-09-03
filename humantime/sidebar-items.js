@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DurationError","TimestampError"],"fn":["format_duration","format_rfc3339","format_rfc3339_micros","format_rfc3339_millis","format_rfc3339_nanos","format_rfc3339_seconds","parse_duration","parse_rfc3339","parse_rfc3339_weak"],"struct":["Duration","FormattedDuration","Rfc3339Timestamp","Timestamp"]};

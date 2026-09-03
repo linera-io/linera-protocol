@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ContextKind","ContextValue","ErrorKind"],"struct":["Error","KindFormatter","RichFormatter"],"trait":["ErrorFormatter"],"type":["Result"]};

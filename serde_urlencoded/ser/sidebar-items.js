@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error"],"fn":["to_string"],"struct":["MapSerializer","SeqSerializer","Serializer","StructSerializer","StructVariantSerializer","TupleSerializer","TupleStructSerializer","TupleVariantSerializer"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AnalysisKind","CreateScheme"],"trait":["Cfg"],"type":["TransactTo"]};

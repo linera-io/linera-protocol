@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["PRECOMPILE"],"fn":["map_fp2_to_g2"]};

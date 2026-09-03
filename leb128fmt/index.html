@@ -1,0 +1,109 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Leb128fmt is a library to decode and encode LEB128 formatted numbers. LEB128 is a variable length integer compression format."><title>leb128fmt - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="leb128fmt" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Crate leb128fmt</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../leb128fmt/index.html">leb128fmt</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a><ul><li><a href="#functions-using-arrays" title="Functions using Arrays">Functions using Arrays</a></li><li><a href="#functions-using-slices" title="Functions Using Slices">Functions Using Slices</a></li><li><a href="#functions-using-fixed-sized-encoding" title="Functions Using Fixed Sized Encoding">Functions Using Fixed Sized Encoding</a></li></ul></li></ul><h3><a href="#macros">Crate Items</a></h3><ul class="block"><li><a href="#macros" title="Macros">Macros</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1>Crate <span>leb128fmt</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/leb128fmt/lib.rs.html#1-1650">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Leb128fmt is a library to decode and encode <a href="https://en.wikipedia.org/wiki/LEB128">LEB128</a> formatted numbers.
+LEB128 is a variable length integer compression format.</p>
+<p>The library does not allocate memory and can be used in <code>no_std</code> and
+<code>no_std::no_alloc</code> environments.</p>
+<p>Various functions are provided which encode and decode signed and unsigned
+integers with the number of bits in the function name. There are generic
+functions provided to read and write slices of encoded values as well.</p>
+<p>There are encoding functions with the word <code>fixed</code> in the name which will
+write out a value using the maximum number of bytes for a given bit size.
+For instance, using <a href="fn.encode_fixed_u32.html" title="fn leb128fmt::encode_fixed_u32"><code>encode_fixed_u32</code></a> will always use 5 bytes to
+write out the value. While always using the maximum number of bytes removes
+the benefit of compression, in some scenarios, it is beneficial to have a
+fixed encoding size.</p>
+<p>Finally, there are macros provided which you can use to build your own
+encoding and decoding functions for unusual variants like signed 33 bit
+values.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h3 id="functions-using-arrays"><a class="doc-anchor" href="#functions-using-arrays">§</a>Functions using Arrays</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Encode an unsigned 32 bit number:
+</span><span class="kw">let </span>(output, written_len) = leb128fmt::encode_u32(<span class="number">43110</span>).unwrap();
+<span class="comment">// The number of bytes written in the output array
+</span><span class="macro">assert_eq!</span>(written_len, <span class="number">3</span>);
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>output[..written_len], <span class="kw-2">&amp;</span>[<span class="number">0xE6</span>, <span class="number">0xD0</span>, <span class="number">0x02</span>]);
+<span class="comment">// The entire output array. Note you should only use &amp;output[..written_len] to copy
+// into your output buffer
+</span><span class="macro">assert_eq!</span>(output, [<span class="number">0xE6</span>, <span class="number">0xD0</span>, <span class="number">0x02</span>, <span class="number">0x00</span>, <span class="number">0x00</span>]);
+
+<span class="comment">// Decode an unsigned 32 bit number:
+</span><span class="kw">let </span>input = [<span class="number">0xE6</span>, <span class="number">0xD0</span>, <span class="number">0x02</span>, <span class="number">0x00</span>, <span class="number">0x00</span>];
+<span class="kw">let </span>(result, read_len) = leb128fmt::decode_u32(input).unwrap();
+<span class="macro">assert_eq!</span>(result, <span class="number">43110</span>);
+<span class="macro">assert_eq!</span>(read_len, <span class="number">3</span>);</code></pre></div><h4 id="helper-functions"><a class="doc-anchor" href="#helper-functions">§</a>Helper Functions</h4>
+<p>If you are reading from an input buffer, you can use <a href="fn.is_last.html" title="fn leb128fmt::is_last"><code>is_last</code></a> and
+<a href="fn.max_len.html" title="fn leb128fmt::max_len"><code>max_len</code></a> to determine the bytes to copy into the array.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>buffer = <span class="macro">vec!</span>[<span class="number">0xFE</span>, <span class="number">0xFE</span>, <span class="number">0xE6</span>, <span class="number">0xD0</span>, <span class="number">0x02</span>, <span class="number">0xFE</span>, <span class="number">0xFE</span>, <span class="number">0xFE</span>];
+<span class="kw">let </span>pos = <span class="number">2</span>;
+<span class="kw">let </span>end = buffer.iter().skip(pos).copied().position(leb128fmt::is_last).map(|p| pos + p);
+<span class="kw">if let </span><span class="prelude-val">Some</span>(end) = end {
+    <span class="kw">if </span>end &lt;= pos + leb128fmt::max_len::&lt;<span class="number">32</span>&gt;() {
+        <span class="kw">let </span><span class="kw-2">mut </span>input = [<span class="number">0u8</span>; leb128fmt::max_len::&lt;<span class="number">32</span>&gt;()];
+        input[..=end - pos].copy_from_slice(<span class="kw-2">&amp;</span>buffer[pos..=end]);
+        <span class="kw">let </span>(result, read_len) = leb128fmt::decode_u32(input).unwrap();
+        <span class="macro">assert_eq!</span>(result, <span class="number">43110</span>);
+        <span class="macro">assert_eq!</span>(read_len, <span class="number">3</span>);
+    } <span class="kw">else </span>{
+        <span class="comment">// invalid LEB128 encoding
+    </span>}
+} <span class="kw">else </span>{
+  <span class="kw">if </span>buffer.len() - pos &lt; leb128fmt::max_len::&lt;<span class="number">32</span>&gt;() {
+     <span class="comment">// Need more bytes in the buffer
+  </span>} <span class="kw">else </span>{
+     <span class="comment">// invalid LEB128 encoding
+  </span>}
+}
+</code></pre></div><h3 id="functions-using-slices"><a class="doc-anchor" href="#functions-using-slices">§</a>Functions Using Slices</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>buffer = <span class="macro">vec!</span>[<span class="number">0xFE</span>; <span class="number">10</span>];
+<span class="kw">let </span><span class="kw-2">mut </span>pos = <span class="number">1</span>;
+
+<span class="comment">// Encode an unsigned 64 bit number with a mutable slice:
+</span><span class="kw">let </span>result = leb128fmt::encode_uint_slice::&lt;u64, <span class="number">64</span>&gt;(<span class="number">43110u64</span>, <span class="kw-2">&amp;mut </span>buffer, <span class="kw-2">&amp;mut </span>pos);
+<span class="comment">// The number of bytes written in the output array
+</span><span class="macro">assert_eq!</span>(result, <span class="prelude-val">Some</span>(<span class="number">3</span>));
+<span class="macro">assert_eq!</span>(pos, <span class="number">4</span>);
+
+<span class="macro">assert_eq!</span>(buffer, [<span class="number">0xFE</span>, <span class="number">0xE6</span>, <span class="number">0xD0</span>, <span class="number">0x02</span>, <span class="number">0xFE</span>, <span class="number">0xFE</span>, <span class="number">0xFE</span>, <span class="number">0xFE</span>, <span class="number">0xFE</span>, <span class="number">0xFE</span>]);
+
+<span class="comment">// Decode an unsigned 64 bit number with a slice:
+</span>pos = <span class="number">1</span>;
+<span class="kw">let </span>result = leb128fmt::decode_uint_slice::&lt;u64, <span class="number">64</span>&gt;(<span class="kw-2">&amp;</span>buffer, <span class="kw-2">&amp;mut </span>pos);
+<span class="macro">assert_eq!</span>(result, <span class="prelude-val">Ok</span>(<span class="number">43110</span>));
+<span class="macro">assert_eq!</span>(pos, <span class="number">4</span>);</code></pre></div><h3 id="functions-using-fixed-sized-encoding"><a class="doc-anchor" href="#functions-using-fixed-sized-encoding">§</a>Functions Using Fixed Sized Encoding</h3>
+<p>There may be several different ways to encode a value. For instance, <code>0</code> can
+be encoded as 32 bits unsigned:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>pos = <span class="number">0</span>;
+<span class="macro">assert_eq!</span>(leb128fmt::decode_uint_slice::&lt;u32, <span class="number">32</span>&gt;(<span class="kw-2">&amp;</span>[<span class="number">0x00</span>], <span class="kw-2">&amp;mut </span>pos), <span class="prelude-val">Ok</span>(<span class="number">0</span>));
+pos = <span class="number">0</span>;
+<span class="macro">assert_eq!</span>(leb128fmt::decode_uint_slice::&lt;u32, <span class="number">32</span>&gt;(<span class="kw-2">&amp;</span>[<span class="number">0x80</span>, <span class="number">0x00</span>], <span class="kw-2">&amp;mut </span>pos), <span class="prelude-val">Ok</span>(<span class="number">0</span>));
+pos = <span class="number">0</span>;
+<span class="macro">assert_eq!</span>(leb128fmt::decode_uint_slice::&lt;u32, <span class="number">32</span>&gt;(<span class="kw-2">&amp;</span>[<span class="number">0x80</span>, <span class="number">0x80</span>, <span class="number">0x00</span>], <span class="kw-2">&amp;mut </span>pos), <span class="prelude-val">Ok</span>(<span class="number">0</span>));
+pos = <span class="number">0</span>;
+<span class="macro">assert_eq!</span>(leb128fmt::decode_uint_slice::&lt;u32, <span class="number">32</span>&gt;(<span class="kw-2">&amp;</span>[<span class="number">0x80</span>, <span class="number">0x80</span>, <span class="number">0x80</span>, <span class="number">0x00</span>], <span class="kw-2">&amp;mut </span>pos), <span class="prelude-val">Ok</span>(<span class="number">0</span>));
+pos = <span class="number">0</span>;
+<span class="macro">assert_eq!</span>(leb128fmt::decode_uint_slice::&lt;u32, <span class="number">32</span>&gt;(<span class="kw-2">&amp;</span>[<span class="number">0x80</span>, <span class="number">0x80</span>, <span class="number">0x80</span>, <span class="number">0x80</span>, <span class="number">0x00</span>], <span class="kw-2">&amp;mut </span>pos), <span class="prelude-val">Ok</span>(<span class="number">0</span>));</code></pre></div>
+<p>There are functions provided to encode a value using the maximum number of
+bytes possible for a given bit size. Using the maximum number of bytes
+removes the benefit of compression, but it may be useful in a few scenarios.</p>
+<p>For instance, if a binary format needs to store the size or offset of some
+data before the size of data is known, it can be beneficial to write a fixed
+sized <code>0</code> placeholder value first. Then, once the real value is known, the
+<code>0</code> placeholder can be overwritten without moving other bytes. The real
+value is also written out using the fixed maximum number of bytes.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Encode an unsigned 32 bit number with all 5 bytes:
+</span><span class="kw">let </span>output  = leb128fmt::encode_fixed_u32(<span class="number">43110</span>).unwrap();
+<span class="macro">assert_eq!</span>(output, [<span class="number">0xE6</span>, <span class="number">0xD0</span>, <span class="number">0x82</span>, <span class="number">0x80</span>, <span class="number">0x00</span>]);
+
+<span class="comment">// Decode an unsigned 32 bit number:
+</span><span class="kw">let </span>input = output;
+<span class="kw">let </span>(result, read_len) = leb128fmt::decode_u32(input).unwrap();
+<span class="macro">assert_eq!</span>(result, <span class="number">43110</span>);
+
+<span class="comment">// Note that all 5 bytes are read
+</span><span class="macro">assert_eq!</span>(read_len, <span class="number">5</span>);</code></pre></div></div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.decode_sint_arr.html" title="macro leb128fmt::decode_sint_arr">decode_<wbr>sint_<wbr>arr</a></dt><dd>Builds custom signed integer decode functions.</dd><dt><a class="macro" href="macro.decode_uint_arr.html" title="macro leb128fmt::decode_uint_arr">decode_<wbr>uint_<wbr>arr</a></dt><dd>Builds custom unsigned integer decode functions.</dd><dt><a class="macro" href="macro.encode_fixed_sint_arr.html" title="macro leb128fmt::encode_fixed_sint_arr">encode_<wbr>fixed_<wbr>sint_<wbr>arr</a></dt><dd>Builds custom signed integer encode functions with the max byte length of
+byte arrays used.</dd><dt><a class="macro" href="macro.encode_fixed_uint_arr.html" title="macro leb128fmt::encode_fixed_uint_arr">encode_<wbr>fixed_<wbr>uint_<wbr>arr</a></dt><dd>Builds custom unsigned integer encode functions with the max byte length of
+byte arrays used.</dd><dt><a class="macro" href="macro.encode_sint_arr.html" title="macro leb128fmt::encode_sint_arr">encode_<wbr>sint_<wbr>arr</a></dt><dd>Builds custom signed integer encode functions.</dd><dt><a class="macro" href="macro.encode_uint_arr.html" title="macro leb128fmt::encode_uint_arr">encode_<wbr>uint_<wbr>arr</a></dt><dd>Builds custom unsigned integer encode functions.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Error.html" title="struct leb128fmt::Error">Error</a></dt><dd>Error when decoding a LEB128 value.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.SInt.html" title="trait leb128fmt::SInt">SInt</a></dt><dd>Sealed trait for supported signed integer types.</dd><dt><a class="trait" href="trait.UInt.html" title="trait leb128fmt::UInt">UInt</a></dt><dd>Sealed trait for supported unsigned integer types.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.decode_s32.html" title="fn leb128fmt::decode_s32">decode_<wbr>s32</a></dt><dd>Decodes an unsigned LEB128 number.</dd><dt><a class="fn" href="fn.decode_s64.html" title="fn leb128fmt::decode_s64">decode_<wbr>s64</a></dt><dd>Decodes an unsigned LEB128 number.</dd><dt><a class="fn" href="fn.decode_sint_slice.html" title="fn leb128fmt::decode_sint_slice">decode_<wbr>sint_<wbr>slice</a></dt><dd>Decodes an unsigned integer from a slice of bytes and starting at a given position.</dd><dt><a class="fn" href="fn.decode_u32.html" title="fn leb128fmt::decode_u32">decode_<wbr>u32</a></dt><dd>Decodes an unsigned LEB128 number.</dd><dt><a class="fn" href="fn.decode_u64.html" title="fn leb128fmt::decode_u64">decode_<wbr>u64</a></dt><dd>Decodes an unsigned LEB128 number.</dd><dt><a class="fn" href="fn.decode_uint_slice.html" title="fn leb128fmt::decode_uint_slice">decode_<wbr>uint_<wbr>slice</a></dt><dd>Decodes an unsigned integer from a slice of bytes and starting at a given position.</dd><dt><a class="fn" href="fn.encode_fixed_s32.html" title="fn leb128fmt::encode_fixed_s32">encode_<wbr>fixed_<wbr>s32</a></dt><dd>Encodes a value as a signed LEB128 number.</dd><dt><a class="fn" href="fn.encode_fixed_s64.html" title="fn leb128fmt::encode_fixed_s64">encode_<wbr>fixed_<wbr>s64</a></dt><dd>Encodes a value as a signed LEB128 number.</dd><dt><a class="fn" href="fn.encode_fixed_sint_slice.html" title="fn leb128fmt::encode_fixed_sint_slice">encode_<wbr>fixed_<wbr>sint_<wbr>slice</a></dt><dd>Encodes a given value into an output slice using a fixed set of bytes.</dd><dt><a class="fn" href="fn.encode_fixed_u32.html" title="fn leb128fmt::encode_fixed_u32">encode_<wbr>fixed_<wbr>u32</a></dt><dd>Encodes an unsigned LEB128 number with using the maximum number of
+bytes for the given bits length.</dd><dt><a class="fn" href="fn.encode_fixed_u64.html" title="fn leb128fmt::encode_fixed_u64">encode_<wbr>fixed_<wbr>u64</a></dt><dd>Encodes an unsigned LEB128 number with using the maximum number of
+bytes for the given bits length.</dd><dt><a class="fn" href="fn.encode_fixed_uint_slice.html" title="fn leb128fmt::encode_fixed_uint_slice">encode_<wbr>fixed_<wbr>uint_<wbr>slice</a></dt><dd>Encodes a given value into an output slice using a fixed set of bytes.</dd><dt><a class="fn" href="fn.encode_s32.html" title="fn leb128fmt::encode_s32">encode_<wbr>s32</a></dt><dd>Encodes a value as a signed LEB128 number.</dd><dt><a class="fn" href="fn.encode_s64.html" title="fn leb128fmt::encode_s64">encode_<wbr>s64</a></dt><dd>Encodes a value as a signed LEB128 number.</dd><dt><a class="fn" href="fn.encode_sint_slice.html" title="fn leb128fmt::encode_sint_slice">encode_<wbr>sint_<wbr>slice</a></dt><dd>Encodes a given value into an output slice using the fixed set of bytes.</dd><dt><a class="fn" href="fn.encode_u32.html" title="fn leb128fmt::encode_u32">encode_<wbr>u32</a></dt><dd>Encodes a value as an unsigned LEB128 number.</dd><dt><a class="fn" href="fn.encode_u64.html" title="fn leb128fmt::encode_u64">encode_<wbr>u64</a></dt><dd>Encodes a value as an unsigned LEB128 number.</dd><dt><a class="fn" href="fn.encode_uint_slice.html" title="fn leb128fmt::encode_uint_slice">encode_<wbr>uint_<wbr>slice</a></dt><dd>Encodes a given value into an output slice using the fixed set of bytes.</dd><dt><a class="fn" href="fn.is_last.html" title="fn leb128fmt::is_last">is_last</a></dt><dd>Returns true if this is the last byte in an encoded LEB128 value.</dd><dt><a class="fn" href="fn.max_len.html" title="fn leb128fmt::max_len">max_len</a></dt><dd>Returns the maximum byte length that is used to encode a value for a given
+number of <code>BITS</code>.</dd></dl></section></div></main></body></html>

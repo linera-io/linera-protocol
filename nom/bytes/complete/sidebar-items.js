@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["escaped","escaped_transform","is_a","is_not","tag","tag_no_case","take","take_till","take_till1","take_until","take_until1","take_while","take_while1","take_while_m_n"]};

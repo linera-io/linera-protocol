@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BERLIN","BYZANTIUM","OSAKA"],"fn":["berlin_gas_calc","berlin_run","byzantium_gas_calc","byzantium_run","calculate_iteration_count","gas_calc","osaka_gas_calc","osaka_run","run_inner"]};

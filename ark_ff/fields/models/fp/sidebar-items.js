@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"derive":["MontConfig"],"fn":["can_use_no_carry_mul_optimization","can_use_no_carry_square_optimization","inv","modulus_has_spare_bit","sqrt_precomputation"],"macro":["MontFp"],"struct":["Fp","MontBackend"],"trait":["FpConfig","MontConfig"],"type":["Fp128","Fp192","Fp256","Fp320","Fp384","Fp448","Fp512","Fp576","Fp64","Fp640","Fp704","Fp768","Fp832"]};

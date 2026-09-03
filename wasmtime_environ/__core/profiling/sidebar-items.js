@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["compiler_copy","compiler_move"]};
