@@ -234,6 +234,14 @@ type BlockHeader {
 	"""
 	previousEventBlocksHash: CryptoHash!
 	"""
+	The height of the most recent checkpoint block strictly below this one, if any.
+	
+	A block that is itself a checkpoint points at the one before it, so a reader takes the
+	latest checkpoint at or below a block from this field, or from the block itself when
+	[`BlockBody::starts_with_checkpoint`].
+	"""
+	previousCheckpoint: BlockHeight
+	"""
 	Cryptographic hash of all the oracle responses in the block.
 	"""
 	oracleResponsesHash: CryptoHash!

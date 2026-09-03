@@ -263,7 +263,7 @@ pub(crate) mod metrics {
 }
 
 /// The BCS-serialized size of an empty [`Block`].
-pub(crate) const EMPTY_BLOCK_SIZE: usize = 94;
+pub(crate) const EMPTY_BLOCK_SIZE: usize = 95;
 
 /// A set of fully-tracked chains. Wrapped in [`Hashed`] (as `Hashed<ChainIdSet>`) so the hash that
 /// identifies the set — stored in [`ChainStateView::outbox_index_tracked_hash`] to detect when the
@@ -871,6 +871,7 @@ where
         checkpoint_origin_cursors: Vec<(ChainId, Cursor)>,
         checkpoint_inbox_cursors: Vec<(ChainId, Cursor)>,
         checkpoint_outbox_block_hashes: Vec<CryptoHash>,
+        latest_checkpoint_height: Option<BlockHeight>,
     ) -> Result<(BlockExecutionOutcome, ResourceTracker, HashSet<ChainId>), ChainError> {
         #[cfg(with_metrics)]
         let block_execution_latency =
@@ -1215,6 +1216,18 @@ where
             previous_event_blocks.insert(stream, (hash, height));
         }
 
+        // Named from the chain's own state, so that whoever reads the block later can find the
+        // checkpoint without opening a view of this chain. A block cannot name itself: its hash
+        // is not known yet, so a block that is itself a checkpoint points at the one before it.
+        // A checkpoint block replaces the history below it, so it cannot attest to what it
+        // replaced: a node that bootstrapped from this very checkpoint has no way to know about
+        // an earlier one, and would compute a different header than the producer did. Every
+        // other block agrees, because installing a checkpoint records it. Readers lose nothing:
+        // the latest checkpoint at or below a checkpoint block is that block itself, which
+        // `BlockBody::starts_with_checkpoint` already says.
+        let previous_checkpoint =
+            latest_checkpoint_height.filter(|_| !block.starts_with_checkpoint());
+
         let state_hash = {
             #[cfg(with_metrics)]
             let state_hash_latency =
@@ -1232,6 +1245,7 @@ where
                 messages,
                 previous_message_blocks,
                 previous_event_blocks,
+                previous_checkpoint,
                 state_hash,
                 oracle_responses,
                 events,
@@ -1376,6 +1390,7 @@ where
             origin_cursors,
             inbox_cursors,
             outbox_block_hashes,
+            *self.latest_checkpoint_height.get(),
         )
         .await?;
 

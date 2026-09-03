@@ -78,6 +78,9 @@ BlockHeader:
         TYPENAME: CryptoHash
     - previous_event_blocks_hash:
         TYPENAME: CryptoHash
+    - previous_checkpoint:
+        OPTION:
+          TYPENAME: BlockHeight
     - oracle_responses_hash:
         TYPENAME: CryptoHash
     - events_hash:

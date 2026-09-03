@@ -539,6 +539,8 @@ pub struct BlockExecutionOutcome {
     pub previous_message_blocks: BTreeMap<ChainId, (CryptoHash, BlockHeight)>,
     /// The hashes and heights of previous blocks that published events to the same channels.
     pub previous_event_blocks: BTreeMap<StreamId, (CryptoHash, BlockHeight)>,
+    /// The height of the most recent checkpoint block strictly below this one, if any.
+    pub previous_checkpoint: Option<BlockHeight>,
     /// The hash of the chain's execution state after this block.
     pub state_hash: CryptoHash,
     /// The record of oracle responses for each transaction.
