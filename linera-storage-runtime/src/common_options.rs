@@ -5,6 +5,8 @@ use linera_storage::{StorageCacheConfig, DEFAULT_CLEANUP_INTERVAL_SECS};
 use linera_views::lru_prefix_cache::StorageCacheConfig as ViewsStorageCacheConfig;
 #[cfg(feature = "rocksdb")]
 use {linera_views::rocks_db::RocksDbStatisticsLevel, std::str::FromStr as _};
+#[cfg(feature = "scylladb")]
+use {linera_views::scylla_db::DEFAULT_MAX_CONCURRENT_CHUNK_QUERIES, std::num::NonZeroUsize};
 
 /// Command-line options shared by all storage backends, controlling concurrency
 /// limits and cache sizes.
@@ -81,6 +83,13 @@ pub struct CommonStorageOptions {
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1", global = true)]
     pub storage_replication_factor: u32,
+
+    /// The maximal number of chunk queries a single multi-key read sends at once. A large
+    /// read is split into fixed-size chunks; issuing every chunk simultaneously can exhaust
+    /// ScyllaDB's reader-concurrency semaphore and inflate read latency for other callers.
+    #[cfg(feature = "scylladb")]
+    #[arg(long, default_value_t = DEFAULT_MAX_CONCURRENT_CHUNK_QUERIES, global = true)]
+    pub scylladb_max_concurrent_chunk_queries: NonZeroUsize,
 
     /// Enable RocksDB's internal statistics collection and export them as Prometheus
     /// metrics. Off by default; enable it on nodes whose metrics are scraped.
@@ -176,6 +185,34 @@ mod tests {
             "test",
             "--rocksdb-statistics-level",
             "not-a-level",
+        ])
+        .is_err());
+    }
+}
+
+#[cfg(all(test, feature = "scylladb"))]
+mod scylladb_tests {
+    use clap::Parser as _;
+    use linera_views::scylla_db::DEFAULT_MAX_CONCURRENT_CHUNK_QUERIES;
+
+    use super::CommonStorageOptions;
+
+    #[test]
+    fn chunk_query_bound_defaults_to_the_views_default() {
+        let options = CommonStorageOptions::with_defaults();
+        assert_eq!(
+            options.scylladb_max_concurrent_chunk_queries,
+            DEFAULT_MAX_CONCURRENT_CHUNK_QUERIES,
+        );
+    }
+
+    // `buffered(0)` admits no future and hangs forever, so zero must never reach the store.
+    #[test]
+    fn rejects_a_zero_chunk_query_bound() {
+        assert!(CommonStorageOptions::try_parse_from([
+            "test",
+            "--scylladb-max-concurrent-chunk-queries",
+            "0",
         ])
         .is_err());
     }

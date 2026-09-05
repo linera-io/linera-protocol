@@ -39,6 +39,17 @@ async fn test_read_multi_values_scylla_db() {
     big_read_multi_values::<ScyllaDbDatabase>(config, 22200000, 200).await;
 }
 
+// More chunks than the concurrent-chunk-query bound, so the fan-out has to run several waves:
+// the only regime whose behaviour differs from issuing every chunk at once. Small values keep
+// it cheap enough to run unignored.
+#[cfg(with_scylladb)]
+#[tokio::test]
+async fn test_multi_wave_read_multi_values_scylla_db() {
+    use linera_views::scylla_db::ScyllaDbDatabase;
+    let config = ScyllaDbDatabase::new_test_config().await.unwrap();
+    big_read_multi_values::<ScyllaDbDatabase>(config, 100, 2000).await;
+}
+
 #[tokio::test]
 async fn test_reads_test_memory() {
     for scenario in get_random_test_scenarios() {

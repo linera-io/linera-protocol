@@ -4,11 +4,12 @@
 //! Implements [`crate::store::KeyValueStore`] for the ScyllaDB database.
 //!
 //! The current connection is done via a Session and a corresponding primary key called
-//! "namespace". The maximum number of concurrent queries is controlled by
-//! `max_concurrent_queries`.
+//! "namespace". `max_concurrent_queries` bounds how many store operations run at once, while
+//! `max_concurrent_chunk_queries` bounds the chunk queries issued within one multi-key read.
 
 use std::{
     collections::{BTreeSet, HashMap},
+    num::NonZeroUsize,
     ops::Deref,
     sync::{
         atomic::{AtomicI64, Ordering},
@@ -18,7 +19,7 @@ use std::{
 };
 
 use async_lock::{Semaphore, SemaphoreGuard};
-use futures::{future::join_all, StreamExt as _};
+use futures::{stream, StreamExt as _, TryStreamExt as _};
 use linera_base::{ensure, util::future::FutureSyncExt as _};
 use scylla::{
     client::{
@@ -61,6 +62,16 @@ use crate::{
 /// Fundamental constant in ScyllaDB: The maximum size of a multi keys query
 /// The limit is in reality 100. But we need one entry for the root key.
 const MAX_MULTI_KEYS: usize = 100 - 1;
+
+/// Default for how many chunk queries a single multi-key read may have in flight at once.
+///
+/// A multi-key read is split into `MAX_MULTI_KEYS`-sized chunks, so one logical read of a large
+/// range expands into many queries against the *same* partition. Issuing them all at once
+/// exhausts ScyllaDB's reader-concurrency semaphore and inflates read latency for every other
+/// caller without buying throughput, so the fan-out is capped instead.
+///
+/// Non-zero because `buffered(0)` admits no future and would hang forever.
+pub const DEFAULT_MAX_CONCURRENT_CHUNK_QUERIES: NonZeroUsize = NonZeroUsize::new(10).unwrap();
 
 /// The maximal size of an operation on ScyllaDB seems to be 16 MiB
 /// https://www.scylladb.com/2019/03/27/best-practices-for-scylla-applications/
@@ -731,6 +742,8 @@ pub struct ScyllaDbStoreInternal {
     store: Arc<ScyllaDbClient>,
     semaphore: Option<Arc<Semaphore>>,
     root_key: Vec<u8>,
+    /// Upper bound on chunk queries in flight for one multi-key read.
+    max_concurrent_chunk_queries: NonZeroUsize,
     /// Whether this store was opened with `open_exclusive`. When true, `write_batch`
     /// resolves in-batch prefix/insert collisions via per-statement `USING TIMESTAMP`;
     /// when false, it splits the batch into two sequential sub-batches with
@@ -747,6 +760,7 @@ pub struct ScyllaDbStoreInternal {
 pub struct ScyllaDbDatabaseInternal {
     store: Arc<ScyllaDbClient>,
     semaphore: Option<Arc<Semaphore>>,
+    max_concurrent_chunk_queries: NonZeroUsize,
 }
 
 impl WithError for ScyllaDbDatabaseInternal {
@@ -877,11 +891,12 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
         let _guard = self.acquire().await;
         let handles = keys
             .chunks(MAX_MULTI_KEYS)
-            .map(|keys| store.contains_keys_internal(&self.root_key, keys.to_vec()));
-        let results: Vec<_> = join_all(handles)
-            .await
-            .into_iter()
-            .collect::<Result<_, _>>()?;
+            .map(|keys| store.contains_keys_internal(&self.root_key, keys.to_vec()))
+            .collect::<Vec<_>>();
+        let results: Vec<_> = stream::iter(handles)
+            .buffered(self.max_concurrent_chunk_queries.get())
+            .try_collect()
+            .await?;
         Ok(results.into_iter().flatten().collect())
     }
 
@@ -896,11 +911,12 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
         let _guard = self.acquire().await;
         let handles = keys
             .chunks(MAX_MULTI_KEYS)
-            .map(|keys| store.read_multi_values_internal(&self.root_key, keys.to_vec()));
-        let results: Vec<_> = join_all(handles)
-            .await
-            .into_iter()
-            .collect::<Result<_, _>>()?;
+            .map(|keys| store.read_multi_values_internal(&self.root_key, keys.to_vec()))
+            .collect::<Vec<_>>();
+        let results: Vec<_> = stream::iter(handles)
+            .buffered(self.max_concurrent_chunk_queries.get())
+            .try_collect()
+            .await?;
         Ok(results.into_iter().flatten().collect())
     }
 
@@ -1043,6 +1059,8 @@ pub struct ScyllaDbStoreInternalConfig {
     pub uri: String,
     /// Maximum number of concurrent database queries allowed for this client.
     pub max_concurrent_queries: Option<usize>,
+    /// Maximum number of chunk queries issued at once by a single multi-key read.
+    pub max_concurrent_chunk_queries: NonZeroUsize,
     /// The replication factor.
     pub replication_factor: u32,
 }
@@ -1066,7 +1084,11 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         let semaphore = config
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
-        Ok(Self { store, semaphore })
+        Ok(Self {
+            store,
+            semaphore,
+            max_concurrent_chunk_queries: config.max_concurrent_chunk_queries,
+        })
     }
 
     fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, ScyllaDbStoreInternalError> {
@@ -1077,6 +1099,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
             store,
             semaphore,
             root_key,
+            max_concurrent_chunk_queries: self.max_concurrent_chunk_queries,
             is_exclusive: false,
             ts_floor: Arc::new(AtomicI64::new(0)),
         })
@@ -1090,6 +1113,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
             store,
             semaphore,
             root_key,
+            max_concurrent_chunk_queries: self.max_concurrent_chunk_queries,
             is_exclusive: true,
             ts_floor: Arc::new(AtomicI64::new(0)),
         })
@@ -1312,6 +1336,7 @@ impl TestKeyValueDatabase for JournalingKeyValueDatabase<ScyllaDbDatabaseInterna
         Ok(ScyllaDbStoreInternalConfig {
             uri,
             max_concurrent_queries: Some(10),
+            max_concurrent_chunk_queries: DEFAULT_MAX_CONCURRENT_CHUNK_QUERIES,
             replication_factor: 1,
         })
     }
