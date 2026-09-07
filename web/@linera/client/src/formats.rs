@@ -43,7 +43,14 @@ impl Formats {
     /// If the bytes are not a BCS-encoded `Formats`.
     #[wasm_bindgen(js_name = fromBytes)]
     pub fn from_bytes(bytes: &[u8]) -> Result<Formats> {
-        Ok(Formats(linera_sdk::bcs::from_bytes(bytes)?))
+        let mut formats: linera_sdk::formats::Formats = linera_sdk::bcs::from_bytes(bytes)?;
+        // Formats published without pruning define the well-known linera-base
+        // primitives themselves, which shadows the SDK's `LineraEnvironment` and leaves
+        // an `AccountOwner` rendered as its variant and bytes rather than as an address.
+        // Registry entries are immutable, so pruning here is what repairs those. A name
+        // collision leaves the registry untouched, so this is safe to always apply.
+        let _ = formats.prune_known_primitives();
+        Ok(Formats(formats))
     }
 
     /// Decodes the bytes of an operation into a plain JavaScript value.
