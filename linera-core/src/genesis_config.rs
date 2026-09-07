@@ -8,7 +8,7 @@ use linera_base::{
         Amount, Blob, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, NetworkDescription,
         Timestamp,
     },
-    identifiers::ChainId,
+    identifiers::{AccountOwner, ChainId},
     ownership::ChainOwnership,
 };
 use linera_execution::committee::Committee;
@@ -38,6 +38,7 @@ fn make_chain(
     let origin = ChainOrigin::Root(index);
     let config = InitialChainConfig {
         application_permissions: Default::default(),
+        account: AccountOwner::CHAIN,
         balance,
         epoch: Epoch::ZERO,
         ownership: ChainOwnership::single(public_key.into()),

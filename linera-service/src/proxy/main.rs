@@ -324,6 +324,10 @@ where
             address,
             shutdown_signal.clone(),
             enable_memory_profiling,
+            || {
+                linera_service::init_metrics();
+                grpc::metrics::init_metrics();
+            },
         )
         .await;
 

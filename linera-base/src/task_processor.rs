@@ -29,6 +29,13 @@ pub struct ProcessorActions {
     /// upon the next query for actions.
     pub set_cursor: Option<String>,
     /// The application is requesting the execution of the given tasks.
+    ///
+    /// Tasks are grouped by [`id`](Task::id), the ones without an id forming a single group.
+    /// The outcomes of distinct groups commute: each is submitted as soon as its task
+    /// succeeds, in no guaranteed order relative to the other groups, and a task that fails is
+    /// retried without holding the other groups back. Within a group the outcomes are
+    /// submitted in the order of this vector and submission stops at the first failure, so
+    /// that an application matching them by position never sees a gap.
     pub execute_tasks: Vec<Task>,
 }
 
@@ -37,6 +44,13 @@ scalar!(ProcessorActions);
 /// An off-chain task requested by an on-chain application.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Task {
+    /// An opaque, application-defined identifier, echoed back in the [`TaskOutcome`].
+    ///
+    /// Applications that set it match outcomes by identity rather than by position. An id
+    /// distinct from the id of every other task of the batch makes the outcome independent of
+    /// all of them; see [`ProcessorActions::execute_tasks`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
     /// The operator handling the task.
     pub operator: String,
     /// The input argument in JSON.
@@ -46,6 +60,9 @@ pub struct Task {
 /// The result of executing an off-chain operator.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TaskOutcome {
+    /// The identifier of the [`Task`] this outcome belongs to, if it had one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
     /// The operator handling the task.
     pub operator: String,
     /// The JSON output.

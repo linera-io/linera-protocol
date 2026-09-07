@@ -590,6 +590,8 @@ InitialChainConfig:
         TYPENAME: ChainOwnership
     - epoch:
         TYPENAME: Epoch
+    - account:
+        TYPENAME: AccountOwner
     - balance:
         TYPENAME: Amount
     - application_permissions:
@@ -761,14 +763,15 @@ NodeError:
           - found_block_height:
               TYPENAME: BlockHeight
     8:
-      MissingCrossChainUpdate:
+      MissingCrossChainUpdates:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
-          - origin:
-              TYPENAME: ChainId
-          - height:
-              TYPENAME: BlockHeight
+          - bundles:
+              SEQ:
+                TUPLE:
+                  - TYPENAME: ChainId
+                  - TYPENAME: BlockHeight
     9:
       BlobsNotFound:
         NEWTYPE:
@@ -880,6 +883,8 @@ OpenChainConfig:
   STRUCT:
     - ownership:
         TYPENAME: ChainOwnership
+    - account:
+        TYPENAME: AccountOwner
     - balance:
         TYPENAME: Amount
     - application_permissions:

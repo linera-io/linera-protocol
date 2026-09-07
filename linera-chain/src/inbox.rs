@@ -25,29 +25,27 @@ use crate::{data_types::MessageBundle, ChainError};
 mod inbox_tests;
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{exponential_bucket_interval, register_histogram_vec};
     use prometheus::HistogramVec;
 
-    pub static INBOX_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "inbox_size",
-            "Inbox size",
-            &[],
-            exponential_bucket_interval(1.0, 2_000_000.0),
-        )
-    });
+    linera_base::declare_metrics! {
+        pub static INBOX_SIZE: HistogramVec =
+            register_histogram_vec(
+                "inbox_size",
+                "Inbox size",
+                &[],
+                exponential_bucket_interval(1.0, 2_000_000.0),
+            );
 
-    pub static REMOVED_BUNDLES: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "removed_bundles",
-            "Number of bundles removed by anticipation",
-            &[],
-            exponential_bucket_interval(1.0, 10_000.0),
-        )
-    });
+        pub static REMOVED_BUNDLES: HistogramVec =
+            register_histogram_vec(
+                "removed_bundles",
+                "Number of bundles removed by anticipation",
+                &[],
+                exponential_bucket_interval(1.0, 10_000.0),
+            );
+    }
 }
 
 /// The state of an inbox.

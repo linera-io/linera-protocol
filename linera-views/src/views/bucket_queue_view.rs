@@ -20,21 +20,20 @@ use crate::{
 };
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
     use prometheus::HistogramVec;
 
-    /// The runtime of hash computation
-    pub static BUCKET_QUEUE_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "bucket_queue_view_hash_runtime",
-            "BucketQueueView hash runtime",
-            &[],
-            exponential_bucket_latencies(5.0),
-        )
-    });
+    linera_base::declare_metrics! {
+        /// The runtime of hash computation
+        pub static BUCKET_QUEUE_VIEW_HASH_RUNTIME: HistogramVec =
+            register_histogram_vec(
+                "bucket_queue_view_hash_runtime",
+                "BucketQueueView hash runtime",
+                &[],
+                exponential_bucket_latencies(5.0),
+            );
+    }
 }
 
 /// Key tags to create the sub-keys of a [`BucketQueueView`] on top of the base key.

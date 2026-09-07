@@ -89,6 +89,7 @@ impl QueryRoot {
         if let Ok(pending_tasks) = self.state.pending_tasks.read_front(count).await {
             for pending in pending_tasks {
                 actions.execute_tasks.push(Task {
+                    id: Some(pending.id.to_string()),
                     operator: pending.operator,
                     input: pending.input,
                 });
@@ -100,8 +101,14 @@ impl QueryRoot {
 
     /// Processes the outcome of a completed task and schedules operations.
     async fn process_task_outcome(&self, outcome: TaskOutcome) -> bool {
+        // The outcome is matched to its task by identity, so an outcome missing after a
+        // failure does not shift the ones that follow.
+        let Some(id) = outcome.id.and_then(|id| id.parse::<u64>().ok()) else {
+            return false;
+        };
         // Schedule an operation to store the result and remove the pending task.
         let operation = TaskProcessorOperation::StoreResult {
+            id,
             result: outcome.output,
         };
         self.runtime.schedule_operation(&operation);

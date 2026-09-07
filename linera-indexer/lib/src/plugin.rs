@@ -78,10 +78,7 @@ where
     D::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
 {
     let root_key = name.as_bytes().to_vec();
-    let store = database
-        .open_exclusive(&root_key)
-        .map_err(|_e| IndexerError::OpenExclusiveError)?;
-    let context = ViewContext::create_root_context(store, ())
+    let context = ViewContext::create_root_context(&database, &root_key, ())
         .await
         .map_err(|e| IndexerError::ViewError(e.into()))?;
     let plugin = V::load(context).await?;

@@ -68,6 +68,8 @@ fn init_with_tracer_provider(log_name: &str, tracer_provider: &SdkTracerProvider
         .with(maybe_log_file_layer)
         .with(stderr_layer)
         .init();
+
+    linera_base::panic_hook::init();
 }
 
 /// Builds an OpenTelemetry layer with the opentelemetry.skip filter.

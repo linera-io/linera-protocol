@@ -50,31 +50,29 @@ pub struct ExecutionStateActor<'a, C> {
 }
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
     use prometheus::HistogramVec;
 
-    /// Histogram of the latency to load a contract bytecode.
-    pub static LOAD_CONTRACT_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "load_contract_latency",
-            "Load contract latency",
-            &[],
-            exponential_bucket_latencies(250.0),
-        )
-    });
+    linera_base::declare_metrics! {
+        /// Histogram of the latency to load a contract bytecode.
+        pub static LOAD_CONTRACT_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "load_contract_latency",
+                "Load contract latency",
+                &[],
+                exponential_bucket_latencies(250.0),
+            );
 
-    /// Histogram of the latency to load a service bytecode.
-    pub static LOAD_SERVICE_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "load_service_latency",
-            "Load service latency",
-            &[],
-            exponential_bucket_latencies(250.0),
-        )
-    });
+        /// Histogram of the latency to load a service bytecode.
+        pub static LOAD_SERVICE_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "load_service_latency",
+                "Load service latency",
+                &[],
+                exponential_bucket_latencies(250.0),
+            );
+    }
 }
 
 pub(crate) type ExecutionStateSender = mpsc::UnboundedSender<ExecutionRequest>;
@@ -418,23 +416,22 @@ where
             }
 
             OpenChain {
-                ownership,
-                balance,
+                config,
                 parent_id,
                 block_height,
-                application_permissions,
                 timestamp,
                 callback,
             } => {
-                let config = OpenChainConfig {
-                    ownership,
-                    balance,
-                    application_permissions,
-                };
                 let chain_id = self
                     .state
                     .system
-                    .open_chain(config, parent_id, block_height, timestamp, self.txn_tracker)
+                    .open_chain(
+                        *config,
+                        parent_id,
+                        block_height,
+                        timestamp,
+                        self.txn_tracker,
+                    )
                     .await?;
                 callback.respond(chain_id);
             }
@@ -821,7 +818,7 @@ where
             } => {
                 let view = self.state.users.try_load_entry(&application).await?;
                 let result = match view {
-                    Some(view) => view.count().await? == 0,
+                    Some(view) => view.iterative_count().await? == 0,
                     None => true,
                 };
                 callback.respond(result);
@@ -1492,12 +1489,9 @@ pub enum ExecutionRequest {
     },
 
     OpenChain {
-        ownership: ChainOwnership,
-        #[debug(skip_if = Amount::is_zero)]
-        balance: Amount,
+        config: Box<OpenChainConfig>,
         parent_id: ChainId,
         block_height: BlockHeight,
-        application_permissions: ApplicationPermissions,
         timestamp: Timestamp,
         #[debug(skip)]
         callback: Sender<ChainId>,

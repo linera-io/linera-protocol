@@ -35,7 +35,7 @@ use crate::{
     },
     manager::proof::{
         commit::{
-            CertifiedBlockWasExecuted, CommitRestsOnValidation, IncomingBundlesAreSelfDerived,
+            CertifiedBlockWasExecuted, CommitRestsOnValidation, IncomingBundlesMatchTheLocalInbox,
         },
         locking::{
             ConfirmedVoteRoundMonotone, OneConfirmationVotePerRound, OneValidationVotePerRound,
@@ -515,7 +515,7 @@ pub trait AccountableSafety:
 ///   certificate; and the `execution_state_cache` hit path skips re-execution.
 ///
 ///   The properties that do protect against a bad outcome are [`CertifiedBlockWasExecuted`] and,
-///   for the cross-chain component, [`IncomingBundlesAreSelfDerived`]. Unlike everything else in
+///   for the cross-chain component, [`IncomingBundlesMatchTheLocalInbox`]. Unlike everything else in
 ///   this module both need
 ///   [`MaxByzantineWeight`](crate::manager::proof::model::MaxByzantineWeight): validity degrades
 ///   above the fault bound with no forensic residue, whereas agreement degrades with one.
@@ -530,12 +530,12 @@ pub trait AccountableSafety:
 /// [`ChainError::CorruptedChainState`]: crate::ChainError::CorruptedChainState
 /// [`extract_equivocations`]: crate::justification::extract_equivocations
 /// [`CertifiedBlockWasExecuted`]: crate::manager::proof::commit::CertifiedBlockWasExecuted
-/// [`IncomingBundlesAreSelfDerived`]: crate::manager::proof::commit::IncomingBundlesAreSelfDerived
+/// [`IncomingBundlesMatchTheLocalInbox`]: crate::manager::proof::commit::IncomingBundlesMatchTheLocalInbox
 pub trait AccountabilityScope:
     AccountableSafety
     + DoubleValidationCompleteness
     + CertifiedBlockWasExecuted
-    + IncomingBundlesAreSelfDerived
+    + IncomingBundlesMatchTheLocalInbox
     + CommitRestsOnValidation
 {
 }

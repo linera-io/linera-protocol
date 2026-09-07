@@ -670,6 +670,21 @@ pub trait Clock {
     }
 }
 
+/// Registers every metric this crate declares.
+///
+/// Without this, a metric is only exported after the code path that observes it has run, so a
+/// rarely-taken path leaves its panels blank and makes a routine restart look like the metric
+/// was removed.
+#[cfg(with_metrics)]
+pub fn init_metrics() {
+    linera_base::init_metrics();
+    linera_cache::init_metrics();
+    linera_chain::init_metrics();
+    linera_execution::init_metrics();
+    linera_views::init_metrics();
+    db_storage::metrics::init_metrics();
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -680,7 +695,7 @@ mod tests {
             Amount, ApplicationPermissions, Blob, BlockHeight, ChainDescription, ChainOrigin,
             Epoch, InitialChainConfig, NetworkDescription, Round, Timestamp,
         },
-        identifiers::{BlobId, BlobType, ChainId, EventId, StreamId},
+        identifiers::{AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
         ownership::ChainOwnership,
     };
     use linera_chain::{
@@ -723,6 +738,7 @@ mod tests {
             InitialChainConfig {
                 ownership: ChainOwnership::single(AccountPublicKey::test_key(0).into()),
                 epoch: Epoch::ZERO,
+                account: AccountOwner::CHAIN,
                 balance: Amount::ZERO,
                 application_permissions: ApplicationPermissions::default(),
             },

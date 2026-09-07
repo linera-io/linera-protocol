@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 /// A pending task stored in the application state.
 #[derive(Clone, Debug, Serialize, Deserialize, async_graphql::SimpleObject)]
 pub struct PendingTask {
+    /// The identifier under which the task processor reports the outcome.
+    pub id: u64,
     /// The operator to execute the task.
     pub operator: String,
     /// The input to pass to the operator.
@@ -19,6 +21,8 @@ pub struct PendingTask {
 pub struct TaskProcessorState {
     /// Pending tasks to be executed.
     pub pending_tasks: QueueView<PendingTask>,
+    /// The identifier to assign to the next requested task.
+    pub next_task_id: RegisterView<u64>,
     /// Results from completed tasks.
     pub results: QueueView<String>,
     /// Counter for tracking how many tasks have been processed.

@@ -25,6 +25,11 @@ use wasm_bindgen::{JsCast as _, JsValue, UnwrapThrowExt as _};
 use wasm_bindgen_futures::JsFuture;
 
 /// Errors that can occur when acquiring a lock.
+///
+/// Adding a [`std::error::Error`] impl here is an E0119 conflict against the explicit
+/// `From<lock::Error>` in [`crate::error`]. That explicit impl is what keeps this type out
+/// of `Error::Other`: drop it and the blanket `From` absorbs this type, losing the
+/// `LockError` class that JavaScript matches on.
 #[derive(Debug)]
 pub enum Error {
     /// The lock could not be acquired because another context already holds it.

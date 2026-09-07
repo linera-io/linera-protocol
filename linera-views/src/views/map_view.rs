@@ -20,21 +20,20 @@
 use linera_base::prometheus_util::MeasureLatency as _;
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
     use prometheus::HistogramVec;
 
-    /// The runtime of hash computation
-    pub static MAP_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "map_view_hash_runtime",
-            "MapView hash runtime",
-            &[],
-            exponential_bucket_latencies(5.0),
-        )
-    });
+    linera_base::declare_metrics! {
+        /// The runtime of hash computation
+        pub static MAP_VIEW_HASH_RUNTIME: HistogramVec =
+            register_histogram_vec(
+                "map_view_hash_runtime",
+                "MapView hash runtime",
+                &[],
+                exponential_bucket_latencies(5.0),
+            );
+    }
 }
 
 use std::{
@@ -2220,15 +2219,13 @@ mod graphql {
                 self.keys().await?
             };
 
-            let mut entries = vec![];
-            for key in keys {
-                entries.push(Entry {
-                    value: self.get(&key).await?,
-                    key,
-                })
-            }
+            let values = self.multi_get(keys.clone()).await?;
 
-            Ok(entries)
+            Ok(keys
+                .into_iter()
+                .zip(values)
+                .map(|(key, value)| Entry { key, value })
+                .collect())
         }
     }
 

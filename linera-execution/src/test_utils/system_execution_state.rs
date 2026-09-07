@@ -66,15 +66,25 @@ impl SystemExecutionState {
     /// Creates a system execution state from a chain description, with dummy committees.
     pub fn new(description: ChainDescription) -> Self {
         let ownership = description.config().ownership.clone();
-        let balance = description.config().balance;
+        let account = description.config().account;
+        let initial_balance = description.config().balance;
         let epoch = description.config().epoch;
         let admin_chain_id = Some(dummy_chain_description(0).id());
+        let (balance, balances) = if account.is_chain() {
+            (initial_balance, BTreeMap::new())
+        } else {
+            (
+                Amount::ZERO,
+                BTreeMap::from_iter([(account, initial_balance)]),
+            )
+        };
         SystemExecutionState {
             epoch,
             description: Some(description),
             admin_chain_id,
             ownership,
             balance,
+            balances,
             committees: dummy_committees(),
             ..SystemExecutionState::default()
         }

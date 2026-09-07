@@ -18,6 +18,7 @@ REGISTRY:
       232622982:
         StoreResult:
           STRUCT:
+            - id: U64
             - result: STR
       246270749:
         RequestTaskOn:

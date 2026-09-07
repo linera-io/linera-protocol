@@ -8,7 +8,10 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::{
     batch::DeletePrefixExpander,
     memory::MemoryStore,
-    store::{KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
+        WritableKeyValueStore,
+    },
     views::MIN_VIEW_TAG,
 };
 
@@ -169,10 +172,21 @@ impl<E, S> ViewContext<E, S>
 where
     S: ReadableKeyValueStore + WritableKeyValueStore,
 {
-    /// Creates a context suitable for a root view, using the given store. If the
-    /// journal's store is non-empty, it will be cleared first, before the context is
-    /// returned.
-    pub async fn create_root_context(store: S, extra: E) -> Result<Self, S::Error> {
+    /// Creates a context suitable for a root view over the partition at `root_key`,
+    /// which is opened in exclusive mode. If the journal is non-empty, it is cleared
+    /// first, before the context is returned.
+    ///
+    /// Taking the database rather than an already-opened store is what keeps a view
+    /// from being backed by a shared partition: the caller never chooses the mode.
+    pub async fn create_root_context<D>(
+        database: &D,
+        root_key: &[u8],
+        extra: E,
+    ) -> Result<Self, S::Error>
+    where
+        D: KeyValueDatabase<Store = S> + WithError<Error = S::Error>,
+    {
+        let store = database.open_exclusive(root_key)?;
         store.clear_journal().await?;
         Ok(Self::new_unchecked(store, Vec::new(), extra))
     }

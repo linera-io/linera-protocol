@@ -358,6 +358,9 @@ Open (i.e. activate) a new chain deriving the UID from an existing one
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
 
   Default value: `0`
+* `--balance-account <ACCOUNT>` — The account on the new chain credited with the initial balance. Defaults to the chain account, which is the only balance that pays fees for blocks the account itself does not authenticate
+
+  Default value: `0x00`
 * `--super-owner` — Whether to create a super owner for the new chain
 
 
@@ -390,6 +393,9 @@ If the wallet holds the key pair for exactly one of the new chain's owners, that
 * `--initial-balance <BALANCE>` — The initial balance of the new chain. This is subtracted from the parent chain's balance
 
   Default value: `0`
+* `--balance-account <ACCOUNT>` — The account on the new chain credited with the initial balance. Defaults to the chain account, which is the only balance that pays fees for blocks the account itself does not authenticate
+
+  Default value: `0x00`
 
 
 
@@ -679,6 +685,21 @@ Start a single benchmark process, maintaining a given TPS
 * `--delay-between-chains-ms <DELAY_BETWEEN_CHAINS_MS>` — The delay between chains, in milliseconds. For example, if set to 200ms, the first chain will start, then the second will start 200 ms after the first one, the third 200 ms after the second one, and so on. This is used for slowly ramping up the TPS, so we don't pound the validators with the full TPS all at once
 * `--config-path <CONFIG_PATH>` — Path to YAML file containing chain IDs to send transfers to. If not provided, only transfers between chains in the same wallet
 * `--single-destination-per-block` — Transaction distribution mode. If false (default), distributes transactions evenly across chains within each block. If true, sends all transactions in each block to a single chain, rotating through chains for subsequent blocks
+* `--client-mode <CLIENT_MODE>` — Which client to drive the chains with
+
+  Default value: `full`
+
+  Possible values:
+  - `full`:
+    A real `ChainClient`: executes every block locally and keeps chain state, so it measures what a client experiences
+  - `lite`:
+    A storage-free proposer: keeps no chain state and executes nothing, so the generator stops being part of what is measured
+
+* `--fan-out <FAN_OUT>` — How many distinct destination chains each chain sends to. Unset means every other benchmarked chain, so cross-chain fan-out grows with `--num-chains` and cannot be varied on its own; setting it pins fan-out while everything else is held fixed
+* `--skip-message-processing` — Keep sending cross-chain messages but never drain the inboxes they fill, isolating the sending side. Inboxes then grow for the whole run, which is fine for a short benchmark and is not a realistic steady state. `--client-mode lite` only
+* `--max-incoming-bundles-per-block <MAX_INCOMING_BUNDLES_PER_BLOCK>` — The maximum number of incoming message bundles to drain into each block, on top of its own operations. Defaults to twice the block's operation count, so a backlog is spread over several blocks instead of one huge one. `--client-mode lite` only
+* `--mixed-self-transfers` — Mix self-transfers in with the cross-chain ones, so roughly half the traffic stays on its own chain. Which half is random, not alternating: the generator shuffles its destination list, so this sets the ratio rather than an order. Without this a chain only ever sends elsewhere; with `--fan-out 0` it only ever sends to itself, and this flag is then ignored. Under `--single-destination-per-block` the mix applies per block rather than per transaction, so whole blocks are self-transfers
+* `--light-certificates` — Broadcast each confirmed certificate in its compact, value-free form (hash plus signatures) where possible. A validator that has forgotten the value transparently gets a retry with the full certificate. `--client-mode lite` only
 
 
 
@@ -713,6 +734,21 @@ Run multiple benchmark processes in parallel
 * `--delay-between-chains-ms <DELAY_BETWEEN_CHAINS_MS>` — The delay between chains, in milliseconds. For example, if set to 200ms, the first chain will start, then the second will start 200 ms after the first one, the third 200 ms after the second one, and so on. This is used for slowly ramping up the TPS, so we don't pound the validators with the full TPS all at once
 * `--config-path <CONFIG_PATH>` — Path to YAML file containing chain IDs to send transfers to. If not provided, only transfers between chains in the same wallet
 * `--single-destination-per-block` — Transaction distribution mode. If false (default), distributes transactions evenly across chains within each block. If true, sends all transactions in each block to a single chain, rotating through chains for subsequent blocks
+* `--client-mode <CLIENT_MODE>` — Which client to drive the chains with
+
+  Default value: `full`
+
+  Possible values:
+  - `full`:
+    A real `ChainClient`: executes every block locally and keeps chain state, so it measures what a client experiences
+  - `lite`:
+    A storage-free proposer: keeps no chain state and executes nothing, so the generator stops being part of what is measured
+
+* `--fan-out <FAN_OUT>` — How many distinct destination chains each chain sends to. Unset means every other benchmarked chain, so cross-chain fan-out grows with `--num-chains` and cannot be varied on its own; setting it pins fan-out while everything else is held fixed
+* `--skip-message-processing` — Keep sending cross-chain messages but never drain the inboxes they fill, isolating the sending side. Inboxes then grow for the whole run, which is fine for a short benchmark and is not a realistic steady state. `--client-mode lite` only
+* `--max-incoming-bundles-per-block <MAX_INCOMING_BUNDLES_PER_BLOCK>` — The maximum number of incoming message bundles to drain into each block, on top of its own operations. Defaults to twice the block's operation count, so a backlog is spread over several blocks instead of one huge one. `--client-mode lite` only
+* `--mixed-self-transfers` — Mix self-transfers in with the cross-chain ones, so roughly half the traffic stays on its own chain. Which half is random, not alternating: the generator shuffles its destination list, so this sets the ratio rather than an order. Without this a chain only ever sends elsewhere; with `--fan-out 0` it only ever sends to itself, and this flag is then ignored. Under `--single-destination-per-block` the mix applies per block rather than per transaction, so whole blocks are self-transfers
+* `--light-certificates` — Broadcast each confirmed certificate in its compact, value-free form (hash plus signatures) where possible. A validator that has forgotten the value transparently gets a retry with the full certificate. `--client-mode lite` only
 * `--processes <PROCESSES>` — The number of benchmark processes to run in parallel
 
   Default value: `1`
@@ -829,6 +865,9 @@ Run a GraphQL service to explore and extend the chains of the wallet
 * `--task-retry-delay-secs <TASK_RETRY_DELAY_SECS>` — Delay in seconds before retrying a failed operator task batch. Only relevant when operators are configured via `--operator-application-ids` or `--controller-id`
 
   Default value: `5`
+* `--slow-task-group-secs <SLOW_TASK_GROUP_SECS>` — Number of seconds after which a still-running operator task group is logged and counted as slow. The group is not interrupted and runs to completion. Only relevant when operators are configured via `--operator-application-ids` or `--controller-id`
+
+  Default value: `300`
 * `--read-only` — Run in read-only mode: disallow mutations and prevent queries from scheduling operations. Use this when exposing the service to untrusted clients
 * `--query-cache-size <QUERY_CACHE_SIZE>` — Enable the application query response cache with the given per-chain capacity. Each entry stores a serialized GraphQL response keyed by (application_id, request_bytes). Incompatible with `--long-lived-services`
 * `--allow-subscription <ALLOWED_SUBSCRIPTIONS>` — Allow a named GraphQL subscription query. The operation name is extracted from the query string. Repeatable. Example: `--allow-subscription 'query CounterValue { getCounter { value } }'`
@@ -1137,6 +1176,7 @@ Request a new chain from a faucet and add it to the wallet
 
 * `--faucet <FAUCET>` — The address of a faucet
 * `--set-default` — Whether this chain should become the default chain
+* `--fund-owner-account` — Whether to credit the claimed tokens to the new owner's account rather than to the chain account. Only blocks authenticated by that owner can then pay fees
 
 
 

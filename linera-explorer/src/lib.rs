@@ -783,20 +783,36 @@ pub async fn route(app: JsValue, path: JsValue, args: JsValue) {
     route_aux(&app, &data, &path, &args, false).await
 }
 
-/// Returns a shortened, debug-formatted representation of a crypto hash string.
+/// Returns a shortened representation of a crypto hash string.
+///
+/// Identifiers that are not crypto hashes are elided in the middle instead: these
+/// helpers are called from templates, where a panic tears down the whole UI rather
+/// than just the offending value.
 #[wasm_bindgen]
 pub fn short_crypto_hash(s: &str) -> String {
-    let hash = CryptoHash::from_str(s).expect("not a crypto hash");
-    format!("{hash:?}")
+    match CryptoHash::from_str(s) {
+        // Use `Display`, which honours the precision; `Debug` prints the full hash.
+        Ok(hash) => format!("{hash:.16}"),
+        Err(_) => short_id(s),
+    }
+}
+
+/// Returns a shortened representation of an identifier, eliding its middle.
+#[wasm_bindgen]
+pub fn short_id(s: &str) -> String {
+    let chars = s.chars().collect::<Vec<_>>();
+    if chars.len() <= 12 {
+        return s.to_string();
+    }
+    let head = chars[..4].iter().collect::<String>();
+    let tail = chars[chars.len() - 4..].iter().collect::<String>();
+    format!("{head}..{tail}")
 }
 
 /// Returns a shortened representation of an application ID string.
 #[wasm_bindgen]
 pub fn short_app_id(s: &str) -> String {
-    if s.len() <= 12 {
-        return s.to_string();
-    }
-    format!("{}..{}", &s[..4], &s[s.len() - 4..])
+    short_id(s)
 }
 
 fn set_onpopstate(app: JsValue) {

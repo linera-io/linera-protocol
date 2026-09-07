@@ -59,3 +59,8 @@ impl Default for RequestsSchedulerConfig {
         }
     }
 }
+
+#[cfg(with_metrics)]
+pub(crate) fn init_metrics() {
+    scheduler::metrics::init_metrics();
+}

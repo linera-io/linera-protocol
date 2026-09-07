@@ -75,19 +75,27 @@ pub async fn start_metrics_with_profiling(
     address: impl ToSocketAddrs + Debug + Send + 'static,
     shutdown_signal: CancellationToken,
     enable_memory_profiling: bool,
+    register_metrics: impl FnOnce(),
 ) {
     let memory_profiling = MemoryProfiling::try_activate(enable_memory_profiling).await;
-    start_metrics(address, shutdown_signal, memory_profiling);
+    start_metrics(address, shutdown_signal, memory_profiling, register_metrics);
 }
 
 /// Starts the metrics HTTP server on `address`, serving `/metrics` and, when profiling is
 /// enabled and available, the memory-profiling endpoints. Runs until `shutdown_signal` fires.
+///
+/// `register_metrics` is the caller's `init_metrics`. It is a parameter rather than a direct
+/// call because this crate sits below `linera-views` and friends in the dependency graph and
+/// cannot reach their metrics; taking it here makes forgetting to register a compile error
+/// instead of a metric that silently only appears once its code path first runs.
 pub fn start_metrics(
     address: impl ToSocketAddrs + Debug + Send + 'static,
     shutdown_signal: CancellationToken,
     memory_profiling: MemoryProfiling,
+    register_metrics: impl FnOnce(),
 ) {
     crate::runtime_metrics::register();
+    register_metrics();
     let app = metrics_router(memory_profiling);
 
     tokio::spawn(async move {

@@ -46,7 +46,7 @@ use crate::{
         CorrectValidatorInIntersection,
     },
     manager::proof::{
-        model::{ConsensusInstance, DurablePersistence, EpochAgreement, SerializedChainState},
+        model::{ConsensusInstance, DurablePersistence, EpochAgreement, SequentialChainState},
         rounds::{CurrentRoundMonotone, RoundFloor, VoteRoundBelowCurrentRound},
         voting::{
             ConfirmationNeedsValidatedCertificate, ConfirmationOnlyInCurrentRound,
@@ -200,19 +200,19 @@ pub trait CastValidationRoundFloor:
 ///
 /// The argument needs the two votes to be observed by the *same* manager state, which is
 /// [`DurablePersistence`] — a validator that lost its state across a crash could sign twice —
-/// and [`SerializedChainState`], which rules out two concurrent handlers each seeing the
+/// and [`SequentialChainState`], which rules out two concurrent handlers each seeing the
 /// pre-vote state. ∎
 ///
 /// [`ChainManager::check_proposed_block`]: crate::manager::ChainManager::check_proposed_block
 /// [`validated_vote`]: field@crate::manager::ChainManager::validated_vote
 /// [`Outcome::Skip`]: crate::manager::Outcome::Skip
-/// [`SerializedChainState`]: crate::manager::proof::model::SerializedChainState
+/// [`SequentialChainState`]: crate::manager::proof::model::SequentialChainState
 pub trait OneValidationVotePerRound:
     ProposalGate
     + CastValidationRoundFloor
     + ValidationRoundStrictlyIncreases
     + DurablePersistence
-    + SerializedChainState
+    + SequentialChainState
 {
 }
 
@@ -246,7 +246,7 @@ pub trait OneValidationVotePerRound:
 /// branch instead.)
 ///
 /// As in [`OneValidationVotePerRound`], the argument consumes [`DurablePersistence`] and
-/// [`SerializedChainState`]. ∎
+/// [`SequentialChainState`]. ∎
 ///
 /// **Where this is fragile.** In the non-fast case the guard lives in
 /// [`ChainManager::check_validated_block`], i.e. at the *call site*, not inside
@@ -260,7 +260,7 @@ pub trait OneValidationVotePerRound:
 /// [`ChainManager::check_validated_block`]: crate::manager::ChainManager::check_validated_block
 /// [`ChainManager::current_round`]: method@crate::manager::ChainManager::current_round
 /// [`Outcome::Skip`]: crate::manager::Outcome::Skip
-/// [`SerializedChainState`]: crate::manager::proof::model::SerializedChainState
+/// [`SequentialChainState`]: crate::manager::proof::model::SequentialChainState
 pub trait OneConfirmationVotePerRound:
     ProposalGate
     + FastConfirmationNeedsEmptyLock
@@ -268,7 +268,7 @@ pub trait OneConfirmationVotePerRound:
     + LockRoundMonotone
     + RoundFloor
     + DurablePersistence
-    + SerializedChainState
+    + SequentialChainState
 {
 }
 

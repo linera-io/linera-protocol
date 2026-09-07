@@ -20,7 +20,12 @@ path = "src/main.rs"
 
 [features]
 default = ["rocksdb", "storage-service"]
-metrics = ["dep:linera-metrics", "dep:prometheus", "linera-base/metrics"]
+metrics = [
+    "dep:linera-metrics",
+    "dep:prometheus",
+    "linera-base/metrics",
+    "linera-rpc/metrics",
+]
 rocksdb = ["linera-views/rocksdb", "linera-storage-runtime/rocksdb"]
 scylladb = ["linera-views/scylladb", "linera-storage-runtime/scylladb"]
 storage-service = ["linera-storage-runtime/storage-service"]

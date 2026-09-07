@@ -61,19 +61,18 @@ pub struct EpochEventData {
 
 /// The number of times the [`SystemOperation::OpenChain`] was executed.
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::register_int_counter_vec;
     use prometheus::IntCounterVec;
 
-    pub static OPEN_CHAIN_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "open_chain_count",
-            "The number of times the `OpenChain` operation was executed",
-            &[],
-        )
-    });
+    linera_base::declare_metrics! {
+        pub static OPEN_CHAIN_COUNT: IntCounterVec =
+            register_int_counter_vec(
+                "open_chain_count",
+                "The number of times the `OpenChain` operation was executed",
+                &[],
+            );
+    }
 }
 
 /// Per-block state of a chain: the timestamp of its most recent block together with
@@ -216,7 +215,10 @@ impl EventSubscriptions {
 pub struct OpenChainConfig {
     /// The ownership configuration of the new chain.
     pub ownership: ChainOwnership,
-    /// The initial chain balance.
+    /// The account on the new chain credited with `balance`. Use [`AccountOwner::CHAIN`] to
+    /// fund the chain account itself.
+    pub account: AccountOwner,
+    /// The initial balance of `account`.
     pub balance: Amount,
     /// The initial application permissions.
     pub application_permissions: ApplicationPermissions,
@@ -228,6 +230,7 @@ impl OpenChainConfig {
     pub fn init_chain_config(&self, epoch: Epoch) -> InitialChainConfig {
         InitialChainConfig {
             application_permissions: self.application_permissions.clone(),
+            account: self.account,
             balance: self.balance,
             epoch,
             ownership: self.ownership.clone(),
@@ -957,6 +960,7 @@ where
         let InitialChainConfig {
             ownership,
             epoch,
+            account,
             balance,
             application_permissions,
         } = description.config().clone();
@@ -982,7 +986,10 @@ where
         self.committee_hash.set(Some(committee_hash));
         self.admin_chain_id.set(Some(admin_chain_id));
         self.ownership.set(ownership);
-        self.balance.set(balance);
+        if balance > Amount::ZERO {
+            // Crediting zero would create an empty account entry.
+            self.credit(&account, balance).await?;
+        }
         self.application_permissions.set(application_permissions);
         Ok(false)
     }

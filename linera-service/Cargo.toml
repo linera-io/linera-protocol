@@ -55,6 +55,7 @@ metrics = [
     "prometheus",
     "linera-base/metrics",
     "linera-client/metrics",
+    "linera-exporter/metrics",
     "linera-faucet-server/metrics",
     "linera-metrics",
 ]
@@ -100,6 +101,7 @@ indicatif.workspace = true
 insta.workspace = true
 is-terminal.workspace = true
 linera-base.workspace = true
+linera-cache.workspace = true
 linera-chain.workspace = true
 linera-client = { workspace = true, features = ["fs"] }
 linera-core.workspace = true

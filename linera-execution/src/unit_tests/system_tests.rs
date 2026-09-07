@@ -96,6 +96,7 @@ async fn open_chain_message_index() {
     let ownership = ChainOwnership::single(owner);
     let config = OpenChainConfig {
         ownership,
+        account: AccountOwner::CHAIN,
         balance: Amount::ZERO,
         application_permissions: Default::default(),
     };

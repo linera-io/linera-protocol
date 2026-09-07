@@ -133,121 +133,11 @@ impl BlockExecution {
 
 #[cfg(with_metrics)]
 pub(crate) mod metrics {
-    use std::sync::LazyLock;
-
     use linera_base::prometheus_util::{
         exponential_bucket_interval, register_histogram_vec, register_int_counter_vec,
     };
     use linera_execution::ResourceTracker;
     use prometheus::{HistogramVec, IntCounterVec};
-
-    pub static NUM_BLOCKS_EXECUTED: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "num_blocks_executed",
-            "Number of blocks executed",
-            &["phase"],
-        )
-    });
-
-    pub static BLOCK_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "block_execution_latency",
-            "Block execution latency",
-            &["phase"],
-            exponential_bucket_interval(50.0_f64, 10_000_000.0),
-        )
-    });
-
-    #[cfg(with_metrics)]
-    pub static MESSAGE_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "message_execution_latency",
-            "Message execution latency",
-            &["phase"],
-            exponential_bucket_interval(0.1_f64, 50_000.0),
-        )
-    });
-
-    pub static OPERATION_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "operation_execution_latency",
-            "Operation execution latency",
-            &["phase"],
-            exponential_bucket_interval(0.1_f64, 50_000.0),
-        )
-    });
-
-    pub static WASM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "wasm_fuel_used_per_block",
-            "Wasm fuel used per block",
-            &["phase"],
-            exponential_bucket_interval(10.0, 100_000_000.0),
-        )
-    });
-
-    pub static EVM_FUEL_USED_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "evm_fuel_used_per_block",
-            "EVM fuel used per block",
-            &["phase"],
-            exponential_bucket_interval(10.0, 100_000_000.0),
-        )
-    });
-
-    pub static VM_NUM_READS_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "vm_num_reads_per_block",
-            "VM number of reads per block",
-            &["phase"],
-            exponential_bucket_interval(0.1, 100.0),
-        )
-    });
-
-    pub static VM_BYTES_READ_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "vm_bytes_read_per_block",
-            "VM number of bytes read per block",
-            &["phase"],
-            exponential_bucket_interval(0.1, 10_000_000.0),
-        )
-    });
-
-    pub static VM_BYTES_WRITTEN_PER_BLOCK: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "vm_bytes_written_per_block",
-            "VM number of bytes written per block",
-            &["phase"],
-            exponential_bucket_interval(0.1, 10_000_000.0),
-        )
-    });
-
-    pub static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "state_hash_computation_latency",
-            "Time to recompute the state hash, in microseconds",
-            &["phase"],
-            exponential_bucket_interval(1.0, 2_000_000.0),
-        )
-    });
-
-    pub static NUM_OUTBOXES: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "num_outboxes",
-            "Number of outboxes",
-            &[],
-            exponential_bucket_interval(1.0, 1_000_000.0),
-        )
-    });
-
-    pub static OUTBOX_COUNTERS_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "outbox_counters_size",
-            "Number of entries in the outbox_counters map (in-flight message heights)",
-            &[],
-            exponential_bucket_interval(1.0, 1_000_000.0),
-        )
-    });
 
     /// Tracks block execution metrics in Prometheus, labeled by the execution `phase`.
     pub(crate) fn track_block_metrics(
@@ -271,6 +161,104 @@ pub(crate) mod metrics {
         VM_BYTES_WRITTEN_PER_BLOCK
             .with_label_values(phase)
             .observe(tracker.bytes_written as f64);
+    }
+
+    linera_base::declare_metrics! {
+        pub static NUM_BLOCKS_EXECUTED: IntCounterVec =
+            register_int_counter_vec(
+                "num_blocks_executed",
+                "Number of blocks executed",
+                &["phase"],
+            );
+
+        pub static BLOCK_EXECUTION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "block_execution_latency",
+                "Block execution latency",
+                &["phase"],
+                exponential_bucket_interval(50.0_f64, 10_000_000.0),
+            );
+
+        #[cfg(with_metrics)]
+        pub static MESSAGE_EXECUTION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "message_execution_latency",
+                "Message execution latency",
+                &["phase"],
+                exponential_bucket_interval(0.1_f64, 50_000.0),
+            );
+
+        pub static OPERATION_EXECUTION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "operation_execution_latency",
+                "Operation execution latency",
+                &["phase"],
+                exponential_bucket_interval(0.1_f64, 50_000.0),
+            );
+
+        pub static WASM_FUEL_USED_PER_BLOCK: HistogramVec =
+            register_histogram_vec(
+                "wasm_fuel_used_per_block",
+                "Wasm fuel used per block",
+                &["phase"],
+                exponential_bucket_interval(10.0, 100_000_000.0),
+            );
+
+        pub static EVM_FUEL_USED_PER_BLOCK: HistogramVec =
+            register_histogram_vec(
+                "evm_fuel_used_per_block",
+                "EVM fuel used per block",
+                &["phase"],
+                exponential_bucket_interval(10.0, 100_000_000.0),
+            );
+
+        pub static VM_NUM_READS_PER_BLOCK: HistogramVec =
+            register_histogram_vec(
+                "vm_num_reads_per_block",
+                "VM number of reads per block",
+                &["phase"],
+                exponential_bucket_interval(0.1, 100.0),
+            );
+
+        pub static VM_BYTES_READ_PER_BLOCK: HistogramVec =
+            register_histogram_vec(
+                "vm_bytes_read_per_block",
+                "VM number of bytes read per block",
+                &["phase"],
+                exponential_bucket_interval(0.1, 10_000_000.0),
+            );
+
+        pub static VM_BYTES_WRITTEN_PER_BLOCK: HistogramVec =
+            register_histogram_vec(
+                "vm_bytes_written_per_block",
+                "VM number of bytes written per block",
+                &["phase"],
+                exponential_bucket_interval(0.1, 10_000_000.0),
+            );
+
+        pub static STATE_HASH_COMPUTATION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "state_hash_computation_latency",
+                "Time to recompute the state hash, in microseconds",
+                &["phase"],
+                exponential_bucket_interval(1.0, 2_000_000.0),
+            );
+
+        pub static NUM_OUTBOXES: HistogramVec =
+            register_histogram_vec(
+                "num_outboxes",
+                "Number of outboxes",
+                &[],
+                exponential_bucket_interval(1.0, 1_000_000.0),
+            );
+
+        pub static OUTBOX_COUNTERS_SIZE: HistogramVec =
+            register_histogram_vec(
+                "outbox_counters_size",
+                "Number of entries in the outbox_counters map (in-flight message heights)",
+                &[],
+                exponential_bucket_interval(1.0, 1_000_000.0),
+            );
     }
 }
 
@@ -399,6 +387,13 @@ where
     /// they have never been filtered — a pre-existing database entry (migration), or a validator
     /// that tracks all chains and never filters.
     pub outbox_index_tracked_hash: RegisterView<C, Option<CryptoHash>>,
+
+    // A lower bound, not an exact record: progress is reported asynchronously, so a crash loses
+    // whatever was not folded in. Deliberate — a re-sent block the destination already has is
+    // skipped on an integer compare, whereas under-sending would leave a permanent gap.
+    /// The highest block of this chain pushed to each other committee validator. A validator with
+    /// no entry is queried before its first push; ones that leave the committee are pruned.
+    pub exported_heights: RegisterView<C, NonCanonicalBTreeMap<ValidatorPublicKey, BlockHeight>>,
 }
 
 /// Block-chaining state.
@@ -745,6 +740,10 @@ where
         }
         let origins = bundles_by_origin.keys().copied().collect::<Vec<_>>();
         let inboxes = self.inboxes.try_load_entries_mut(&origins).await?;
+        // When the bundles must already be present (block proposals), collect *every* missing
+        // `(origin, height)` rather than bailing on the first, so the caller can be told the
+        // full set of cross-chain updates to fetch in a single round-trip.
+        let mut missing_bundles = Vec::new();
         for ((origin, bundles), mut inbox) in bundles_by_origin.into_iter().zip(inboxes) {
             tracing::trace!(
                 "Removing [{}] from inbox for {origin}",
@@ -760,15 +759,8 @@ where
                     .remove_bundle(bundle)
                     .await
                     .map_err(|error| (chain_id, origin, error))?;
-                if must_be_present {
-                    ensure!(
-                        was_present,
-                        ChainError::MissingCrossChainUpdate {
-                            chain_id,
-                            origin,
-                            height: bundle.height,
-                        }
-                    );
+                if must_be_present && !was_present {
+                    missing_bundles.push((origin, bundle.height));
                 }
             }
             inbox.observe_size_metric();
@@ -776,6 +768,13 @@ where
                 self.nonempty_inboxes.get_mut().remove(&origin);
             }
         }
+        ensure!(
+            missing_bundles.is_empty(),
+            ChainError::MissingCrossChainUpdates {
+                chain_id,
+                bundles: missing_bundles,
+            }
+        );
         Ok(())
     }
 

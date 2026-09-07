@@ -65,8 +65,8 @@ impl<S: Storage> std::ops::Deref for ChainStateViewReadGuard<S> {
 pub(crate) use crate::chain_worker::EventSubscriptionsResult;
 use crate::{
     chain_worker::{
-        handle, state::ChainWorkerState, BlockOutcome, ChainWorkerConfig, CrossChainUpdateResult,
-        DeliveryNotifier, ProcessConfirmedBlockMode,
+        handle, state::ChainWorkerState, BlockExportHandle, BlockOutcome, ChainWorkerConfig,
+        CrossChainUpdateResult, DeliveryNotifier, ProcessConfirmedBlockMode,
     },
     client::{ChainModes, ListeningMode},
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -101,99 +101,13 @@ pub(crate) fn wrap_future<F: std::future::Future>(f: F) -> F {
 }
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{
         exponential_bucket_interval, register_histogram, register_histogram_vec,
         register_int_counter, register_int_counter_vec,
     };
     use linera_chain::{data_types::MessageAction, types::ConfirmedBlockCertificate};
     use prometheus::{Histogram, HistogramVec, IntCounter, IntCounterVec};
-
-    pub static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "num_rounds_in_certificate",
-            "Number of rounds in certificate",
-            &["certificate_value", "round_type"],
-            exponential_bucket_interval(0.1, 50.0),
-        )
-    });
-
-    pub static NUM_ROUNDS_IN_BLOCK_PROPOSAL: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "num_rounds_in_block_proposal",
-            "Number of rounds in block proposal",
-            &["round_type"],
-            exponential_bucket_interval(0.1, 50.0),
-        )
-    });
-
-    pub static TRANSACTION_COUNT: LazyLock<IntCounterVec> =
-        LazyLock::new(|| register_int_counter_vec("transaction_count", "Transaction count", &[]));
-
-    pub static INCOMING_BUNDLE_COUNT: LazyLock<IntCounter> =
-        LazyLock::new(|| register_int_counter("incoming_bundle_count", "Incoming bundle count"));
-
-    pub static REJECTED_BUNDLE_COUNT: LazyLock<IntCounter> =
-        LazyLock::new(|| register_int_counter("rejected_bundle_count", "Rejected bundle count"));
-
-    pub static INCOMING_MESSAGE_COUNT: LazyLock<IntCounter> =
-        LazyLock::new(|| register_int_counter("incoming_message_count", "Incoming message count"));
-
-    pub static OPERATION_COUNT: LazyLock<IntCounter> =
-        LazyLock::new(|| register_int_counter("operation_count", "Operation count"));
-
-    pub static OPERATIONS_PER_BLOCK: LazyLock<Histogram> = LazyLock::new(|| {
-        register_histogram(
-            "operations_per_block",
-            "Number of operations per block",
-            exponential_bucket_interval(1.0, 10000.0),
-        )
-    });
-
-    pub static INCOMING_BUNDLES_PER_BLOCK: LazyLock<Histogram> = LazyLock::new(|| {
-        register_histogram(
-            "incoming_bundles_per_block",
-            "Number of incoming bundles per block",
-            exponential_bucket_interval(1.0, 10000.0),
-        )
-    });
-
-    pub static TRANSACTIONS_PER_BLOCK: LazyLock<Histogram> = LazyLock::new(|| {
-        register_histogram(
-            "transactions_per_block",
-            "Number of transactions per block",
-            exponential_bucket_interval(1.0, 10000.0),
-        )
-    });
-
-    pub static NUM_BLOCKS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec("num_blocks", "Number of blocks added to chains", &[])
-    });
-
-    pub static CERTIFICATES_SIGNED: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "certificates_signed",
-            "Number of confirmed block certificates signed by each validator",
-            &["validator_name"],
-        )
-    });
-
-    pub static CHAIN_INFO_QUERIES: LazyLock<IntCounter> = LazyLock::new(|| {
-        register_int_counter(
-            "chain_info_queries",
-            "Number of chain info queries processed",
-        )
-    });
-
-    pub static CROSS_CHAIN_BATCH_SIZE: LazyLock<Histogram> = LazyLock::new(|| {
-        register_histogram(
-            "cross_chain_batch_size",
-            "Number of cross-chain requests coalesced into a single per-chain batch",
-            exponential_bucket_interval(1.0, 1000.0),
-        )
-    });
 
     /// Holds metrics data extracted from a confirmed block certificate.
     pub struct MetricsData {
@@ -272,6 +186,83 @@ mod metrics {
                     .inc();
             }
         }
+    }
+
+    linera_base::declare_metrics! {
+        pub static NUM_ROUNDS_IN_CERTIFICATE: HistogramVec =
+            register_histogram_vec(
+                "num_rounds_in_certificate",
+                "Number of rounds in certificate",
+                &["certificate_value", "round_type"],
+                exponential_bucket_interval(0.1, 50.0),
+            );
+
+        pub static NUM_ROUNDS_IN_BLOCK_PROPOSAL: HistogramVec =
+            register_histogram_vec(
+                "num_rounds_in_block_proposal",
+                "Number of rounds in block proposal",
+                &["round_type"],
+                exponential_bucket_interval(0.1, 50.0),
+            );
+
+        pub static TRANSACTION_COUNT: IntCounterVec =
+            register_int_counter_vec("transaction_count", "Transaction count", &[]);
+
+        pub static INCOMING_BUNDLE_COUNT: IntCounter =
+            register_int_counter("incoming_bundle_count", "Incoming bundle count");
+
+        pub static REJECTED_BUNDLE_COUNT: IntCounter =
+            register_int_counter("rejected_bundle_count", "Rejected bundle count");
+
+        pub static INCOMING_MESSAGE_COUNT: IntCounter =
+            register_int_counter("incoming_message_count", "Incoming message count");
+
+        pub static OPERATION_COUNT: IntCounter =
+            register_int_counter("operation_count", "Operation count");
+
+        pub static OPERATIONS_PER_BLOCK: Histogram =
+            register_histogram(
+                "operations_per_block",
+                "Number of operations per block",
+                exponential_bucket_interval(1.0, 10000.0),
+            );
+
+        pub static INCOMING_BUNDLES_PER_BLOCK: Histogram =
+            register_histogram(
+                "incoming_bundles_per_block",
+                "Number of incoming bundles per block",
+                exponential_bucket_interval(1.0, 10000.0),
+            );
+
+        pub static TRANSACTIONS_PER_BLOCK: Histogram =
+            register_histogram(
+                "transactions_per_block",
+                "Number of transactions per block",
+                exponential_bucket_interval(1.0, 10000.0),
+            );
+
+        pub static NUM_BLOCKS: IntCounterVec =
+            register_int_counter_vec("num_blocks", "Number of blocks added to chains", &[]);
+
+        pub static CERTIFICATES_SIGNED: IntCounterVec =
+            register_int_counter_vec(
+                "certificates_signed",
+                "Number of confirmed block certificates signed by each validator",
+                &["validator_name"],
+            );
+
+        pub static CHAIN_INFO_QUERIES: IntCounter =
+            register_int_counter(
+                "chain_info_queries",
+                "Number of chain info queries processed",
+            );
+
+        pub static CROSS_CHAIN_BATCH_SIZE: Histogram =
+            register_histogram(
+                "cross_chain_batch_size",
+                "Number of cross-chain requests coalesced into a single per-chain batch",
+                exponential_bucket_interval(1.0, 1000.0),
+            );
     }
 }
 
@@ -430,7 +421,7 @@ pub enum WorkerError {
     MissingNetworkDescription,
     #[error("thread error: {0}")]
     Thread(#[from] web_thread_pool::Error),
-    #[error("Chain worker was poisoned by a journal resolution failure")]
+    #[error("Chain worker was poisoned by a failed save that may have left storage in an undetermined state")]
     PoisonedWorker,
     #[error("Cross-chain batch was rolled back due to an error in another request")]
     BatchRolledBack,
@@ -712,6 +703,9 @@ pub struct WorkerState<StorageClient: Storage> {
     /// corrupted chain. The RPC server layer installs this; without it, we fall
     /// back to dispatching locally through `handle_cross_chain_request`.
     outbound_cross_chain_sender: Option<OutboundCrossChainSender>,
+    /// The process-wide export queue, installed by the server binary — the only layer that
+    /// knows how to reach another validator. `None` means blocks are not exported.
+    block_export: Option<BlockExportHandle>,
 }
 
 /// Dispatcher for outbound cross-chain requests that handles the source-shard-to-
@@ -733,6 +727,7 @@ where
             chain_workers: self.chain_workers.clone(),
             chain_batches: self.chain_batches.clone(),
             outbound_cross_chain_sender: self.outbound_cross_chain_sender.clone(),
+            block_export: self.block_export.clone(),
         }
     }
 }
@@ -934,7 +929,16 @@ where
             #[cfg_attr(web, expect(clippy::arc_with_non_send_sync))]
             chain_batches: Arc::new(papaya::HashMap::new()),
             outbound_cross_chain_sender: None,
+            block_export: None,
         }
+    }
+
+    /// Installs the process-wide block export queue. Must be called before any chain worker is
+    /// created: workers capture the handle as they load, so one created earlier would never
+    /// export.
+    pub fn with_block_export(mut self, handle: BlockExportHandle) -> Self {
+        self.block_export = Some(handle);
+        self
     }
 
     /// Installs a shard-routing dispatcher used for outbound cross-chain requests
@@ -1143,6 +1147,19 @@ where
         .forget();
     }
 
+    /// Returns how many chain workers are currently resident in memory. Used to assert that
+    /// workers expire at their TTL — a task that keeps touching one holds it forever.
+    #[cfg(with_testing)]
+    pub fn resident_chain_worker_count(&self) -> usize {
+        self.chain_workers
+            .pin()
+            .iter()
+            .filter(
+                |(_, future)| matches!(future.peek(), Some(Ok(weak)) if weak.strong_count() > 0),
+            )
+            .count()
+    }
+
     /// Evicts a poisoned chain worker from the cache, but only if the entry still
     /// points to the same instance. This avoids removing a fresh replacement that
     /// another task may have already loaded.
@@ -1319,6 +1336,7 @@ where
             chain_id,
             service_runtime_endpoint,
             service_runtime_task,
+            self.block_export.clone(),
         )
         .await?;
 

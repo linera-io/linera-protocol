@@ -8,7 +8,7 @@ use std::{
 
 use futures::{lock::Mutex, stream::StreamExt, FutureExt};
 use linera_base::{
-    data_types::{MessagePolicy, TimeDelta},
+    data_types::MessagePolicy,
     identifiers::{ApplicationId, ChainId, GenericApplicationId},
 };
 use linera_client::chain_listener::{ClientContext, ListenerCommand};
@@ -28,7 +28,7 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
-use crate::task_processor::{OperatorMap, TaskProcessor};
+use crate::task_processor::{OperatorMap, TaskProcessor, TaskProcessorConfig};
 
 /// An update message sent to a TaskProcessor to change its set of applications.
 #[derive(Debug)]
@@ -50,7 +50,7 @@ pub struct Controller<Ctx: ClientContext> {
     cancellation_token: CancellationToken,
     notifications: NotificationStream,
     operators: OperatorMap,
-    retry_delay: TimeDelta,
+    config: TaskProcessorConfig,
     processors: BTreeMap<ChainId, ProcessorHandle>,
     listened_local_chains: BTreeSet<ChainId>,
     current_message_policies: BTreeMap<ChainId, MessagePolicy>,
@@ -79,7 +79,7 @@ where
         chain_client: ChainClient<Ctx::Environment>,
         cancellation_token: CancellationToken,
         operators: OperatorMap,
-        retry_delay: TimeDelta,
+        config: TaskProcessorConfig,
         command_sender: UnboundedSender<ListenerCommand>,
     ) -> Self {
         let notifications = chain_client.subscribe().expect("client subscription");
@@ -91,7 +91,7 @@ where
             cancellation_token,
             notifications,
             operators,
-            retry_delay,
+            config,
             processors: BTreeMap::new(),
             listened_local_chains: BTreeSet::new(),
             current_message_policies: BTreeMap::new(),
@@ -439,7 +439,7 @@ where
             chain_client,
             self.cancellation_token.child_token(),
             self.operators.clone(),
-            self.retry_delay,
+            self.config,
             Some(update_receiver),
         );
 

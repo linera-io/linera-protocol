@@ -30,7 +30,7 @@ use crate::{
     execution::UserAction,
     execution_state_actor::{ExecutionRequest, ExecutionStateSender},
     resources::ResourceController,
-    system::CreateApplicationResult,
+    system::{CreateApplicationResult, OpenChainConfig},
     util::{ReceiverExt, UnboundedSenderExt},
     ApplicationDescription, ApplicationId, BaseRuntime, ContractRuntime, DataBlobHash,
     ExecutionError, FinalizeContext, Message, MessageContext, MessageKind, ModuleId, Operation,
@@ -1570,6 +1570,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         &mut self,
         ownership: ChainOwnership,
         application_permissions: ApplicationPermissions,
+        account: AccountOwner,
         balance: Amount,
     ) -> Result<ChainId, ExecutionError> {
         let parent_id = self.inner().chain_id;
@@ -1577,16 +1578,21 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
 
         let timestamp = self.inner().user_context;
 
+        let config = Box::new(OpenChainConfig {
+            ownership,
+            account,
+            balance,
+            application_permissions,
+        });
+
         let chain_id = self
             .inner()
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::OpenChain {
-                ownership,
-                balance,
+                config,
                 parent_id,
                 block_height,
                 timestamp,
-                application_permissions,
                 callback,
             })?
             .recv_response()?;

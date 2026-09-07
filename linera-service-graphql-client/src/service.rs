@@ -243,6 +243,7 @@ mod from {
 
                 Ok(SystemOperation::OpenChain(OpenChainConfig {
                     ownership,
+                    account: open_chain.account,
                     balance: open_chain.balance,
                     application_permissions,
                 }))

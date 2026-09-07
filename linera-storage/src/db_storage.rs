@@ -49,8 +49,6 @@ use crate::{ChainRuntimeContext, Clock, Storage};
 /// Prometheus metrics for storage operations.
 #[cfg(with_metrics)]
 pub mod metrics {
-    use std::sync::LazyLock;
-
     use linera_base::prometheus_util::{
         exponential_bucket_interval, exponential_bucket_latencies, linear_bucket_interval,
         register_histogram, register_histogram_vec, register_int_counter, register_int_counter_vec,
@@ -64,235 +62,212 @@ pub mod metrics {
     /// Label value for items served from the database.
     pub(super) const DB: &str = "db";
 
-    /// The metric counting how often a blob is tested for existence from storage
-    pub(super) static CONTAINS_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "contains_blob",
-            "The metric counting how often a blob is tested for existence from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+    /// Registers a counter labelled by [`SOURCE_LABEL`], with both children created up front.
+    ///
+    /// `materialize_unlabeled` cannot reach a labelled vector, because label values are not
+    /// knowable in general — but this domain is exactly {[`CACHE`], [`DB`]} and known right here.
+    /// Left lazy, a counter whose cache path has not run yet exports nothing at all, which reads
+    /// identically to the metric having been deleted: measured 2026-08-28, `contains_blob_state`,
+    /// `contains_certificate` and `read_event_block_height` were absent fleet-wide despite live
+    /// call sites, and `contains_blobs` and `read_blob_state` exported only the `db` side, which
+    /// silently skews any cache-hit ratio built from them.
+    fn register_source_counter(name: &str, description: &str) -> IntCounterVec {
+        let counter = register_int_counter_vec(name, description, &[SOURCE_LABEL]);
+        counter.with_label_values(&[CACHE]);
+        counter.with_label_values(&[DB]);
+        counter
+    }
 
-    /// The metric counting how often multiple blobs are tested for existence from storage
-    pub(super) static CONTAINS_BLOBS_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "contains_blobs",
-            "The metric counting how often multiple blobs are tested for existence from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+    linera_base::declare_metrics! {
+        /// The metric counting how often a blob is tested for existence from storage
+        pub(super) static CONTAINS_BLOB_COUNTER: IntCounterVec =
+            register_source_counter(
+                "contains_blob",
+                "The metric counting how often a blob is tested for existence from storage",
+            );
 
-    /// The metric counting how often a blob state is tested for existence from storage
-    pub(super) static CONTAINS_BLOB_STATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "contains_blob_state",
-            "The metric counting how often a blob state is tested for existence from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often multiple blobs are tested for existence from storage
+        pub(super) static CONTAINS_BLOBS_COUNTER: IntCounterVec =
+            register_source_counter(
+                "contains_blobs",
+                "The metric counting how often multiple blobs are tested for existence from storage",
+            );
 
-    /// The metric counting how often a certificate is tested for existence from storage.
-    pub(super) static CONTAINS_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "contains_certificate",
-            "The metric counting how often a certificate is tested for existence from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often a blob state is tested for existence from storage
+        pub(super) static CONTAINS_BLOB_STATE_COUNTER: IntCounterVec =
+            register_source_counter(
+                "contains_blob_state",
+                "The metric counting how often a blob state is tested for existence from storage",
+            );
 
-    /// The metric counting how often a hashed certificate value is read from storage.
-    #[doc(hidden)]
-    pub static READ_CONFIRMED_BLOCK_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "read_confirmed_block",
-            "The metric counting how often a hashed confirmed block is read from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often a certificate is tested for existence from storage.
+        pub(super) static CONTAINS_CERTIFICATE_COUNTER: IntCounterVec =
+            register_source_counter(
+                "contains_certificate",
+                "The metric counting how often a certificate is tested for existence from storage",
+            );
 
-    /// The metric counting how often confirmed blocks are read from storage.
-    #[doc(hidden)]
-    pub(super) static READ_CONFIRMED_BLOCKS_COUNTER: LazyLock<IntCounterVec> =
-        LazyLock::new(|| {
-            register_int_counter_vec(
+        /// The metric counting how often a hashed certificate value is read from storage.
+        #[doc(hidden)]
+        pub static READ_CONFIRMED_BLOCK_COUNTER: IntCounterVec =
+            register_source_counter(
+                "read_confirmed_block",
+                "The metric counting how often a hashed confirmed block is read from storage",
+            );
+
+        /// The metric counting how often confirmed blocks are read from storage.
+        #[doc(hidden)]
+        pub(super) static READ_CONFIRMED_BLOCKS_COUNTER: IntCounterVec =
+            register_source_counter(
                 "read_confirmed_blocks",
                 "The metric counting how often confirmed blocks are read from storage",
-                &[SOURCE_LABEL],
-            )
-        });
+            );
 
-    /// The metric counting how often a blob is read from storage.
-    #[doc(hidden)]
-    pub(super) static READ_BLOB_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "read_blob",
-            "The metric counting how often a blob is read from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often a blob is read from storage.
+        #[doc(hidden)]
+        pub(super) static READ_BLOB_COUNTER: IntCounterVec =
+            register_source_counter(
+                "read_blob",
+                "The metric counting how often a blob is read from storage",
+            );
 
-    /// The metric counting how often a blob state is read from storage.
-    #[doc(hidden)]
-    pub(super) static READ_BLOB_STATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "read_blob_state",
-            "The metric counting how often a blob state is read from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often a blob state is read from storage.
+        #[doc(hidden)]
+        pub(super) static READ_BLOB_STATE_COUNTER: IntCounterVec =
+            register_source_counter(
+                "read_blob_state",
+                "The metric counting how often a blob state is read from storage",
+            );
 
-    /// The metric counting how often a blob is written to storage.
-    #[doc(hidden)]
-    pub(super) static WRITE_BLOB_COUNTER: LazyLock<IntCounter> = LazyLock::new(|| {
-        register_int_counter(
-            "write_blob",
-            "The metric counting how often a blob is written to storage",
-        )
-    });
+        /// The metric counting how often a blob is written to storage.
+        #[doc(hidden)]
+        pub(super) static WRITE_BLOB_COUNTER: IntCounter =
+            register_int_counter(
+                "write_blob",
+                "The metric counting how often a blob is written to storage",
+            );
 
-    /// The metric counting how often a certificate is read from storage.
-    #[doc(hidden)]
-    pub static READ_CERTIFICATE_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "read_certificate",
-            "The metric counting how often a certificate is read from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often a certificate is read from storage.
+        #[doc(hidden)]
+        pub static READ_CERTIFICATE_COUNTER: IntCounterVec =
+            register_source_counter(
+                "read_certificate",
+                "The metric counting how often a certificate is read from storage",
+            );
 
-    /// The metric counting how often certificates are read from storage.
-    #[doc(hidden)]
-    pub(super) static READ_CERTIFICATES_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "read_certificates",
-            "The metric counting how often certificate are read from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often certificates are read from storage.
+        #[doc(hidden)]
+        pub(super) static READ_CERTIFICATES_COUNTER: IntCounterVec =
+            register_source_counter(
+                "read_certificates",
+                "The metric counting how often certificate are read from storage",
+            );
 
-    /// The metric counting how often a certificate is written to storage.
-    #[doc(hidden)]
-    pub static WRITE_CERTIFICATE_COUNTER: LazyLock<IntCounter> = LazyLock::new(|| {
-        register_int_counter(
-            "write_certificate",
-            "The metric counting how often a certificate is written to storage",
-        )
-    });
+        /// The metric counting how often a certificate is written to storage.
+        #[doc(hidden)]
+        pub static WRITE_CERTIFICATE_COUNTER: IntCounter =
+            register_int_counter(
+                "write_certificate",
+                "The metric counting how often a certificate is written to storage",
+            );
 
-    /// Serialized size of the lite-certificate component (round + value hash + validator
-    /// signatures), observed when a confirmed certificate is written to storage. Bytes are
-    /// taken from the already-produced BCS output, so this adds no extra serialization work.
-    /// Sized to track the signature component, which is what grows under post-quantum
-    /// signature migration (10x for Falcon-512, 38x for ML-DSA-44).
-    pub(super) static CERTIFICATE_LITE_BYTES: LazyLock<Histogram> = LazyLock::new(|| {
-        register_histogram(
-            "certificate_lite_bytes",
-            "Serialized size of the lite-certificate (signatures + metadata) in bytes",
-            exponential_bucket_interval(128.0, 2_097_152.0),
-        )
-    });
+        /// Serialized size of the lite-certificate component (round + value hash + validator
+        /// signatures), observed when a confirmed certificate is written to storage. Bytes are
+        /// taken from the already-produced BCS output, so this adds no extra serialization work.
+        /// Sized to track the signature component, which is what grows under post-quantum
+        /// signature migration (10x for Falcon-512, 38x for ML-DSA-44).
+        pub(super) static CERTIFICATE_LITE_BYTES: Histogram =
+            register_histogram(
+                "certificate_lite_bytes",
+                "Serialized size of the lite-certificate (signatures + metadata) in bytes",
+                exponential_bucket_interval(128.0, 2_097_152.0),
+            );
 
-    /// Serialized size of the certificate value (block payload), observed when a confirmed
-    /// certificate is written to storage. Bytes are taken from the already-produced BCS
-    /// output. Range matches the gRPC max message size cap.
-    pub(super) static CERTIFICATE_VALUE_BYTES: LazyLock<Histogram> = LazyLock::new(|| {
-        register_histogram(
-            "certificate_value_bytes",
-            "Serialized size of the certificate value (block payload) in bytes",
-            exponential_bucket_interval(256.0, 16_777_216.0),
-        )
-    });
+        /// Serialized size of the certificate value (block payload), observed when a confirmed
+        /// certificate is written to storage. Bytes are taken from the already-produced BCS
+        /// output. Range matches the gRPC max message size cap.
+        pub(super) static CERTIFICATE_VALUE_BYTES: Histogram =
+            register_histogram(
+                "certificate_value_bytes",
+                "Serialized size of the certificate value (block payload) in bytes",
+                exponential_bucket_interval(256.0, 16_777_216.0),
+            );
 
-    /// Number of validator signatures attached to each confirmed certificate. Linear buckets
-    /// because committee size is small (typically under 20) and resolution at single-signer
-    /// granularity matters more than range.
-    pub(super) static CERTIFICATE_SIGNER_COUNT: LazyLock<Histogram> = LazyLock::new(|| {
-        register_histogram(
-            "certificate_signer_count",
-            "Number of validator signatures attached to each confirmed certificate",
-            linear_bucket_interval(1.0, 1.0, 20.0),
-        )
-    });
+        /// Number of validator signatures attached to each confirmed certificate. Linear buckets
+        /// because committee size is small (typically under 20) and resolution at single-signer
+        /// granularity matters more than range.
+        pub(super) static CERTIFICATE_SIGNER_COUNT: Histogram =
+            register_histogram(
+                "certificate_signer_count",
+                "Number of validator signatures attached to each confirmed certificate",
+                linear_bucket_interval(1.0, 1.0, 20.0),
+            );
 
-    /// The latency to load a chain state.
-    #[doc(hidden)]
-    pub(crate) static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "load_chain_latency",
-            "The latency to load a chain state",
-            &[],
-            exponential_bucket_latencies(1000.0),
-        )
-    });
+        /// The latency to load a chain state.
+        #[doc(hidden)]
+        pub(crate) static LOAD_CHAIN_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "load_chain_latency",
+                "The latency to load a chain state",
+                &[],
+                exponential_bucket_latencies(1000.0),
+            );
 
-    /// The metric counting how often an event is read from storage.
-    #[doc(hidden)]
-    pub(super) static READ_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "read_event",
-            "The metric counting how often an event is read from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often an event is read from storage.
+        #[doc(hidden)]
+        pub(super) static READ_EVENT_COUNTER: IntCounterVec =
+            register_source_counter(
+                "read_event",
+                "The metric counting how often an event is read from storage",
+            );
 
-    /// The metric counting how often an event is tested for existence from storage
-    pub(super) static CONTAINS_EVENT_COUNTER: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "contains_event",
-            "The metric counting how often an event is tested for existence from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often an event is tested for existence from storage
+        pub(super) static CONTAINS_EVENT_COUNTER: IntCounterVec =
+            register_source_counter(
+                "contains_event",
+                "The metric counting how often an event is tested for existence from storage",
+            );
 
-    /// The metric counting how often an event is written to storage.
-    #[doc(hidden)]
-    pub(super) static WRITE_EVENT_COUNTER: LazyLock<IntCounter> = LazyLock::new(|| {
-        register_int_counter(
-            "write_event",
-            "The metric counting how often an event is written to storage",
-        )
-    });
+        /// The metric counting how often an event is written to storage.
+        #[doc(hidden)]
+        pub(super) static WRITE_EVENT_COUNTER: IntCounter =
+            register_int_counter(
+                "write_event",
+                "The metric counting how often an event is written to storage",
+            );
 
-    /// The metric counting how often a block hash is read by height from storage.
-    #[doc(hidden)]
-    pub(super) static READ_BLOCK_HASH_BY_HEIGHT_COUNTER: LazyLock<IntCounterVec> =
-        LazyLock::new(|| {
-            register_int_counter_vec(
+        /// The metric counting how often a block hash is read by height from storage.
+        #[doc(hidden)]
+        pub(super) static READ_BLOCK_HASH_BY_HEIGHT_COUNTER: IntCounterVec =
+            register_source_counter(
                 "read_block_hash_by_height",
                 "The metric counting how often a block hash is read by height from storage",
-                &[SOURCE_LABEL],
-            )
-        });
+            );
 
-    /// The metric counting how often an event block height is read from storage.
-    #[doc(hidden)]
-    pub(super) static READ_EVENT_BLOCK_HEIGHT_COUNTER: LazyLock<IntCounterVec> =
-        LazyLock::new(|| {
-            register_int_counter_vec(
+        /// The metric counting how often an event block height is read from storage.
+        #[doc(hidden)]
+        pub(super) static READ_EVENT_BLOCK_HEIGHT_COUNTER: IntCounterVec =
+            register_source_counter(
                 "read_event_block_height",
                 "The metric counting how often an event block height is read from storage",
-                &[SOURCE_LABEL],
-            )
-        });
+            );
 
-    /// The metric counting how often the network description is read from storage.
-    #[doc(hidden)]
-    pub(super) static READ_NETWORK_DESCRIPTION: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "network_description",
-            "The metric counting how often the network description is read from storage",
-            &[SOURCE_LABEL],
-        )
-    });
+        /// The metric counting how often the network description is read from storage.
+        #[doc(hidden)]
+        pub(super) static READ_NETWORK_DESCRIPTION: IntCounterVec =
+            register_source_counter(
+                "network_description",
+                "The metric counting how often the network description is read from storage",
+            );
 
-    /// The metric counting how often the network description is written to storage.
-    #[doc(hidden)]
-    pub(super) static WRITE_NETWORK_DESCRIPTION: LazyLock<IntCounter> = LazyLock::new(|| {
-        register_int_counter(
-            "write_network_description",
-            "The metric counting how often the network description is written to storage",
-        )
-    });
+        /// The metric counting how often the network description is written to storage.
+        #[doc(hidden)]
+        pub(super) static WRITE_NETWORK_DESCRIPTION: IntCounter =
+            register_int_counter(
+                "write_network_description",
+                "The metric counting how often the network description is written to storage",
+            );
+    }
 }
 
 /// The key used for blobs. The Blob ID itself is contained in the root key.
@@ -792,8 +767,8 @@ where
             user_services: self.user_services.clone(),
         };
         let root_key = RootKey::ChainState(chain_id).bytes();
-        let store = self.database.open_exclusive(&root_key)?;
-        let context = ViewContext::create_root_context(store, runtime_context).await?;
+        let context =
+            ViewContext::create_root_context(&*self.database, &root_key, runtime_context).await?;
         ChainStateView::load(context).await
     }
 
@@ -1606,8 +1581,7 @@ where
         block_exporter_id: u32,
     ) -> Result<Self::BlockExporterContext, ViewError> {
         let root_key = RootKey::BlockExporterState(block_exporter_id).bytes();
-        let store = self.database.open_exclusive(&root_key)?;
-        Ok(ViewContext::create_root_context(store, block_exporter_id).await?)
+        Ok(ViewContext::create_root_context(&*self.database, &root_key, block_exporter_id).await?)
     }
 
     async fn list_blob_ids(&self) -> Result<Vec<BlobId>, ViewError> {
@@ -2192,5 +2166,41 @@ mod tests {
             cert_by_hash.value().block().header,
             cert_by_height.value().block().header
         );
+    }
+
+    /// A source-labelled counter must export both children before either path has run, so a
+    /// cold `cache` side cannot be mistaken for a deleted metric and a hit ratio built from
+    /// the two is never missing a denominator.
+    #[cfg(with_metrics)]
+    #[test]
+    fn source_labelled_counters_export_both_sources_before_any_read() {
+        crate::init_metrics();
+
+        let families = prometheus::gather();
+        for name in [
+            "linera_contains_blob_state",
+            "linera_contains_certificate",
+            "linera_read_event_block_height",
+            "linera_contains_blobs",
+            "linera_read_blob_state",
+        ] {
+            let family = families
+                .iter()
+                .find(|family| family.get_name() == name)
+                .unwrap_or_else(|| panic!("{name} must be exported once init_metrics has run"));
+            let mut sources = family
+                .get_metric()
+                .iter()
+                .flat_map(|metric| metric.get_label())
+                .filter(|label| label.get_name() == super::metrics::SOURCE_LABEL)
+                .map(|label| label.get_value())
+                .collect::<Vec<_>>();
+            sources.sort_unstable();
+            assert_eq!(
+                sources,
+                [super::metrics::CACHE, super::metrics::DB],
+                "{name} must export both sources"
+            );
+        }
     }
 }

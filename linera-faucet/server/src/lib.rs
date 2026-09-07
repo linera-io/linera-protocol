@@ -52,118 +52,106 @@ use crate::database::FaucetDatabase;
 
 // Prometheus metrics for the faucet
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{
         exponential_bucket_interval, register_gauge_vec, register_histogram_vec,
         register_int_counter_vec,
     };
     use prometheus::{GaugeVec, HistogramVec, IntCounterVec};
 
-    pub static CLAIM_REQUESTS_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "faucet_claim_requests_total",
-            "Total number of claim requests by result",
-            &["result"],
-        )
-    });
+    linera_base::declare_metrics! {
+        pub static CLAIM_REQUESTS_TOTAL: IntCounterVec =
+            register_int_counter_vec(
+                "faucet_claim_requests_total",
+                "Total number of claim requests by result",
+                &["result"],
+            );
 
-    pub static CLAIM_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "faucet_claim_latency_ms",
-            "End-to-end latency of claim requests in milliseconds",
-            &["result"],
-            exponential_bucket_interval(0.5, 8000.0),
-        )
-    });
+        pub static CLAIM_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "faucet_claim_latency_ms",
+                "End-to-end latency of claim requests in milliseconds",
+                &["result"],
+                exponential_bucket_interval(0.5, 8000.0),
+            );
 
-    pub static CHAINS_CREATED_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "faucet_chains_created_total",
-            "Total number of chains created by the faucet",
-            &[],
-        )
-    });
+        pub static CHAINS_CREATED_TOTAL: IntCounterVec =
+            register_int_counter_vec(
+                "faucet_chains_created_total",
+                "Total number of chains created by the faucet",
+                &[],
+            );
 
-    pub static BATCH_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "faucet_batch_size",
-            "Number of chain creation requests per batch",
-            &[],
-            Some(vec![1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0]),
-        )
-    });
+        pub static BATCH_SIZE: HistogramVec =
+            register_histogram_vec(
+                "faucet_batch_size",
+                "Number of chain creation requests per batch",
+                &[],
+                Some(vec![1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0]),
+            );
 
-    pub static BATCH_PROCESSING_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "faucet_batch_processing_latency_ms",
-            "Time to process a batch of chain creation requests in milliseconds",
-            &["result"],
-            exponential_bucket_interval(0.5, 8000.0),
-        )
-    });
+        pub static BATCH_PROCESSING_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "faucet_batch_processing_latency_ms",
+                "Time to process a batch of chain creation requests in milliseconds",
+                &["result"],
+                exponential_bucket_interval(0.5, 8000.0),
+            );
 
-    pub static QUEUE_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "faucet_queue_size",
-            "Number of pending claim requests in the queue",
-            &[],
-            Some(vec![
-                0.0, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0,
-            ]),
-        )
-    });
+        pub static QUEUE_SIZE: HistogramVec =
+            register_histogram_vec(
+                "faucet_queue_size",
+                "Number of pending claim requests in the queue",
+                &[],
+                Some(vec![
+                    0.0, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0,
+                ]),
+            );
 
-    pub static QUEUE_WAIT_TIME: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "faucet_queue_wait_time_ms",
-            "Time a request spends in the queue before processing in milliseconds",
-            &[],
-            exponential_bucket_interval(0.5, 2000.0),
-        )
-    });
+        pub static QUEUE_WAIT_TIME: HistogramVec =
+            register_histogram_vec(
+                "faucet_queue_wait_time_ms",
+                "Time a request spends in the queue before processing in milliseconds",
+                &[],
+                exponential_bucket_interval(0.5, 2000.0),
+            );
 
-    pub static FAUCET_BALANCE: LazyLock<GaugeVec> = LazyLock::new(|| {
-        register_gauge_vec(
-            "faucet_balance_amount",
-            "Current balance of the faucet chain, in tokens",
-            &[],
-        )
-    });
+        pub static FAUCET_BALANCE: GaugeVec =
+            register_gauge_vec(
+                "faucet_balance_amount",
+                "Current balance of the faucet chain, in tokens",
+                &[],
+            );
 
-    pub static RATE_LIMIT_REJECTIONS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "faucet_rate_limit_rejections_total",
-            "Number of requests rejected due to rate limiting",
-            &[],
-        )
-    });
+        pub static RATE_LIMIT_REJECTIONS: IntCounterVec =
+            register_int_counter_vec(
+                "faucet_rate_limit_rejections_total",
+                "Number of requests rejected due to rate limiting",
+                &[],
+            );
 
-    pub static INSUFFICIENT_BALANCE_REJECTIONS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "faucet_insufficient_balance_rejections_total",
-            "Number of requests rejected due to insufficient faucet balance",
-            &[],
-        )
-    });
+        pub static INSUFFICIENT_BALANCE_REJECTIONS: IntCounterVec =
+            register_int_counter_vec(
+                "faucet_insufficient_balance_rejections_total",
+                "Number of requests rejected due to insufficient faucet balance",
+                &[],
+            );
 
-    pub static DATABASE_OPERATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "faucet_database_operation_latency_ms",
-            "Database operation latency in milliseconds",
-            &["operation"],
-            exponential_bucket_interval(0.5, 2000.0),
-        )
-    });
+        pub static DATABASE_OPERATION_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "faucet_database_operation_latency_ms",
+                "Database operation latency in milliseconds",
+                &["operation"],
+                exponential_bucket_interval(0.5, 2000.0),
+            );
 
-    pub static RETRYABLE_ERRORS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "faucet_retryable_errors_total",
-            "Number of chain execution retryable errors by type",
-            &["error_type"],
-        )
-    });
+        pub static RETRYABLE_ERRORS: IntCounterVec =
+            register_int_counter_vec(
+                "faucet_retryable_errors_total",
+                "Number of chain execution retryable errors by type",
+                &["error_type"],
+            );
+    }
 }
 
 /// Refusal messages returned by the claim paths. Shared as constants because the
@@ -197,6 +185,21 @@ pub(crate) async fn graphiql(uri: axum::http::Uri) -> impl axum::response::IntoR
             .subscription_endpoint("/ws")
             .finish(),
     )
+}
+
+/// Registers every metric reachable from this crate.
+///
+/// Without this, a metric is only exported after the code path that observes it has run, so a
+/// rarely-taken path leaves its panels blank and makes a routine restart look like the metric
+/// was removed.
+#[cfg(with_metrics)]
+pub fn init_metrics() {
+    linera_base::init_metrics();
+    linera_chain::init_metrics();
+    linera_core::init_metrics();
+    linera_execution::init_metrics();
+    linera_storage::init_metrics();
+    metrics::init_metrics();
 }
 
 #[cfg(test)]
@@ -268,6 +271,8 @@ struct PendingRequest {
     owner: AccountOwner,
     /// For daily claims, the existing chain to transfer tokens to.
     target_chain_id: Option<ChainId>,
+    /// The account on the user's chain to credit.
+    destination: AccountOwner,
     /// The amount of tokens to send.
     amount: Amount,
     /// For daily claims, the period number to store.
@@ -434,15 +439,31 @@ where
     S: Storage + Send + Sync + 'static,
 {
     /// Creates a new chain with the given authentication key, and transfers tokens to it.
-    async fn claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
-        record_claim_latency(self.do_claim(owner)).await
+    ///
+    /// The tokens are credited to `destination` on the new chain, defaulting to the chain
+    /// account itself. A chain funded only in an owner's account can pay fees just for the
+    /// blocks that owner authenticates.
+    async fn claim(
+        &self,
+        owner: AccountOwner,
+        destination: Option<AccountOwner>,
+    ) -> Result<ChainDescription, Error> {
+        record_claim_latency(self.do_claim(owner, destination.unwrap_or(AccountOwner::CHAIN))).await
     }
 
     /// Transfers a daily amount of tokens to the user's existing chain.
     /// The user must have already claimed a chain. Each user can claim once per 24-hour
     /// period, measured from their initial claim time.
-    async fn daily_claim(&self, owner: AccountOwner) -> Result<ClaimOutcome, Error> {
-        record_claim_latency(self.do_daily_claim(owner)).await
+    ///
+    /// The tokens are credited to `destination` on that chain, following the same rule as the
+    /// initial claim.
+    async fn daily_claim(
+        &self,
+        owner: AccountOwner,
+        destination: Option<AccountOwner>,
+    ) -> Result<ClaimOutcome, Error> {
+        record_claim_latency(self.do_daily_claim(owner, destination.unwrap_or(AccountOwner::CHAIN)))
+            .await
     }
 }
 
@@ -450,7 +471,11 @@ impl<S> MutationRoot<S>
 where
     S: Storage + Send + Sync + 'static,
 {
-    async fn do_claim(&self, owner: AccountOwner) -> Result<ChainDescription, Error> {
+    async fn do_claim(
+        &self,
+        owner: AccountOwner,
+        destination: AccountOwner,
+    ) -> Result<ChainDescription, Error> {
         // Check if this owner already has a chain.
         #[cfg(with_metrics)]
         let histogram = metrics::DATABASE_OPERATION_LATENCY.with_label_values(&["get_chain_id"]);
@@ -477,6 +502,7 @@ where
             requests.push_back(PendingRequest {
                 owner,
                 target_chain_id: None,
+                destination,
                 amount: self.initial_claim_amount,
                 daily_period: 0,
                 responder: tx,
@@ -519,7 +545,11 @@ where
         }
     }
 
-    async fn do_daily_claim(&self, owner: AccountOwner) -> Result<ClaimOutcome, Error> {
+    async fn do_daily_claim(
+        &self,
+        owner: AccountOwner,
+        destination: AccountOwner,
+    ) -> Result<ClaimOutcome, Error> {
         // Each early return below is a *refusal*, not a failure, and must be counted
         // under its own `result` label: these paths return before the queue round-trip
         // that increments `CLAIM_REQUESTS_TOTAL`, so without the explicit counters
@@ -561,6 +591,7 @@ where
         self.enqueue_daily_request(
             owner,
             initial_claim.chain_id,
+            destination,
             self.daily_claim_amount,
             period,
         )
@@ -571,6 +602,7 @@ where
         &self,
         owner: AccountOwner,
         target_chain_id: ChainId,
+        destination: AccountOwner,
         amount: Amount,
         daily_period: u64,
     ) -> Result<ClaimOutcome, Error> {
@@ -583,6 +615,7 @@ where
             requests.push_back(PendingRequest {
                 owner,
                 target_chain_id: Some(target_chain_id),
+                destination,
                 amount,
                 daily_period,
                 responder: tx,
@@ -904,13 +937,14 @@ where
                     owner: AccountOwner::CHAIN,
                     recipient: Account {
                         chain_id: target_chain_id,
-                        owner: request.owner,
+                        owner: request.destination,
                     },
                     amount: request.amount,
                 })
             } else {
                 let config = OpenChainConfig {
                     ownership: ChainOwnership::single(request.owner),
+                    account: request.destination,
                     balance: request.amount,
                     application_permissions: ApplicationPermissions::default(),
                 };
@@ -1273,6 +1307,7 @@ where
             self.metrics_address(),
             cancellation_token.clone(),
             self.enable_memory_profiling,
+            crate::init_metrics,
         )
         .await;
 

@@ -78,67 +78,89 @@ mod received_log;
 mod validator_trackers;
 
 #[cfg(with_metrics)]
-mod metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod metrics {
     use linera_base::prometheus_util::{
-        exponential_bucket_latencies, register_histogram_vec, register_int_counter_vec,
+        exponential_bucket_interval, exponential_bucket_latencies, register_histogram_vec,
+        register_int_counter, register_int_counter_vec,
     };
-    use prometheus::{HistogramVec, IntCounterVec};
+    use prometheus::{HistogramVec, IntCounter, IntCounterVec};
 
-    pub static PROCESS_INBOX_WITHOUT_PREPARE_LATENCY: LazyLock<HistogramVec> =
-        LazyLock::new(|| {
+    linera_base::declare_metrics! {
+        pub static PROCESS_INBOX_WITHOUT_PREPARE_LATENCY: HistogramVec =
             register_histogram_vec(
                 "process_inbox_latency",
                 "process_inbox latency",
                 &[],
+                exponential_bucket_latencies(60_000.0),
+            );
+
+        pub static PREPARE_CHAIN_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "prepare_chain_latency",
+                "prepare_chain latency",
+                &[],
+                exponential_bucket_latencies(60_000.0),
+            );
+
+        pub static SYNCHRONIZE_CHAIN_STATE_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "synchronize_chain_state_latency",
+                "synchronize_chain_state latency",
+                &[],
+                exponential_bucket_latencies(600_000.0),
+            );
+
+        pub static EXECUTE_BLOCK_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "execute_block_latency",
+                "execute_block latency",
+                &[],
                 exponential_bucket_latencies(10_000.0),
-            )
-        });
+            );
 
-    pub static PREPARE_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "prepare_chain_latency",
-            "prepare_chain latency",
-            &[],
-            exponential_bucket_latencies(10_000.0),
-        )
-    });
+        pub static FIND_RECEIVED_CERTIFICATES_LATENCY: HistogramVec =
+            register_histogram_vec(
+                "find_received_certificates_latency",
+                "find_received_certificates latency",
+                &[],
+                exponential_bucket_latencies(3_600_000.0),
+            );
 
-    pub static SYNCHRONIZE_CHAIN_STATE_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "synchronize_chain_state_latency",
-            "synchronize_chain_state latency",
-            &[],
-            exponential_bucket_latencies(10_000.0),
-        )
-    });
+        pub static FIND_RECEIVED_CERTIFICATES_LOG_ENTRIES: HistogramVec =
+            register_histogram_vec(
+                "find_received_certificates_log_entries",
+                "Number of received-log entries collected from the validators, per call",
+                &[],
+                exponential_bucket_interval(1.0, 1_000_000.0),
+            );
 
-    pub static EXECUTE_BLOCK_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "execute_block_latency",
-            "execute_block latency",
-            &[],
-            exponential_bucket_latencies(10_000.0),
-        )
-    });
+        pub static FIND_RECEIVED_CERTIFICATES_SENDER_CHAINS: HistogramVec =
+            register_histogram_vec(
+                "find_received_certificates_sender_chains",
+                "Number of distinct sender chains to synchronize, per call",
+                &[],
+                exponential_bucket_interval(1.0, 100_000.0),
+            );
 
-    pub static FIND_RECEIVED_CERTIFICATES_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "find_received_certificates_latency",
-            "find_received_certificates latency",
-            &[],
-            exponential_bucket_latencies(10_000.0),
-        )
-    });
+        pub static SENDER_CERTIFICATES_DISCOVERED_TOTAL: IntCounter =
+            register_int_counter(
+                "sender_certificates_discovered_total",
+                "Total number of sender certificates advertised by the validators' received logs",
+            );
 
-    pub static BLOCK_STAGING_FAILURES_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "block_staging_failures_total",
-            "Total number of client block staging (execute_block) failures, labelled by error type",
-            &["error_type"],
-        )
-    });
+        pub static SENDER_CERTIFICATES_MISSING_TOTAL: IntCounter =
+            register_int_counter(
+                "sender_certificates_missing_total",
+                "Total number of sender certificates not already known locally, hence downloaded",
+            );
+
+        pub static BLOCK_STAGING_FAILURES_TOTAL: IntCounterVec =
+            register_int_counter_vec(
+                "block_staging_failures_total",
+                "Total number of client block staging (execute_block) failures, labelled by error type",
+                &["error_type"],
+            );
+    }
 }
 
 /// Default number of certificates to download in a single batch.
@@ -1432,7 +1454,7 @@ impl<Env: Environment> Client<Env> {
     fn remote_node_updater(
         &self,
         remote_node: RemoteNode<Env::ValidatorNode>,
-    ) -> RemoteNodeUpdater<Env> {
+    ) -> RemoteNodeUpdater<Env::Storage, Env::ValidatorNode> {
         RemoteNodeUpdater {
             remote_node,
             local_node: self.local_node.clone(),
@@ -2361,21 +2383,35 @@ impl<Env: Environment> Client<Env> {
                         continue;
                     }
                 }
-                while let LocalNodeError::WorkerError(WorkerError::ChainError(chain_err)) = &err {
-                    if let ChainError::MissingCrossChainUpdate {
-                        chain_id,
-                        origin,
-                        height,
-                    } = &**chain_err
+                // The local node reports every missing sender bundle in a single
+                // `MissingCrossChainUpdates`, so we download them all in one pass and retry once.
+                if let LocalNodeError::WorkerError(WorkerError::ChainError(chain_err)) = &err {
+                    if let ChainError::MissingCrossChainUpdates { chain_id, bundles } = &**chain_err
                     {
-                        self.download_sender_block_with_sending_ancestors(
-                            *chain_id,
-                            *origin,
-                            *height,
-                            remote_node,
-                        )
-                        .await?;
-                        // Retry
+                        let chain_id = *chain_id;
+                        // `download_sender_block_with_sending_ancestors` walks each origin's
+                        // message-bearing blocks back from the given height, so the highest missing
+                        // height per origin subsumes the lower ones. Deduplicate to that (also
+                        // ending the borrow of `err` so we can reassign it below), then download the
+                        // independent origins concurrently, bounded by `max_joined_tasks`.
+                        let mut origin_heights: BTreeMap<ChainId, BlockHeight> = BTreeMap::new();
+                        for (origin, height) in bundles {
+                            let entry = origin_heights.entry(*origin).or_insert(*height);
+                            *entry = (*entry).max(*height);
+                        }
+                        stream::iter(origin_heights.into_iter().map(|(origin, height)| {
+                            self.download_sender_block_with_sending_ancestors(
+                                chain_id,
+                                origin,
+                                height,
+                                remote_node,
+                            )
+                        }))
+                        .buffer_unordered(self.options.max_joined_tasks)
+                        .collect::<Vec<_>>()
+                        .await
+                        .into_iter()
+                        .collect::<Result<(), _>>()?;
                         if let Err(new_err) = self
                             .local_node
                             .handle_block_proposal(proposal.clone())
@@ -2385,8 +2421,6 @@ impl<Env: Environment> Client<Env> {
                         } else {
                             continue 'proposal_loop;
                         }
-                    } else {
-                        break;
                     }
                 }
 

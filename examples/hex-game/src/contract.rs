@@ -157,7 +157,9 @@ impl HexContract {
         );
         let app_id = self.runtime.application_id();
         let permissions = ApplicationPermissions::new_single(app_id.forget_abi());
-        let chain_id = self.runtime.open_chain(ownership, permissions, fee_budget);
+        let chain_id =
+            self.runtime
+                .open_chain(ownership, permissions, AccountOwner::CHAIN, fee_budget);
         for owner in &players {
             self.state
                 .game_chains

@@ -444,15 +444,26 @@ where
         #[graphql(desc = "The owner of the new chain.")] owner: AccountOwner,
         #[graphql(desc = "The balance of the chain being created. Zero if `None`.")]
         balance: Option<Amount>,
+        #[graphql(
+            desc = "The account on the new chain credited with the balance. The chain account \
+                    itself if `None`."
+        )]
+        account: Option<AccountOwner>,
     ) -> Result<ChainId, Error> {
         let ownership = ChainOwnership::single(owner);
         let balance = balance.unwrap_or(Amount::ZERO);
+        let account = account.unwrap_or(AccountOwner::CHAIN);
         let description = self
             .apply_client_command(&chain_id, move |client| {
                 let ownership = ownership.clone();
                 async move {
                     let result = client
-                        .open_chain(ownership, ApplicationPermissions::default(), balance)
+                        .open_chain(
+                            ownership,
+                            ApplicationPermissions::default(),
+                            account,
+                            balance,
+                        )
                         .await
                         .map_err(Error::from)
                         .map(|outcome| outcome.map(|(chain_id, _)| chain_id));
@@ -474,6 +485,11 @@ where
         #[graphql(desc = "The weights of the owners")] weights: Option<Vec<u64>>,
         #[graphql(desc = "The number of multi-leader rounds")] multi_leader_rounds: Option<u32>,
         #[graphql(desc = "The balance of the chain. Zero if `None`")] balance: Option<Amount>,
+        #[graphql(
+            desc = "The account on the new chain credited with the balance. The chain account \
+                    itself if `None`."
+        )]
+        account: Option<AccountOwner>,
         #[graphql(desc = "The duration of the fast round, in milliseconds; default: no timeout")]
         fast_round_ms: Option<u64>,
         #[graphql(
@@ -518,13 +534,14 @@ where
         };
         let ownership = ChainOwnership::multiple(owners, multi_leader_rounds, timeout_config);
         let balance = balance.unwrap_or(Amount::ZERO);
+        let account = account.unwrap_or(AccountOwner::CHAIN);
         let description = self
             .apply_client_command(&chain_id, move |client| {
                 let ownership = ownership.clone();
                 let application_permissions = application_permissions.clone().unwrap_or_default();
                 async move {
                     let result = client
-                        .open_chain(ownership, application_permissions, balance)
+                        .open_chain(ownership, application_permissions, account, balance)
                         .await
                         .map_err(Error::from)
                         .map(|outcome| outcome.map(|(chain_id, _)| chain_id));
@@ -1075,38 +1092,34 @@ where
 }
 
 #[cfg(with_metrics)]
-mod query_cache_metrics {
-    use std::sync::LazyLock;
-
+pub(crate) mod query_cache_metrics {
     use linera_base::prometheus_util::{register_int_counter_vec, register_int_gauge};
     use prometheus::{IntCounterVec, IntGauge};
 
-    pub static QUERY_CACHE_HIT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec("query_response_cache_hit", "Query response cache hits", &[])
-    });
+    linera_base::declare_metrics! {
+        pub static QUERY_CACHE_HIT: IntCounterVec =
+            register_int_counter_vec("query_response_cache_hit", "Query response cache hits", &[]);
 
-    pub static QUERY_CACHE_MISS: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "query_response_cache_miss",
-            "Query response cache misses",
-            &[],
-        )
-    });
+        pub static QUERY_CACHE_MISS: IntCounterVec =
+            register_int_counter_vec(
+                "query_response_cache_miss",
+                "Query response cache misses",
+                &[],
+            );
 
-    pub static QUERY_CACHE_INVALIDATION: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "query_response_cache_invalidation",
-            "Query response cache invalidations (per chain)",
-            &[],
-        )
-    });
+        pub static QUERY_CACHE_INVALIDATION: IntCounterVec =
+            register_int_counter_vec(
+                "query_response_cache_invalidation",
+                "Query response cache invalidations (per chain)",
+                &[],
+            );
 
-    pub static QUERY_CACHE_ENTRIES: LazyLock<IntGauge> = LazyLock::new(|| {
-        register_int_gauge(
-            "query_response_cache_entries",
-            "Current number of cached query responses across all chains",
-        )
-    });
+        pub static QUERY_CACHE_ENTRIES: IntGauge =
+            register_int_gauge(
+                "query_response_cache_entries",
+                "Current number of cached query responses across all chains",
+            );
+    }
 }
 
 /// Per-chain cache state: an LRU map plus the `next_block_height` at the time the
@@ -1432,6 +1445,7 @@ where
             self.metrics_address(),
             cancellation_token.clone(),
             self.enable_memory_profiling,
+            crate::init_metrics,
         )
         .await;
 

@@ -446,6 +446,11 @@ type ChainStateExtendedView {
 	that tracks all chains and never filters.
 	"""
 	outboxIndexTrackedHash: CryptoHash
+	"""
+	The highest block of this chain pushed to each other committee validator. A validator with
+	no entry is queried before its first push; ones that leave the committee are pruned.
+	"""
+	exportedHeights: JSONObject!
 }
 
 """
@@ -1068,7 +1073,11 @@ type MutationRoot {
 		"""
 		The balance of the chain being created. Zero if `None`.
 		"""
-		balance: Amount
+		balance: Amount,
+		"""
+		The account on the new chain credited with the balance. The chain account itself if `None`.
+		"""
+		account: AccountOwner
 	): ChainId!
 	"""
 	Creates a new multi-owner chain.
@@ -1098,6 +1107,10 @@ type MutationRoot {
 		The balance of the chain. Zero if `None`
 		"""
 		balance: Amount,
+		"""
+		The account on the new chain credited with the balance. The chain account itself if `None`.
+		"""
+		account: AccountOwner,
 		"""
 		The duration of the fast round, in milliseconds; default: no timeout
 		"""
@@ -1302,7 +1315,11 @@ Open chain operation metadata.
 """
 type OpenChainOperationMetadata {
 	"""
-	The initial balance credited to the new chain.
+	The account on the new chain credited with the initial balance.
+	"""
+	account: AccountOwner!
+	"""
+	The initial balance credited to `account`.
 	"""
 	balance: Amount!
 	"""
