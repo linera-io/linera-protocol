@@ -12,10 +12,23 @@
 //! this network it is served by a formats-registry application, which
 //! [`Application::query`](crate::chain::Application::query) can already read.
 
+use serde::ser::Serialize as _;
+use serde_wasm_bindgen::Serializer;
 use wasm_bindgen::prelude::*;
 use web_sys::wasm_bindgen;
 
 use crate::Result;
+
+/// The conversion every decoded payload goes through.
+///
+/// Application types carry `u64` and `u128` amounts that a JavaScript number
+/// cannot hold, and structs that should arrive as plain objects. The default
+/// conversion does neither: it fails outright on a large integer, and turns
+/// every struct into a `Map` that `JSON.stringify` renders as `{}`. This
+/// mirrors `linera-explorer`'s own serializer.
+const SER: Serializer = Serializer::new()
+    .serialize_large_number_types_as_bigints(true)
+    .serialize_maps_as_objects(true);
 
 /// A decoder for one application's operation, message, response and event payloads.
 #[wasm_bindgen]
@@ -30,7 +43,14 @@ impl Formats {
     /// If the bytes are not a BCS-encoded `Formats`.
     #[wasm_bindgen(js_name = fromBytes)]
     pub fn from_bytes(bytes: &[u8]) -> Result<Formats> {
-        Ok(Formats(linera_sdk::bcs::from_bytes(bytes)?))
+        let mut formats: linera_sdk::formats::Formats = linera_sdk::bcs::from_bytes(bytes)?;
+        // Formats published without pruning define the well-known linera-base
+        // primitives themselves, which shadows the SDK's `LineraEnvironment` and leaves
+        // an `AccountOwner` rendered as its variant and bytes rather than as an address.
+        // Registry entries are immutable, so pruning here is what repairs those. A name
+        // collision leaves the registry untouched, so this is safe to always apply.
+        let _ = formats.prune_known_primitives();
+        Ok(Formats(formats))
     }
 
     /// Decodes the bytes of an operation into a plain JavaScript value.
@@ -39,9 +59,7 @@ impl Formats {
     /// If the bytes don't match the application's operation format.
     #[wasm_bindgen(js_name = decodeOperation)]
     pub fn decode_operation(&self, bytes: &[u8]) -> Result<JsValue> {
-        Ok(serde_wasm_bindgen::to_value(
-            &self.0.decode_operation(bytes)?,
-        )?)
+        Ok(self.0.decode_operation(bytes)?.serialize(&SER)?)
     }
 
     /// Decodes the bytes of an operation's result into a plain JavaScript value.
@@ -50,9 +68,7 @@ impl Formats {
     /// If the bytes don't match the application's response format.
     #[wasm_bindgen(js_name = decodeResponse)]
     pub fn decode_response(&self, bytes: &[u8]) -> Result<JsValue> {
-        Ok(serde_wasm_bindgen::to_value(
-            &self.0.decode_response(bytes)?,
-        )?)
+        Ok(self.0.decode_response(bytes)?.serialize(&SER)?)
     }
 
     /// Decodes the bytes of a cross-chain message into a plain JavaScript value.
@@ -61,9 +77,7 @@ impl Formats {
     /// If the bytes don't match the application's message format.
     #[wasm_bindgen(js_name = decodeMessage)]
     pub fn decode_message(&self, bytes: &[u8]) -> Result<JsValue> {
-        Ok(serde_wasm_bindgen::to_value(
-            &self.0.decode_message(bytes)?,
-        )?)
+        Ok(self.0.decode_message(bytes)?.serialize(&SER)?)
     }
 
     /// Decodes the bytes of an event into a plain JavaScript value.
@@ -72,8 +86,6 @@ impl Formats {
     /// If the bytes don't match the application's event format.
     #[wasm_bindgen(js_name = decodeEventValue)]
     pub fn decode_event_value(&self, bytes: &[u8]) -> Result<JsValue> {
-        Ok(serde_wasm_bindgen::to_value(
-            &self.0.decode_event_value(bytes)?,
-        )?)
+        Ok(self.0.decode_event_value(bytes)?.serialize(&SER)?)
     }
 }

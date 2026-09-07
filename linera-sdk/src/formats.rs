@@ -9,10 +9,8 @@ use serde_reflection::{
         DeserializationContext, DeserializationEnvironment, SerializationContext,
         SerializationEnvironment, SymbolTableEnvironment,
     },
-    Format, Registry,
+    Format, Registry, Samples, Tracer, TracerConfig,
 };
-#[cfg(not(target_arch = "wasm32"))]
-use serde_reflection::{Samples, Tracer, TracerConfig};
 
 /// The serde formats used by an application. The exact serde encoding in use must be
 /// known separately.
@@ -45,7 +43,6 @@ pub trait BcsApplication {
     /// pruned from the registry (see [`Formats::prune_known_primitives`]) so that they
     /// decode to their human-readable form via [`LineraEnvironment`]. This is the form
     /// meant to be published to a formats registry.
-    #[cfg(not(target_arch = "wasm32"))]
     fn pruned_formats() -> Result<Formats, PruneError> {
         let mut formats = Self::formats()?;
         formats.prune_known_primitives()?;
@@ -167,7 +164,6 @@ macro_rules! known_human_readable_primitives {
 
         /// Traces the canonical BCS format of every known primitive, used to verify
         /// the correspondence before pruning.
-        #[cfg(not(target_arch = "wasm32"))]
         fn expected_primitive_registry() -> serde_reflection::Result<Registry> {
             let mut tracer = Tracer::new(
                 TracerConfig::default()
@@ -205,7 +201,6 @@ known_human_readable_primitives! {
 }
 
 /// An error raised while pruning known primitives from a [`Formats`] registry.
-#[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, thiserror::Error)]
 pub enum PruneError {
     /// The canonical formats of the known primitives could not be computed.
@@ -282,7 +277,11 @@ impl Formats {
     /// This is meant to be called from snapshot tests (and any other code that
     /// generates the stored [`Formats`]) so that the human-readable rendering is baked
     /// into the published formats.
-    #[cfg(not(target_arch = "wasm32"))]
+    ///
+    /// A reader can also call it on formats it has just fetched. Registry entries are
+    /// immutable, so formats that were published unpruned would otherwise render their
+    /// primitives structurally forever; pruning on the way in repairs them for every
+    /// reader, without republishing anything.
     pub fn prune_known_primitives(&mut self) -> Result<(), PruneError> {
         let expected = expected_primitive_registry()?;
         // Verify everything first so a mismatch never leaves the registry half-pruned.
