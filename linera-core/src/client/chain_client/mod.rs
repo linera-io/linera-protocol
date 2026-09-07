@@ -133,9 +133,9 @@ pub struct Options {
     pub max_event_stream_queries: usize,
 }
 
-struct CircuitBreakerState {
-    next_probe_at: Timestamp,
-    probe_interval: Duration,
+pub(super) struct CircuitBreakerState {
+    pub(super) next_probe_at: Timestamp,
+    pub(super) probe_interval: Duration,
 }
 
 /// A boxed per-validator notification stream task. `Send` on native targets; on web
@@ -3385,7 +3385,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Returns the newly created stream tasks; the caller is responsible for polling
     /// them.
     #[instrument(level = "trace", skip(senders, circuit_breakers))]
-    async fn update_notification_streams(
+    pub(super) async fn update_notification_streams(
         &self,
         senders: &mut HashMap<ValidatorPublicKey, AbortHandle>,
         circuit_breakers: &mut HashMap<ValidatorPublicKey, CircuitBreakerState>,
@@ -3447,8 +3447,18 @@ impl<Env: Environment> ChainClient<Env> {
                         "Validator notification stream ended; entering circuit breaker"
                     );
                 }
-            } else if !abort.is_aborted() && circuit_breakers.contains_key(validator) {
-                // Stream alive while in circuit breaker -> probe succeeded -> recovered.
+            } else if !abort.is_aborted()
+                && circuit_breakers
+                    .get(validator)
+                    .is_some_and(|state| now >= state.next_probe_at)
+            {
+                // Stream still alive a full probe interval after the probe was launched
+                // -> recovered. The deadline check is load-bearing: the abort handle is
+                // non-aborted from the instant the probe task is created, long before
+                // `subscribe` resolves, so without it any update landing inside that
+                // connect window reads a still-connecting probe as a healthy stream and
+                // drops the breaker — resetting the accumulated backoff, so a
+                // permanently-down validator is probed forever at the shortest cadence.
                 info!(
                     %validator,
                     chain_id = %self.chain_id,

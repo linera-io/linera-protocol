@@ -44,7 +44,7 @@ use crate::test_utils::ScyllaDbStorageBuilder;
 use crate::test_utils::ServiceStorageBuilder;
 use crate::{
     client::{
-        chain_client::{self, ChainClient},
+        chain_client::{self, ChainClient, CircuitBreakerState},
         ClientOutcome, ListeningMode,
     },
     local_node::LocalNodeError,
@@ -257,6 +257,68 @@ where
         {
         }
     }
+    Ok(())
+}
+
+/// Verifies that circuit-breaker probes against a validator that stays down BACK OFF —
+/// the interval doubles per failed probe instead of retrying at a fixed cadence.
+///
+/// This is the half of the probe timer that
+/// `test_probe_timer_repairs_severed_notification_streams` cannot see: that test advances
+/// the clock past the maximum interval before every attempt, so a validator stuck at a
+/// constant interval still repairs inside its window. Two mutations it passes and this
+/// test kills: deleting the re-arm before a probe is launched (the deadline stays in the
+/// past, the still-connecting probe is read as recovered, and the breaker resets to the
+/// initial interval forever), and deleting the `now < next_probe_at` skip entirely (every
+/// wake-up re-subscribes, with no backoff at all).
+///
+/// Backoff matters in production because each probe is a `subscribe` plus a full
+/// `synchronize_chain_state_from`, per validator per chain, against a fleet that is down.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_probe_backoff_escalates_against_a_down_validator<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let chain = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let observer = builder
+        .make_client(chain.chain_id(), None, BlockHeight::ZERO)
+        .await?;
+    let (listener, _listen_handle, _) = observer.listen().await?;
+    tokio::spawn(listener);
+
+    // Let the initial subscriptions settle, then take validator 0 down and sever every
+    // stream: validator 0's probes will now fail, so its breaker must escalate.
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    builder.set_fault_type([0], FaultType::Offline);
+    builder.disconnect_notification_subscribers().await;
+
+    // Walk two simulated hours in five-minute steps. Correct backoff (300s, then 600,
+    // 1200, 2400, 3600, 3600…) admits at most a handful of probes in that span; a breaker
+    // that never escalates retries every 300s, and one with no skip at all re-subscribes
+    // on essentially every wake-up.
+    let before = builder.subscribe_calls(0).await;
+    for _ in 0..24 {
+        clock.add(TimeDelta::from_secs(300));
+        tokio::time::sleep(std::time::Duration::from_millis(40)).await;
+    }
+    let probes = builder.subscribe_calls(0).await - before;
+
+    assert!(
+        probes >= 1,
+        "the down validator was never probed at all ({probes}) — the probe timer is not firing"
+    );
+    assert!(
+        probes <= 6,
+        "the down validator was probed {probes} times in a simulated 2h; correct exponential \
+         backoff schedules them at 300s, 900s, 2100s and 4500s — at most 6 with slack. The breaker is not escalating \
+         — check the re-arm before the probe launch and the `now < next_probe_at` skip."
+    );
     Ok(())
 }
 
@@ -5770,6 +5832,85 @@ where
         reached,
         BlockHeight(2),
         "a bounded round must report the validator's own height afterwards",
+    );
+    Ok(())
+}
+
+/// Drives `update_notification_streams` directly to pin the circuit-breaker state machine,
+/// deterministically and without depending on task scheduling.
+///
+/// Two properties, each killing a mutation the end-to-end repair test passes:
+///   1. Launching a probe RE-ARMS the deadline, so the probe timer does not immediately
+///      re-fire while the probe is still connecting (delete the re-arm and assertion 1
+///      fails).
+///   2. A probe that is still in flight is NOT read as a recovered stream. The handle is
+///      non-aborted from the instant the task is created, long before `subscribe`
+///      resolves, so a second update landing inside that window must leave the breaker —
+///      and its accumulated backoff — intact (delete the elapsed-deadline guard and
+///      assertion 2 fails).
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_in_flight_probe_is_not_treated_as_recovered<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use std::collections::HashMap;
+
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let chain = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let down = builder.node(0).name();
+    builder.set_fault_type([0], FaultType::Offline);
+
+    // A breaker that has already backed off once and is due now.
+    let interval = std::time::Duration::from_secs(600);
+    let mut senders = HashMap::new();
+    let mut circuit_breakers = HashMap::new();
+    circuit_breakers.insert(
+        down,
+        CircuitBreakerState {
+            next_probe_at: clock.current_time(),
+            probe_interval: interval,
+        },
+    );
+
+    // Launch the probe. The tasks are deliberately NOT polled, so the probe stays
+    // in flight for the rest of the test — exactly the window under scrutiny.
+    let _tasks = chain
+        .update_notification_streams(&mut senders, &mut circuit_breakers)
+        .await?;
+    let state = circuit_breakers
+        .get(&down)
+        .expect("launching a probe must not drop the breaker");
+    assert!(
+        state.next_probe_at > clock.current_time(),
+        "launching a probe must re-arm the deadline, otherwise the probe timer re-fires \
+         immediately while the probe is still connecting"
+    );
+    assert_eq!(
+        state.probe_interval, interval,
+        "launching a probe must not reset the accumulated backoff"
+    );
+
+    // A second update inside the connect window — as a local notification or another
+    // validator's stream death would trigger. The probe has not resolved, so nothing has
+    // been learned about this validator yet.
+    chain
+        .update_notification_streams(&mut senders, &mut circuit_breakers)
+        .await?;
+    let state = circuit_breakers.get(&down).unwrap_or_else(|| {
+        panic!(
+            "an in-flight probe was mistaken for a recovered stream: the breaker was \
+             dropped, so the next failure restarts backoff from the initial interval and \
+             a permanently-down validator is probed forever at the shortest cadence"
+        )
+    });
+    assert_eq!(
+        state.probe_interval, interval,
+        "the accumulated backoff must survive an update that lands mid-probe"
     );
     Ok(())
 }

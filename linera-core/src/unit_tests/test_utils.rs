@@ -95,6 +95,10 @@ where
     /// Abort handles for the notification streams handed out by `do_subscribe`, so
     /// tests can sever them mid-flight as a validator (or proxy) restart would.
     notification_stream_aborts: Vec<stream::AbortHandle>,
+    /// How many times `do_subscribe` has been called. Monotonic — never drained by
+    /// `disconnect_notification_subscribers` — so a test can bound how often a client
+    /// re-subscribes, which is what pins the circuit breaker's backoff.
+    subscribe_calls: usize,
 }
 
 /// A client used by tests to talk to an in-process `LocalValidator`.
@@ -342,6 +346,7 @@ where
             state,
             notifier: Arc::new(ChannelNotifier::default()),
             notification_stream_aborts: Vec::new(),
+            subscribe_calls: 0,
         };
         Self {
             public_key,
@@ -358,6 +363,11 @@ where
     /// Returns the validator's currently configured [`FaultType`].
     pub fn fault_type(&self) -> FaultType {
         self.fault_type
+    }
+
+    /// How many times this validator has been asked to `subscribe`.
+    pub async fn subscribe_calls(&self) -> usize {
+        self.client.lock().await.subscribe_calls
     }
 
     /// Ends every notification stream previously handed out by this validator — as
@@ -538,6 +548,14 @@ where
         sender: oneshot::Sender<Result<NotificationStream, NodeError>>,
     ) -> Result<(), Result<NotificationStream, NodeError>> {
         let mut validator = self.client.lock().await;
+        validator.subscribe_calls += 1;
+        // Honour `Offline` here as the query paths already do, so a test can make a
+        // circuit-breaker probe genuinely FAIL and observe the backoff escalate.
+        if self.fault_type == FaultType::Offline {
+            return sender.send(Err(NodeError::ClientIoError {
+                error: "offline".to_string(),
+            }));
+        }
         let rx = validator.notifier.subscribe(chains);
         let (stream, abort) = stream::abortable(UnboundedReceiverStream::new(rx));
         validator.notification_stream_aborts.push(abort);
@@ -1121,6 +1139,13 @@ where
         }
         drop(validator_clients);
         self
+    }
+
+    /// How many times the validator at `index` has been asked to `subscribe`.
+    pub async fn subscribe_calls(&self, index: usize) -> usize {
+        self.node_provider.all_nodes()[index]
+            .subscribe_calls()
+            .await
     }
 
     /// Severs every notification stream on every validator in the test setup, as a
