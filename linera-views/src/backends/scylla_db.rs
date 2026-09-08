@@ -392,11 +392,11 @@ impl ScyllaDbClient {
     }
 
     fn get_occurrences_map(
-        keys: Vec<Vec<u8>>,
-    ) -> Result<HashMap<Vec<u8>, Vec<usize>>, ScyllaDbStoreInternalError> {
-        let mut map = HashMap::<Vec<u8>, Vec<usize>>::new();
-        for (i_key, key) in keys.into_iter().enumerate() {
-            Self::check_key_size(&key)?;
+        keys: &[Vec<u8>],
+    ) -> Result<HashMap<&[u8], Vec<usize>>, ScyllaDbStoreInternalError> {
+        let mut map = HashMap::<&[u8], Vec<usize>>::new();
+        for (i_key, key) in keys.iter().enumerate() {
+            Self::check_key_size(key)?;
             map.entry(key).or_default().push(i_key);
         }
         Ok(map)
@@ -405,20 +405,20 @@ impl ScyllaDbClient {
     async fn read_multi_values_internal(
         &self,
         root_key: &[u8],
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbStoreInternalError> {
         let mut values = vec![None; keys.len()];
         let map = Self::get_occurrences_map(keys)?;
         let statement = self.get_multi_key_values_statement(map.len()).await?;
-        let mut inputs = vec![root_key.to_vec()];
-        inputs.extend(map.keys().cloned());
+        let mut inputs = vec![root_key];
+        inputs.extend(map.keys().copied());
         let mut rows = Box::pin(self.session.execute_iter(statement, &inputs))
             .await?
             .rows_stream::<(Vec<u8>, Vec<u8>)>()?;
 
         while let Some(row) = rows.next().await {
             let (key, value) = row?;
-            if let Some((&last, rest)) = map[&key].split_last() {
+            if let Some((&last, rest)) = map[key.as_slice()].split_last() {
                 for position in rest {
                     values[*position] = Some(value.clone());
                 }
@@ -431,20 +431,20 @@ impl ScyllaDbClient {
     async fn contains_keys_internal(
         &self,
         root_key: &[u8],
-        keys: Vec<Vec<u8>>,
+        keys: &[Vec<u8>],
     ) -> Result<Vec<bool>, ScyllaDbStoreInternalError> {
         let mut values = vec![false; keys.len()];
         let map = Self::get_occurrences_map(keys)?;
         let statement = self.get_multi_keys_statement(map.len()).await?;
-        let mut inputs = vec![root_key.to_vec()];
-        inputs.extend(map.keys().cloned());
+        let mut inputs = vec![root_key];
+        inputs.extend(map.keys().copied());
         let mut rows = Box::pin(self.session.execute_iter(statement, &inputs))
             .await?
             .rows_stream::<(Vec<u8>,)>()?;
 
         while let Some(row) = rows.next().await {
             let (key,) = row?;
-            for i_key in &map[&key] {
+            for i_key in &map[key.as_slice()] {
                 values[*i_key] = true;
             }
         }
@@ -877,7 +877,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
         let _guard = self.acquire().await;
         let handles = keys
             .chunks(MAX_MULTI_KEYS)
-            .map(|keys| store.contains_keys_internal(&self.root_key, keys.to_vec()));
+            .map(|keys| store.contains_keys_internal(&self.root_key, keys));
         let results: Vec<_> = join_all(handles)
             .await
             .into_iter()
@@ -896,7 +896,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
         let _guard = self.acquire().await;
         let handles = keys
             .chunks(MAX_MULTI_KEYS)
-            .map(|keys| store.read_multi_values_internal(&self.root_key, keys.to_vec()));
+            .map(|keys| store.read_multi_values_internal(&self.root_key, keys));
         let results: Vec<_> = join_all(handles)
             .await
             .into_iter()
