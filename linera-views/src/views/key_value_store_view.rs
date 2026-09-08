@@ -880,7 +880,7 @@ impl<C: Context> KeyValueStoreView<C> {
             key_prefix.len() <= self.max_key_size(),
             ViewError::KeyTooLong
         );
-        let len = key_prefix.len();
+        let key_prefix_len = key_prefix.len();
         let key_prefix_full = self
             .context
             .base_key()
@@ -894,6 +894,8 @@ impl<C: Context> KeyValueStoreView<C> {
         if !self.deletion_set.delete_storage_first {
             let mut suffix_closed_set =
                 SuffixClosedSetIterator::new(0, self.deletion_set.deleted_prefixes.iter());
+            let has_deleted_prefixes = !self.deletion_set.deleted_prefixes.is_empty();
+            let mut key_with_prefix = key_prefix.to_vec();
             for key in self
                 .context
                 .store()
@@ -903,20 +905,25 @@ impl<C: Context> KeyValueStoreView<C> {
                 loop {
                     match update {
                         Some((update_key, update_value))
-                            if &update_key[len..] <= key.as_slice() =>
+                            if &update_key[key_prefix_len..] <= key.as_slice() =>
                         {
                             if let Update::Set(_) = update_value {
-                                keys.push(update_key[len..].to_vec());
+                                keys.push(update_key[key_prefix_len..].to_vec());
                             }
                             update = updates.next();
-                            if update_key[len..] == key[..] {
+                            if update_key[key_prefix_len..] == key[..] {
                                 break;
                             }
                         }
                         _ => {
-                            let mut key_with_prefix = key_prefix.to_vec();
-                            key_with_prefix.extend_from_slice(&key);
-                            if !suffix_closed_set.find_key(&key_with_prefix) {
+                            let deleted = if has_deleted_prefixes {
+                                key_with_prefix.truncate(key_prefix_len);
+                                key_with_prefix.extend_from_slice(&key);
+                                suffix_closed_set.find_key(&key_with_prefix)
+                            } else {
+                                false
+                            };
+                            if !deleted {
                                 keys.push(key);
                             }
                             break;
@@ -927,7 +934,7 @@ impl<C: Context> KeyValueStoreView<C> {
         }
         while let Some((update_key, update_value)) = update {
             if let Update::Set(_) = update_value {
-                let update_key = update_key[len..].to_vec();
+                let update_key = update_key[key_prefix_len..].to_vec();
                 keys.push(update_key);
             }
             update = updates.next();
@@ -961,7 +968,7 @@ impl<C: Context> KeyValueStoreView<C> {
             key_prefix.len() <= self.max_key_size(),
             ViewError::KeyTooLong
         );
-        let len = key_prefix.len();
+        let key_prefix_len = key_prefix.len();
         let key_prefix_full = self
             .context
             .base_key()
@@ -975,6 +982,8 @@ impl<C: Context> KeyValueStoreView<C> {
         if !self.deletion_set.delete_storage_first {
             let mut suffix_closed_set =
                 SuffixClosedSetIterator::new(0, self.deletion_set.deleted_prefixes.iter());
+            let has_deleted_prefixes = !self.deletion_set.deleted_prefixes.is_empty();
+            let mut key_with_prefix = key_prefix.to_vec();
             for entry in self
                 .context
                 .store()
@@ -984,20 +993,28 @@ impl<C: Context> KeyValueStoreView<C> {
                 let (key, value) = entry;
                 loop {
                     match update {
-                        Some((update_key, update_value)) if update_key[len..] <= key[..] => {
+                        Some((update_key, update_value))
+                            if update_key[key_prefix_len..] <= key[..] =>
+                        {
                             if let Update::Set(update_value) = update_value {
-                                let key_value = (update_key[len..].to_vec(), update_value.to_vec());
+                                let key_value =
+                                    (update_key[key_prefix_len..].to_vec(), update_value.to_vec());
                                 key_values.push(key_value);
                             }
                             update = updates.next();
-                            if update_key[len..] == key[..] {
+                            if update_key[key_prefix_len..] == key[..] {
                                 break;
                             }
                         }
                         _ => {
-                            let mut key_with_prefix = key_prefix.to_vec();
-                            key_with_prefix.extend_from_slice(&key);
-                            if !suffix_closed_set.find_key(&key_with_prefix) {
+                            let deleted = if has_deleted_prefixes {
+                                key_with_prefix.truncate(key_prefix_len);
+                                key_with_prefix.extend_from_slice(&key);
+                                suffix_closed_set.find_key(&key_with_prefix)
+                            } else {
+                                false
+                            };
+                            if !deleted {
                                 key_values.push((key, value));
                             }
                             break;
@@ -1008,7 +1025,7 @@ impl<C: Context> KeyValueStoreView<C> {
         }
         while let Some((update_key, update_value)) = update {
             if let Update::Set(update_value) = update_value {
-                let key_value = (update_key[len..].to_vec(), update_value.to_vec());
+                let key_value = (update_key[key_prefix_len..].to_vec(), update_value.to_vec());
                 key_values.push(key_value);
             }
             update = updates.next();
