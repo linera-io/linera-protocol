@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"trait":["AccountabilityScope","AccountableSafety","ChainAuditability","ChainTilesRounds","ConflictCompleteness","DoubleValidationCompleteness","DoubleVoteSoundness","FirstRoundSoundness","InvalidJustificationSoundness","LockViolationSoundness","MisbehaviourProof","ProofSoundness","SoundChain"]};

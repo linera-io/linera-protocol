@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["NON_ZERO_BYTE_DATA_COST","NON_ZERO_BYTE_MULTIPLIER","STANDARD_TOKEN_COST","TOTAL_COST_FLOOR_PER_TOKEN"],"fn":["tokens_in_calldata","transaction_floor_cost"]};

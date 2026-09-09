@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["LockingBlock","Outcome"],"mod":["proof"],"struct":["ChainManager","ChainManagerInfo","ManagerSafetySnapshot"],"type":["ValidatedOrConfirmedVote"]};

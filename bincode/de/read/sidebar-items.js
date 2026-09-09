@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["IoReader","SliceReader"],"trait":["BincodeRead"]};

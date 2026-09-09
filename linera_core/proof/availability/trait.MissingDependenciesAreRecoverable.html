@@ -1,0 +1,85 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Lemma (A client can obtain everything a submission depends on). A client can always find, on the network, the data it needs in order to submit"><title>MissingDependenciesAreRecoverable in linera_core::proof::availability - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="linera_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">MissingDependenciesAreRecoverable</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../linera_core/index.html">linera_<wbr>core</a><span class="version">0.16.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Missing<wbr>Dependencies<wbr>AreRecoverable</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#what-a-valid-proposal-requires" title="What a valid proposal requires">What a valid proposal requires</a></li><li><a href="#discovery" title="Discovery">Discovery</a></li><li><a href="#supply" title="Supply">Supply</a></li><li><a href="#two-things-this-makes-possible" title="Two things this makes possible">Two things this makes possible</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In linera_<wbr>core::<wbr>proof::<wbr>availability</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">linera_core</a>::<wbr><a href="../index.html">proof</a>::<wbr><a href="index.html">availability</a></div><h1>Trait <span class="trait">Missing<wbr>Dependencies<wbr>AreRecoverable</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/linera_core/proof/availability.rs.html#293-296">Source</a> </span></div><pre class="rust item-decl"><code>pub trait MissingDependenciesAreRecoverable:
+    <a class="trait" href="trait.LockingBlobsTravelWithTheLock.html" title="trait linera_core::proof::availability::LockingBlobsTravelWithTheLock">LockingBlobsTravelWithTheLock</a>
+    + <a class="trait" href="../assumptions/trait.CorrectValidatorAvailability.html" title="trait linera_core::proof::assumptions::CorrectValidatorAvailability">CorrectValidatorAvailability</a>
+    + <a class="trait" href="../assumptions/trait.EventualSynchrony.html" title="trait linera_core::proof::assumptions::EventualSynchrony">EventualSynchrony</a> { }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><strong>Lemma (A client can obtain everything a submission depends on).</strong> A client can always find, on
+the network, the data it needs in order to submit</p>
+<ol>
+<li>a <strong>valid block proposal</strong> — one every correct validator will accept — or</li>
+<li>a <strong>confirmed certificate</strong>, to a validator that does not yet have it;</li>
+</ol>
+<p>and having found it, it can hand that data to any validator that is missing it.</p>
+<p>The two halves are <em>discovery</em> and <em>supply</em>, and they are separate claims. Discovery is what a
+client does before it has a block at all; supply is what happens when a validator turns out to
+be behind. The second is easy once the first has happened, because building the proposal is what
+puts the data in the client’s own storage.</p>
+<h2 id="what-a-valid-proposal-requires"><a class="doc-anchor" href="#what-a-valid-proposal-requires">§</a>What a valid proposal requires</h2>
+<p>Validity is not one condition, so the dependencies are not one kind. <code>try_handle_block_proposal</code>
+checks the following in order, and each check is a demand on data the validator must already
+hold. The right-hand column is how a client comes to hold it too.</p>
+<div><table><thead><tr><th>the proposal is valid only if</th><th>the validator needs</th><th>error when it lacks it</th><th>how a client finds it</th></tr></thead><tbody>
+<tr><td>the chain exists at all</td><td>the chain description blob</td><td><code>InactiveChain</code></td><td>from the creating chain’s block</td></tr>
+<tr><td>its height and parent hash continue the chain (<code>verify_block_chaining</code>)</td><td>that chain’s certified prefix</td><td><code>UnexpectedBlockHeight</code></td><td><code>ChainClient::synchronize_chain_state</code></td></tr>
+<tr><td>its round is one this validator can accept (<a href="../../../linera_chain/manager/proof/voting/trait.ProposalGate.html" title="trait linera_chain::manager::proof::voting::ProposalGate"><code>ProposalGate</code></a>)</td><td>the consensus state at that height</td><td><code>WrongRound</code></td><td>the same, plus <code>ChainClient::prepare_chain</code></td></tr>
+<tr><td>it declares the chain’s current epoch (<code>check_block_epoch</code>)</td><td>the committee for that epoch, hence the admin chain’s epoch event</td><td><code>EventsNotFound</code> on the epoch stream</td><td>by following the admin chain, which every client does</td></tr>
+<tr><td>every incoming bundle it consumes is present in the inbox, equal, and in cursor order</td><td>the <em>sending</em> chains’ message-bearing blocks, already delivered into that inbox</td><td><code>MissingCrossChainUpdates</code></td><td><code>ChainClient::find_received_certificates</code></td></tr>
+<tr><td>its transactions execute correctly</td><td>every blob the block publishes or reads, and every event it reads</td><td><code>BlobsNotFound</code>, <code>EventsNotFound</code></td><td><code>download_blob</code> / <code>download_pending_blob</code>, and <code>Client::sync_events_from_node</code></td></tr>
+</tbody></table>
+</div>
+<p>The inbox row is the one that needs care, because “valid” there means more than “the bundle
+exists”. <code>remove_bundles_from_inboxes</code> runs with <code>must_be_present = true</code>, so the bundle must
+already be in <em>that validator’s</em> inbox and equal to what it holds
+(<a href="../../../linera_chain/manager/proof/commit/trait.IncomingBundlesMatchTheLocalInbox.html" title="trait linera_chain::manager::proof::commit::IncomingBundlesMatchTheLocalInbox"><code>IncomingBundlesMatchTheLocalInbox</code></a>); and consumption must respect cursor order, skipping only
+bundles every message of which is skippable (<a href="trait.DeliveryAndConsumptionAreOrdered.html" title="trait linera_core::proof::availability::DeliveryAndConsumptionAreOrdered"><code>DeliveryAndConsumptionAreOrdered</code></a>). A client
+therefore cannot make a proposal valid by supplying a bundle in isolation: it supplies the
+sending chain’s blocks, and the validator derives the inbox from them itself.</p>
+<h2 id="discovery"><a class="doc-anchor" href="#discovery">§</a>Discovery</h2>
+<p>Each row’s last column is a request to the network, not a lookup in something the client is
+assumed to have. The client learns of incoming messages by asking validators for their received
+logs (<code>find_received_certificates</code>), of blobs by downloading them, of events by
+<code>sync_events_from_node</code>, and of its own chain’s state by synchronizing it.</p>
+<p><em>This half is quorum-dependent, and the code says so.</em> <code>find_received_certificates</code> is
+documented as best effort: it finds only certificates confirmed among sufficiently many
+validators of the sending chain’s <em>current</em> committee — which holds “whenever a sender’s chain
+is still in use and is regularly upgraded to new committees”. A message from a chain that has
+since gone quiet across a reconfiguration is the case that is not covered, which is the
+availability question in <a href="../assumptions/trait.BlobRetention.html" title="trait linera_core::proof::assumptions::BlobRetention"><code>super::assumptions::BlobRetention</code></a>’s family rather than a defect in
+the supply argument below.</p>
+<h2 id="supply"><a class="doc-anchor" href="#supply">§</a>Supply</h2>
+<p><em>Every dependency is by then available at the requester, locally.</em> Building the proposal means
+the client’s own local node executed the block, and execution consumes exactly the data in the
+table; so holding it is a precondition of having a proposal to submit, not a coincidence.
+<code>linera_core::updater</code> states the messaging case as an invariant of local storage: it is
+“guaranteed to hold every block we needed to build a proposal”, because a bundle can only be
+consumed after its ordered message-bearing predecessors were downloaded.</p>
+<p>For case (2) the argument is shorter: the block is certified, so its dependencies are
+retrievable at all (<a href="trait.CertifiedBlockIsAvailable.html" title="trait linera_core::proof::availability::CertifiedBlockIsAvailable"><code>CertifiedBlockIsAvailable</code></a>), and a client that processed the certificate
+wrote them as it went (<a href="trait.BlockOutputsArePersisted.html" title="trait linera_core::proof::availability::BlockOutputsArePersisted"><code>BlockOutputsArePersisted</code></a>). The blob arm of <code>send_confirmed_certificate</code>
+says so outright — “the certificate is confirmed, so the blobs must be in storage” — and treats
+a miss as an error rather than something to wait for.</p>
+<p>This is a <em>local</em> availability claim, and it is stronger than the network-wide one:
+<a href="trait.CertifiedBlockIsAvailable.html" title="trait linera_core::proof::availability::CertifiedBlockIsAvailable"><code>CertifiedBlockIsAvailable</code></a> says the data can be obtained from some quorum, whereas here it is
+already in the hand of the party that must supply it. That is why the pushes read local storage
+and nothing else — <code>read_certificates_for_heights</code>, <code>read_blobs_from_storage</code>,
+<code>get_next_height_to_preprocess</code> — and why no class waits on a third party. ∎</p>
+<p>The one case where local availability is not immediate is a lock the client is <em>recovering</em>
+rather than one it created: there the blobs were collected during synchronization, by
+<a href="trait.LockingBlobsTravelWithTheLock.html" title="trait linera_core::proof::availability::LockingBlobsTravelWithTheLock"><code>LockingBlobsTravelWithTheLock</code></a>.</p>
+<h2 id="two-things-this-makes-possible"><a class="doc-anchor" href="#two-things-this-makes-possible">§</a>Two things this makes possible</h2>
+<p><strong>A client need not follow a whole chain to supply what came from it.</strong> A chain it merely
+receives from is stored only at its message-bearing heights, and <code>send_chain_information</code> pushes
+exactly those, silently skipping heights it does not have; the validator executes the contiguous
+prefix and <em>preprocesses</em> any block above a gap, which is enough to deliver that block’s
+bundles. So a sparse chain the client never fully held is still enough to make the inbox row
+true at the validator.</p>
+<p><strong>The set to push is derived from local storage, not from the error.</strong>
+<code>MissingCrossChainUpdates</code> names only the bundles the current proposal needs and omits
+already-consumed ancestors the validator must execute first, so deriving the push from it would
+be unreliable; <code>send_chain_information</code> sends the whole locally-held range instead.</p>
+<p><strong>Why the pushes terminate.</strong> Each class carries a well-founded measure.
+<code>send_confirmed_certificate</code> latches <code>sent_admin_chain</code> / <code>sent_blobs</code> / <code>sent_blocks</code>, so each
+class is attempted once. <code>send_block_proposal</code> drains its <code>blob_ids</code> with <code>mem::take</code> and
+records <code>publisher_chain_ids_sent</code> per publishing chain. <code>MissingCrossChainUpdates</code> reports
+every missing bundle at once, so it too is a latch: the whole reported set is synced in one
+batch, and a validator that still reports missing bundles afterwards is not retried. A
+dependency that nobody can supply therefore surfaces as an error rather than looping.</p>
+</div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../../trait.impl/linera_core/proof/availability/trait.MissingDependenciesAreRecoverable.js" async></script></section></div></main></body></html>

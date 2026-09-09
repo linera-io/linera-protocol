@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["NamespaceError","PrefixDeclaration","ResolveResult"],"struct":["LocalName","Namespace","Prefix","PrefixIter","QName"]};

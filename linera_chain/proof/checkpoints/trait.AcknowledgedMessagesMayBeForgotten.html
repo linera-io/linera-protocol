@@ -1,0 +1,77 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Lemma (A sender may forget messages its recipient has checkpointed). A chain’s checkpoint dump names only those of its blocks that still carry outgoing bundles no recipient has acknowledged consuming. Acknowledged bundles are dropped, and no future incarnation of any recipient can ask for them again."><title>AcknowledgedMessagesMayBeForgotten in linera_chain::proof::checkpoints - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="linera_chain" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">AcknowledgedMessagesMayBeForgotten</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../linera_chain/index.html">linera_<wbr>chain</a><span class="version">0.16.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Acknowledged<wbr>Messages<wbr>MayBe<wbr>Forgotten</a></h2><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In linera_<wbr>chain::<wbr>proof::<wbr>checkpoints</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">linera_chain</a>::<wbr><a href="../index.html">proof</a>::<wbr><a href="index.html">checkpoints</a></div><h1>Trait <span class="trait">Acknowledged<wbr>Messages<wbr>MayBe<wbr>Forgotten</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/linera_chain/proof/checkpoints.rs.html#318">Source</a> </span></div><pre class="rust item-decl"><code>pub trait AcknowledgedMessagesMayBeForgotten: <a class="trait" href="trait.CheckpointPreservesConsumptionBoundary.html" title="trait linera_chain::proof::checkpoints::CheckpointPreservesConsumptionBoundary">CheckpointPreservesConsumptionBoundary</a> { }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><strong>Lemma (A sender may forget messages its recipient has checkpointed).</strong> A chain’s checkpoint
+dump names only those of its blocks that still carry outgoing bundles no recipient has
+acknowledged consuming. Acknowledged bundles are dropped, and no future incarnation of any
+recipient can ask for them again.</p>
+<p>Without this a chain could never forget anything it had ever sent: <code>outbox_block_hashes</code> would
+name every block with an outgoing message for the life of the chain, and each checkpoint would
+be larger than the last.</p>
+<p><em>Code correspondence.</em> Three transitions, alternating between the two chains.</p>
+<p><strong>The sender records an outstanding bundle.</strong></p>
+<div><table><thead><tr><th></th><th></th></tr></thead><tbody>
+<tr><td>transition</td><td>the per-recipient loop in <code>ChainStateView::execute_block_inner</code></td></tr>
+<tr><td>reads</td><td><code>BlockTracker::non_checkpoint_ack_tx_indices</code>, and the current entry for that recipient</td></tr>
+<tr><td>writes</td><td><code>system.unfinalized_message_blocks[recipient]</code>, adding <code>Cursor { height, index }</code> for each kept transaction index</td></tr>
+<tr><td>precondition</td><td>the recipient has at least one message in this block that is not a <code>CheckpointAck</code>; otherwise the entry is not touched</td></tr>
+</tbody></table>
+</div>
+<p><strong>The recipient acknowledges, at its own checkpoint.</strong></p>
+<div><table><thead><tr><th></th><th></th></tr></thead><tbody>
+<tr><td>transition</td><td><code>ExecutionStateView::apply_checkpoint</code>, over <code>PreparedCheckpoint::origin_cursors</code> built before the block by <code>ChainStateView::collect_inbox_cursors</code></td></tr>
+<tr><td>reads</td><td><code>system.pending_checkpoint_ack_targets</code>, and <code>next_cursor_to_remove</code> of each named inbox</td></tr>
+<tr><td>writes</td><td>one <code>SystemMessage::CheckpointAck { latest_received_cursor }</code> per target through <code>TransactionTracker::add_outgoing_message</code>, then clears <code>pending_checkpoint_ack_targets</code></td></tr>
+<tr><td>precondition</td><td><code>prepare_checkpoint</code> and <code>check_checkpoint_preconditions</code> both passed (<a href="trait.CheckpointSummarizesUserStreams.html" title="trait linera_chain::proof::checkpoints::CheckpointSummarizesUserStreams"><code>CheckpointSummarizesUserStreams</code></a>)</td></tr>
+</tbody></table>
+</div>
+<p><strong>The sender trims.</strong></p>
+<div><table><thead><tr><th></th><th></th></tr></thead><tbody>
+<tr><td>transition</td><td>the <code>CheckpointAck</code> arm of <code>SystemExecutionStateView::execute_message</code></td></tr>
+<tr><td>reads</td><td><code>system.unfinalized_message_blocks[context.origin]</code></td></tr>
+<tr><td>writes</td><td>the same entry, replaced by <code>cursors.split_off(&amp;latest_received_cursor)</code>, or removed when that is empty</td></tr>
+<tr><td>precondition</td><td>none — an acknowledgement naming an origin with no entry is a no-op</td></tr>
+</tbody></table>
+</div>
+<p><em>Proof.</em> Four steps.</p>
+<p><em>What gets recorded.</em> <code>non_checkpoint_ack_tx_indices</code> walks the block’s outgoing messages and
+keeps, per destination, the indices of transactions holding at least one message for which
+<code>Message::is_checkpoint_ack</code> is false. <code>execute_block_inner</code> inserts a <a href="../../../linera_base/data_types/struct.Cursor.html" title="struct linera_base::data_types::Cursor"><code>Cursor</code></a> for each. So a
+block whose only traffic to a recipient is an acknowledgement adds nothing to track — which is
+the first of the two exclusions below.</p>
+<p><em>What the dump names.</em> <code>unfinalized_message_blocks</code> is held in the <em>system execution state</em>, not
+in the off-chain outbox, so it is identical across validators and may feed a certified oracle
+response: <code>PreparedCheckpoint::outbox_block_hashes</code> is the unique heights across all its
+cursors, resolved to hashes through <code>block_hashes</code> by the pre-block hook — the cursors are
+written mid-execution, when the block’s own hash is not yet known. Cursors rather than bare
+heights is what lets an acknowledgement landing part-way through a block evict a recipient
+outright, which matters for a high-fanout chain whose recipients each interact with it once.</p>
+<p><em>What clears an entry.</em> On <code>CheckpointAck { latest_received_cursor }</code>, <code>split_off</code> retains the
+cursors at or above it and discards the strict prefix below; an emptied set removes the
+recipient entirely. Since the dump is derived from what remains, those blocks stop being named.</p>
+<p><em>Why that is safe.</em> <code>latest_received_cursor</code> is the recipient’s <code>next_cursor_to_remove</code> at its
+checkpoint, so it has consumed everything below it. The same checkpoint records that position in
+<code>PreparedCheckpoint::inbox_cursors</code>, so any node bootstrapping the recipient seeds
+<code>restored_cursor</code> at least that high; and by <a href="trait.CheckpointPreservesConsumptionBoundary.html" title="trait linera_chain::proof::checkpoints::CheckpointPreservesConsumptionBoundary"><code>CheckpointPreservesConsumptionBoundary</code></a> a bundle
+below <code>restored_cursor</code> is dropped by <code>Inbox::add_bundle</code> on arrival and reported as already
+known by <code>Inbox::remove_bundle</code> on consumption. No incarnation of the recipient, present or
+future, can therefore ask for a bundle the sender has dropped. ∎</p>
+<p><strong>What is kept is exactly what a bootstrapped node needs.</strong> The same map has a second reader:
+<code>ChainStateView::restore_outboxes_from_unfinalized</code>, called once after
+<code>restore_from_content</code> when a node bootstraps from a checkpoint. Off-chain outbox state —
+<code>outboxes</code>, <code>outbox_counters</code>, <code>nonempty_outboxes</code> — is not part of the certified blob, so
+without this rebuild a bootstrapped node would silently stop pushing pending messages onward.
+Retention and resumption are therefore the same set: a sender keeps a block precisely while some
+recipient might still need it delivered.</p>
+<p><strong>Why the exchange terminates.</strong> An acknowledgement is itself a message, so two exclusions stop
+two chains acknowledging each other forever, and they act at different points. A bundle whose
+only messages to a recipient were <code>CheckpointAck</code> never enters <code>unfinalized_message_blocks</code>
+(<code>non_checkpoint_ack_tx_indices</code>), so it never becomes something to acknowledge; and a received
+<code>CheckpointAck</code> never enters its origin into <code>pending_checkpoint_ack_targets</code> (the
+<code>!posted_message.message.is_checkpoint_ack()</code> guard in <code>BlockTracker</code>), so it creates no debt to
+answer. <code>apply_checkpoint</code> then clears that set, so only a fresh non-acknowledgement message
+re-enters a chain for the next round.</p>
+<p><strong>A sender can forget only as fast as its recipients checkpoint.</strong> Nothing obliges a recipient
+to checkpoint, and until it does it sends no acknowledgement, so the sender keeps naming those
+blocks. A chain whose recipients never checkpoint therefore has an ever-growing dump however
+often it checkpoints itself — its own frequency does not help. This is the outbox-side face of
+<a href="https://github.com/linera-io/linera-protocol/issues/6693">issue #6693</a>: with nothing scheduling
+checkpoints anywhere, the bound this lemma provides rests on behaviour no rule requires.</p>
+</div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../../trait.impl/linera_chain/proof/checkpoints/trait.AcknowledgedMessagesMayBeForgotten.js" async></script></section></div></main></body></html>

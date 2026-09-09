@@ -1,0 +1,53 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Lemma (A checkpoint restores exactly the execution state it captured). Applying a checkpoint’s blobs reproduces the chain’s execution state as it stood immediately before the checkpoint block, in full."><title>CheckpointRestoresExecutionState in linera_chain::proof::checkpoints - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="linera_chain" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">CheckpointRestoresExecutionState</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../linera_chain/index.html">linera_<wbr>chain</a><span class="version">0.16.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Checkpoint<wbr>Restores<wbr>Execution<wbr>State</a></h2><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In linera_<wbr>chain::<wbr>proof::<wbr>checkpoints</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">linera_chain</a>::<wbr><a href="../index.html">proof</a>::<wbr><a href="index.html">checkpoints</a></div><h1>Trait <span class="trait">Checkpoint<wbr>Restores<wbr>Execution<wbr>State</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/linera_chain/proof/checkpoints.rs.html#225">Source</a> </span></div><pre class="rust item-decl"><code>pub trait CheckpointRestoresExecutionState: <a class="trait" href="../../manager/proof/model/trait.SequentialChainState.html" title="trait linera_chain::manager::proof::model::SequentialChainState">SequentialChainState</a> { }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><strong>Lemma (A checkpoint restores exactly the execution state it captured).</strong> Applying a
+checkpoint’s blobs reproduces the chain’s execution state as it stood immediately before the
+checkpoint block, in full.</p>
+<p><em>Proof.</em> Four parts.</p>
+<p><em>The dump is total.</em> <a href="../../../linera_execution/execution/struct.ExecutionStateView.html" title="struct linera_execution::execution::ExecutionStateView"><code>ExecutionStateView</code></a> has exactly one field: an inner view holding the
+system state, the user applications’ key-value stores, and the two previous-block maps.
+Everything the outer view exposes is reached by dereferencing into it, and <code>dump_content</code>
+serializes that inner view’s persisted content whole. No part of the execution state can be
+left out of a checkpoint by oversight — totality here is structural, not an inventory someone
+has to keep current as fields are added.</p>
+<p><em>The dump is quiescent.</em> <code>dump_content</code> reads from storage and refuses to run while the view
+holds pending in-memory changes, failing with <code>ViewError::HasPendingChanges</code>.
+<code>prepare_checkpoint</code> is therefore a <em>pre-block</em> operation, run before block-level setup mutates
+the chain. The captured bytes are the committed pre-block state — exactly what a bootstrapping
+node restores before re-applying the certified checkpoint block.</p>
+<p><em>The bytes are pinned by the certificate.</em> The dump is chunked at the epoch’s
+<code>maximum_blob_size</code> and published as created blobs of the checkpoint block, their ids listed in
+that block’s <code>OracleResponse::Checkpoint</code> as <code>execution_state_blobs</code>. Blobs are content
+addressed, so a node fetching them cannot be handed different bytes; and the id list is part of
+the certified outcome, so it cannot be pointed at a different dump. Integrity here is free, in
+the way integrity of any blob is free — availability is the separate question, and is
+<code>linera_core::proof::availability::CertifiedBlockIsAvailable</code>’s.</p>
+<p><em>The hash agrees.</em> <code>ExecutionStateView::crypto_hash_mut</code> derives the state hash from the inner
+view’s historical hash, and <code>restore_from_content</code> records the hash of the restored bytes as the
+new stored hash. A node that restores and then re-applies the certified checkpoint block
+computes the <code>state_hash</code> that block certifies, so a restore that went wrong does not go
+unnoticed. ∎</p>
+<p><strong>This is the execution state, not the chain.</strong> The two totality arguments point opposite ways
+and it is worth being exact about which applies. <a href="../../../linera_execution/execution/struct.ExecutionStateView.html" title="struct linera_execution::execution::ExecutionStateView"><code>ExecutionStateView</code></a> has one field, so the
+dump covers all of it. <a href="../../struct.ChainStateView.html" title="struct linera_chain::ChainStateView"><code>ChainStateView</code></a> has sixteen, of which the blob covers exactly one —
+<code>execution_state</code>. Inboxes, outboxes, the tip, the chain manager, the block-hash index and the
+event trackers are all outside it.</p>
+<p>Two of those are restored by named mechanisms rather than by the blob, and a checkpoint would be
+unusable without them:</p>
+<ul>
+<li><em>Inboxes.</em> Each inbox’s <code>restored_cursor</code> is seeded from <code>PreparedCheckpoint::inbox_cursors</code>,
+carried in the certified oracle response rather than the dump
+(<a href="trait.CheckpointPreservesConsumptionBoundary.html" title="trait linera_chain::proof::checkpoints::CheckpointPreservesConsumptionBoundary"><code>CheckpointPreservesConsumptionBoundary</code></a>).</li>
+<li><em>Outboxes.</em> <code>outboxes</code>, <code>outbox_counters</code> and <code>nonempty_outboxes</code> are rebuilt by
+<a href="../../struct.ChainStateView.html" title="struct linera_chain::ChainStateView"><code>ChainStateView</code></a>’s <code>restore_outboxes_from_unfinalized</code>, run once after
+<code>restore_from_content</code>, from the on-chain <code>unfinalized_message_blocks</code>
+(<a href="trait.AcknowledgedMessagesMayBeForgotten.html" title="trait linera_chain::proof::checkpoints::AcknowledgedMessagesMayBeForgotten"><code>AcknowledgedMessagesMayBeForgotten</code></a>). Off-chain outbox state is not certified, so without
+this a bootstrapped node would go quiet on cross-chain delivery while looking healthy.</li>
+</ul>
+<p>So a checkpoint is not a snapshot of a chain. It is a certified snapshot of the chain’s
+<em>execution state</em>, plus enough certified bookkeeping to reconstruct the message-passing state
+around it. What the remaining chain-state fields hold after a bootstrap is outside this lemma.</p>
+<p><strong>Residual obligation.</strong> <code>restore_from_content</code> leaves the in-memory view stale: its
+documentation requires the caller to reload afterwards, and nothing in the type enforces it. A
+caller that skipped the reload would continue against a view that no longer describes storage.
+This is the same shape as <a href="../../manager/proof/locking/trait.SafetyStateRecovery.html" title="trait linera_chain::manager::proof::locking::SafetyStateRecovery"><code>SafetyStateRecovery</code></a> — a correctness condition discharged by
+convention at the call site rather than by construction.</p>
+</div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../../trait.impl/linera_chain/proof/checkpoints/trait.CheckpointRestoresExecutionState.js" async></script></section></div></main></body></html>

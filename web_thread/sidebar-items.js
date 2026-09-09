@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["SendTask","Task","Thread"],"trait":["AsJs","Post","PostExt"],"type":["Error","Result"]};

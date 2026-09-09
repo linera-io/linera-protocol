@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["wallet"],"struct":["Impl"],"trait":["Environment","Network","Signer","Storage","Wallet"],"type":["Test","TestNetwork","TestSigner","TestStorage","TestWallet"]};

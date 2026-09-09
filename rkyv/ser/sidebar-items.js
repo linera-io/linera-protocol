@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["serializers"],"trait":["ScratchSpace","Serializer","SharedSerializeRegistry"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BEACON_ROOTS_ADDRESS","SYSTEM_ADDRESS"],"static":["BEACON_ROOTS_CODE"]};

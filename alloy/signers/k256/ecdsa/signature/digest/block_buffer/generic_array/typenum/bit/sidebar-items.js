@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["B0","B1"],"trait":["Bit"]};

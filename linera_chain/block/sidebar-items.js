@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BlockBodyField","ConversionError"],"struct":["Block","BlockBody","BlockHeader","ConfirmedBlock","PreviousEventBlocksMap","PreviousMessageBlocksMap","Timeout","ValidatedBlock"]};

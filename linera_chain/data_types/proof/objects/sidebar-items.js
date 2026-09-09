@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"trait":["Certificate","JustificationCommitment","SignedProposal","SignedVotePayload","UnlockingRound","ValidatorVote"]};

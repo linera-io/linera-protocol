@@ -1,0 +1,377 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `linera-chain/src/proof/checkpoints.rs`."><title>checkpoints.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="linera_chain" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">linera_chain/proof/</div>checkpoints.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) Zefchain Labs, Inc.
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="doccomment">//! Event streams across a checkpoint boundary.
+<a href=#5 id=5 data-nosnippet>5</a>
+<a href=#6 id=6 data-nosnippet>6</a></span><span class="kw">use </span><span class="kw">crate</span>::manager::proof::model::SequentialChainState;
+<a href=#7 id=7 data-nosnippet>7</a>
+<a href=#8 id=8 data-nosnippet>8</a><span class="doccomment">/// **Invariant (A stream's readable floor is its first index since the last checkpoint).** For
+<a href=#9 id=9 data-nosnippet>9</a>/// every event stream of a chain, [`StreamCounts::first_index`] is the index of the first event
+<a href=#10 id=10 data-nosnippet>10</a>/// published to that stream since the most recent checkpoint, and the indices from there up to
+<a href=#11 id=11 data-nosnippet>11</a>/// [`StreamCounts::next_index`] are contiguous. Events below the floor may have been pruned and
+<a href=#12 id=12 data-nosnippet>12</a>/// are unavailable to a node that bootstrapped from that checkpoint; events at or above it are
+<a href=#13 id=13 data-nosnippet>13</a>/// untouched by checkpointing.
+<a href=#14 id=14 data-nosnippet>14</a>///
+<a href=#15 id=15 data-nosnippet>15</a>/// This is the sense in which pre-checkpoint events are *summarized* rather than merely dropped:
+<a href=#16 id=16 data-nosnippet>16</a>/// what a checkpoint discards is bounded, and the boundary is a published number rather than
+<a href=#17 id=17 data-nosnippet>17</a>/// something a reader has to infer.
+<a href=#18 id=18 data-nosnippet>18</a>///
+<a href=#19 id=19 data-nosnippet>19</a>/// *Proof.* [`ChainStateView`]'s `process_emitted_events` maintains both fields whenever a block is
+<a href=#20 id=20 data-nosnippet>20</a>/// processed — executed or merely preprocessed — and branches on whether the block records a
+<a href=#21 id=21 data-nosnippet>21</a>/// predecessor for the stream in [`previous_event_blocks`], the per-stream map holding the hash
+<a href=#22 id=22 data-nosnippet>22</a>/// and height of the last block that emitted to it. That map is built during execution and is
+<a href=#23 id=23 data-nosnippet>23</a>/// covered by the block hash through [`previous_event_blocks_hash`], so every node branches the
+<a href=#24 id=24 data-nosnippet>24</a>/// same way on the same block.
+<a href=#25 id=25 data-nosnippet>25</a>///
+<a href=#26 id=26 data-nosnippet>26</a>/// * *A predecessor is recorded.* The stream has published since the last checkpoint, so its
+<a href=#27 id=27 data-nosnippet>27</a>///   events must continue contiguously. If they do not — `lo != counts.next_index` — the tracker
+<a href=#28 id=28 data-nosnippet>28</a>///   is left untouched, so a gap never advances `next_index` over a missing index and never moves
+<a href=#29 id=29 data-nosnippet>29</a>///   the floor.
+<a href=#30 id=30 data-nosnippet>30</a>/// * *No predecessor, and `lo &gt;= first_index`.* This block is the first to emit to the stream
+<a href=#31 id=31 data-nosnippet>31</a>///   since a checkpoint. `lo` becomes the new floor and `next_index` advances to `max(next_index,
+<a href=#32 id=32 data-nosnippet>32</a>///   hi + 1)`.
+<a href=#33 id=33 data-nosnippet>33</a>/// * *No predecessor, and `lo &lt; first_index`.* An earlier checkpoint era, already superseded by a
+<a href=#34 id=34 data-nosnippet>34</a>///   later one this chain has recorded. It is ignored, so the floor does not move backwards. ∎
+<a href=#35 id=35 data-nosnippet>35</a>///
+<a href=#36 id=36 data-nosnippet>36</a>/// **The floor only ever rises**, which is what makes it safe to publish. The `&gt;=` guard in the
+<a href=#37 id=37 data-nosnippet>37</a>/// second branch exists for checkpoints seen out of order — an earlier one preprocessed after a
+<a href=#38 id=38 data-nosnippet>38</a>/// later one — and without it a stale checkpoint would lower a floor that readers had already
+<a href=#39 id=39 data-nosnippet>39</a>/// relied on.
+<a href=#40 id=40 data-nosnippet>40</a>///
+<a href=#41 id=41 data-nosnippet>41</a>/// **What a reader may conclude.** A cross-chain read of an event through
+<a href=#42 id=42 data-nosnippet>42</a>/// [`OracleResponse::Event`] is guaranteed to find it only at an index at or above that stream's
+<a href=#43 id=43 data-nosnippet>43</a>/// floor. Below the floor, availability depends on some node not having pruned, which no statement
+<a href=#44 id=44 data-nosnippet>44</a>/// here provides.
+<a href=#45 id=45 data-nosnippet>45</a>///
+<a href=#46 id=46 data-nosnippet>46</a>/// [`StreamCounts::first_index`]: crate::StreamCounts::first_index
+<a href=#47 id=47 data-nosnippet>47</a>/// [`StreamCounts::next_index`]: crate::StreamCounts::next_index
+<a href=#48 id=48 data-nosnippet>48</a>/// [`ChainStateView`]: crate::ChainStateView
+<a href=#49 id=49 data-nosnippet>49</a>/// [`previous_event_blocks`]: crate::block::BlockBody::previous_event_blocks
+<a href=#50 id=50 data-nosnippet>50</a>/// [`previous_event_blocks_hash`]: crate::block::BlockHeader::previous_event_blocks_hash
+<a href=#51 id=51 data-nosnippet>51</a>/// [`OracleResponse::Event`]: linera_base::data_types::OracleResponse::Event
+<a href=#52 id=52 data-nosnippet>52</a></span><span class="kw">pub trait </span>EventFloorTracksCheckpoints: SequentialChainState {}
+<a href=#53 id=53 data-nosnippet>53</a>
+<a href=#54 id=54 data-nosnippet>54</a><span class="doccomment">/// **Lemma (A checkpoint summarizes every user stream that published since the previous one).**
+<a href=#55 id=55 data-nosnippet>55</a>/// At a checkpoint, each application holding an event stream that has published since the previous
+<a href=#56 id=56 data-nosnippet>56</a>/// checkpoint is given the chance to replace that stream's history with a summary, and no system
+<a href=#57 id=57 data-nosnippet>57</a>/// stream is ever in that position.
+<a href=#58 id=58 data-nosnippet>58</a>///
+<a href=#59 id=59 data-nosnippet>59</a>/// *Proof.* `ExecutionStateActor::summarize_events_at_checkpoint` takes as its work list exactly
+<a href=#60 id=60 data-nosnippet>60</a>/// the user streams in [`previous_event_blocks`]. That map is cleared by every checkpoint, so an
+<a href=#61 id=61 data-nosnippet>61</a>/// entry means the stream has published since the previous one. Each owning application is run
+<a href=#62 id=62 data-nosnippet>62</a>/// through `UserAction::SummarizeEvents` with a `StreamUpdate` whose `previous_index` is `0` and
+<a href=#63 id=63 data-nosnippet>63</a>/// whose `first_index` and `next_index` are both the stream's current count: a summary is an
+<a href=#64 id=64 data-nosnippet>64</a>/// absolute-state snapshot, so the application is handed no incremental range to fold in. The
+<a href=#65 id=65 data-nosnippet>65</a>/// summary it emits lands at `next_index`, which is a fresh index with no predecessor recorded, so
+<a href=#66 id=66 data-nosnippet>66</a>/// by [`EventFloorTracksCheckpoints`] it becomes the stream's readable floor.
+<a href=#67 id=67 data-nosnippet>67</a>///
+<a href=#68 id=68 data-nosnippet>68</a>/// The map is then cleared, dropping every pre-checkpoint anchor, so no later block links back to
+<a href=#69 id=69 data-nosnippet>69</a>/// blocks whose events are no longer guaranteed to be readable.
+<a href=#70 id=70 data-nosnippet>70</a>///
+<a href=#71 id=71 data-nosnippet>71</a>/// Only user streams can appear. A chain that has *published* to a system stream cannot checkpoint
+<a href=#72 id=72 data-nosnippet>72</a>/// at all — `ExecutionStateView::prepare_checkpoint` scans [`previous_event_blocks`] and refuses,
+<a href=#73 id=73 data-nosnippet>73</a>/// because system streams have no application to summarize them — and a chain that has *consumed*
+<a href=#74 id=74 data-nosnippet>74</a>/// system events is refused separately by [`ChainStateView`]'s `check_checkpoint_preconditions`,
+<a href=#75 id=75 data-nosnippet>75</a>/// which scans the reader-side trackers and fails with
+<a href=#76 id=76 data-nosnippet>76</a>/// [`ChainError::CheckpointPreconditionFailed`]. The admin chain's epoch streams are the case both
+<a href=#77 id=77 data-nosnippet>77</a>/// guards exist for. ∎
+<a href=#78 id=78 data-nosnippet>78</a>///
+<a href=#79 id=79 data-nosnippet>79</a>/// **A silent application closes its stream.** Summarization is an opportunity, not an obligation.
+<a href=#80 id=80 data-nosnippet>80</a>/// A stream whose application emits nothing when summarized loses its anchor along with every
+<a href=#81 id=81 data-nosnippet>81</a>/// other, and is not summarized again unless it publishes something new. Nothing distinguishes a
+<a href=#82 id=82 data-nosnippet>82</a>/// stream deliberately closed from one whose application neglected to summarize, and in both cases
+<a href=#83 id=83 data-nosnippet>83</a>/// the events below the floor are gone.
+<a href=#84 id=84 data-nosnippet>84</a>///
+<a href=#85 id=85 data-nosnippet>85</a>/// [`previous_event_blocks`]: crate::block::BlockBody::previous_event_blocks
+<a href=#86 id=86 data-nosnippet>86</a>/// [`ChainError::CheckpointPreconditionFailed`]: crate::ChainError::CheckpointPreconditionFailed
+<a href=#87 id=87 data-nosnippet>87</a>/// [`ChainStateView`]: crate::ChainStateView
+<a href=#88 id=88 data-nosnippet>88</a></span><span class="kw">pub trait </span>CheckpointSummarizesUserStreams: EventFloorTracksCheckpoints {}
+<a href=#89 id=89 data-nosnippet>89</a>
+<a href=#90 id=90 data-nosnippet>90</a><span class="doccomment">/// **Lemma (A checkpoint moves the consumption boundary and nothing else about messages).**
+<a href=#91 id=91 data-nosnippet>91</a>/// Restoring a chain from a checkpoint changes which incoming bundles are still *retained*, never
+<a href=#92 id=92 data-nosnippet>92</a>/// which have been consumed. Bundles below the restored cursor are already reflected in the
+<a href=#93 id=93 data-nosnippet>93</a>/// restored execution state and are ignored on arrival and on consumption; bundles at or above it
+<a href=#94 id=94 data-nosnippet>94</a>/// are queued, delivered and consumed exactly as they would have been with no checkpoint at all.
+<a href=#95 id=95 data-nosnippet>95</a>///
+<a href=#96 id=96 data-nosnippet>96</a>/// *Proof.* Three parts — what the checkpoint records, what a restore does, and what the guards
+<a href=#97 id=97 data-nosnippet>97</a>/// then absorb.
+<a href=#98 id=98 data-nosnippet>98</a>///
+<a href=#99 id=99 data-nosnippet>99</a>/// *Recorded.* `PreparedCheckpoint::inbox_cursors` carries the cursor of **every** inbox with a
+<a href=#100 id=100 data-nosnippet>100</a>/// non-default `next_cursor_to_remove`, not only those the checkpoint acknowledges. A bootstrapping
+<a href=#101 id=101 data-nosnippet>101</a>/// node therefore learns the consumption position of every origin the chain had consumed from,
+<a href=#102 id=102 data-nosnippet>102</a>/// including origins it will never hear from again.
+<a href=#103 id=103 data-nosnippet>103</a>///
+<a href=#104 id=104 data-nosnippet>104</a>/// *Restored.* `Inbox::restore_from_checkpoint` sets `restored_cursor` to that cursor, raises
+<a href=#105 id=105 data-nosnippet>105</a>/// `next_cursor_to_add` to it if it lagged, sets `next_cursor_to_remove` to it, drops
+<a href=#106 id=106 data-nosnippet>106</a>/// `added_bundles` below it, and clears `removed_bundles` — those anticipated removals came from
+<a href=#107 id=107 data-nosnippet>107</a>/// pre-restore blocks the rollback has invalidated. It refuses to move backwards: restoring at a
+<a href=#108 id=108 data-nosnippet>108</a>/// cursor below the current `restored_cursor` is an error, so a checkpoint dispatched out of order
+<a href=#109 id=109 data-nosnippet>109</a>/// cannot undo a later one.
+<a href=#110 id=110 data-nosnippet>110</a>///
+<a href=#111 id=111 data-nosnippet>111</a>/// *Absorbed.* Below `restored_cursor`, `Inbox::add_bundle` returns without queueing and
+<a href=#112 id=112 data-nosnippet>112</a>/// `Inbox::remove_bundle` returns immediately, reporting the bundle as already known and
+<a href=#113 id=113 data-nosnippet>113</a>/// deliberately *not* recording it in `removed_bundles` — otherwise that queue would fill with
+<a href=#114 id=114 data-nosnippet>114</a>/// anticipations no sender will ever satisfy. So a sender that has not yet seen the matching
+<a href=#115 id=115 data-nosnippet>115</a>/// acknowledgement and re-pushes an already-consumed bundle causes a silent no-op, not a duplicate
+<a href=#116 id=116 data-nosnippet>116</a>/// consumption. At or above the cursor the guards are the ordinary ones, and
+<a href=#117 id=117 data-nosnippet>117</a>/// `linera_core::proof::availability::BundleConsumedAtMostOnce` applies unchanged. ∎
+<a href=#118 id=118 data-nosnippet>118</a>///
+<a href=#119 id=119 data-nosnippet>119</a>/// **The acknowledgement is what lets a sender forget.** A checkpoint emits
+<a href=#120 id=120 data-nosnippet>120</a>/// `SystemMessage::CheckpointAck` to each origin in `PreparedCheckpoint::origin_cursors`, carrying
+<a href=#121 id=121 data-nosnippet>121</a>/// the position past the last bundle from that origin this chain has consumed. The recipients are
+<a href=#122 id=122 data-nosnippet>122</a>/// `pending_checkpoint_ack_targets`: the chains that have sent this one a message which was not
+<a href=#123 id=123 data-nosnippet>123</a>/// itself a `CheckpointAck`, so an acknowledgement never obliges an acknowledgement in return.
+<a href=#124 id=124 data-nosnippet>124</a>/// What the origin then does with it, and why dropping those bundles is safe, is
+<a href=#125 id=125 data-nosnippet>125</a>/// [`AcknowledgedMessagesMayBeForgotten`].
+<a href=#126 id=126 data-nosnippet>126</a>///
+<a href=#127 id=127 data-nosnippet>127</a>/// **What the outboxes still reference is certified, not merely named.**
+<a href=#128 id=128 data-nosnippet>128</a>/// `PreparedCheckpoint::outbox_block_hashes` lists every block this chain's outboxes still refer
+<a href=#129 id=129 data-nosnippet>129</a>/// to, captured before the checkpoint block runs, and travels in the checkpoint's oracle response.
+<a href=#130 id=130 data-nosnippet>130</a>/// The checkpoint block's certificate therefore *re-certifies* those older blocks, which is what
+<a href=#131 id=131 data-nosnippet>131</a>/// keeps them acceptable after the committee that signed them has been removed —
+<a href=#132 id=132 data-nosnippet>132</a>/// [`CheckpointRecertifiesReferencedBlocks`].
+<a href=#133 id=133 data-nosnippet>133</a></span><span class="kw">pub trait </span>CheckpointPreservesConsumptionBoundary: SequentialChainState {}
+<a href=#134 id=134 data-nosnippet>134</a>
+<a href=#135 id=135 data-nosnippet>135</a><span class="doccomment">/// **Lemma (A checkpoint leaves blob availability unchanged).** Checkpointing neither strands a
+<a href=#136 id=136 data-nosnippet>136</a>/// blob the chain can still reach nor silently requires one a bootstrapping node cannot obtain.
+<a href=#137 id=137 data-nosnippet>137</a>///
+<a href=#138 id=138 data-nosnippet>138</a>/// *Proof.* Two directions.
+<a href=#139 id=139 data-nosnippet>139</a>///
+<a href=#140 id=140 data-nosnippet>140</a>/// *Nothing is stranded.* Blobs live in storage shared across chains, addressed by content and
+<a href=#141 id=141 data-nosnippet>141</a>/// owned by no chain's view. What a checkpoint prunes is this chain's *history* — its older blocks
+<a href=#142 id=142 data-nosnippet>142</a>/// and the events they published — which is not where blobs are kept. So no blob becomes
+<a href=#143 id=143 data-nosnippet>143</a>/// unreachable by checkpointing, and the retention obligation is exactly what it was before.
+<a href=#144 id=144 data-nosnippet>144</a>///
+<a href=#145 id=145 data-nosnippet>145</a>/// *Nothing is silently required.* `ExecutionStateView::apply_checkpoint` records an
+<a href=#146 id=146 data-nosnippet>146</a>/// [`OracleResponse::Checkpoint`] carrying `used_blobs`, read from the system state's `used_blobs`
+<a href=#147 id=147 data-nosnippet>147</a>/// set: every blob the chain references at that moment. An oracle response is part of the block's
+<a href=#148 id=148 data-nosnippet>148</a>/// outcome and covered by the block hash, so the list is certified rather than advisory, and a
+<a href=#149 id=149 data-nosnippet>149</a>/// bootstrapping node knows precisely which blobs it must hold in shared storage before applying
+<a href=#150 id=150 data-nosnippet>150</a>/// the checkpoint — otherwise a later operation could read blob content it does not have. ∎
+<a href=#151 id=151 data-nosnippet>151</a>///
+<a href=#152 id=152 data-nosnippet>152</a>/// **The state dump is itself a blob, on the ordinary terms.** The execution state is split at the
+<a href=#153 id=153 data-nosnippet>153</a>/// current epoch's `maximum_blob_size` and published through `add_created_blob`, so a checkpoint's
+<a href=#154 id=154 data-nosnippet>154</a>/// snapshot is published by its block exactly as any other blob is: priced by the block that
+<a href=#155 id=155 data-nosnippet>155</a>/// publishes it, bounded in count and size, and retained on the same footing. A checkpoint buys a
+<a href=#156 id=156 data-nosnippet>156</a>/// node the right to skip replaying history; it does not buy free storage.
+<a href=#157 id=157 data-nosnippet>157</a>///
+<a href=#158 id=158 data-nosnippet>158</a>/// [`OracleResponse::Checkpoint`]: linera_base::data_types::OracleResponse::Checkpoint
+<a href=#159 id=159 data-nosnippet>159</a></span><span class="kw">pub trait </span>CheckpointPreservesBlobAvailability: SequentialChainState {}
+<a href=#160 id=160 data-nosnippet>160</a>
+<a href=#161 id=161 data-nosnippet>161</a><span class="doccomment">/// **Lemma (A checkpoint restores exactly the execution state it captured).** Applying a
+<a href=#162 id=162 data-nosnippet>162</a>/// checkpoint's blobs reproduces the chain's execution state as it stood immediately before the
+<a href=#163 id=163 data-nosnippet>163</a>/// checkpoint block, in full.
+<a href=#164 id=164 data-nosnippet>164</a>///
+<a href=#165 id=165 data-nosnippet>165</a>/// *Proof.* Four parts.
+<a href=#166 id=166 data-nosnippet>166</a>///
+<a href=#167 id=167 data-nosnippet>167</a>/// *The dump is total.* [`ExecutionStateView`] has exactly one field: an inner view holding the
+<a href=#168 id=168 data-nosnippet>168</a>/// system state, the user applications' key-value stores, and the two previous-block maps.
+<a href=#169 id=169 data-nosnippet>169</a>/// Everything the outer view exposes is reached by dereferencing into it, and `dump_content`
+<a href=#170 id=170 data-nosnippet>170</a>/// serializes that inner view's persisted content whole. No part of the execution state can be
+<a href=#171 id=171 data-nosnippet>171</a>/// left out of a checkpoint by oversight — totality here is structural, not an inventory someone
+<a href=#172 id=172 data-nosnippet>172</a>/// has to keep current as fields are added.
+<a href=#173 id=173 data-nosnippet>173</a>///
+<a href=#174 id=174 data-nosnippet>174</a>/// *The dump is quiescent.* `dump_content` reads from storage and refuses to run while the view
+<a href=#175 id=175 data-nosnippet>175</a>/// holds pending in-memory changes, failing with `ViewError::HasPendingChanges`.
+<a href=#176 id=176 data-nosnippet>176</a>/// `prepare_checkpoint` is therefore a *pre-block* operation, run before block-level setup mutates
+<a href=#177 id=177 data-nosnippet>177</a>/// the chain. The captured bytes are the committed pre-block state — exactly what a bootstrapping
+<a href=#178 id=178 data-nosnippet>178</a>/// node restores before re-applying the certified checkpoint block.
+<a href=#179 id=179 data-nosnippet>179</a>///
+<a href=#180 id=180 data-nosnippet>180</a>/// *The bytes are pinned by the certificate.* The dump is chunked at the epoch's
+<a href=#181 id=181 data-nosnippet>181</a>/// `maximum_blob_size` and published as created blobs of the checkpoint block, their ids listed in
+<a href=#182 id=182 data-nosnippet>182</a>/// that block's `OracleResponse::Checkpoint` as `execution_state_blobs`. Blobs are content
+<a href=#183 id=183 data-nosnippet>183</a>/// addressed, so a node fetching them cannot be handed different bytes; and the id list is part of
+<a href=#184 id=184 data-nosnippet>184</a>/// the certified outcome, so it cannot be pointed at a different dump. Integrity here is free, in
+<a href=#185 id=185 data-nosnippet>185</a>/// the way integrity of any blob is free — availability is the separate question, and is
+<a href=#186 id=186 data-nosnippet>186</a>/// `linera_core::proof::availability::CertifiedBlockIsAvailable`'s.
+<a href=#187 id=187 data-nosnippet>187</a>///
+<a href=#188 id=188 data-nosnippet>188</a>/// *The hash agrees.* `ExecutionStateView::crypto_hash_mut` derives the state hash from the inner
+<a href=#189 id=189 data-nosnippet>189</a>/// view's historical hash, and `restore_from_content` records the hash of the restored bytes as the
+<a href=#190 id=190 data-nosnippet>190</a>/// new stored hash. A node that restores and then re-applies the certified checkpoint block
+<a href=#191 id=191 data-nosnippet>191</a>/// computes the `state_hash` that block certifies, so a restore that went wrong does not go
+<a href=#192 id=192 data-nosnippet>192</a>/// unnoticed. ∎
+<a href=#193 id=193 data-nosnippet>193</a>///
+<a href=#194 id=194 data-nosnippet>194</a>/// **This is the execution state, not the chain.** The two totality arguments point opposite ways
+<a href=#195 id=195 data-nosnippet>195</a>/// and it is worth being exact about which applies. [`ExecutionStateView`] has one field, so the
+<a href=#196 id=196 data-nosnippet>196</a>/// dump covers all of it. [`ChainStateView`] has sixteen, of which the blob covers exactly one —
+<a href=#197 id=197 data-nosnippet>197</a>/// `execution_state`. Inboxes, outboxes, the tip, the chain manager, the block-hash index and the
+<a href=#198 id=198 data-nosnippet>198</a>/// event trackers are all outside it.
+<a href=#199 id=199 data-nosnippet>199</a>///
+<a href=#200 id=200 data-nosnippet>200</a>/// Two of those are restored by named mechanisms rather than by the blob, and a checkpoint would be
+<a href=#201 id=201 data-nosnippet>201</a>/// unusable without them:
+<a href=#202 id=202 data-nosnippet>202</a>///
+<a href=#203 id=203 data-nosnippet>203</a>/// * *Inboxes.* Each inbox's `restored_cursor` is seeded from `PreparedCheckpoint::inbox_cursors`,
+<a href=#204 id=204 data-nosnippet>204</a>///   carried in the certified oracle response rather than the dump
+<a href=#205 id=205 data-nosnippet>205</a>///   ([`CheckpointPreservesConsumptionBoundary`]).
+<a href=#206 id=206 data-nosnippet>206</a>/// * *Outboxes.* `outboxes`, `outbox_counters` and `nonempty_outboxes` are rebuilt by
+<a href=#207 id=207 data-nosnippet>207</a>///   [`ChainStateView`]'s `restore_outboxes_from_unfinalized`, run once after
+<a href=#208 id=208 data-nosnippet>208</a>///   `restore_from_content`, from the on-chain `unfinalized_message_blocks`
+<a href=#209 id=209 data-nosnippet>209</a>///   ([`AcknowledgedMessagesMayBeForgotten`]). Off-chain outbox state is not certified, so without
+<a href=#210 id=210 data-nosnippet>210</a>///   this a bootstrapped node would go quiet on cross-chain delivery while looking healthy.
+<a href=#211 id=211 data-nosnippet>211</a>///
+<a href=#212 id=212 data-nosnippet>212</a>/// So a checkpoint is not a snapshot of a chain. It is a certified snapshot of the chain's
+<a href=#213 id=213 data-nosnippet>213</a>/// *execution state*, plus enough certified bookkeeping to reconstruct the message-passing state
+<a href=#214 id=214 data-nosnippet>214</a>/// around it. What the remaining chain-state fields hold after a bootstrap is outside this lemma.
+<a href=#215 id=215 data-nosnippet>215</a>///
+<a href=#216 id=216 data-nosnippet>216</a>/// **Residual obligation.** `restore_from_content` leaves the in-memory view stale: its
+<a href=#217 id=217 data-nosnippet>217</a>/// documentation requires the caller to reload afterwards, and nothing in the type enforces it. A
+<a href=#218 id=218 data-nosnippet>218</a>/// caller that skipped the reload would continue against a view that no longer describes storage.
+<a href=#219 id=219 data-nosnippet>219</a>/// This is the same shape as [`SafetyStateRecovery`] — a correctness condition discharged by
+<a href=#220 id=220 data-nosnippet>220</a>/// convention at the call site rather than by construction.
+<a href=#221 id=221 data-nosnippet>221</a>///
+<a href=#222 id=222 data-nosnippet>222</a>/// [`ChainStateView`]: crate::ChainStateView
+<a href=#223 id=223 data-nosnippet>223</a>/// [`SafetyStateRecovery`]: crate::manager::proof::locking::SafetyStateRecovery
+<a href=#224 id=224 data-nosnippet>224</a>/// [`ExecutionStateView`]: linera_execution::ExecutionStateView
+<a href=#225 id=225 data-nosnippet>225</a></span><span class="kw">pub trait </span>CheckpointRestoresExecutionState: SequentialChainState {}
+<a href=#226 id=226 data-nosnippet>226</a>
+<a href=#227 id=227 data-nosnippet>227</a><span class="doccomment">/// **Lemma (A sender may forget messages its recipient has checkpointed).** A chain's checkpoint
+<a href=#228 id=228 data-nosnippet>228</a>/// dump names only those of its blocks that still carry outgoing bundles no recipient has
+<a href=#229 id=229 data-nosnippet>229</a>/// acknowledged consuming. Acknowledged bundles are dropped, and no future incarnation of any
+<a href=#230 id=230 data-nosnippet>230</a>/// recipient can ask for them again.
+<a href=#231 id=231 data-nosnippet>231</a>///
+<a href=#232 id=232 data-nosnippet>232</a>/// Without this a chain could never forget anything it had ever sent: `outbox_block_hashes` would
+<a href=#233 id=233 data-nosnippet>233</a>/// name every block with an outgoing message for the life of the chain, and each checkpoint would
+<a href=#234 id=234 data-nosnippet>234</a>/// be larger than the last.
+<a href=#235 id=235 data-nosnippet>235</a>///
+<a href=#236 id=236 data-nosnippet>236</a>/// *Code correspondence.* Three transitions, alternating between the two chains.
+<a href=#237 id=237 data-nosnippet>237</a>///
+<a href=#238 id=238 data-nosnippet>238</a>/// **The sender records an outstanding bundle.**
+<a href=#239 id=239 data-nosnippet>239</a>///
+<a href=#240 id=240 data-nosnippet>240</a>/// | | |
+<a href=#241 id=241 data-nosnippet>241</a>/// |---|---|
+<a href=#242 id=242 data-nosnippet>242</a>/// | transition | the per-recipient loop in `ChainStateView::execute_block_inner` |
+<a href=#243 id=243 data-nosnippet>243</a>/// | reads | `BlockTracker::non_checkpoint_ack_tx_indices`, and the current entry for that recipient |
+<a href=#244 id=244 data-nosnippet>244</a>/// | writes | `system.unfinalized_message_blocks[recipient]`, adding `Cursor { height, index }` for each kept transaction index |
+<a href=#245 id=245 data-nosnippet>245</a>/// | precondition | the recipient has at least one message in this block that is not a `CheckpointAck`; otherwise the entry is not touched |
+<a href=#246 id=246 data-nosnippet>246</a>///
+<a href=#247 id=247 data-nosnippet>247</a>/// **The recipient acknowledges, at its own checkpoint.**
+<a href=#248 id=248 data-nosnippet>248</a>///
+<a href=#249 id=249 data-nosnippet>249</a>/// | | |
+<a href=#250 id=250 data-nosnippet>250</a>/// |---|---|
+<a href=#251 id=251 data-nosnippet>251</a>/// | transition | `ExecutionStateView::apply_checkpoint`, over `PreparedCheckpoint::origin_cursors` built before the block by `ChainStateView::collect_inbox_cursors` |
+<a href=#252 id=252 data-nosnippet>252</a>/// | reads | `system.pending_checkpoint_ack_targets`, and `next_cursor_to_remove` of each named inbox |
+<a href=#253 id=253 data-nosnippet>253</a>/// | writes | one `SystemMessage::CheckpointAck { latest_received_cursor }` per target through `TransactionTracker::add_outgoing_message`, then clears `pending_checkpoint_ack_targets` |
+<a href=#254 id=254 data-nosnippet>254</a>/// | precondition | `prepare_checkpoint` and `check_checkpoint_preconditions` both passed ([`CheckpointSummarizesUserStreams`]) |
+<a href=#255 id=255 data-nosnippet>255</a>///
+<a href=#256 id=256 data-nosnippet>256</a>/// **The sender trims.**
+<a href=#257 id=257 data-nosnippet>257</a>///
+<a href=#258 id=258 data-nosnippet>258</a>/// | | |
+<a href=#259 id=259 data-nosnippet>259</a>/// |---|---|
+<a href=#260 id=260 data-nosnippet>260</a>/// | transition | the `CheckpointAck` arm of `SystemExecutionStateView::execute_message` |
+<a href=#261 id=261 data-nosnippet>261</a>/// | reads | `system.unfinalized_message_blocks[context.origin]` |
+<a href=#262 id=262 data-nosnippet>262</a>/// | writes | the same entry, replaced by `cursors.split_off(&amp;latest_received_cursor)`, or removed when that is empty |
+<a href=#263 id=263 data-nosnippet>263</a>/// | precondition | none — an acknowledgement naming an origin with no entry is a no-op |
+<a href=#264 id=264 data-nosnippet>264</a>///
+<a href=#265 id=265 data-nosnippet>265</a>/// *Proof.* Four steps.
+<a href=#266 id=266 data-nosnippet>266</a>///
+<a href=#267 id=267 data-nosnippet>267</a>/// *What gets recorded.* `non_checkpoint_ack_tx_indices` walks the block's outgoing messages and
+<a href=#268 id=268 data-nosnippet>268</a>/// keeps, per destination, the indices of transactions holding at least one message for which
+<a href=#269 id=269 data-nosnippet>269</a>/// `Message::is_checkpoint_ack` is false. `execute_block_inner` inserts a [`Cursor`] for each. So a
+<a href=#270 id=270 data-nosnippet>270</a>/// block whose only traffic to a recipient is an acknowledgement adds nothing to track — which is
+<a href=#271 id=271 data-nosnippet>271</a>/// the first of the two exclusions below.
+<a href=#272 id=272 data-nosnippet>272</a>///
+<a href=#273 id=273 data-nosnippet>273</a>/// *What the dump names.* `unfinalized_message_blocks` is held in the *system execution state*, not
+<a href=#274 id=274 data-nosnippet>274</a>/// in the off-chain outbox, so it is identical across validators and may feed a certified oracle
+<a href=#275 id=275 data-nosnippet>275</a>/// response: `PreparedCheckpoint::outbox_block_hashes` is the unique heights across all its
+<a href=#276 id=276 data-nosnippet>276</a>/// cursors, resolved to hashes through `block_hashes` by the pre-block hook — the cursors are
+<a href=#277 id=277 data-nosnippet>277</a>/// written mid-execution, when the block's own hash is not yet known. Cursors rather than bare
+<a href=#278 id=278 data-nosnippet>278</a>/// heights is what lets an acknowledgement landing part-way through a block evict a recipient
+<a href=#279 id=279 data-nosnippet>279</a>/// outright, which matters for a high-fanout chain whose recipients each interact with it once.
+<a href=#280 id=280 data-nosnippet>280</a>///
+<a href=#281 id=281 data-nosnippet>281</a>/// *What clears an entry.* On `CheckpointAck { latest_received_cursor }`, `split_off` retains the
+<a href=#282 id=282 data-nosnippet>282</a>/// cursors at or above it and discards the strict prefix below; an emptied set removes the
+<a href=#283 id=283 data-nosnippet>283</a>/// recipient entirely. Since the dump is derived from what remains, those blocks stop being named.
+<a href=#284 id=284 data-nosnippet>284</a>///
+<a href=#285 id=285 data-nosnippet>285</a>/// *Why that is safe.* `latest_received_cursor` is the recipient's `next_cursor_to_remove` at its
+<a href=#286 id=286 data-nosnippet>286</a>/// checkpoint, so it has consumed everything below it. The same checkpoint records that position in
+<a href=#287 id=287 data-nosnippet>287</a>/// `PreparedCheckpoint::inbox_cursors`, so any node bootstrapping the recipient seeds
+<a href=#288 id=288 data-nosnippet>288</a>/// `restored_cursor` at least that high; and by [`CheckpointPreservesConsumptionBoundary`] a bundle
+<a href=#289 id=289 data-nosnippet>289</a>/// below `restored_cursor` is dropped by `Inbox::add_bundle` on arrival and reported as already
+<a href=#290 id=290 data-nosnippet>290</a>/// known by `Inbox::remove_bundle` on consumption. No incarnation of the recipient, present or
+<a href=#291 id=291 data-nosnippet>291</a>/// future, can therefore ask for a bundle the sender has dropped. ∎
+<a href=#292 id=292 data-nosnippet>292</a>///
+<a href=#293 id=293 data-nosnippet>293</a>/// **What is kept is exactly what a bootstrapped node needs.** The same map has a second reader:
+<a href=#294 id=294 data-nosnippet>294</a>/// `ChainStateView::restore_outboxes_from_unfinalized`, called once after
+<a href=#295 id=295 data-nosnippet>295</a>/// `restore_from_content` when a node bootstraps from a checkpoint. Off-chain outbox state —
+<a href=#296 id=296 data-nosnippet>296</a>/// `outboxes`, `outbox_counters`, `nonempty_outboxes` — is not part of the certified blob, so
+<a href=#297 id=297 data-nosnippet>297</a>/// without this rebuild a bootstrapped node would silently stop pushing pending messages onward.
+<a href=#298 id=298 data-nosnippet>298</a>/// Retention and resumption are therefore the same set: a sender keeps a block precisely while some
+<a href=#299 id=299 data-nosnippet>299</a>/// recipient might still need it delivered.
+<a href=#300 id=300 data-nosnippet>300</a>///
+<a href=#301 id=301 data-nosnippet>301</a>/// **Why the exchange terminates.** An acknowledgement is itself a message, so two exclusions stop
+<a href=#302 id=302 data-nosnippet>302</a>/// two chains acknowledging each other forever, and they act at different points. A bundle whose
+<a href=#303 id=303 data-nosnippet>303</a>/// only messages to a recipient were `CheckpointAck` never enters `unfinalized_message_blocks`
+<a href=#304 id=304 data-nosnippet>304</a>/// (`non_checkpoint_ack_tx_indices`), so it never becomes something to acknowledge; and a received
+<a href=#305 id=305 data-nosnippet>305</a>/// `CheckpointAck` never enters its origin into `pending_checkpoint_ack_targets` (the
+<a href=#306 id=306 data-nosnippet>306</a>/// `!posted_message.message.is_checkpoint_ack()` guard in `BlockTracker`), so it creates no debt to
+<a href=#307 id=307 data-nosnippet>307</a>/// answer. `apply_checkpoint` then clears that set, so only a fresh non-acknowledgement message
+<a href=#308 id=308 data-nosnippet>308</a>/// re-enters a chain for the next round.
+<a href=#309 id=309 data-nosnippet>309</a>///
+<a href=#310 id=310 data-nosnippet>310</a>/// **A sender can forget only as fast as its recipients checkpoint.** Nothing obliges a recipient
+<a href=#311 id=311 data-nosnippet>311</a>/// to checkpoint, and until it does it sends no acknowledgement, so the sender keeps naming those
+<a href=#312 id=312 data-nosnippet>312</a>/// blocks. A chain whose recipients never checkpoint therefore has an ever-growing dump however
+<a href=#313 id=313 data-nosnippet>313</a>/// often it checkpoints itself — its own frequency does not help. This is the outbox-side face of
+<a href=#314 id=314 data-nosnippet>314</a>/// [issue #6693](https://github.com/linera-io/linera-protocol/issues/6693): with nothing scheduling
+<a href=#315 id=315 data-nosnippet>315</a>/// checkpoints anywhere, the bound this lemma provides rests on behaviour no rule requires.
+<a href=#316 id=316 data-nosnippet>316</a>///
+<a href=#317 id=317 data-nosnippet>317</a>/// [`Cursor`]: linera_base::data_types::Cursor
+<a href=#318 id=318 data-nosnippet>318</a></span><span class="kw">pub trait </span>AcknowledgedMessagesMayBeForgotten: CheckpointPreservesConsumptionBoundary {}
+<a href=#319 id=319 data-nosnippet>319</a>
+<a href=#320 id=320 data-nosnippet>320</a><span class="doccomment">/// **Lemma (A checkpoint re-certifies the blocks its outboxes still reference).** The older blocks
+<a href=#321 id=321 data-nosnippet>321</a>/// a chain still owes delivery from remain acceptable to a node that has never seen them, even
+<a href=#322 id=322 data-nosnippet>322</a>/// after the committee that signed them has been removed.
+<a href=#323 id=323 data-nosnippet>323</a>///
+<a href=#324 id=324 data-nosnippet>324</a>/// *Why this needs saying.* Removing a committee revokes the standing of everything it signed:
+<a href=#325 id=325 data-nosnippet>325</a>/// [`AdminOperation::RemoveCommittee`] states that such blocks "will only be accepted once they
+<a href=#326 id=326 data-nosnippet>326</a>/// have been followed (hence re-certified) by a block certified by a recent committee". A chain's
+<a href=#327 id=327 data-nosnippet>327</a>/// unacknowledged outgoing blocks are exactly the ones most likely to be old, so without a route
+<a href=#328 id=328 data-nosnippet>328</a>/// back to a current committee they would become undeliverable precisely when a node most needs
+<a href=#329 id=329 data-nosnippet>329</a>/// them — on bootstrap.
+<a href=#330 id=330 data-nosnippet>330</a>///
+<a href=#331 id=331 data-nosnippet>331</a>/// *Code correspondence.*
+<a href=#332 id=332 data-nosnippet>332</a>///
+<a href=#333 id=333 data-nosnippet>333</a>/// | | |
+<a href=#334 id=334 data-nosnippet>334</a>/// |---|---|
+<a href=#335 id=335 data-nosnippet>335</a>/// | transition | `ChainWorkerState::process_confirmed_block`, checkpoint-restore path |
+<a href=#336 id=336 data-nosnippet>336</a>/// | reads | `outbox_block_hashes` from the checkpoint's `OracleResponse::Checkpoint`; `Storage::contains_certificate` for each |
+<a href=#337 id=337 data-nosnippet>337</a>/// | writes | `pre_checkpoint_block_trust`, one entry per hash not yet in storage; the entry is removed when that block later arrives |
+<a href=#338 id=338 data-nosnippet>338</a>/// | precondition | the checkpoint certificate itself verifies against the committee for *its* epoch |
+<a href=#339 id=339 data-nosnippet>339</a>///
+<a href=#340 id=340 data-nosnippet>340</a>/// *Proof.* The checkpoint block's certificate is signed by a current committee, and
+<a href=#341 id=341 data-nosnippet>341</a>/// `outbox_block_hashes` travels inside its oracle response, so the list is covered by the block
+<a href=#342 id=342 data-nosnippet>342</a>/// hash and inherits that certificate's standing ([`AcknowledgedMessagesMayBeForgotten`] fixes what
+<a href=#343 id=343 data-nosnippet>343</a>/// the list contains). Naming a block by hash is therefore a current committee vouching for it.
+<a href=#344 id=344 data-nosnippet>344</a>///
+<a href=#345 id=345 data-nosnippet>345</a>/// The worker turns that into an admission rule. Before touching any chain state it checks each
+<a href=#346 id=346 data-nosnippet>346</a>/// named hash against storage; every one missing is recorded in `pre_checkpoint_block_trust` and
+<a href=#347 id=347 data-nosnippet>347</a>/// the push fails with `WorkerError::BlocksNotFound`, so a half-restored chain whose outboxes
+<a href=#348 id=348 data-nosnippet>348</a>/// reference unknown blocks is never exposed. The client then uploads each missing certificate, and
+<a href=#349 id=349 data-nosnippet>349</a>/// the `in_trust_set` test at the top of `process_confirmed_block` both removes the mark and lets
+<a href=#350 id=350 data-nosnippet>350</a>/// the block past the already-processed guard — the condition is `!in_trust_set &amp;&amp;
+<a href=#351 id=351 data-nosnippet>351</a>/// tip.next_block_height &gt; height`. When the set is empty the restoration runs end to end. ∎
+<a href=#352 id=352 data-nosnippet>352</a>///
+<a href=#353 id=353 data-nosnippet>353</a>/// **What is relaxed and what is not.** The vouching substitutes for the block's *epoch* being
+<a href=#354 id=354 data-nosnippet>354</a>/// current, not for its certificate being valid: `certificate.check` still runs against the
+<a href=#355 id=355 data-nosnippet>355</a>/// committee for the block's declared epoch. So a re-certified block is one whose own quorum signed
+<a href=#356 id=356 data-nosnippet>356</a>/// it and whose continued relevance a later quorum attests — never one accepted on a hash alone.
+<a href=#357 id=357 data-nosnippet>357</a>/// [`TipAdvancesOnlyOnValidCertificate`] says the same from the other side: what trust-marking
+<a href=#358 id=358 data-nosnippet>358</a>/// bypasses is the re-execution of ancestors, not their certification.
+<a href=#359 id=359 data-nosnippet>359</a>///
+<a href=#360 id=360 data-nosnippet>360</a>/// **This is one instance of a general mechanism.** Re-certification also runs along prev-hash
+<a href=#361 id=361 data-nosnippet>361</a>/// chains, without any checkpoint: `ChainWorkerState::select_message_bundles` accepts a
+<a href=#362 id=362 data-nosnippet>362</a>/// revoked-epoch bundle when a later bundle in the same batch is in a still-trusted epoch, since
+<a href=#363 id=363 data-nosnippet>363</a>/// that bundle's certificate transitively covers the earlier ones. The
+<a href=#364 id=364 data-nosnippet>364</a>/// [`previous_message_blocks`](linera_execution::ExecutionStateView) and `previous_event_blocks`
+<a href=#365 id=365 data-nosnippet>365</a>/// maps exist to keep such chains intact for recipients and streams that are addressed only
+<a href=#366 id=366 data-nosnippet>366</a>/// occasionally. The general form belongs with committee reconfiguration rather than here; what is
+<a href=#367 id=367 data-nosnippet>367</a>/// specific to checkpoints is that pruning *severs* those chains — a checkpoint clears
+<a href=#368 id=368 data-nosnippet>368</a>/// `previous_event_blocks` ([`CheckpointSummarizesUserStreams`]) — which is why the blocks the
+<a href=#369 id=369 data-nosnippet>369</a>/// outboxes still need must be named explicitly instead.
+<a href=#370 id=370 data-nosnippet>370</a>///
+<a href=#371 id=371 data-nosnippet>371</a>/// [`AdminOperation::RemoveCommittee`]: linera_execution::system::AdminOperation::RemoveCommittee
+<a href=#372 id=372 data-nosnippet>372</a>/// [`TipAdvancesOnlyOnValidCertificate`]: crate::manager::proof::commit::TipAdvancesOnlyOnValidCertificate
+<a href=#373 id=373 data-nosnippet>373</a></span><span class="kw">pub trait </span>CheckpointRecertifiesReferencedBlocks:
+<a href=#374 id=374 data-nosnippet>374</a>    AcknowledgedMessagesMayBeForgotten + CheckpointSummarizesUserStreams
+<a href=#375 id=375 data-nosnippet>375</a>{
+<a href=#376 id=376 data-nosnippet>376</a>}
+</code></pre></div></section></main></body></html>

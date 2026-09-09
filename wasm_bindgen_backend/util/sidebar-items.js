@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["ident_ty","leading_colon_path_ty","raw_ident","rust_ident","simple_path_ty","wrap_import_function"],"struct":["ShortHash"]};

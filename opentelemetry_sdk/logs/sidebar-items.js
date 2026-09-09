@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["in_memory_exporter"],"struct":["BatchConfig","BatchConfigBuilder","BatchLogProcessor","BatchLogProcessorBuilder","LogBatch","LoggerProviderBuilder","SdkLogRecord","SdkLogger","SdkLoggerProvider","SimpleLogProcessor","TraceContext"],"trait":["LogExporter","LogProcessor"]};

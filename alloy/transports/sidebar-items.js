@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Authorization","RpcError","TransportErrorKind"],"macro":["impl_future"],"mod":["http","layers","mock","utils"],"struct":["BoxTransport","DualTransport","HttpError"],"trait":["DualTransportHandler","IntoBoxTransport","Transport","TransportConnect"],"type":["BoxFuture","Pbf","RpcFut","RpcResult","TransportError","TransportFut","TransportResult"]};

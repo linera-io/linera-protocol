@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["anon_name","expand","expand_type","generate_name"],"struct":["ExpCtxt","ExternCrates","NamespacedMap"]};

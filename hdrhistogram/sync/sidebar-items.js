@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["IdleRecorder","Recorder","SyncHistogram"],"type":["IdleRecorderGuard"]};

@@ -1,0 +1,9 @@
+(function() {
+    const implementors = Object.fromEntries([["linera_base",[]],["linera_sdk",[["impl <a class=\"trait\" href=\"linera_sdk/linera_base_types/trait.ContractAbi.html\" title=\"trait linera_sdk::linera_base_types::ContractAbi\">ContractAbi</a> for <a class=\"struct\" href=\"linera_sdk/abis/controller/struct.ControllerAbi.html\" title=\"struct linera_sdk::abis::controller::ControllerAbi\">ControllerAbi</a>",0],["impl <a class=\"trait\" href=\"linera_sdk/linera_base_types/trait.ContractAbi.html\" title=\"trait linera_sdk::linera_base_types::ContractAbi\">ContractAbi</a> for <a class=\"struct\" href=\"linera_sdk/abis/evm/struct.EvmAbi.html\" title=\"struct linera_sdk::abis::evm::EvmAbi\">EvmAbi</a>",0],["impl <a class=\"trait\" href=\"linera_sdk/linera_base_types/trait.ContractAbi.html\" title=\"trait linera_sdk::linera_base_types::ContractAbi\">ContractAbi</a> for <a class=\"struct\" href=\"linera_sdk/abis/fungible/struct.FungibleTokenAbi.html\" title=\"struct linera_sdk::abis::fungible::FungibleTokenAbi\">FungibleTokenAbi</a>",0],["impl <a class=\"trait\" href=\"linera_sdk/linera_base_types/trait.ContractAbi.html\" title=\"trait linera_sdk::linera_base_types::ContractAbi\">ContractAbi</a> for <a class=\"struct\" href=\"linera_sdk/abis/wrapped_fungible/struct.WrappedFungibleTokenAbi.html\" title=\"struct linera_sdk::abis::wrapped_fungible::WrappedFungibleTokenAbi\">WrappedFungibleTokenAbi</a>",0]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":59,"fragment_lengths":[18,1353]}

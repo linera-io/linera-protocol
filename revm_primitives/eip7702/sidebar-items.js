@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["PER_AUTH_BASE_COST","PER_EMPTY_ACCOUNT_COST"]};

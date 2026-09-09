@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["GithubCommitStatus"],"struct":["Comment","CommentReactions","Commit","CommitComparison","CommitElement","CommitParent","CommitStats","GitCommitObject","GitUser","Tree","Verification"],"type":["CommitFile","FileStatus"]};

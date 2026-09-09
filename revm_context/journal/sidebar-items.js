@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["entry","inner"],"struct":["Journal","JournalOutput"]};

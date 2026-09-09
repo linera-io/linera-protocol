@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Auth","Continue"],"fn":["create_jwt"],"struct":["AppAuth","DeviceCodes","OAuth"]};

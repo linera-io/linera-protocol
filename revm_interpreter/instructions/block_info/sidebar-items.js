@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["basefee","blob_basefee","block_number","chainid","coinbase","difficulty","gaslimit","timestamp"]};

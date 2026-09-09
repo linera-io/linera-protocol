@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CheckerError"],"struct":["Checker","CheckerErrors"]};

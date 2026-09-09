@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add","add_mixed","double"],"type":["AffinePoint","ProjectivePoint"]};

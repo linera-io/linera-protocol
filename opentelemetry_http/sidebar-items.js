@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["HeaderExtractor","HeaderInjector"],"trait":["HttpClient","ResponseExt"],"type":["HttpError"]};

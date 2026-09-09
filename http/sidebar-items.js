@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["header","method","request","response","status","uri","version"],"struct":["Error","Extensions"],"type":["Result"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["account","account_os","devicename","devicename_os","distro","hostname","realname","realname_os","username","username_os"]};

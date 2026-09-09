@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CollectionType","ColumnType","NativeType","Result","ResultMetadataHolder"],"fn":["deserialize"],"struct":["ColumnSpec","DeserializedMetadataAndRawRows","PartitionKeyIndex","Prepared","PreparedMetadata","RawMetadataAndRawRows","ResultMetadata","SchemaChange","SelfBorrowedMetadataContainer","SetKeyspace","TableSpec","UserDefinedType"]};

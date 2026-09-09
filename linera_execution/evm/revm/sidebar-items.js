@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ALREADY_CREATED_CONTRACT_SELECTOR","COMMIT_CONTRACT_CHANGES_SELECTOR","GET_ACCOUNT_INFO_SELECTOR","GET_CONTRACT_STORAGE_SELECTOR","JSON_EMPTY_VECTOR"],"enum":["EvmContractModule","EvmServiceModule"],"fn":["address_to_user_application_id"],"struct":["RevmContractInstance","RevmServiceInstance"]};

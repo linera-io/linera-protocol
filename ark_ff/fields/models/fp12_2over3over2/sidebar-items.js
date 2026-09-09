@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["characteristic_square_mod_6_is_one"],"struct":["Fp12ConfigWrapper"],"trait":["Fp12Config"],"type":["Fp12"]};

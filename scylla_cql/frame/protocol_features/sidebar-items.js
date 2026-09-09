@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["LWT_OPTIMIZATION_META_BIT_MASK_KEY","SCYLLA_LWT_ADD_METADATA_MARK_EXTENSION"],"struct":["ProtocolFeatures"]};

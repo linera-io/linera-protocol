@@ -1,0 +1,44 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Theorem (No committee certifies its own introduction). For every epoch, a node can learn that epoch’s committee only from evidence certified under a strictly earlier epoch, or — for epoch zero alone — from network configuration that is not a certificate at all. The relation “the committee for `e` was learned from a certificate in epoch `e&#39;`” is therefore well founded, with `e&#39; &#60; e`."><title>CommitteeKnowledgeIsWellFounded in linera_chain::proof::epochs - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="linera_chain" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">CommitteeKnowledgeIsWellFounded</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../linera_chain/index.html">linera_<wbr>chain</a><span class="version">0.16.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Committee<wbr>Knowledge<wbr>IsWell<wbr>Founded</a></h2><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In linera_<wbr>chain::<wbr>proof::<wbr>epochs</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">linera_chain</a>::<wbr><a href="../index.html">proof</a>::<wbr><a href="index.html">epochs</a></div><h1>Trait <span class="trait">Committee<wbr>Knowledge<wbr>IsWell<wbr>Founded</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/linera_chain/proof/epochs.rs.html#76">Source</a> </span></div><pre class="rust item-decl"><code>pub trait CommitteeKnowledgeIsWellFounded: <a class="trait" href="../../manager/proof/model/trait.CorrectValidator.html" title="trait linera_chain::manager::proof::model::CorrectValidator">CorrectValidator</a> { }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><strong>Theorem (No committee certifies its own introduction).</strong> For every epoch, a node can learn
+that epoch’s committee only from evidence certified under a <em>strictly earlier</em> epoch, or — for
+epoch zero alone — from network configuration that is not a certificate at all. The relation
+“the committee for <code>e</code> was learned from a certificate in epoch <code>e'</code>” is therefore well founded,
+with <code>e' &lt; e</code>.</p>
+<p>This is what makes induction on the epoch legitimate, and it is the property a reconfiguration
+scheme is easiest to get wrong. Were a committee able to authenticate the evidence that
+introduces it — a per-chain genesis configuration naming a committee would do it — an attacker
+who could produce such a configuration could mint a committee out of nothing and have it vouch
+for itself. Nothing here would detect that, because every signature would check out.</p>
+<p><em>Code correspondence.</em></p>
+<div><table><thead><tr><th></th><th></th></tr></thead><tbody>
+<tr><td>transition</td><td><code>ExecutionRuntimeContext::get_committee_hashes</code>, reached from <code>ChainWorkerState::committee_for_epoch</code> before <code>certificate.check</code></td></tr>
+<tr><td>reads</td><td>for epoch <code>0</code>, <code>NetworkDescription::genesis_committee_blob_hash</code>; otherwise the admin chain’s <a href="../../../linera_execution/system/static.EPOCH_STREAM_NAME.html" title="static linera_execution::system::EPOCH_STREAM_NAME"><code>EPOCH_STREAM_NAME</code></a> event at index <code>epoch</code></td></tr>
+<tr><td>writes</td><td>nothing</td></tr>
+<tr><td>failure</td><td><code>ExecutionError::EventsNotFound</code> when the epoch’s event is absent, so the certificate is not verified rather than verified optimistically</td></tr>
+</tbody></table>
+</div>
+<p><em>Proof.</em> By descent on the epoch.</p>
+<p><em>The base is not a certificate.</em> Epoch <code>0</code> resolves to
+<code>NetworkDescription::genesis_committee_blob_hash</code>. A <a href="../../../linera_base/data_types/struct.NetworkDescription.html" title="struct linera_base::data_types::NetworkDescription"><code>NetworkDescription</code></a> is configuration a
+node is given, network-wide and identical for every chain. No chain can introduce one, and in
+particular creating a chain cannot introduce a committee — the failure mode this theorem exists
+to exclude.</p>
+<p><em>Every step descends.</em> For <code>epoch &gt; 0</code> the committee hash is read from the event at index
+<code>epoch</code> of the admin chain’s epoch stream, written by <a href="../../../linera_execution/system/enum.AdminOperation.html#variant.CreateCommittee" title="variant linera_execution::system::AdminOperation::CreateCommittee"><code>AdminOperation::CreateCommittee</code></a>. To
+hold that event a node must have processed the admin-chain block containing it, which by
+<a href="../../manager/proof/commit/trait.TipAdvancesOnlyOnValidCertificate.html" title="trait linera_chain::manager::proof::commit::TipAdvancesOnlyOnValidCertificate"><code>TipAdvancesOnlyOnValidCertificate</code></a> required a valid certificate for that block, judged
+against the committee for the epoch that block <em>declares</em>. A block declares the epoch its chain
+was in before executing, and a block advances the epoch at most once
+(<a href="../../enum.ChainError.html#variant.MultipleEpochAdvances" title="variant linera_chain::ChainError::MultipleEpochAdvances"><code>ChainError::MultipleEpochAdvances</code></a>), so the block introducing epoch <code>e</code> declares at most
+<code>e - 1</code>.</p>
+<p><em>There is no other route.</em> <code>committee_for_epoch</code> is the sole path from an epoch to a committee
+on the verification path, and it consults exactly these two sources. When the event is missing
+it fails with <code>EventsNotFound</code>; nothing falls back to a committee carried by the certificate
+being checked, or by the block, or by the chain being created. ∎</p>
+<p><strong>A missing epoch is recoverable, which is why the strictness costs nothing.</strong> Refusing to
+verify a certificate whose epoch a node has not yet learned would be an availability problem if
+there were no way to catch up. There is: <code>EventsNotFound</code> on the admin chain’s stream is a class
+in <code>linera_core::proof::availability::MissingDependenciesAreRecoverable</code>, and
+<code>send_confirmed_certificate</code> answers it by pushing the admin chain to that validator before
+retrying. So the node learns the epoch and then verifies, in that order — which is the whole
+point.</p>
+</div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../../trait.impl/linera_chain/proof/epochs/trait.CommitteeKnowledgeIsWellFounded.js" async></script></section></div></main></body></html>

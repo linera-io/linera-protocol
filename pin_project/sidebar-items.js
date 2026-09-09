@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"attr":["pin_project","pinned_drop"],"trait":["UnsafeUnpin"]};

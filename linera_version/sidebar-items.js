@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error"],"static":["VERSION_INFO"],"struct":["ApiHashes","CrateVersion","Pretty","VersionInfo"],"type":["Hash"]};

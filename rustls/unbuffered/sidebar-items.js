@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ConnectionState","EncodeError","EncryptError"],"struct":["AppDataRecord","EncodeTlsData","InsufficientSizeError","ReadEarlyData","ReadTraffic","TransmitTlsData","UnbufferedConnectionCommon","UnbufferedStatus","WriteTraffic"]};

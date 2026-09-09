@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"attr":["pointee"],"derive":["Pointee"],"fn":["from_raw_parts","from_raw_parts_mut","metadata"],"struct":["DynMetadata"],"trait":["NonNullExt","Pointee","PtrExt"]};

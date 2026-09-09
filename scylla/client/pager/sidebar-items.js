@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["NextPageError","NextRowError"],"struct":["QueryPager","TypedRowStream"]};

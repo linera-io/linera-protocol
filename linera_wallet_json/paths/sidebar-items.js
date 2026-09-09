@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["config_dir","keystore_path","wallet_path"]};

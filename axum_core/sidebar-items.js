@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["body","extract","response"],"struct":["Error"],"trait":["RequestExt","RequestPartsExt"],"type":["BoxError"]};

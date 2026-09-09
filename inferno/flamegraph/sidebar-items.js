@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Direction","TextTruncateDirection"],"fn":["from_files","from_lines","from_reader","from_readers"],"mod":["color","defaults"],"struct":["FuncFrameAttrsMap","Options"]};

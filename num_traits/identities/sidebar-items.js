@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["one","zero"],"trait":["ConstOne","ConstZero","One","Zero"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["display","keystore","paths","wallet"]};

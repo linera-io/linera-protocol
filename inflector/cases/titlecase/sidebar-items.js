@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["is_title_case","to_title_case"]};

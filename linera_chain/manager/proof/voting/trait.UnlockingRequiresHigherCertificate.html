@@ -1,0 +1,45 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Lemma (A validation vote past a lock needs a higher certificate). Suppose a correct validator casts a validation vote for block `B` in round `r`, and let `(A, p)` be the value of its `confirmed_vote` immediately before. Then `p` is defined only if the proposal carried an `OriginalProposal`, and:"><title>UnlockingRequiresHigherCertificate in linera_chain::manager::proof::voting - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="linera_chain" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">UnlockingRequiresHigherCertificate</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../linera_chain/index.html">linera_<wbr>chain</a><span class="version">0.16.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Unlocking<wbr>Requires<wbr>Higher<wbr>Certificate</a></h2><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In linera_<wbr>chain::<wbr>manager::<wbr>proof::<wbr>voting</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../../index.html">linera_chain</a>::<wbr><a href="../../index.html">manager</a>::<wbr><a href="../index.html">proof</a>::<wbr><a href="index.html">voting</a></div><h1>Trait <span class="trait">Unlocking<wbr>Requires<wbr>Higher<wbr>Certificate</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../../src/linera_chain/manager/proof/voting.rs.html#214">Source</a> </span></div><pre class="rust item-decl"><code>pub trait UnlockingRequiresHigherCertificate: <a class="trait" href="trait.ProposalGate.html" title="trait linera_chain::manager::proof::voting::ProposalGate">ProposalGate</a> { }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><strong>Lemma (A validation vote past a lock needs a higher certificate).</strong> Suppose a correct
+validator casts a validation vote for block <code>B</code> in round <code>r</code>, and let <code>(A, p)</code> be the value
+of its <a href="../../struct.ChainManager.html#structfield.confirmed_vote" title="field linera_chain::manager::ChainManager::confirmed_vote"><code>confirmed_vote</code></a> immediately before. Then <code>p</code> is defined only if the proposal
+carried an <a href="../../../data_types/enum.OriginalProposal.html" title="enum linera_chain::data_types::OriginalProposal"><code>OriginalProposal</code></a>, and:</p>
+<ul>
+<li>if the proposal is a <strong>regular retry</strong> carrying a certificate <code>c</code> (necessarily a valid
+<a href="../../../types/struct.ValidatedBlockCertificate.html" title="struct linera_chain::types::ValidatedBlockCertificate"><code>ValidatedBlockCertificate</code></a> for <code>B</code>, in a round <code>c.round &lt; r</code>), then
+<code>p ≤ c.round</code> when <code>A</code> matches <code>B</code>’s proposal, and <code>p &lt; c.round</code> otherwise;</li>
+<li>if the proposal is a <strong>fast retry</strong>, then <code>p</code> is <a href="../../../../linera_base/data_types/enum.Round.html#variant.Fast" title="variant linera_base::data_types::Round::Fast"><code>Round::Fast</code></a> and <code>A</code> matches <code>B</code>’s
+proposal;</li>
+<li>a <strong>fresh</strong> proposal is rejected outright.</li>
+</ul>
+<p>This is the hinge of the safety argument: it says a correct validator abandons a block it has
+confirmed only when shown a quorum that validated the new block in a round <em>strictly above</em>
+its own confirmation.</p>
+<p><em>Code correspondence.</em></p>
+<div><table><thead><tr><th></th><th></th></tr></thead><tbody>
+<tr><td>transition</td><td><a href="../../struct.ChainManager.html#method.check_proposed_block" title="method linera_chain::manager::ChainManager::check_proposed_block"><code>ChainManager::check_proposed_block</code></a>, final <code>ensure!</code></td></tr>
+<tr><td>reads</td><td><a href="../../struct.ChainManager.html#structfield.confirmed_vote" title="field linera_chain::manager::ChainManager::confirmed_vote"><code>confirmed_vote</code></a>, <code>proposal.original_proposal</code></td></tr>
+<tr><td>writes</td><td>nothing</td></tr>
+<tr><td>precondition</td><td>the proposal passed <code>check_invariants</code>, <code>check_signature</code> and — for a regular retry — <code>certificate.check(committee)</code>, all in <code>try_handle_block_proposal</code></td></tr>
+</tbody></table>
+</div>
+<p><em>Proof.</em> By <a href="trait.ProposalGate.html" title="trait linera_chain::manager::proof::voting::ProposalGate"><code>ProposalGate</code></a>, <code>Accept</code> was returned, so the final <code>ensure!</code> of
+<a href="../../struct.ChainManager.html#method.check_proposed_block" title="method linera_chain::manager::ChainManager::check_proposed_block"><code>ChainManager::check_proposed_block</code></a> held. With <code>vote = (A, p)</code> it evaluates</p>
+<div class="example-wrap"><pre class="language-text"><code>match proposal.original_proposal.as_ref() {
+    None =&gt; false,
+    Some(OriginalProposal::Regular { certificate }) =&gt;
+        if vote.value().matches_proposed_block(new_block) {
+            vote.round &lt;= certificate.round
+        } else {
+            vote.round &lt; certificate.round
+        },
+    Some(OriginalProposal::Fast(_)) =&gt;
+        vote.round.is_fast() &amp;&amp; vote.value().matches_proposed_block(new_block),
+}</code></pre></div>
+<p>which is the case distinction claimed. That the retried certificate is <em>valid</em> and certifies
+exactly <code>B</code> comes from the caller: <code>try_handle_block_proposal</code> calls
+<code>certificate.check(&amp;committee)?</code> on the <code>Regular</code> arm, and
+<a href="../../../data_types/struct.BlockProposal.html#method.check_invariants" title="method linera_chain::data_types::BlockProposal::check_invariants"><code>BlockProposal::check_invariants</code></a> — also called there — requires
+<code>certificate.check_value(&amp;ValidatedBlock::new(outcome.with(block)))</code>, i.e. the certificate
+certifies the very block being proposed, and <code>content.round &gt; certificate.round</code>. ∎</p>
+<p>Note <code>matches_proposed_block</code> compares the <a href="../../../data_types/struct.ProposedBlock.html" title="struct linera_chain::data_types::ProposedBlock"><code>ProposedBlock</code></a> only, not the execution outcome;
+<a href="../safety/trait.FastRetryPreservesBlock.html" title="trait linera_chain::manager::proof::safety::FastRetryPreservesBlock"><code>FastRetryPreservesBlock</code></a> is where that gap is closed.</p>
+</div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../../../trait.impl/linera_chain/manager/proof/voting/trait.UnlockingRequiresHigherCertificate.js" async></script></section></div></main></body></html>

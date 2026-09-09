@@ -1,0 +1,30 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Parses an instance of `std::io::Read` as a `&#38;[u8]` without reading the entire file into memory."><title>decode in combine - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="combine" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">decode</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../combine/index.html">combine</a><span class="version">4.6.7</span></h2></div><div class="sidebar-elems"><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">combine</a></div><h1>Macro <span class="macro">decode</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/combine/stream/mod.rs.html#1409-1462">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! decode {
+    ($decoder: expr, $read: expr, $parser: expr $(,)?) =&gt; { ... };
+    ($decoder: expr, $read: expr, $parser: expr, $input_stream: expr $(,)?) =&gt; { ... };
+    ($decoder: expr, $read: expr, $parser: expr, $input_stream: expr, $post_decode: expr $(,)?) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Parses an instance of <code>std::io::Read</code> as a <code>&amp;[u8]</code> without reading the entire file into
+memory.</p>
+<p>This is defined as a macro to work around the lack of Higher Ranked Types. See the
+example for how to pass a parser to the macro (constructing parts of the parser outside of
+the <code>decode!</code> call is unlikely to work.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::{
+    fs::File,
+};
+<span class="kw">use </span>combine::{decode, satisfy, skip_many1, many1, sep_end_by, Parser, stream::Decoder};
+
+<span class="kw">let </span><span class="kw-2">mut </span>read = File::open(<span class="string">"README.md"</span>).unwrap();
+<span class="kw">let </span><span class="kw-2">mut </span>decoder = Decoder::new();
+<span class="kw">let </span>is_whitespace = |b: u8| b == <span class="string">b' ' </span>|| b == <span class="string">b'\r' </span>|| b == <span class="string">b'\n'</span>;
+<span class="macro">assert_eq!</span>(
+    <span class="macro">decode!</span>(
+        decoder,
+        read,
+        {
+            <span class="kw">let </span>word = many1(satisfy(|b| !is_whitespace(b)));
+            sep_end_by(word, skip_many1(satisfy(is_whitespace))).map(|words: Vec&lt;Vec&lt;u8&gt;&gt;| words.len())
+        },
+        |input, _position| combine::easy::Stream::from(input),
+    ).map_err(combine::easy::Errors::&lt;u8, <span class="kw-2">&amp;</span>[u8], <span class="kw">_</span>&gt;::from),
+    <span class="prelude-val">Ok</span>(<span class="number">773</span>),
+);</code></pre></div></div></details></section></div></main></body></html>

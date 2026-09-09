@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["WebSocketUpgradeRejection"],"struct":["ConnectionNotUpgradable","InvalidConnectionHeader","InvalidProtocolPseudoheader","InvalidUpgradeHeader","InvalidWebSocketVersionHeader","MethodNotConnect","MethodNotGet","WebSocketKeyHeaderMissing"]};

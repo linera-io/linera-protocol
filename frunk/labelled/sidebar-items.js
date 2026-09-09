@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["field_with_name","from_labelled_generic","into_labelled_generic","labelled_convert_from","sculpted_convert_from","transform_from"],"mod":["chars"],"struct":["Field","ValueField"],"trait":["ByNameFieldPlucker","IntoLabelledGeneric","IntoUnlabelled","IntoValueLabelled","LabelledGeneric","Transmogrifier"]};

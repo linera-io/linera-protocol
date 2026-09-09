@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ByteClassElements","ByteClassIter","ByteClassRepresentatives","ByteClasses","Unit"]};
