@@ -761,14 +761,8 @@ impl<Env: Environment> Client<Env> {
         // Download remaining certificates from the remote node using a pipelined
         // sliding window. A background task downloads up to `max_concurrent_batch_downloads`
         // batches concurrently and sends them through a channel for sequential processing.
-        #[cfg(not(web))]
-        type CertificateBatchFuture = std::pin::Pin<
-            Box<dyn Future<Output = Result<Vec<ConfirmedBlockCertificate>, NodeError>> + Send>,
-        >;
-        #[cfg(web)]
-        type CertificateBatchFuture = std::pin::Pin<
-            Box<dyn Future<Output = Result<Vec<ConfirmedBlockCertificate>, NodeError>>>,
-        >;
+        type CertificateBatchFuture =
+            crate::MaybeSendBoxFuture<'static, Result<Vec<ConfirmedBlockCertificate>, NodeError>>;
 
         let max_concurrent = self.options.max_concurrent_batch_downloads;
         let batch_size = self.options.certificate_download_batch_size;

@@ -14,7 +14,7 @@ use async_trait::async_trait;
 use futures::{
     future::Either,
     lock::{Mutex, MutexGuard},
-    Future,
+    stream, Future,
 };
 use linera_base::{
     crypto::{
@@ -92,6 +92,13 @@ where
 {
     state: WorkerState<S>,
     notifier: Arc<ChannelNotifier<Notification>>,
+    /// Abort handles for the notification streams handed out by `do_subscribe`, so
+    /// tests can sever them mid-flight as a validator (or proxy) restart would.
+    notification_stream_aborts: Vec<stream::AbortHandle>,
+    /// How many times `do_subscribe` has been called. Monotonic — never drained by
+    /// `disconnect_notification_subscribers` — so a test can bound how often a client
+    /// re-subscribes, which is what pins the circuit breaker's backoff.
+    subscribe_calls: usize,
 }
 
 /// A client used by tests to talk to an in-process `LocalValidator`.
@@ -338,6 +345,8 @@ where
         let client = LocalValidator {
             state,
             notifier: Arc::new(ChannelNotifier::default()),
+            notification_stream_aborts: Vec::new(),
+            subscribe_calls: 0,
         };
         Self {
             public_key,
@@ -354,6 +363,20 @@ where
     /// Returns the validator's currently configured [`FaultType`].
     pub fn fault_type(&self) -> FaultType {
         self.fault_type
+    }
+
+    /// How many times this validator has been asked to `subscribe`.
+    pub async fn subscribe_calls(&self) -> usize {
+        self.client.lock().await.subscribe_calls
+    }
+
+    /// Ends every notification stream previously handed out by this validator — as
+    /// clients experience when the validator (or its proxy) restarts.
+    pub async fn disconnect_notification_subscribers(&self) {
+        let mut validator = self.client.lock().await;
+        for abort in validator.notification_stream_aborts.drain(..) {
+            abort.abort();
+        }
     }
 
     fn set_fault_type(&mut self, fault_type: FaultType) {
@@ -524,9 +547,25 @@ where
         chains: Vec<ChainId>,
         sender: oneshot::Sender<Result<NotificationStream, NodeError>>,
     ) -> Result<(), Result<NotificationStream, NodeError>> {
-        let validator = self.client.lock().await;
+        let mut validator = self.client.lock().await;
+        validator.subscribe_calls += 1;
+        // Honour `Offline` here as the query paths already do, so a test can make a
+        // circuit-breaker probe genuinely FAIL and observe the backoff escalate.
+        if matches!(
+            self.fault_type,
+            FaultType::Offline | FaultType::OfflineWithInfo
+        ) {
+            return sender.send(Err(NodeError::ClientIoError {
+                error: "offline".to_string(),
+            }));
+        }
         let rx = validator.notifier.subscribe(chains);
-        let stream: NotificationStream = Box::pin(UnboundedReceiverStream::new(rx));
+        let (stream, abort) = stream::abortable(UnboundedReceiverStream::new(rx));
+        validator
+            .notification_stream_aborts
+            .retain(|abort| !abort.is_aborted());
+        validator.notification_stream_aborts.push(abort);
+        let stream: NotificationStream = Box::pin(stream);
         sender.send(Ok(stream))
     }
 
@@ -1106,6 +1145,22 @@ where
         }
         drop(validator_clients);
         self
+    }
+
+    /// How many times the validator at `index` has been asked to `subscribe`.
+    pub async fn subscribe_calls(&self, index: usize) -> usize {
+        self.node_provider.all_nodes()[index]
+            .subscribe_calls()
+            .await
+    }
+
+    /// Severs every notification stream on every validator in the test setup, as a
+    /// fleet-wide proxy restart does. Clients keep their (now dead) ends of the streams
+    /// until they notice and re-subscribe.
+    pub async fn disconnect_notification_subscribers(&self) {
+        for validator in self.node_provider.all_nodes() {
+            validator.disconnect_notification_subscribers().await;
+        }
     }
 
     /// Returns the [`FaultType`] currently configured for the given validator, or `None`
