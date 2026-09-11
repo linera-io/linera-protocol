@@ -4,7 +4,6 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
-    future::Future,
     pin,
     sync::{Arc, Mutex, RwLock},
     time::Duration,
@@ -579,10 +578,7 @@ pub(crate) enum BatchRequest {
 /// single driver. The driver loops: wait for an item from the request channel,
 /// drain the channel, then process all requests in one batch through
 /// [`WorkerState::chain_write`] (one write lock, one save), repeat.
-#[cfg(not(web))]
-type BatchFuture = pin::Pin<Box<dyn Future<Output = ()> + Send>>;
-#[cfg(web)]
-type BatchFuture = pin::Pin<Box<dyn Future<Output = ()>>>;
+type BatchFuture = crate::MaybeSendBoxFuture<'static, ()>;
 
 #[derive(Clone)]
 struct ChainBatchRequestProcessor {

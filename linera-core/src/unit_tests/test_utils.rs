@@ -551,13 +551,19 @@ where
         validator.subscribe_calls += 1;
         // Honour `Offline` here as the query paths already do, so a test can make a
         // circuit-breaker probe genuinely FAIL and observe the backoff escalate.
-        if self.fault_type == FaultType::Offline {
+        if matches!(
+            self.fault_type,
+            FaultType::Offline | FaultType::OfflineWithInfo
+        ) {
             return sender.send(Err(NodeError::ClientIoError {
                 error: "offline".to_string(),
             }));
         }
         let rx = validator.notifier.subscribe(chains);
         let (stream, abort) = stream::abortable(UnboundedReceiverStream::new(rx));
+        validator
+            .notification_stream_aborts
+            .retain(|abort| !abort.is_aborted());
         validator.notification_stream_aborts.push(abort);
         let stream: NotificationStream = Box::pin(stream);
         sender.send(Ok(stream))
