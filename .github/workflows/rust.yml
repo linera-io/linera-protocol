@@ -265,6 +265,24 @@ jobs:
           exit 1
         fi
 
+  check-outdated-api-hashes:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run-code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+    - uses: actions/checkout@v6.0.2
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Check for outdated api-hashes.json
+      run: |
+        if ! diff linera-version/api-hashes.json <(cargo run --locked -p linera-version)
+        then
+          echo '`linera-version/api-hashes.json` differs from the computed API hashes'
+          echo 'Run `cargo run -p linera-version > linera-version/api-hashes.json` to update it.'
+          exit 1
+        fi
+
   ethereum-tests:
     needs: changed-files
     if: needs.changed-files.outputs.should-run-code == 'true'
