@@ -117,6 +117,34 @@ where
         self.dedup_insert(key, crate::Arc(Arc::new(value)))
     }
 
+    /// Replaces the value for a key, overwriting one that is cached or still weakly held.
+    ///
+    /// [`Self::insert`] deduplicates: on a live allocation it keeps the existing value and drops
+    /// the new one, which is right for a content-addressed mapping where a key's value can never
+    /// change. Use this instead for a mapping that must be *correctable* — there, keeping the old
+    /// value silently serves stale data forever, and [`Self::remove`] is not enough because the
+    /// weak index it deliberately preserves lets [`Self::get`] resurrect it.
+    pub fn replace(&self, key: &K, value: V) -> crate::Arc<V> {
+        let arc = crate::Arc(Arc::new(value));
+        let guard = self.weak_index.guard();
+        self.weak_index
+            .insert(key.clone(), Arc::downgrade(&arc.0), &guard);
+        drop(guard);
+        self.cache.insert(key.clone(), arc.clone());
+        arc
+    }
+
+    /// Drops a key from both the bounded cache and the weak index, so a later [`Self::get`]
+    /// cannot resurrect the value from a still-live `Arc`.
+    ///
+    /// For a correctable mapping this is what [`Self::remove`] cannot promise.
+    pub fn invalidate(&self, key: &K) {
+        let guard = self.weak_index.guard();
+        self.weak_index.remove(key, &guard);
+        drop(guard);
+        self.cache.remove(key);
+    }
+
     /// Removes a value from the bounded cache.
     ///
     /// The weak index entry is intentionally kept — another consumer may
