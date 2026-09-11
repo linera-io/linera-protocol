@@ -254,6 +254,7 @@ library BridgeTypes {
         CryptoHash messages_hash;
         CryptoHash previous_message_blocks_hash;
         CryptoHash previous_event_blocks_hash;
+        opt_BlockHeight previous_checkpoint;
         CryptoHash oracle_responses_hash;
         CryptoHash events_hash;
         CryptoHash blobs_hash;
@@ -272,6 +273,7 @@ library BridgeTypes {
         result = abi.encodePacked(result, bcs_serialize_CryptoHash(input.messages_hash));
         result = abi.encodePacked(result, bcs_serialize_CryptoHash(input.previous_message_blocks_hash));
         result = abi.encodePacked(result, bcs_serialize_CryptoHash(input.previous_event_blocks_hash));
+        result = abi.encodePacked(result, bcs_serialize_opt_BlockHeight(input.previous_checkpoint));
         result = abi.encodePacked(result, bcs_serialize_CryptoHash(input.oracle_responses_hash));
         result = abi.encodePacked(result, bcs_serialize_CryptoHash(input.events_hash));
         result = abi.encodePacked(result, bcs_serialize_CryptoHash(input.blobs_hash));
@@ -306,6 +308,8 @@ library BridgeTypes {
         (new_pos, previous_message_blocks_hash) = bcs_deserialize_offset_CryptoHash(new_pos, input);
         CryptoHash memory previous_event_blocks_hash;
         (new_pos, previous_event_blocks_hash) = bcs_deserialize_offset_CryptoHash(new_pos, input);
+        opt_BlockHeight memory previous_checkpoint;
+        (new_pos, previous_checkpoint) = bcs_deserialize_offset_opt_BlockHeight(new_pos, input);
         CryptoHash memory oracle_responses_hash;
         (new_pos, oracle_responses_hash) = bcs_deserialize_offset_CryptoHash(new_pos, input);
         CryptoHash memory events_hash;
@@ -328,6 +332,7 @@ library BridgeTypes {
                 messages_hash,
                 previous_message_blocks_hash,
                 previous_event_blocks_hash,
+                previous_checkpoint,
                 oracle_responses_hash,
                 events_hash,
                 blobs_hash,
@@ -1498,6 +1503,42 @@ library BridgeTypes {
         uint256 new_pos;
         opt_AccountOwner memory value;
         (new_pos, value) = bcs_deserialize_offset_opt_AccountOwner(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct opt_BlockHeight {
+        bool has_value;
+        BlockHeight value;
+    }
+
+    function bcs_serialize_opt_BlockHeight(opt_BlockHeight memory input) internal pure returns (bytes memory) {
+        if (input.has_value) {
+            return abi.encodePacked(uint8(1), bcs_serialize_BlockHeight(input.value));
+        } else {
+            return abi.encodePacked(uint8(0));
+        }
+    }
+
+    function bcs_deserialize_offset_opt_BlockHeight(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, opt_BlockHeight memory)
+    {
+        uint256 new_pos;
+        bool has_value;
+        (new_pos, has_value) = bcs_deserialize_offset_bool(pos, input);
+        BlockHeight memory value;
+        if (has_value) {
+            (new_pos, value) = bcs_deserialize_offset_BlockHeight(new_pos, input);
+        }
+        return (new_pos, opt_BlockHeight(has_value, value));
+    }
+
+    function bcs_deserialize_opt_BlockHeight(bytes memory input) internal pure returns (opt_BlockHeight memory) {
+        uint256 new_pos;
+        opt_BlockHeight memory value;
+        (new_pos, value) = bcs_deserialize_offset_opt_BlockHeight(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }

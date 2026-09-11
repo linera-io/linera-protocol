@@ -307,6 +307,7 @@ fn create_test_block(chain_id: ChainId, height: BlockHeight) -> Block {
             messages_hash: CryptoHash::new(&TestString::new("messages_hash")),
             previous_message_blocks_hash: CryptoHash::new(&TestString::new("prev_msg_blocks_hash")),
             previous_event_blocks_hash: CryptoHash::new(&TestString::new("prev_event_blocks_hash")),
+            previous_checkpoint: None,
             oracle_responses_hash: CryptoHash::new(&TestString::new("oracle_responses_hash")),
             events_hash: CryptoHash::new(&TestString::new("events_hash")),
             blobs_hash: CryptoHash::new(&TestString::new("blobs_hash")),

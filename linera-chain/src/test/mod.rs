@@ -77,6 +77,7 @@ impl BlockBuilder {
                 messages: vec![],
                 previous_message_blocks: BTreeMap::new(),
                 previous_event_blocks: BTreeMap::new(),
+                previous_checkpoint: None,
                 oracle_responses: vec![],
                 events: vec![],
                 blobs: vec![],

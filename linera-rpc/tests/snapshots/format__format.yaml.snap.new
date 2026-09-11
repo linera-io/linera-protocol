@@ -1,5 +1,6 @@
 ---
 source: linera-rpc/tests/format.rs
+assertion_line: 94
 expression: get_registry().unwrap()
 ---
 Account:

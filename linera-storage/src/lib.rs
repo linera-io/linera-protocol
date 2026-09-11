@@ -907,6 +907,7 @@ mod tests {
             blobs: vec![],
             operation_results: vec![],
             previous_event_blocks: BTreeMap::new(),
+            previous_checkpoint: None,
             previous_message_blocks: BTreeMap::new(),
         };
 
