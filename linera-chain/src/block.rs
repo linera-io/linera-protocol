@@ -650,6 +650,20 @@ impl Block {
             .any(|responses| !responses.is_empty())
     }
 
+    /// Returns whether this block consumes any [`CheckpointAck`] message. Such blocks
+    /// are barred from the fast round: an acknowledgement's bundle has no availability
+    /// guarantee, so validators can legitimately disagree on whether they hold it, and
+    /// a fast-round proposal cannot be re-proposed without the bundle once some
+    /// validators have voted to confirm it.
+    ///
+    /// [`CheckpointAck`]: linera_execution::SystemMessage::CheckpointAck
+    pub fn consumes_checkpoint_ack(&self) -> bool {
+        self.body
+            .incoming_bundles()
+            .flat_map(|incoming| &incoming.bundle.messages)
+            .any(|posted| posted.message.is_checkpoint_ack())
+    }
+
     /// Returns whether this block matches the proposal.
     pub fn matches_proposed_block(&self, block: &ProposedBlock) -> bool {
         let ProposedBlock {

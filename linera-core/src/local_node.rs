@@ -491,6 +491,21 @@ where
         Ok(self.node.state.reset_and_reexecute_chain(chain_id).await?)
     }
 
+    /// Removes an incoming bundle of `chain_id` that can never be consumed by its
+    /// blocks, and marks the lane from `origin` as settled up to it.
+    pub async fn settle_unavailable_bundle(
+        &self,
+        chain_id: ChainId,
+        origin: ChainId,
+        cursor: linera_base::data_types::Cursor,
+    ) -> Result<(), LocalNodeError> {
+        Ok(self
+            .node
+            .state
+            .settle_unavailable_bundle(chain_id, origin, cursor)
+            .await?)
+    }
+
     /// Gets received certificate trackers.
     pub async fn get_received_certificate_trackers(
         &self,

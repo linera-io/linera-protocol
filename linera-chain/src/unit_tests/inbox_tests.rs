@@ -409,3 +409,88 @@ async fn test_inbox_restore_from_checkpoint() {
         );
     }
 }
+
+/// A push with no predecessor marks the lane as settled below its first bundle:
+/// consuming a settled bundle that was never delivered here reconciles as a no-op — even
+/// past an already-added later bundle, where it used to fail as `UnexpectedBundle` and
+/// wedge the lane for good.
+#[tokio::test]
+async fn test_inbox_settled_lane_add_then_remove() {
+    let hash = CryptoHash::test_hash("1");
+    let mut view = InboxStateView::new().await;
+    // The sender's checkpoint settled the lane below height 8; the height-5 bundle was
+    // never delivered here.
+    view.note_sender_pruned_below(make_bundle(hash, 8, 0, [8]).cursor())
+        .await
+        .unwrap();
+    assert!(view.add_bundle(make_bundle(hash, 8, 0, [8])).await.unwrap());
+    // A certified block consumes the missed height-5 bundle: ignored, and not
+    // anticipated — the sender will never push it.
+    assert!(!view
+        .remove_bundle(&make_bundle(hash, 5, 0, [5]))
+        .await
+        .unwrap());
+    assert_eq!(view.removed_bundles.count(), 0);
+    // The added bundle is untouched and consumes normally.
+    assert!(view
+        .remove_bundle(&make_bundle(hash, 8, 0, [8]))
+        .await
+        .unwrap());
+    assert_eq!(view.added_bundles.count(), 0);
+}
+
+/// The consume-first ordering: a settled bundle was consumed by anticipation before the
+/// no-predecessor push arrived. The push must drop the stale anticipated entry — the
+/// push it awaits will never come — instead of failing to reconcile against it.
+#[tokio::test]
+async fn test_inbox_settled_lane_remove_then_add() {
+    let hash = CryptoHash::test_hash("1");
+    let mut view = InboxStateView::new().await;
+    // A certified block consumes the height-5 bundle before anything was added.
+    assert!(!view
+        .remove_bundle(&make_bundle(hash, 5, 0, [5]))
+        .await
+        .unwrap());
+    assert_eq!(view.removed_bundles.count(), 1);
+    // The no-predecessor push at height 8 arrives: the anticipated entry is dropped and
+    // the new bundle is added.
+    view.note_sender_pruned_below(make_bundle(hash, 8, 0, [8]).cursor())
+        .await
+        .unwrap();
+    assert_eq!(view.removed_bundles.count(), 0);
+    assert!(view.add_bundle(make_bundle(hash, 8, 0, [8])).await.unwrap());
+    // A late re-delivery of a settled bundle is dropped, not an error.
+    assert!(!view.add_bundle(make_bundle(hash, 5, 0, [5])).await.unwrap());
+}
+
+/// Delivered bundles stay live below the settled point: a pending bundle in
+/// `added_bundles` — e.g. a `CheckpointAck` sent by a checkpoint block itself, which no
+/// anchor tracks — must still reconcile normally, and corruption at its cursor is still
+/// caught.
+#[tokio::test]
+async fn test_inbox_settled_lane_keeps_pending_bundles() {
+    let hash = CryptoHash::test_hash("1");
+    let mut view = InboxStateView::new().await;
+    // The height-5 bundle was delivered before the no-predecessor push at height 8.
+    assert!(view.add_bundle(make_bundle(hash, 5, 0, [5])).await.unwrap());
+    view.note_sender_pruned_below(make_bundle(hash, 8, 0, [8]).cursor())
+        .await
+        .unwrap();
+    assert!(view.add_bundle(make_bundle(hash, 8, 0, [8])).await.unwrap());
+    assert_eq!(view.added_bundles.count(), 2);
+    // Consuming a different bundle at the pending bundle's cursor still fails.
+    assert_matches!(
+        view.remove_bundle(&make_bundle(hash, 5, 0, [9])).await,
+        Err(InboxError::UnexpectedBundle { .. })
+    );
+    // The pending bundle itself consumes normally.
+    assert!(view
+        .remove_bundle(&make_bundle(hash, 5, 0, [5]))
+        .await
+        .unwrap());
+    assert!(view
+        .remove_bundle(&make_bundle(hash, 8, 0, [8]))
+        .await
+        .unwrap());
+    assert_eq!(view.added_bundles.count(), 0);
+}
