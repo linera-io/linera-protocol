@@ -27,9 +27,10 @@ use linera_chain::{
     ChainError, ChainStateView,
 };
 use linera_execution::{
-    committee::Committee, BlobState, ExecutionError, ExecutionRuntimeConfig,
-    ExecutionRuntimeContext, SharedCommittees, TransactionTracker, UserContractCode,
-    UserServiceCode, WasmRuntime,
+    committee::Committee,
+    thread_pool::{DECOMPRESS_CONTRACT, DECOMPRESS_SERVICE},
+    BlobState, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext, SharedCommittees,
+    TransactionTracker, UserContractCode, UserServiceCode, WasmRuntime,
 };
 #[cfg(with_revm)]
 use linera_execution::{
@@ -314,7 +315,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         #[cfg_attr(not(any(with_wasm_runtime, with_revm)), allow(unused_variables))]
         let contract_bytecode = self
             .thread_pool()
-            .run_send((), move |()| async move {
+            .run_send(DECOMPRESS_CONTRACT, (), move |()| async move {
                 compressed_contract_bytecode.decompress()
             })
             .await
@@ -381,7 +382,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         #[cfg_attr(not(any(with_wasm_runtime, with_revm)), allow(unused_variables))]
         let service_bytecode = self
             .thread_pool()
-            .run_send((), move |()| async move {
+            .run_send(DECOMPRESS_SERVICE, (), move |()| async move {
                 compressed_service_bytecode.decompress()
             })
             .await
