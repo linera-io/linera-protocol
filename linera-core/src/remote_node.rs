@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::{BTreeSet, HashSet, VecDeque};
 
 use custom_debug_derive::Debug;
 use futures::future::try_join_all;
@@ -153,7 +153,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         }
     }
 
-    fn check_and_return_info(
+    pub(crate) fn check_and_return_info(
         &self,
         response: ChainInfoResponse,
         chain_id: ChainId,
@@ -288,15 +288,15 @@ impl<N: ValidatorNode> RemoteNode<N> {
         Ok(certificates)
     }
 
-    /// Checks that requesting these blobs when trying to handle this certificate is legitimate,
-    /// i.e. that there are no duplicates and the blobs are actually required.
-    pub fn check_blobs_not_found<T: CertificateValue>(
+    /// Checks that a validator's request for these blobs is legitimate: no duplicates, and every
+    /// one of them in `required`. The caller chooses that scope — one certificate's requirements
+    /// on the single-certificate path, the whole run's union on a streamed run.
+    pub fn check_blobs_not_found(
         &self,
-        certificate: &GenericCertificate<T>,
+        required: &BTreeSet<BlobId>,
         blob_ids: &[BlobId],
     ) -> Result<(), NodeError> {
         ensure!(!blob_ids.is_empty(), NodeError::EmptyBlobsNotFound);
-        let required = certificate.inner().required_blob_ids();
         for blob_id in blob_ids {
             if !required.contains(blob_id) {
                 info!(

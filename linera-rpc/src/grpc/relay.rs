@@ -21,6 +21,7 @@ use std::{
     },
 };
 
+use futures::StreamExt as _;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlobContent, BlockHeight, NetworkDescription},
@@ -38,7 +39,7 @@ use tracing::{debug, instrument, Level};
 use super::{
     api::{self, validator_relay_client::ValidatorRelayClient},
     pool::GrpcConnectionPool,
-    transport, GrpcError, GRPC_MAX_MESSAGE_SIZE,
+    push_client, transport, GrpcError, GRPC_MAX_MESSAGE_SIZE,
 };
 use crate::{
     config::ValidatorPublicNetworkConfig, node_provider::NodeOptions,
@@ -97,6 +98,37 @@ impl ValidatorNode for RelayClient {
 
     fn address(&self) -> String {
         self.address.clone()
+    }
+
+    type PushStream = push_client::PushStream;
+
+    /// Opens a push stream through this validator's own proxy.
+    ///
+    /// The destination is named in the first message and only there, so the proxy checks it
+    /// against the committee once per stream rather than once per certificate.
+    async fn open_push_stream(&self) -> Result<Self::PushStream, NodeError> {
+        let (certificates, queue) = push_client::write_half();
+        // The destination heads the stream; the rest is the caller's queue wrapped in place, so
+        // the relay costs no second channel and no pump task.
+        let first = api::RelayPushRequest {
+            inner: Some(api::relay_push_request::Inner::Destination(
+                self.destination.clone(),
+            )),
+        };
+        let destination = futures::stream::once(async move { first });
+        let wrapped = tokio_stream::wrappers::ReceiverStream::new(queue).map(|certificate| {
+            api::RelayPushRequest {
+                inner: Some(api::relay_push_request::Inner::Certificate(certificate)),
+            }
+        });
+        let responses = self
+            .client
+            .clone()
+            .relay_confirmed_certificates(destination.chain(wrapped))
+            .await
+            .map_err(push_client::open_error)?
+            .into_inner();
+        Ok(push_client::PushStream::new(certificates, responses))
     }
 
     #[instrument(target = "relay_client", skip_all, err(level = Level::DEBUG), fields(destination = self.address))]

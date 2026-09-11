@@ -54,7 +54,7 @@ use tracing::{debug, instrument, trace, Level};
 
 use super::{
     api::{self, validator_node_client::ValidatorNodeClient, SubscriptionRequest},
-    transport, GRPC_MAX_MESSAGE_SIZE,
+    push_client, transport, GRPC_MAX_MESSAGE_SIZE,
 };
 
 /// Maximum number of stream IDs per `previous_event_blocks` request, to avoid exceeding
@@ -260,6 +260,25 @@ impl ValidatorNode for GrpcClient {
 
     fn address(&self) -> String {
         self.address.clone()
+    }
+
+    type PushStream = push_client::PushStream;
+
+    /// Opens a push stream straight to the destination's public service.
+    ///
+    /// Nothing is written before this returns: tonic hands back the response half as soon as the
+    /// destination's headers arrive, which is why a bidirectional stream is not bounded by the
+    /// channel's per-request timeout the way a single request would be.
+    async fn open_push_stream(&self) -> Result<Self::PushStream, NodeError> {
+        let (certificates, queue) = push_client::write_half();
+        let responses = self
+            .client
+            .clone()
+            .push_confirmed_certificates(tokio_stream::wrappers::ReceiverStream::new(queue))
+            .await
+            .map_err(push_client::open_error)?
+            .into_inner();
+        Ok(push_client::PushStream::new(certificates, responses))
     }
 
     #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]

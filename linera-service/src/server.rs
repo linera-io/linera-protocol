@@ -655,6 +655,16 @@ enum ServerCommand {
         )]
         block_export_max_retry_delay: Duration,
 
+        /// How long one streamed run may go unanswered before its stream is treated as dead.
+        /// Generous next to a request timeout: a run is many certificates and the destination
+        /// applies them all before the last answer comes back.
+        #[arg(
+            long = "block-export-push-timeout-ms",
+            default_value = "60000",
+            value_parser = util::parse_millis
+        )]
+        block_export_push_timeout: Duration,
+
         /// How long block export waits to open a connection to one of this validator's proxies.
         #[arg(
             long = "block-export-send-timeout-ms",
@@ -811,6 +821,7 @@ async fn run(options: ServerOptions) {
             block_export_transport,
             block_export_batch_size,
             block_export_max_catch_up_blocks,
+            block_export_push_timeout,
             block_export_queue_size,
             block_export_queue_bytes,
             block_export_max_in_flight,
@@ -851,6 +862,7 @@ async fn run(options: ServerOptions) {
                         max_in_flight_per_destination: block_export_max_in_flight,
                         max_in_flight_total: block_export_max_in_flight_total,
                         max_catch_up_blocks: block_export_max_catch_up_blocks,
+                        push_timeout: block_export_push_timeout,
                         idle_catch_up_interval: block_export_idle_interval,
                         retry_delay: block_export_retry_delay,
                         max_retry_delay: block_export_max_retry_delay,

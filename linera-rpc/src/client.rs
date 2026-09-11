@@ -58,6 +58,18 @@ impl ValidatorNode for Client {
         }
     }
 
+    type PushStream = crate::grpc::PushStream;
+
+    async fn open_push_stream(&self) -> Result<Self::PushStream, NodeError> {
+        match self {
+            Client::Grpc(grpc_client) => grpc_client.open_push_stream().await,
+
+            // The simple transport has no streams; the caller falls back per certificate.
+            #[cfg(with_simple_network)]
+            Client::Simple(_) => Err(NodeError::PushStreamUnsupported),
+        }
+    }
+
     async fn handle_block_proposal(
         &self,
         proposal: BlockProposal,

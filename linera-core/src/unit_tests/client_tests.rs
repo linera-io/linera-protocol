@@ -4776,6 +4776,8 @@ where
         },
         storage: builder.validator_storage(0),
         certificate_upload_batch_size: 100,
+        stream: Default::default(),
+        push_timeout: linera_base::time::Duration::from_secs(60),
         #[cfg(with_metrics)]
         address: "test".to_owned(),
     };
@@ -4940,6 +4942,8 @@ where
         },
         storage,
         certificate_upload_batch_size: 100,
+        stream: Default::default(),
+        push_timeout: linera_base::time::Duration::from_secs(60),
         #[cfg(with_metrics)]
         address: "test".to_owned(),
     };
@@ -5052,6 +5056,8 @@ where
         },
         storage,
         certificate_upload_batch_size: 100,
+        stream: Default::default(),
+        push_timeout: linera_base::time::Duration::from_secs(60),
         #[cfg(with_metrics)]
         address: "test".to_owned(),
     };

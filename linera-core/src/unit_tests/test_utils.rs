@@ -52,7 +52,7 @@ use crate::{
     data_types::*,
     environment::{wallet::Chain, TestSigner, TestWallet},
     node::{
-        CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
+        CrossChainMessageDelivery, NoPushStream, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider,
     },
     notifier::ChannelNotifier,
@@ -106,6 +106,12 @@ where
 
     fn address(&self) -> String {
         format!("local:{}", self.public_key)
+    }
+
+    type PushStream = NoPushStream;
+
+    async fn open_push_stream(&self) -> Result<Self::PushStream, NodeError> {
+        Err(NodeError::PushStreamUnsupported)
     }
 
     async fn handle_block_proposal(

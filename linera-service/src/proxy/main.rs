@@ -40,6 +40,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
 
 mod grpc;
+mod push_relay;
 use grpc::GrpcProxy;
 
 /// Options for running the proxy.
