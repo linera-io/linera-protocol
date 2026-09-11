@@ -751,6 +751,12 @@ where
         self.chain_worker_config.cross_chain_message_chunk_limit = limit;
     }
 
+    /// Enables or disables sparse sender catch-up.
+    #[cfg(with_testing)]
+    pub fn set_allow_sparse_sender_catchup(&mut self, allow: bool) {
+        self.chain_worker_config.allow_sparse_sender_catchup = allow;
+    }
+
     /// Returns the worker's nickname.
     #[instrument(level = "trace", skip(self))]
     pub fn nickname(&self) -> &str {

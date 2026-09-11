@@ -267,9 +267,33 @@ where
     /// many validators are faulty.
     ///
     /// Returns `true` if the bundle was new, `false` if it was already in `removed_bundles`.
-    pub(crate) async fn add_bundle(&mut self, bundle: MessageBundle) -> Result<bool, InboxError> {
+    /// `allow_sparse_catchup` permits the sender to skip bundles this chain has *already
+    /// consumed* by anticipation: entries in `removed_bundles` strictly below the incoming
+    /// cursor are dropped rather than treated as a mismatch, because a sparsely catching-up
+    /// sender will never deliver them. Bundles this chain has not consumed are unaffected —
+    /// they still have to arrive in order.
+    pub(crate) async fn add_bundle(
+        &mut self,
+        bundle: MessageBundle,
+        allow_sparse_catchup: bool,
+    ) -> Result<bool, InboxError> {
         // Record the latest cursor.
         let cursor = Cursor::from(&bundle);
+        if allow_sparse_catchup {
+            // Drop anticipated removals the sparse sender is skipping over. Their effects are
+            // already in this chain's execution state; the equality check they would have
+            // performed on arrival is redundant with the one a quorum ran at voting time.
+            while let Some(previous_bundle) = self.removed_bundles.front().await? {
+                if Cursor::from(&previous_bundle) >= cursor {
+                    break;
+                }
+                tracing::debug!(
+                    "Dropping anticipated bundle {:?}: sender is catching up sparsely past it",
+                    previous_bundle
+                );
+                self.removed_bundles.delete_front();
+            }
+        }
         ensure!(
             cursor >= *self.next_cursor_to_add.get(),
             InboxError::IncorrectOrder {
