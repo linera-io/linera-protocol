@@ -106,6 +106,7 @@ linera-base = { path = ".", default-features = false, features = ["test"] }
 linera-witty = { workspace = true, features = ["test"] }
 tempfile.workspace = true
 test-case.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
 
 [build-dependencies]
 cfg_aliases.workspace = true

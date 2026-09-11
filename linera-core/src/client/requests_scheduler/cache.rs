@@ -3,7 +3,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use linera_base::{data_types::Timestamp, time::Duration};
+use linera_base::time::{Duration, Instant};
 
 #[cfg(with_metrics)]
 use super::scheduler::metrics;
@@ -12,7 +12,7 @@ use super::scheduler::metrics;
 #[derive(Debug, Clone)]
 pub(super) struct CacheEntry<R> {
     result: Arc<R>,
-    cached_at: Timestamp,
+    cached_at: Instant,
 }
 
 /// Cache for request results with TTL-based expiration and LRU eviction.
@@ -103,7 +103,7 @@ where
     /// # Arguments
     /// - `key`: The request key to cache
     /// - `result`: The result to cache
-    pub(super) async fn store(&self, key: K, result: Arc<R>, now: Timestamp) {
+    pub(super) async fn store(&self, key: K, result: Arc<R>, now: Instant) {
         self.evict_expired_entries(now).await; // Clean up expired entries first
         let mut cache = self.cache.write().await;
         // Insert new entry
@@ -128,7 +128,7 @@ where
     ///
     /// # Returns
     /// The number of entries that were evicted
-    async fn evict_expired_entries(&self, now: Timestamp) -> usize {
+    async fn evict_expired_entries(&self, now: Instant) -> usize {
         let mut cache = self.cache.write().await;
         // Not strictly smaller b/c we want to add a new entry after eviction.
         if cache.len() < self.max_cache_size {
@@ -137,7 +137,7 @@ where
         let mut expired_keys = 0usize;
 
         cache.retain(|_key, entry| {
-            if now.duration_since(entry.cached_at) > self.cache_ttl {
+            if now.saturating_duration_since(entry.cached_at) > self.cache_ttl {
                 expired_keys += 1;
                 false
             } else {
@@ -179,9 +179,16 @@ pub(super) trait SubsumingKey<R> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::sync::{Arc, LazyLock};
 
-    use linera_base::{data_types::Timestamp, time::Duration};
+    use linera_base::time::{Duration, Instant};
+
+    /// A fixed origin for the monotonic clock, so that a test can say "this entry was
+    /// cached `micros` microseconds in" the way it used to with a `Timestamp`.
+    fn at(micros: u64) -> Instant {
+        static ORIGIN: LazyLock<Instant> = LazyLock::new(Instant::now);
+        *ORIGIN + Duration::from_micros(micros)
+    }
 
     use super::*;
 
@@ -233,7 +240,7 @@ mod tests {
         let result = RangeResult(vec![0, 1, 2, 3, 4, 5]);
 
         cache
-            .store(key.clone(), Arc::new(result.clone()), Timestamp::from(0))
+            .store(key.clone(), Arc::new(result.clone()), at(0))
             .await;
         let retrieved: Option<RangeResult> = cache.get(&key).await;
 
@@ -248,22 +255,14 @@ mod tests {
         let large_key = RangeKey { start: 0, end: 10 };
         let large_result = RangeResult(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
         cache
-            .store(
-                large_key.clone(),
-                Arc::new(large_result.clone()),
-                Timestamp::from(0),
-            )
+            .store(large_key.clone(), Arc::new(large_result.clone()), at(0))
             .await;
 
         // Store an exact match
         let exact_key = RangeKey { start: 2, end: 5 };
         let exact_result = RangeResult(vec![2, 3, 4, 5]);
         cache
-            .store(
-                exact_key.clone(),
-                Arc::new(exact_result.clone()),
-                Timestamp::from(0),
-            )
+            .store(exact_key.clone(), Arc::new(exact_result.clone()), at(0))
             .await;
 
         // Should get exact match, not extracted from larger range
@@ -279,11 +278,7 @@ mod tests {
         let large_key = RangeKey { start: 0, end: 10 };
         let large_result = RangeResult(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
         cache
-            .store(
-                large_key,
-                Arc::new(large_result.clone()),
-                Timestamp::from(0),
-            )
+            .store(large_key, Arc::new(large_result.clone()), at(0))
             .await;
 
         // Request a subset
@@ -299,9 +294,7 @@ mod tests {
 
         let key1 = RangeKey { start: 0, end: 5 };
         let result1 = RangeResult(vec![0, 1, 2, 3, 4, 5]);
-        cache
-            .store(key1, Arc::new(result1), Timestamp::from(0))
-            .await;
+        cache.store(key1, Arc::new(result1), at(0)).await;
 
         // Non-overlapping range
         let key2 = RangeKey { start: 10, end: 15 };
@@ -321,11 +314,7 @@ mod tests {
                 end: i * 10,
             };
             cache
-                .store(
-                    key,
-                    Arc::new(RangeResult(vec![i * 10])),
-                    Timestamp::from(i * 5_000),
-                )
+                .store(key, Arc::new(RangeResult(vec![i * 10])), at(i * 5_000))
                 .await;
         }
 
@@ -336,11 +325,7 @@ mod tests {
             end: 100,
         };
         cache
-            .store(
-                key_4.clone(),
-                Arc::new(RangeResult(vec![100])),
-                Timestamp::from(60_000),
-            )
+            .store(key_4.clone(), Arc::new(RangeResult(vec![100])), at(60_000))
             .await;
 
         let cache_guard = cache.cache.read().await;
@@ -389,7 +374,7 @@ mod tests {
             always_fail_extraction: true,
         };
         cache
-            .store(failing_key, Arc::new(SimpleResult(10)), Timestamp::from(0))
+            .store(failing_key, Arc::new(SimpleResult(10)), at(0))
             .await;
 
         // Store entry that subsumes and succeeds extraction
@@ -398,7 +383,7 @@ mod tests {
             always_fail_extraction: false,
         };
         cache
-            .store(working_key, Arc::new(SimpleResult(20)), Timestamp::from(0))
+            .store(working_key, Arc::new(SimpleResult(20)), at(0))
             .await;
 
         // Request should find the working one
