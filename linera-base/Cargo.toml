@@ -114,6 +114,11 @@ linera-witty = { workspace = true, features = ["test"] }
 tempfile.workspace = true
 test-case.workspace = true
 
+# `ruzstd` is the decompressor used on `wasm32`; it is a dev-dependency here so that its
+# frame handling is also covered by the tests running on other targets.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+ruzstd.workspace = true
+
 [build-dependencies]
 cfg_aliases.workspace = true
 
