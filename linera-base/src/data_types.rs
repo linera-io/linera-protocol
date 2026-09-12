@@ -1542,6 +1542,40 @@ impl CompressedBytecode {
     }
 }
 
+/// Decompresses all the zstd frames in `compressed_bytes`, writing the result to `writer`.
+///
+/// A [`StreamingDecoder`](ruzstd::decoding::StreamingDecoder) decodes a single frame, so one is
+/// created per frame, and skippable frames are stepped over using the length in their header.
+#[cfg(any(target_arch = "wasm32", test))]
+fn decompress_frames(
+    mut compressed_bytes: &[u8],
+    writer: &mut impl io::Write,
+) -> Result<(), io::Error> {
+    use ruzstd::decoding::{
+        errors::{FrameDecoderError, ReadFrameHeaderError},
+        StreamingDecoder,
+    };
+
+    while !compressed_bytes.is_empty() {
+        match StreamingDecoder::new(&mut compressed_bytes) {
+            Ok(mut decoder) => {
+                io::copy(&mut decoder, writer)?;
+            }
+            Err(FrameDecoderError::ReadFrameHeaderError(ReadFrameHeaderError::SkipFrame {
+                length,
+                ..
+            })) => {
+                compressed_bytes = compressed_bytes
+                    .get(length as usize..)
+                    .ok_or_else(|| io::Error::other("Truncated skippable frame"))?;
+            }
+            Err(error) => return Err(io::Error::other(error)),
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(target_arch = "wasm32")]
 impl CompressedBytecode {
     /// Returns `true` if the decompressed size does not exceed the limit.
@@ -1549,14 +1583,11 @@ impl CompressedBytecode {
         compressed_bytes: &[u8],
         limit: u64,
     ) -> Result<bool, DecompressionError> {
-        use ruzstd::decoding::StreamingDecoder;
         let limit = usize::try_from(limit).unwrap_or(usize::MAX);
         let mut writer = LimitedWriter::new(io::sink(), limit);
-        let mut decoder = StreamingDecoder::new(compressed_bytes).map_err(io::Error::other)?;
 
-        // TODO(#2710): Decode multiple frames, if present
-        match io::copy(&mut decoder, &mut writer) {
-            Ok(_) => Ok(true),
+        match decompress_frames(compressed_bytes, &mut writer) {
+            Ok(()) => Ok(true),
             Err(error) => {
                 error.downcast::<LimitedWriterError>()?;
                 Ok(false)
@@ -1566,26 +1597,8 @@ impl CompressedBytecode {
 
     /// Decompresses a [`CompressedBytecode`] into a [`Bytecode`].
     pub fn decompress(&self) -> Result<Bytecode, DecompressionError> {
-        use ruzstd::{decoding::StreamingDecoder, io::Read};
-
-        #[cfg(with_metrics)]
-        let _decompression_latency = BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
-
-        let compressed_bytes = &*self.compressed_bytes;
         let mut bytes = Vec::new();
-        let mut decoder = StreamingDecoder::new(&**compressed_bytes).map_err(io::Error::other)?;
-
-        // TODO(#2710): Decode multiple frames, if present
-        while !decoder.get_ref().is_empty() {
-            decoder
-                .read_to_end(&mut bytes)
-                .expect("Reading from a slice in memory should not result in I/O errors");
-        }
-
-        #[cfg(with_metrics)]
-        BYTECODE_DECOMPRESSED_SIZE_BYTES
-            .with_label_values(&[])
-            .observe(bytes.len() as f64);
+        decompress_frames(&self.compressed_bytes, &mut bytes)?;
 
         Ok(Bytecode { bytes })
     }
@@ -2219,5 +2232,95 @@ mod tests {
         let roundtrip: ModuleId =
             serde_json::from_value(serde_json::Value::String(hex.to_owned())).unwrap();
         assert_eq!(roundtrip, module_id);
+    }
+
+    /// Tests for [`decompress_frames`], which is what `wasm32` targets decompress bytecodes
+    /// with. They run everywhere else, where `zstd` is available to compress the inputs and to
+    /// compare against.
+    #[cfg(not(target_arch = "wasm32"))]
+    mod compression {
+        use std::{io, sync::Arc};
+
+        use super::super::{decompress_frames, Bytecode, CompressedBytecode};
+        use crate::limited_writer::{LimitedWriter, LimitedWriterError};
+
+        /// Builds a bytecode made of two zstd frames followed by a skippable frame, together
+        /// with the bytes it decompresses to.
+        ///
+        /// `zstd` accepts such a concatenation, so the decompressor used on `wasm32` has to
+        /// accept it too, or the two disagree about which bytecodes are valid.
+        fn multi_frame_bytecode() -> (CompressedBytecode, Vec<u8>) {
+            let first = vec![b'a'; 100_000];
+            let second = vec![b'b'; 50_000];
+
+            let mut compressed_bytes = Bytecode::new(first.clone())
+                .compress()
+                .compressed_bytes
+                .to_vec();
+            compressed_bytes
+                .extend_from_slice(&Bytecode::new(second.clone()).compress().compressed_bytes);
+            // Magic number 0x184d2a50 and a four-byte little-endian payload length.
+            compressed_bytes.extend_from_slice(&[0x50, 0x2a, 0x4d, 0x18, 4, 0, 0, 0, 1, 2, 3, 4]);
+
+            let compressed_bytecode = CompressedBytecode {
+                compressed_bytes: Arc::new(compressed_bytes.into_boxed_slice()),
+            };
+
+            (compressed_bytecode, [first, second].concat())
+        }
+
+        #[test]
+        fn all_frames_are_decompressed() {
+            let (compressed_bytecode, expected) = multi_frame_bytecode();
+
+            assert_eq!(compressed_bytecode.decompress().unwrap().bytes, expected);
+
+            let mut bytes = Vec::new();
+            decompress_frames(&compressed_bytecode.compressed_bytes, &mut bytes).unwrap();
+            assert_eq!(bytes, expected);
+        }
+
+        #[test]
+        fn all_frames_count_towards_the_size_limit() {
+            let (compressed_bytecode, expected) = multi_frame_bytecode();
+            let compressed_bytes = &**compressed_bytecode.compressed_bytes;
+            let size = expected.len();
+
+            for limit in [size / 2, size - 1, size, size + 1] {
+                let mut writer = LimitedWriter::new(io::sink(), limit);
+                let within_limit = match decompress_frames(compressed_bytes, &mut writer) {
+                    Ok(()) => true,
+                    Err(error) => {
+                        error.downcast::<LimitedWriterError>().unwrap();
+                        false
+                    }
+                };
+
+                assert_eq!(within_limit, limit >= size);
+                assert_eq!(
+                    CompressedBytecode::decompressed_size_at_most(
+                        compressed_bytes,
+                        u64::try_from(limit).unwrap()
+                    )
+                    .unwrap(),
+                    within_limit
+                );
+            }
+        }
+
+        #[test]
+        fn trailing_garbage_is_rejected() {
+            let (compressed_bytecode, _) = multi_frame_bytecode();
+            let mut compressed_bytes = compressed_bytecode.compressed_bytes.to_vec();
+            compressed_bytes.extend_from_slice(b"not a zstd frame");
+
+            let mut bytes = Vec::new();
+            assert!(decompress_frames(&compressed_bytes, &mut bytes).is_err());
+
+            let compressed_bytecode = CompressedBytecode {
+                compressed_bytes: Arc::new(compressed_bytes.into_boxed_slice()),
+            };
+            assert!(compressed_bytecode.decompress().is_err());
+        }
     }
 }
