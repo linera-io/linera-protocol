@@ -5,6 +5,7 @@ use linera_version::VersionInfo;
 
 fn main() -> anyhow::Result<()> {
     serde_json::to_writer_pretty(std::io::stdout(), &VersionInfo::get()?.api_hashes())?;
+    println!();
 
     Ok(())
 }

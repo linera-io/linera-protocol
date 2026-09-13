@@ -233,16 +233,13 @@ impl VersionInfo {
         }
         .into();
 
-        let api_hashes: ApiHashes = serde_json::from_reader(fs_err::File::open(api_hashes_path)?)?;
-
         let rpc_hash = get_hash(
             paths,
             &metadata,
             "linera-rpc",
             "tests/snapshots/format__format.yaml.snap",
         )
-        .unwrap_or(api_hashes.rpc)
-        .into();
+        .ok();
 
         let graphql_hash = get_hash(
             paths,
@@ -250,12 +247,30 @@ impl VersionInfo {
             "linera-service-graphql-client",
             "gql/*.graphql",
         )
-        .unwrap_or(api_hashes.graphql)
-        .into();
+        .ok();
 
-        let wit_hash = get_hash(paths, &metadata, "linera-sdk", "wit/*.wit")
-            .unwrap_or(api_hashes.wit)
-            .into();
+        let wit_hash = get_hash(paths, &metadata, "linera-sdk", "wit/*.wit").ok();
+
+        // The cache is a stand-in for the API source files, which a published crate does not
+        // ship; reading it only when a hash is missing keeps it writable from its own output.
+        let (rpc_hash, graphql_hash, wit_hash) = match (rpc_hash, graphql_hash, wit_hash) {
+            (Some(rpc_hash), Some(graphql_hash), Some(wit_hash)) => {
+                (rpc_hash, graphql_hash, wit_hash)
+            }
+            (rpc_hash, graphql_hash, wit_hash) => {
+                let api_hashes: ApiHashes =
+                    serde_json::from_reader(fs_err::File::open(api_hashes_path)?)?;
+                (
+                    rpc_hash.unwrap_or(api_hashes.rpc),
+                    graphql_hash.unwrap_or(api_hashes.graphql),
+                    wit_hash.unwrap_or(api_hashes.wit),
+                )
+            }
+        };
+
+        let rpc_hash = rpc_hash.into();
+        let graphql_hash = graphql_hash.into();
+        let wit_hash = wit_hash.into();
 
         Ok(Self {
             crate_version,
