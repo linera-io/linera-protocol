@@ -1,0 +1,105 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Notes on `sharded-slab`’s implementation and design."><title>sharded_slab::implementation - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sharded_slab" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module implementation</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../sharded_slab/index.html">sharded_<wbr>slab</a><span class="version">0.1.7</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module implementation</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#design" title="Design">Design</a></li><li><a href="#implementation" title="Implementation">Implementation</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate sharded_<wbr>slab</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">sharded_slab</a></div><h1>Module <span>implementation</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/sharded_slab/implementation.rs.html#4-138">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Notes on <code>sharded-slab</code>’s implementation and design.</p>
+<h2 id="design"><a class="doc-anchor" href="#design">§</a>Design</h2>
+<p>The sharded slab’s design is strongly inspired by the ideas presented by
+Leijen, Zorn, and de Moura in <a href="https://www.microsoft.com/en-us/research/uploads/prod/2019/06/mimalloc-tr-v1.pdf">Mimalloc: Free List Sharding in
+Action</a>. In this report, the authors present a novel design for a
+memory allocator based on a concept of <em>free list sharding</em>.</p>
+<p>Memory allocators must keep track of what memory regions are not currently
+allocated (“free”) in order to provide them to future allocation requests.
+The term <a href="https://en.wikipedia.org/wiki/Free_list"><em>free list</em></a> refers to a technique for performing this
+bookkeeping, where each free block stores a pointer to the next free block,
+forming a linked list. The memory allocator keeps a pointer to the most
+recently freed block, the <em>head</em> of the free list. To allocate more memory,
+the allocator pops from the free list by setting the head pointer to the
+next free block of the current head block, and returning the previous head.
+To deallocate a block, the block is pushed to the free list by setting its
+first word to the current head pointer, and the head pointer is set to point
+to the deallocated block. Most implementations of slab allocators backed by
+arrays or vectors use a similar technique, where pointers are replaced by
+indices into the backing array.</p>
+<p>When allocations and deallocations can occur concurrently across threads,
+they must synchronize accesses to the free list; either by putting the
+entire allocator state inside of a lock, or by using atomic operations to
+treat the free list as a lock-free structure (such as a <a href="https://en.wikipedia.org/wiki/Treiber_stack">Treiber stack</a>). In
+both cases, there is a significant performance cost — even when the free
+list is lock-free, it is likely that a noticeable amount of time will be
+spent in compare-and-swap loops. Ideally, the global synchronzation point
+created by the single global free list could be avoided as much as possible.</p>
+<p>The approach presented by Leijen, Zorn, and de Moura is to introduce
+sharding and thus increase the granularity of synchronization significantly.
+In mimalloc, the heap is <em>sharded</em> so that each thread has its own
+thread-local heap. Objects are always allocated from the local heap of the
+thread where the allocation is performed. Because allocations are always
+done from a thread’s local heap, they need not be synchronized.</p>
+<p>However, since objects can move between threads before being deallocated,
+<em>deallocations</em> may still occur concurrently. Therefore, Leijen et al.
+introduce a concept of <em>local</em> and <em>global</em> free lists. When an object is
+deallocated on the same thread it was originally allocated on, it is placed
+on the local free list; if it is deallocated on another thread, it goes on
+the global free list for the heap of the thread from which it originated. To
+allocate, the local free list is used first; if it is empty, the entire
+global free list is popped onto the local free list. Since the local free
+list is only ever accessed by the thread it belongs to, it does not require
+synchronization at all, and because the global free list is popped from
+infrequently, the cost of synchronization has a reduced impact. A majority
+of allocations can occur without any synchronization at all; and
+deallocations only require synchronization when an object has left its
+parent thread (a relatively uncommon case).</p>
+<h2 id="implementation"><a class="doc-anchor" href="#implementation">§</a>Implementation</h2>
+<p>A slab is represented as an array of <a href="https://docs.rs/sharded-slab/latest/sharded_slab/trait.Config.html#associatedconstant.MAX_THREADS"><code>MAX_THREADS</code></a> <em>shards</em>. A shard
+consists of a vector of one or more <em>pages</em> plus associated metadata.
+Finally, a page consists of an array of <em>slots</em>, head indices for the local
+and remote free lists.</p>
+<div class="example-wrap"><pre class="language-text"><code>┌─────────────┐
+│ shard 1     │
+│             │    ┌─────────────┐        ┌────────┐
+│ pages───────┼───▶│ page 1      │        │        │
+├─────────────┤    ├─────────────┤  ┌────▶│  next──┼─┐
+│ shard 2     │    │ page 2      │  │     ├────────┤ │
+├─────────────┤    │             │  │     │XXXXXXXX│ │
+│ shard 3     │    │ local_head──┼──┘     ├────────┤ │
+└─────────────┘    │ remote_head─┼──┐     │        │◀┘
+      ...          ├─────────────┤  │     │  next──┼─┐
+┌─────────────┐    │ page 3      │  │     ├────────┤ │
+│ shard n     │    └─────────────┘  │     │XXXXXXXX│ │
+└─────────────┘          ...        │     ├────────┤ │
+                   ┌─────────────┐  │     │XXXXXXXX│ │
+                   │ page n      │  │     ├────────┤ │
+                   └─────────────┘  │     │        │◀┘
+                                    └────▶│  next──┼───▶  ...
+                                          ├────────┤
+                                          │XXXXXXXX│
+                                          └────────┘</code></pre></div>
+<p>The size of the first page in a shard is always a power of two, and every
+subsequent page added after the first is twice as large as the page that
+preceeds it.</p>
+<div class="example-wrap"><pre class="language-text"><code>
+pg.
+┌───┐   ┌─┬─┐
+│ 0 │───▶ │ │
+├───┤   ├─┼─┼─┬─┐
+│ 1 │───▶ │ │ │ │
+├───┤   ├─┼─┼─┼─┼─┬─┬─┬─┐
+│ 2 │───▶ │ │ │ │ │ │ │ │
+├───┤   ├─┼─┼─┼─┼─┼─┼─┼─┼─┬─┬─┬─┬─┬─┬─┬─┐
+│ 3 │───▶ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │
+└───┘   └─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┘</code></pre></div>
+<p>When searching for a free slot, the smallest page is searched first, and if
+it is full, the search proceeds to the next page until either a free slot is
+found or all available pages have been searched. If all available pages have
+been searched and the maximum number of pages has not yet been reached, a
+new page is then allocated.</p>
+<p>Since every page is twice as large as the previous page, and all page sizes
+are powers of two, we can determine the page index that contains a given
+address by shifting the address down by the smallest page size and
+looking at how many twos places necessary to represent that number,
+telling us what power of two page size it fits inside of. We can
+determine the number of twos places by counting the number of leading
+zeros (unused twos places) in the number’s binary representation, and
+subtracting that count from the total number of bits in a word.</p>
+<p>The formula for determining the page number that contains an offset is thus:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>WIDTH - ((offset + INITIAL_PAGE_SIZE) &gt;&gt; INDEX_SHIFT).leading_zeros()</code></pre></div>
+<p>where <code>WIDTH</code> is the number of bits in a <code>usize</code>, and <code>INDEX_SHIFT</code> is</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>INITIAL_PAGE_SIZE.trailing_zeros() + <span class="number">1</span>;</code></pre></div></div></details></section></div></main></body></html>

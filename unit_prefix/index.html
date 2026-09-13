@@ -1,0 +1,119 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This is a library for formatting numbers with numeric prefixes, such as turning “3000 metres” into “3 kilometres”, or “8705 bytes” into “8.5 KiB”."><title>unit_prefix - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="unit_prefix" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Crate unit_prefix</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../unit_prefix/index.html">unit_<wbr>prefix</a><span class="version">0.5.2</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#usage" title="Usage">Usage</a><ul><li><a href="#binary-prefixes" title="Binary Prefixes">Binary Prefixes</a></li><li><a href="#which-type-of-prefix-should-i-use" title="Which type of prefix should I use?">Which type of prefix should I use?</a></li><li><a href="#prefix-names" title="Prefix Names">Prefix Names</a></li><li><a href="#string-parsing" title="String Parsing">String Parsing</a></li></ul></li></ul><h3><a href="#enums">Crate Items</a></h3><ul class="block"><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#traits" title="Traits">Traits</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1>Crate <span>unit_<wbr>prefix</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/unit_prefix/lib.rs.html#1-637">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This is a library for formatting numbers with numeric prefixes, such as
+turning “3000 metres” into “3 kilometres”, or “8705 bytes” into “8.5 KiB”.</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<p>The function <a href="enum.NumberPrefix.html#method.decimal"><code>NumberPrefix::decimal</code></a>
+returns either a pair of the resulting number and its prefix, or a
+notice that the number was too small to have any prefix applied to it. For
+example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>unit_prefix::NumberPrefix;
+
+<span class="kw">let </span>amount = <span class="number">8542_f32</span>;
+<span class="kw">let </span>result = <span class="kw">match </span>NumberPrefix::decimal(amount) {
+    NumberPrefix::Standalone(bytes) =&gt; {
+        <span class="macro">format!</span>(<span class="string">"The file is {} bytes in size"</span>, bytes)
+    },
+    NumberPrefix::Prefixed(prefix, n) =&gt; {
+        <span class="macro">format!</span>(<span class="string">"The file is {:.1} {}B in size"</span>, n, prefix)
+    },
+};
+
+<span class="macro">assert_eq!</span>(<span class="string">"The file is 8.5 kB in size"</span>, result);</code></pre></div>
+<p>The <code>{:.1}</code> part of the formatting string tells it to restrict the
+output to only one decimal place. This value is calculated by repeatedly
+dividing the number by 1000 until it becomes less than that, which in this
+case results in 8.542, which gets rounded down. Because only one division
+had to take place, the function also returns the decimal prefix <code>Kilo</code>,
+which gets converted to its internationally-recognised symbol when
+formatted as a string.</p>
+<p>If the value is too small to have any prefixes applied to it — in this case,
+if it’s under 1000 — then the standalone value will be returned:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>unit_prefix::NumberPrefix;
+
+<span class="kw">let </span>amount = <span class="number">705_f32</span>;
+<span class="kw">let </span>result = <span class="kw">match </span>NumberPrefix::decimal(amount) {
+    NumberPrefix::Standalone(bytes) =&gt; {
+        <span class="macro">format!</span>(<span class="string">"The file is {} bytes in size"</span>, bytes)
+    },
+    NumberPrefix::Prefixed(prefix, n) =&gt; {
+        <span class="macro">format!</span>(<span class="string">"The file is {:.1} {}B in size"</span>, n, prefix)
+    },
+};
+
+<span class="macro">assert_eq!</span>(<span class="string">"The file is 705 bytes in size"</span>, result);</code></pre></div>
+<p>In this particular example, the user expects different formatting for
+both bytes and kilobytes: while prefixed values are given more precision,
+there’s no point using anything other than whole numbers for just byte
+amounts. This is why the function pays attention to values without any
+prefixes — they often need to be special-cased.</p>
+<h3 id="binary-prefixes"><a class="doc-anchor" href="#binary-prefixes">§</a>Binary Prefixes</h3>
+<p>This library also allows you to use the <em>binary prefixes</em>, which use the
+number 1024 (2<sup>10</sup>) as the multiplier, rather than the more common 1000
+(10<sup>3</sup>). This uses the
+<a href="enum.NumberPrefix.html#method.binary"><code>NumberPrefix::binary</code></a> function.
+For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>unit_prefix::NumberPrefix;
+
+<span class="kw">let </span>amount = <span class="number">8542_f32</span>;
+<span class="kw">let </span>result = <span class="kw">match </span>NumberPrefix::binary(amount) {
+    NumberPrefix::Standalone(bytes) =&gt; {
+        <span class="macro">format!</span>(<span class="string">"The file is {} bytes in size"</span>, bytes)
+    },
+    NumberPrefix::Prefixed(prefix, n) =&gt; {
+        <span class="macro">format!</span>(<span class="string">"The file is {:.1} {}B in size"</span>, n, prefix)
+    },
+};
+
+<span class="macro">assert_eq!</span>(<span class="string">"The file is 8.3 KiB in size"</span>, result);</code></pre></div>
+<p>A kibibyte is slightly larger than a kilobyte, so the number is smaller
+in the result; but other than that, it works in exactly the same way, with
+the binary prefix being converted to a symbol automatically.</p>
+<h3 id="which-type-of-prefix-should-i-use"><a class="doc-anchor" href="#which-type-of-prefix-should-i-use">§</a>Which type of prefix should I use?</h3>
+<p>There is no correct answer this question! Common practice is to use
+the binary prefixes for numbers of <em>bytes</em>, while still using the decimal
+prefixes for everything else. Computers work with powers of two, rather than
+powers of ten, and by using the binary prefixes, you get a more accurate
+representation of the amount of data.</p>
+<h3 id="prefix-names"><a class="doc-anchor" href="#prefix-names">§</a>Prefix Names</h3>
+<p>If you need to describe your unit in actual words, rather than just with the
+symbol, use one of the <code>upper</code>, <code>caps</code>, <code>lower</code>, or <code>symbol</code>, which output the
+prefix in a variety of formats. For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>unit_prefix::NumberPrefix;
+
+<span class="kw">let </span>amount = <span class="number">8542_f32</span>;
+<span class="kw">let </span>result = <span class="kw">match </span>NumberPrefix::decimal(amount) {
+    NumberPrefix::Standalone(bytes) =&gt; {
+        <span class="macro">format!</span>(<span class="string">"The file is {} bytes in size"</span>, bytes)
+    },
+    NumberPrefix::Prefixed(prefix, n) =&gt; {
+        <span class="macro">format!</span>(<span class="string">"The file is {:.1} {}bytes in size"</span>, n, prefix.lower())
+    },
+};
+
+<span class="macro">assert_eq!</span>(<span class="string">"The file is 8.5 kilobytes in size"</span>, result);</code></pre></div><h3 id="string-parsing"><a class="doc-anchor" href="#string-parsing">§</a>String Parsing</h3>
+<p>There is a <code>FromStr</code> implementation for <code>NumberPrefix</code> that parses
+strings containing numbers and trailing prefixes, such as <code>7.5E</code>.</p>
+<p>Currently, the only supported units are <code>b</code> and <code>B</code> for bytes, and <code>m</code> for
+metres. Whitespace is allowed between the number and the rest of the string.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>unit_prefix::{NumberPrefix, Prefix};
+
+<span class="macro">assert_eq!</span>(
+    <span class="string">"7.05E"</span>.parse::&lt;NumberPrefix&lt;<span class="kw">_</span>&gt;&gt;(),
+    <span class="prelude-val">Ok</span>(NumberPrefix::Prefixed(Prefix::Exa, <span class="number">7.05_f64</span>))
+);
+
+<span class="macro">assert_eq!</span>(
+    <span class="string">"7.05"</span>.parse::&lt;NumberPrefix&lt;<span class="kw">_</span>&gt;&gt;(),
+    <span class="prelude-val">Ok</span>(NumberPrefix::Standalone(<span class="number">7.05_f64</span>))
+);
+
+<span class="macro">assert_eq!</span>(
+    <span class="string">"7.05 GiB"</span>.parse::&lt;NumberPrefix&lt;<span class="kw">_</span>&gt;&gt;(),
+    <span class="prelude-val">Ok</span>(NumberPrefix::Prefixed(Prefix::Gibi, <span class="number">7.05_f64</span>))
+);</code></pre></div></div></details><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.NumberPrefix.html" title="enum unit_prefix::NumberPrefix">Number<wbr>Prefix</a></dt><dd>The result of trying to apply a prefix to a floating-point value.</dd><dt><a class="enum" href="enum.Prefix.html" title="enum unit_prefix::Prefix">Prefix</a></dt><dd>A numeric prefix, either binary or decimal.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.Amounts.html" title="trait unit_prefix::Amounts">Amounts</a></dt><dd>Traits for floating-point values for both the possible multipliers. They
+need to be Copy, have defined 1000 and 1024s, and implement a bunch of
+operators.</dd></dl></section></div></main></body></html>

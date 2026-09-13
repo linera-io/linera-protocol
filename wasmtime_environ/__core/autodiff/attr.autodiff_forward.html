@@ -1,0 +1,53 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This macro uses forward-mode automatic differentiation to generate a new function. It may only be applied to a function. The new function will compute the derivative of the function to which the macro was applied."><title>autodiff_forward in wasmtime_environ::__core::autodiff - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc attr"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">autodiff_forward</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_<wbr>environ</a><span class="version">25.0.3</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">autodiff_<wbr>forward</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#usage-examples" title="Usage examples:">Usage examples:</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In wasmtime_<wbr>environ::<wbr>__<wbr>core::<wbr>autodiff</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">autodiff</a></div><h1>Attribute Macro <span class="attr">autodiff_<wbr>forward</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="https://doc.rust-lang.org/1.95.0/src/core/macros/mod.rs.html#1557">Source</a> </span></div><pre class="rust item-decl"><code>#[autodiff_forward]</code></pre><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>autodiff</code>)</span></div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This macro uses forward-mode automatic differentiation to generate a new function.
+It may only be applied to a function. The new function will compute the derivative
+of the function to which the macro was applied.</p>
+<p>The expected usage syntax is:
+<code>#[autodiff_forward(NAME, INPUT_ACTIVITIES, OUTPUT_ACTIVITY)]</code></p>
+<ul>
+<li><code>NAME</code>: A string that represents a valid function name.</li>
+<li><code>INPUT_ACTIVITIES</code>: Specifies one valid activity for each input parameter.</li>
+<li><code>OUTPUT_ACTIVITY</code>: Must not be set if the function implicitly returns nothing
+(or explicitly returns <code>-&gt; ()</code>). Otherwise, it must be set to one of the allowed activities.</li>
+</ul>
+<p>ACTIVITIES might either be <code>Dual</code> or <code>Const</code>, more options will be exposed later.</p>
+<p><code>Const</code> should be used on non-float arguments, or float-based arguments as an optimization
+if we are not interested in computing the derivatives with respect to this argument.</p>
+<p><code>Dual</code> can be used for float scalar values or for references, raw pointers, or other
+indirect input arguments. It can also be used on a scalar float return value.
+If used on a return value, the generated function will return a tuple of two float scalars.
+If used on an input argument, a new shadow argument of the same type will be created,
+directly following the original argument.</p>
+<h4 id="usage-examples"><a class="doc-anchor" href="#usage-examples">§</a>Usage examples:</h4>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(autodiff)]
+</span><span class="kw">use </span>std::autodiff::<span class="kw-2">*</span>;
+<span class="attr">#[autodiff_forward(rb_fwd1, Dual, Const, Dual)]
+#[autodiff_forward(rb_fwd2, Const, Dual, Dual)]
+#[autodiff_forward(rb_fwd3, Dual, Dual, Dual)]
+</span><span class="kw">fn </span>rosenbrock(x: f64, y: f64) -&gt; f64 {
+    (<span class="number">1.0 </span>- x).powi(<span class="number">2</span>) + <span class="number">100.0 </span>* (y - x.powi(<span class="number">2</span>)).powi(<span class="number">2</span>)
+}
+<span class="attr">#[autodiff_forward(rb_inp_fwd, Dual, Dual, Dual)]
+</span><span class="kw">fn </span>rosenbrock_inp(x: f64, y: f64, out: <span class="kw-2">&amp;mut </span>f64) {
+    <span class="kw-2">*</span>out = (<span class="number">1.0 </span>- x).powi(<span class="number">2</span>) + <span class="number">100.0 </span>* (y - x.powi(<span class="number">2</span>)).powi(<span class="number">2</span>);
+}
+
+<span class="kw">fn </span>main() {
+  <span class="kw">let </span>x0 = rosenbrock(<span class="number">1.0</span>, <span class="number">3.0</span>); <span class="comment">// 400.0
+  </span><span class="kw">let </span>(x1, dx1) = rb_fwd1(<span class="number">1.0</span>, <span class="number">1.0</span>, <span class="number">3.0</span>); <span class="comment">// (400.0, -800.0)
+  </span><span class="kw">let </span>(x2, dy1) = rb_fwd2(<span class="number">1.0</span>, <span class="number">3.0</span>, <span class="number">1.0</span>); <span class="comment">// (400.0, 400.0)
+  // When seeding both arguments at once the tangent return is the sum of both.
+  </span><span class="kw">let </span>(x3, dxy) = rb_fwd3(<span class="number">1.0</span>, <span class="number">1.0</span>, <span class="number">3.0</span>, <span class="number">1.0</span>); <span class="comment">// (400.0, -400.0)
+
+  </span><span class="kw">let </span><span class="kw-2">mut </span>out = <span class="number">0.0</span>;
+  <span class="kw">let </span><span class="kw-2">mut </span>dout = <span class="number">0.0</span>;
+  rb_inp_fwd(<span class="number">1.0</span>, <span class="number">1.0</span>, <span class="number">3.0</span>, <span class="number">1.0</span>, <span class="kw-2">&amp;mut </span>out, <span class="kw-2">&amp;mut </span>dout);
+  <span class="comment">// (out, dout) == (400.0, -400.0)
+</span>}</code></pre></div>
+<p>We might want to track how one input float affects one or more output floats. In this case,
+the shadow of one input should be initialized to <code>1.0</code>, while the shadows of the other
+inputs should be initialized to <code>0.0</code>. The shadow of the output(s) should be initialized to
+<code>0.0</code>. After calling the generated function, the shadow of the input will be zeroed,
+while the shadow(s) of the output(s) will contain the derivatives. Forward mode is generally
+more efficient if we have more output floats marked as <code>Dual</code> than input floats.
+Related information can also be found under the term “Vector-Jacobian product” (VJP).</p>
+</div></details></section></div></main></body></html>

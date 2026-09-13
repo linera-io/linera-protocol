@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get"],"struct":["Body","Client","ClientBuilder","Request","RequestBuilder","Response"]};

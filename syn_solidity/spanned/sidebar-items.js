@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["join_spans","set_spans"],"trait":["Spanned"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["pipe"],"struct":["OpenOptions","Receiver","Sender"]};

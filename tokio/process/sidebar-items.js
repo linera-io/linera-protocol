@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Child","ChildStderr","ChildStdin","ChildStdout","Command"]};

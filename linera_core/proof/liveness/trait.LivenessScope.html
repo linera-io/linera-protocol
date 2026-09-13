@@ -1,0 +1,50 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Remark (What liveness does not claim). Five exclusions, each of which a reader may reasonably expect `UnboundedProgress` to cover."><title>LivenessScope in linera_core::proof::liveness - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="linera_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">LivenessScope</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../linera_core/index.html">linera_<wbr>core</a><span class="version">0.16.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Liveness<wbr>Scope</a></h2><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In linera_<wbr>core::<wbr>proof::<wbr>liveness</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">linera_core</a>::<wbr><a href="../index.html">proof</a>::<wbr><a href="index.html">liveness</a></div><h1>Trait <span class="trait">Liveness<wbr>Scope</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/linera_core/proof/liveness.rs.html#168-171">Source</a> </span></div><pre class="rust item-decl"><code>pub trait LivenessScope:
+    <a class="trait" href="trait.UnboundedProgress.html" title="trait linera_core::proof::liveness::UnboundedProgress">UnboundedProgress</a>
+    + <a class="trait" href="../../../linera_chain/manager/proof/timeouts/trait.RoundsWithoutTimeout.html" title="trait linera_chain::manager::proof::timeouts::RoundsWithoutTimeout">RoundsWithoutTimeout</a>
+    + <a class="trait" href="../assumptions/trait.ActiveCorrectDriver.html" title="trait linera_core::proof::assumptions::ActiveCorrectDriver">ActiveCorrectDriver</a>
+    + <a class="trait" href="../progress/trait.LockRecovery.html" title="trait linera_core::proof::progress::LockRecovery">LockRecovery</a> { }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><strong>Remark (What liveness does not claim).</strong> Five exclusions, each of which a reader may
+reasonably expect <a href="trait.UnboundedProgress.html" title="trait linera_core::proof::liveness::UnboundedProgress"><code>UnboundedProgress</code></a> to cover.</p>
+<ul>
+<li>
+<p><strong>No progress without a client.</strong> <a href="../assumptions/trait.ActiveCorrectDriver.html" title="trait linera_core::proof::assumptions::ActiveCorrectDriver"><code>ActiveCorrectDriver</code></a> is indispensable: a validator
+never proposes and never advances a round unprompted. A microchain whose owners have all
+gone away makes no progress and is not thereby faulty. This is the deepest structural
+difference from a validator-driven BFT protocol, and it is what makes a Linera validator’s
+per-chain cost proportional to use.</p>
+</li>
+<li>
+<p><strong>The fast round can wedge a height permanently.</strong> By <a href="../../../linera_chain/manager/proof/timeouts/trait.RoundsWithoutTimeout.html" title="trait linera_chain::manager::proof::timeouts::RoundsWithoutTimeout"><code>RoundsWithoutTimeout</code></a>, with the
+default <a href="../../../linera_base/ownership/struct.TimeoutConfig.html" title="struct linera_base::ownership::TimeoutConfig"><code>TimeoutConfig</code></a> the fast round has no timeout at all, and while the current round
+is fast only a super owner may open a later one. A super owner that issues two conflicting
+fast proposals splits the correct validators — each locks onto the first it sees, by
+<a href="../../../linera_chain/manager/proof/voting/trait.FastConfirmationNeedsEmptyLock.html" title="trait linera_chain::manager::proof::voting::FastConfirmationNeedsEmptyLock"><code>FastConfirmationNeedsEmptyLock</code></a> — so neither reaches a quorum, and the height stops until
+that same super owner proposes again in a higher round. <a href="../../../linera_chain/manager/proof/safety/trait.CommitAgreement.html" title="trait linera_chain::manager::proof::safety::CommitAgreement"><code>CommitAgreement</code></a> is untouched;
+this is exactly the trade the fast path makes, and the reason
+<code>ChainClient::process_pending_block_inner</code> refuses to replace a pending fast proposal whose
+signing key it no longer holds.</p>
+</li>
+<li>
+<p><strong>Multi-leader rounds are not covered by <a href="trait.RoundProgress.html" title="trait linera_core::proof::liveness::RoundProgress"><code>RoundProgress</code></a>.</strong> The theorem is stated for
+<a href="../../../linera_base/data_types/enum.Round.html#variant.SingleLeader" title="variant linera_base::data_types::Round::SingleLeader"><code>SingleLeader</code></a> and <a href="../../../linera_base/data_types/enum.Round.html#variant.Validator" title="variant linera_base::data_types::Round::Validator"><code>Validator</code></a> rounds, where a unique leader is guaranteed by
+<a href="../../../linera_chain/manager/proof/timeouts/trait.LeaderEligibility.html" title="trait linera_chain::manager::proof::timeouts::LeaderEligibility"><code>LeaderEligibility</code></a>. In a multi-leader round several owners may propose simultaneously;
+correct validators then vote for whichever proposal they see first, quorums may not form,
+and by <a href="../../../linera_chain/manager/proof/timeouts/trait.RoundsWithoutTimeout.html" title="trait linera_chain::manager::proof::timeouts::RoundsWithoutTimeout"><code>RoundsWithoutTimeout</code></a> a non-final multi-leader round has no timeout — it is left
+only by a proposal in a higher round. This is by design (multi-leader rounds are the
+uncontended fast path) and costs nothing, because the round sequence passes through them
+into single-leader rounds where the theorem applies.</p>
+</li>
+<li>
+<p><strong>No bound on the number of rounds, and no bound before GST.</strong> <a href="trait.RoundProgress.html" title="trait linera_core::proof::liveness::RoundProgress"><code>RoundProgress</code></a> asserts the
+existence of a successful round, not a bound on how many precede it. Faulty leaders and
+pre-GST delays each cost rounds.</p>
+</li>
+<li>
+<p><strong>Nothing is claimed about the <em>content</em> of the committed blocks.</strong> A driver competing with
+other owners may find its own block superseded: <a href="../progress/trait.LockRecovery.html" title="trait linera_core::proof::progress::LockRecovery"><code>LockRecovery</code></a> obliges it to re-propose
+whatever is locked rather than its own pending block. <code>process_pending_block</code> then returns
+the committed certificate for the other block and keeps the driver’s proposal pending for a
+later height. Liveness of the <em>chain</em> does not imply liveness of any particular
+transaction.</p>
+</li>
+</ul>
+</div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../../trait.impl/linera_core/proof/liveness/trait.LivenessScope.js" async></script></section></div></main></body></html>

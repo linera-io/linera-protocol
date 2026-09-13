@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"trait":["FallbackVote","LeaderEligibility","MultiLeaderRoundsAreLocal","RoundsWithoutTimeout","SingleLeaderRoundsNeedTimeout","TimeoutCertificateAdvancesRound","TimeoutCertificateProvesRoundReached","TimeoutVoteConditions"]};

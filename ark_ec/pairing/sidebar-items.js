@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["prepare_g1","prepare_g2"],"struct":["MillerLoopOutput","PairingOutput"],"trait":["Pairing"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["on"],"struct":["OnUpgrade","Parts","Upgraded"]};

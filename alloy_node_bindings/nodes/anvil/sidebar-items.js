@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_IPC_ENDPOINT"],"struct":["Anvil","AnvilInstance"]};

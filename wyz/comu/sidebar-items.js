@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Address","Const","Frozen","Mut","NullPtrError"],"trait":["Mutability","Referential","SliceReferential"],"type":["Reference"]};

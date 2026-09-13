@@ -1,0 +1,9 @@
+(function() {
+    const implementors = Object.fromEntries([["alloy",[]],["alloy_consensus",[["impl <a class=\"trait\" href=\"alloy_consensus/trait.Sealable.html\" title=\"trait alloy_consensus::Sealable\">Sealable</a> for <a class=\"struct\" href=\"alloy_consensus/struct.Header.html\" title=\"struct alloy_consensus::Header\">Header</a>",0]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":59,"fragment_lengths":[12,272]}

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["comparison","compatibility","examples","feature_flags","generics","opaque","philosophy","structs","troubleshooting","upgrading","what_code_is_generated"]};

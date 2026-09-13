@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["malloc_conf","malloc_conf_mib"]};

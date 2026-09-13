@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["io"],"struct":["AllocVec","Cobs","ExtendFlavor","Size","Slice"],"trait":["Flavor"],"type":["StdVec"]};

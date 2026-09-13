@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["impl_normalizer_nfc_v1","impl_normalizer_nfd_data_v1","impl_normalizer_nfd_supplement_v1","impl_normalizer_nfd_tables_v1","impl_normalizer_nfkd_data_v1","impl_normalizer_nfkd_tables_v1","impl_normalizer_uts46_data_v1","make_provider"]};

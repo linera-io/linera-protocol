@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["IssueStateReason"],"struct":["Comment","Issue","PullRequestLink"]};

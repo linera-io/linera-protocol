@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Signature"],"type":["MaxOverhead","MaxSize"]};

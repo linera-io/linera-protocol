@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["REPLACEMENT_CHARACTER"],"enum":["BufReadDecoderError","DecodeError"],"fn":["decode"],"struct":["BufReadDecoder","Incomplete","LossyDecoder"]};

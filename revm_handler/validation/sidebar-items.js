@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["validate_eip4844_tx","validate_env","validate_initial_tx_gas","validate_priority_fee_tx","validate_tx_env"]};

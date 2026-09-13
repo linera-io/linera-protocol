@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"trait":["CastValidationRoundFloor","ConfirmedVoteRoundMonotone","Lock","LockRoundMonotone","NoValidatedBlockInFastRound","OneConfirmationVotePerRound","OneValidationVotePerRound","SafetyStateRecovery","SimultaneousVotes","UniqueValidatedBlockPerRound"]};

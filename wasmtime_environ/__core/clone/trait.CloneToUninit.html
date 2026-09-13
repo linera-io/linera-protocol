@@ -1,0 +1,147 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A generalization of `Clone` to dynamically-sized types stored in arbitrary containers."><title>CloneToUninit in wasmtime_environ::__core::clone - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">CloneToUninit</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_<wbr>environ</a><span class="version">25.0.3</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Clone<wbr>ToUninit</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#safety" title="Safety">Safety</a></li><li><a href="#examples" title="Examples">Examples</a></li><li><a href="#see-also" title="See Also">See Also</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.clone_to_uninit" title="clone_to_uninit">clone_to_uninit</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In wasmtime_<wbr>environ::<wbr>__<wbr>core::<wbr>clone</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">clone</a></div><h1>Trait <span class="trait">Clone<wbr>ToUninit</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="https://doc.rust-lang.org/1.95.0/src/core/clone.rs.html#507">Source</a> </span></div><pre class="rust item-decl"><code>pub unsafe trait CloneToUninit {
+    // Required method
+    unsafe fn <a href="#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dest: <a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.pointer.html">*mut </a><a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.u8.html">u8</a>);
+}</code></pre><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A generalization of <a href="trait.Clone.html" title="trait wasmtime_environ::__core::clone::Clone"><code>Clone</code></a> to <a href="https://doc.rust-lang.org/reference/dynamically-sized-types.html">dynamically-sized types</a> stored in arbitrary containers.</p>
+<p>This trait is implemented for all types implementing <a href="trait.Clone.html" title="trait wasmtime_environ::__core::clone::Clone"><code>Clone</code></a>, <a href="https://doc.rust-lang.org/1.95.0/std/primitive.slice.html" title="primitive slice">slices</a> of all
+such types, and other dynamically-sized types in the standard library.
+You may also implement this trait to enable cloning custom DSTs
+(structures containing dynamically-sized fields), or use it as a supertrait to enable
+cloning a <a href="https://doc.rust-lang.org/reference/types/trait-object.html">trait object</a>.</p>
+<p>This trait is normally used via operations on container types which support DSTs,
+so you should not typically need to call <code>.clone_to_uninit()</code> explicitly except when
+implementing such a container or otherwise performing explicit management of an allocation,
+or when implementing <code>CloneToUninit</code> itself.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>Implementations must ensure that when <code>.clone_to_uninit(dest)</code> returns normally rather than
+panicking, it always leaves <code>*dest</code> initialized as a valid value of type <code>Self</code>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>If you are defining a trait, you can add <code>CloneToUninit</code> as a supertrait to enable cloning of
+<code>dyn</code> values of your trait:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(clone_to_uninit)]
+</span><span class="kw">use </span>std::rc::Rc;
+
+<span class="kw">trait </span>Foo: std::fmt::Debug + std::clone::CloneToUninit {
+    <span class="kw">fn </span>modify(<span class="kw-2">&amp;mut </span><span class="self">self</span>);
+    <span class="kw">fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; i32;
+}
+
+<span class="kw">impl </span>Foo <span class="kw">for </span>i32 {
+    <span class="kw">fn </span>modify(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw-2">*</span><span class="self">self </span><span class="kw-2">*</span>= <span class="number">10</span>;
+    }
+    <span class="kw">fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; i32 {
+        <span class="kw-2">*</span><span class="self">self
+    </span>}
+}
+
+<span class="kw">let </span>first: Rc&lt;<span class="kw">dyn </span>Foo&gt; = Rc::new(<span class="number">1234</span>);
+
+<span class="kw">let </span><span class="kw-2">mut </span>second = first.clone();
+Rc::make_mut(<span class="kw-2">&amp;mut </span>second).modify(); <span class="comment">// make_mut() will call clone_to_uninit()
+
+</span><span class="macro">assert_eq!</span>(first.value(), <span class="number">1234</span>);
+<span class="macro">assert_eq!</span>(second.value(), <span class="number">12340</span>);</code></pre></div>
+<p>The following is an example of implementing <code>CloneToUninit</code> for a custom DST.
+(It is essentially a limited form of what <code>derive(CloneToUninit)</code> would do,
+if such a derive macro existed.)</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(clone_to_uninit)]
+</span><span class="kw">use </span>std::clone::CloneToUninit;
+<span class="kw">use </span>std::mem::offset_of;
+<span class="kw">use </span>std::rc::Rc;
+
+<span class="attr">#[derive(PartialEq)]
+</span><span class="kw">struct </span>MyDst&lt;T: <span class="question-mark">?</span>Sized&gt; {
+    label: String,
+    contents: T,
+}
+
+<span class="kw">unsafe impl</span>&lt;T: <span class="question-mark">?</span>Sized + CloneToUninit&gt; CloneToUninit <span class="kw">for </span>MyDst&lt;T&gt; {
+    <span class="kw">unsafe fn </span>clone_to_uninit(<span class="kw-2">&amp;</span><span class="self">self</span>, dest: <span class="kw-2">*mut </span>u8) {
+        <span class="comment">// The offset of `self.contents` is dynamic because it depends on the alignment of T
+        // which can be dynamic (if `T = dyn SomeTrait`). Therefore, we have to obtain it
+        // dynamically by examining `self`, rather than using `offset_of!`.
+        //
+        // SAFETY: `self` by definition points somewhere before `&amp;self.contents` in the same
+        // allocation.
+        </span><span class="kw">let </span>offset_of_contents = <span class="kw">unsafe </span>{
+            (<span class="kw-2">&amp;</span><span class="kw">raw const </span><span class="self">self</span>.contents).byte_offset_from_unsigned(<span class="self">self</span>)
+        };
+
+        <span class="comment">// Clone the *sized* fields of `self` (just one, in this example).
+        // (By cloning this first and storing it temporarily in a local variable, we avoid
+        // leaking it in case of any panic, using the ordinary automatic cleanup of local
+        // variables. Such a leak would be sound, but undesirable.)
+        </span><span class="kw">let </span>label = <span class="self">self</span>.label.clone();
+
+        <span class="comment">// SAFETY: The caller must provide a `dest` such that these field offsets are valid
+        // to write to.
+        </span><span class="kw">unsafe </span>{
+            <span class="comment">// Clone the unsized field directly from `self` to `dest`.
+            </span><span class="self">self</span>.contents.clone_to_uninit(dest.add(offset_of_contents));
+
+            <span class="comment">// Now write all the sized fields.
+            //
+            // Note that we only do this once all of the clone() and clone_to_uninit() calls
+            // have completed, and therefore we know that there are no more possible panics;
+            // this ensures no memory leaks in case of panic.
+            </span>dest.add(<span class="macro">offset_of!</span>(<span class="self">Self</span>, label)).cast::&lt;String&gt;().write(label);
+        }
+        <span class="comment">// All fields of the struct have been initialized; therefore, the struct is initialized,
+        // and we have satisfied our `unsafe impl CloneToUninit` obligations.
+    </span>}
+}
+
+<span class="kw">fn </span>main() {
+    <span class="comment">// Construct MyDst&lt;[u8; 4]&gt;, then coerce to MyDst&lt;[u8]&gt;.
+    </span><span class="kw">let </span>first: Rc&lt;MyDst&lt;[u8]&gt;&gt; = Rc::new(MyDst {
+        label: String::from(<span class="string">"hello"</span>),
+        contents: [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>],
+    });
+
+    <span class="kw">let </span><span class="kw-2">mut </span>second = first.clone();
+    <span class="comment">// make_mut() will call clone_to_uninit().
+    </span><span class="kw">for </span>elem <span class="kw">in </span>Rc::make_mut(<span class="kw-2">&amp;mut </span>second).contents.iter_mut() {
+        <span class="kw-2">*</span>elem <span class="kw-2">*</span>= <span class="number">10</span>;
+    }
+
+    <span class="macro">assert_eq!</span>(first.contents, [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>]);
+    <span class="macro">assert_eq!</span>(second.contents, [<span class="number">10</span>, <span class="number">20</span>, <span class="number">30</span>, <span class="number">40</span>]);
+    <span class="macro">assert_eq!</span>(second.label, <span class="string">"hello"</span>);
+}</code></pre></div><h2 id="see-also"><a class="doc-anchor" href="#see-also">§</a>See Also</h2>
+<ul>
+<li><a href="trait.Clone.html#method.clone_from" title="method wasmtime_environ::__core::clone::Clone::clone_from"><code>Clone::clone_from</code></a> is a safe function which may be used instead when <a href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized"><code>Self: Sized</code></a>
+and the destination is already initialized; it may be able to reuse allocations owned by
+the destination, whereas <code>clone_to_uninit</code> cannot, since its destination is assumed to be
+uninitialized.</li>
+<li><a href="../../std/borrow/trait.ToOwned.html"><code>ToOwned</code></a>, which allocates a new destination container.</li>
+</ul>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.clone_to_uninit" class="method"><a class="src rightside" href="https://doc.rust-lang.org/1.95.0/src/core/clone.rs.html#543">Source</a><h4 class="code-header">unsafe fn <a href="#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dest: <a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.pointer.html">*mut </a><a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.u8.html">u8</a>)</h4></section><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span></summary><div class="docblock"><p>Performs copy-assignment from <code>self</code> to <code>dest</code>.</p>
+<p>This is analogous to <code>std::ptr::write(dest.cast(), self.clone())</code>,
+except that <code>Self</code> may be a dynamically-sized type (<a href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized"><code>!Sized</code></a>).</p>
+<p>Before this function is called, <code>dest</code> may point to uninitialized memory.
+After this function is called, <code>dest</code> will point to initialized memory; it will be
+sound to create a <code>&amp;Self</code> reference from the pointer with the <a href="../ptr/fn.metadata.html" title="fn wasmtime_environ::__core::ptr::metadata">pointer metadata</a>
+from <code>self</code>.</p>
+<h5 id="safety-1"><a class="doc-anchor" href="#safety-1">§</a>Safety</h5>
+<p>Behavior is undefined if any of the following conditions are violated:</p>
+<ul>
+<li><code>dest</code> must be <a href="../ptr/index.html#safety" title="mod wasmtime_environ::__core::ptr">valid</a> for writes for <code>size_of_val(self)</code> bytes.</li>
+<li><code>dest</code> must be properly aligned to <code>align_of_val(self)</code>.</li>
+</ul>
+<h5 id="panics"><a class="doc-anchor" href="#panics">§</a>Panics</h5>
+<p>This function may panic. (For example, it might panic if memory allocation for a clone
+of a value owned by <code>self</code> fails.)
+If the call panics, then <code>*dest</code> should be treated as uninitialized memory; it must not be
+read or dropped, because even if it was previously valid, it may have been partially
+overwritten.</p>
+<p>The caller may wish to take care to deallocate the allocation pointed to by <code>dest</code>,
+if applicable, to avoid a memory leak (but this is not a requirement).</p>
+<p>Implementors should avoid leaking values by, upon unwinding, dropping all component values
+that might have already been created. (For example, if a <code>[Foo]</code> of length 3 is being
+cloned, and the second of the three calls to <code>Foo::clone()</code> unwinds, then the first <code>Foo</code>
+cloned should be dropped.)</p>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><div class="negative-marker"></div><section id="impl-CloneToUninit-for-str" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.95.0/src/core/clone.rs.html#567">Source</a><a href="#impl-CloneToUninit-for-str" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.CloneToUninit.html" title="trait wasmtime_environ::__core::clone::CloneToUninit">CloneToUninit</a> for <a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.str.html">str</a></h3></section><section id="impl-CloneToUninit-for-ByteStr" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.95.0/src/core/clone.rs.html#589">Source</a><a href="#impl-CloneToUninit-for-ByteStr" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.CloneToUninit.html" title="trait wasmtime_environ::__core::clone::CloneToUninit">CloneToUninit</a> for <a class="struct" href="../bstr/struct.ByteStr.html" title="struct wasmtime_environ::__core::bstr::ByteStr">ByteStr</a></h3></section><section id="impl-CloneToUninit-for-CStr" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.95.0/src/core/clone.rs.html#577">Source</a><a href="#impl-CloneToUninit-for-CStr" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.CloneToUninit.html" title="trait wasmtime_environ::__core::clone::CloneToUninit">CloneToUninit</a> for <a class="struct" href="../ffi/struct.CStr.html" title="struct wasmtime_environ::__core::ffi::CStr">CStr</a></h3></section><section id="impl-CloneToUninit-for-OsStr" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.95.0/src/std/ffi/os_str.rs.html#1353">Source</a><a href="#impl-CloneToUninit-for-OsStr" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.CloneToUninit.html" title="trait wasmtime_environ::__core::clone::CloneToUninit">CloneToUninit</a> for <a class="struct" href="https://doc.rust-lang.org/1.95.0/std/ffi/os_str/struct.OsStr.html" title="struct std::ffi::os_str::OsStr">OsStr</a></h3></section><section id="impl-CloneToUninit-for-Path" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.95.0/src/std/path.rs.html#3585">Source</a><a href="#impl-CloneToUninit-for-Path" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.CloneToUninit.html" title="trait wasmtime_environ::__core::clone::CloneToUninit">CloneToUninit</a> for <a class="struct" href="https://doc.rust-lang.org/1.95.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a></h3></section><section id="impl-CloneToUninit-for-%5BT%5D" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.95.0/src/core/clone.rs.html#556">Source</a><a href="#impl-CloneToUninit-for-%5BT%5D" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.CloneToUninit.html" title="trait wasmtime_environ::__core::clone::CloneToUninit">CloneToUninit</a> for <a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.slice.html">[T]</a><div class="where">where
+    T: <a class="trait" href="trait.Clone.html" title="trait wasmtime_environ::__core::clone::Clone">Clone</a>,</div></h3></section><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.95.0/src/core/clone.rs.html#547">Source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.CloneToUninit.html" title="trait wasmtime_environ::__core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="trait.Clone.html" title="trait wasmtime_environ::__core::clone::Clone">Clone</a>,</div></h3></section></div><script src="../../../trait.impl/core/clone/trait.CloneToUninit.js" data-ignore-extern-crates="std,core" async></script></section></div></main></body></html>

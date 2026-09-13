@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["RecoveredAuthority"],"mod":["eip2930","eip7702","transaction_type"],"struct":["AccessList","AccessListItem","Authorization","RecoveredAuthorization","SignedAuthorization"],"trait":["Transaction","TransactionError","TransactionGetter"]};

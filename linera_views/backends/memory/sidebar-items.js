@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["MemoryStoreError"],"struct":["MemoryDatabase","MemoryStore","MemoryStoreConfig"]};

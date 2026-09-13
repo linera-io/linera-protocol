@@ -1,0 +1,245 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `linera-chain/src/data_types/proof/quorum.rs`."><title>quorum.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="linera_chain" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../../static.files/src-script-813739b1.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">linera_chain/data_types/proof/</div>quorum.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) Zefchain Labs, Inc.
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="doccomment">//! Quorum properties: what a quorum of validator signatures buys us.
+<a href=#5 id=5 data-nosnippet>5</a>//!
+<a href=#6 id=6 data-nosnippet>6</a>//! Throughout this module, fix a [`Committee`] and write
+<a href=#7 id=7 data-nosnippet>7</a>//!
+<a href=#8 id=8 data-nosnippet>8</a>//! * `N` for [`Committee::total_votes`],
+<a href=#9 id=9 data-nosnippet>9</a>//! * `q` for [`Committee::quorum_threshold`],
+<a href=#10 id=10 data-nosnippet>10</a>//! * `f⁺` for [`Committee::validity_threshold`],
+<a href=#11 id=11 data-nosnippet>11</a>//! * `w(S)` for the sum of [`Committee::weight`] over a set `S` of validators.
+<a href=#12 id=12 data-nosnippet>12</a>//!
+<a href=#13 id=13 data-nosnippet>13</a>//! These are the only results in the specification that reason about weights arithmetically.
+<a href=#14 id=14 data-nosnippet>14</a>//! Everything above this module consumes them through [`CorrectValidatorInIntersection`],
+<a href=#15 id=15 data-nosnippet>15</a>//! [`CorrectSignerCastItsVote`], [`CertificateCarriesCorrectVote`] and
+<a href=#16 id=16 data-nosnippet>16</a>//! [`CorrectValidatorsFormQuorum`].
+<a href=#17 id=17 data-nosnippet>17</a>//!
+<a href=#18 id=18 data-nosnippet>18</a>//! [`Committee`]: linera_execution::committee::Committee
+<a href=#19 id=19 data-nosnippet>19</a>//! [`Committee::total_votes`]: linera_execution::committee::Committee::total_votes
+<a href=#20 id=20 data-nosnippet>20</a>//! [`Committee::quorum_threshold`]: linera_execution::committee::Committee::quorum_threshold
+<a href=#21 id=21 data-nosnippet>21</a>//! [`Committee::validity_threshold`]: linera_execution::committee::Committee::validity_threshold
+<a href=#22 id=22 data-nosnippet>22</a>//! [`Committee::weight`]: linera_execution::committee::Committee::weight
+<a href=#23 id=23 data-nosnippet>23</a>
+<a href=#24 id=24 data-nosnippet>24</a></span><span class="kw">use </span><span class="kw">crate</span>::manager::proof::model::{CorrectValidator, MaxByzantineWeight, UnforgeableSignatures};
+<a href=#25 id=25 data-nosnippet>25</a>
+<a href=#26 id=26 data-nosnippet>26</a><span class="doccomment">/// **Definition (Quorum).** A *quorum* of a committee is a set `S` of pairwise distinct
+<a href=#27 id=27 data-nosnippet>27</a>/// committee members with `w(S) ≥ q`.
+<a href=#28 id=28 data-nosnippet>28</a>///
+<a href=#29 id=29 data-nosnippet>29</a>/// Note that this is a statement about *weight*, not cardinality: [`Committee::weight`] returns
+<a href=#30 id=30 data-nosnippet>30</a>/// `0` for a non-member, so a set containing non-members is never helped by them.
+<a href=#31 id=31 data-nosnippet>31</a>///
+<a href=#32 id=32 data-nosnippet>32</a>/// [`Committee::weight`]: linera_execution::committee::Committee::weight
+<a href=#33 id=33 data-nosnippet>33</a></span><span class="kw">pub trait </span>Quorum {}
+<a href=#34 id=34 data-nosnippet>34</a>
+<a href=#35 id=35 data-nosnippet>35</a><span class="doccomment">/// **Lemma (Threshold arithmetic).** `f⁺ = ⌈N/3⌉` and `2·q ≥ N + f⁺`.
+<a href=#36 id=36 data-nosnippet>36</a>///
+<a href=#37 id=37 data-nosnippet>37</a>/// *Proof.* [`Committee::new`] computes `validity_threshold = total_votes.div_ceil(3)`, which is
+<a href=#38 id=38 data-nosnippet>38</a>/// `⌈N/3⌉` by definition of `div_ceil`, and
+<a href=#39 id=39 data-nosnippet>39</a>/// `quorum_threshold = (total_votes + validity_threshold).div_ceil(2)`, i.e.
+<a href=#40 id=40 data-nosnippet>40</a>/// `q = ⌈(N + f⁺)/2⌉ ≥ (N + f⁺)/2`. Multiplying the second by two gives the claim.
+<a href=#41 id=41 data-nosnippet>41</a>///
+<a href=#42 id=42 data-nosnippet>42</a>/// Both fields are stored rather than recomputed on use, so the proof needs them to be
+<a href=#43 id=43 data-nosnippet>43</a>/// trustworthy on a committee that arrived over the network. They are: the `Deserialize` impl
+<a href=#44 id=44 data-nosnippet>44</a>/// for [`Committee`] recomputes both from the validator weights and rejects the committee unless
+<a href=#45 id=45 data-nosnippet>45</a>/// they agree with the serialized values (`CommitteeFull`'s `TryFrom` in
+<a href=#46 id=46 data-nosnippet>46</a>/// `linera_execution::committee`). Hence every [`Committee`] reaching consensus code satisfies
+<a href=#47 id=47 data-nosnippet>47</a>/// the two identities above. ∎
+<a href=#48 id=48 data-nosnippet>48</a>///
+<a href=#49 id=49 data-nosnippet>49</a>/// [`Committee`]: linera_execution::committee::Committee
+<a href=#50 id=50 data-nosnippet>50</a>/// [`Committee::new`]: linera_execution::committee::Committee::new
+<a href=#51 id=51 data-nosnippet>51</a></span><span class="kw">pub trait </span>ThresholdArithmetic {}
+<a href=#52 id=52 data-nosnippet>52</a>
+<a href=#53 id=53 data-nosnippet>53</a><span class="doccomment">/// **Lemma (Quorum intersection).** Any two quorums `S₁`, `S₂` of the same committee satisfy
+<a href=#54 id=54 data-nosnippet>54</a>/// `w(S₁ ∩ S₂) ≥ f⁺`.
+<a href=#55 id=55 data-nosnippet>55</a>///
+<a href=#56 id=56 data-nosnippet>56</a>/// *Proof.* `S₁ ∪ S₂` is a set of committee members, so `w(S₁ ∪ S₂) ≤ N`. Weights are additive
+<a href=#57 id=57 data-nosnippet>57</a>/// over disjoint sets, so inclusion–exclusion gives
+<a href=#58 id=58 data-nosnippet>58</a>///
+<a href=#59 id=59 data-nosnippet>59</a>/// ```text
+<a href=#60 id=60 data-nosnippet>60</a>/// w(S₁ ∩ S₂) = w(S₁) + w(S₂) − w(S₁ ∪ S₂) ≥ q + q − N ≥ (N + f⁺) − N = f⁺,
+<a href=#61 id=61 data-nosnippet>61</a>/// ```
+<a href=#62 id=62 data-nosnippet>62</a>///
+<a href=#63 id=63 data-nosnippet>63</a>/// where the first inequality is [`Quorum`] applied to `S₁` and `S₂`, and the second is
+<a href=#64 id=64 data-nosnippet>64</a>/// [`ThresholdArithmetic`]. ∎
+<a href=#65 id=65 data-nosnippet>65</a></span><span class="kw">pub trait </span>Intersection: ThresholdArithmetic {}
+<a href=#66 id=66 data-nosnippet>66</a>
+<a href=#67 id=67 data-nosnippet>67</a><span class="doccomment">/// **Lemma (A correct validator lies in every quorum intersection).** Any two quorums of the
+<a href=#68 id=68 data-nosnippet>68</a>/// same committee share at least one correct validator.
+<a href=#69 id=69 data-nosnippet>69</a>///
+<a href=#70 id=70 data-nosnippet>70</a>/// *Proof.* By [`Intersection`] the intersection has weight at least `f⁺`. By
+<a href=#71 id=71 data-nosnippet>71</a>/// [`MaxByzantineWeight`] the total weight of faulty validators is at most `f⁺ − 1 &lt; f⁺`, so the
+<a href=#72 id=72 data-nosnippet>72</a>/// intersection cannot consist of faulty validators alone. ∎
+<a href=#73 id=73 data-nosnippet>73</a></span><span class="kw">pub trait </span>CorrectValidatorInIntersection: Intersection + MaxByzantineWeight {}
+<a href=#74 id=74 data-nosnippet>74</a>
+<a href=#75 id=75 data-nosnippet>75</a><span class="doccomment">/// **Lemma (A valid certificate embeds a quorum).** If a certificate `c` verifies against a
+<a href=#76 id=76 data-nosnippet>76</a>/// committee, then the signers of `c.signatures` form a [`Quorum`] of that committee.
+<a href=#77 id=77 data-nosnippet>77</a>///
+<a href=#78 id=78 data-nosnippet>78</a>/// *Proof.* There are two verification entry points, and both funnel into the crate-private
+<a href=#79 id=79 data-nosnippet>79</a>/// helper `check_signatures`: [`LiteCertificate::check`], which the two block certificate types
+<a href=#80 id=80 data-nosnippet>80</a>/// delegate to, and [`GenericCertificate::check`], which is what a
+<a href=#81 id=81 data-nosnippet>81</a>/// [`TimeoutCertificate`] — a type alias for `GenericCertificate&lt;Timeout&gt;` — resolves to. Each
+<a href=#82 id=82 data-nosnippet>82</a>/// builds the same [`SignedVotePayload`] and passes it with `c.signatures` to that helper, which
+<a href=#83 id=83 data-nosnippet>83</a>/// (1) rejects a repeated signer with
+<a href=#84 id=84 data-nosnippet>84</a>/// [`ChainError::CertificateValidatorReuse`], establishing pairwise distinctness; (2) rejects any
+<a href=#85 id=85 data-nosnippet>85</a>/// signer whose [`Committee::weight`] is `0` with [`ChainError::InvalidSigner`], establishing
+<a href=#86 id=86 data-nosnippet>86</a>/// committee membership; and (3) accumulates the signers' weights and rejects a total below
+<a href=#87 id=87 data-nosnippet>87</a>/// [`Committee::quorum_threshold`] with [`ChainError::CertificateRequiresQuorum`], establishing
+<a href=#88 id=88 data-nosnippet>88</a>/// `w(S) ≥ q`. Those three are precisely [`Quorum`]. The accumulation cannot overflow: step (1)
+<a href=#89 id=89 data-nosnippet>89</a>/// establishes distinctness before step (3) adds, so the total is bounded by the committee's own
+<a href=#90 id=90 data-nosnippet>90</a>/// `total_votes`, which [`Committee::new`] rejects on overflow. ∎
+<a href=#91 id=91 data-nosnippet>91</a>///
+<a href=#92 id=92 data-nosnippet>92</a>/// The signatures themselves are [`CertificateSignaturesVerify`].
+<a href=#93 id=93 data-nosnippet>93</a>///
+<a href=#94 id=94 data-nosnippet>94</a>/// [`LiteCertificate::check`]: crate::types::LiteCertificate::check
+<a href=#95 id=95 data-nosnippet>95</a>/// [`GenericCertificate::check`]: crate::types::GenericCertificate::check
+<a href=#96 id=96 data-nosnippet>96</a>/// [`TimeoutCertificate`]: crate::types::TimeoutCertificate
+<a href=#97 id=97 data-nosnippet>97</a>/// [`SignedVotePayload`]: super::objects::SignedVotePayload
+<a href=#98 id=98 data-nosnippet>98</a>/// [`Committee::new`]: linera_execution::committee::Committee::new
+<a href=#99 id=99 data-nosnippet>99</a>/// [`ChainError::CertificateValidatorReuse`]: crate::ChainError::CertificateValidatorReuse
+<a href=#100 id=100 data-nosnippet>100</a>/// [`ChainError::InvalidSigner`]: crate::ChainError::InvalidSigner
+<a href=#101 id=101 data-nosnippet>101</a>/// [`ChainError::CertificateRequiresQuorum`]: crate::ChainError::CertificateRequiresQuorum
+<a href=#102 id=102 data-nosnippet>102</a>/// [`Committee::weight`]: linera_execution::committee::Committee::weight
+<a href=#103 id=103 data-nosnippet>103</a>/// [`Committee::quorum_threshold`]: linera_execution::committee::Committee::quorum_threshold
+<a href=#104 id=104 data-nosnippet>104</a></span><span class="kw">pub trait </span>CertificateEmbedsQuorum {}
+<a href=#105 id=105 data-nosnippet>105</a>
+<a href=#106 id=106 data-nosnippet>106</a><span class="doccomment">/// **Lemma (Every signature on a valid certificate verifies).** If a certificate `c` verifies
+<a href=#107 id=107 data-nosnippet>107</a>/// against a committee — through either entry point named in [`CertificateEmbedsQuorum`] — then
+<a href=#108 id=108 data-nosnippet>108</a>/// *each individual* signer of `c.signatures` holds a signature that verifies over the single
+<a href=#109 id=109 data-nosnippet>109</a>/// [`SignedVotePayload`]
+<a href=#110 id=110 data-nosnippet>110</a>///
+<a href=#111 id=111 data-nosnippet>111</a>/// ```text
+<a href=#112 id=112 data-nosnippet>112</a>/// (c.value.value_hash, c.round, c.value.kind, c.unlocking_round, c.first_round,
+<a href=#113 id=113 data-nosnippet>113</a>///  c.justification_commitment)
+<a href=#114 id=114 data-nosnippet>114</a>/// ```
+<a href=#115 id=115 data-nosnippet>115</a>///
+<a href=#116 id=116 data-nosnippet>116</a>/// *Proof.* Both entry points construct exactly that
+<a href=#117 id=117 data-nosnippet>117</a>/// [`VoteValue`](crate::data_types::VoteValue) and pass it, with `c.signatures`, to
+<a href=#118 id=118 data-nosnippet>118</a>/// `check_signatures`, whose final step calls `ValidatorSignature::verify_batch` and propagates
+<a href=#119 id=119 data-nosnippet>119</a>/// any failure. For [`ValidatorSignature`] — an alias of `Secp256k1Signature` — that function is
+<a href=#120 id=120 data-nosnippet>120</a>/// a loop of individual verifications returning on the first failure:
+<a href=#121 id=121 data-nosnippet>121</a>///
+<a href=#122 id=122 data-nosnippet>122</a>/// ```text
+<a href=#123 id=123 data-nosnippet>123</a>/// for (author, signature) in votes {
+<a href=#124 id=124 data-nosnippet>124</a>///     signature.verify_inner::&lt;T&gt;(prehash, *author)?;
+<a href=#125 id=125 data-nosnippet>125</a>/// }
+<a href=#126 id=126 data-nosnippet>126</a>/// ```
+<a href=#127 id=127 data-nosnippet>127</a>///
+<a href=#128 id=128 data-nosnippet>128</a>/// so acceptance of the whole is acceptance of each. ∎
+<a href=#129 id=129 data-nosnippet>129</a>///
+<a href=#130 id=130 data-nosnippet>130</a>/// **This is a property of the signature scheme, not of `check_signatures`.** The inference "the
+<a href=#131 id=131 data-nosnippet>131</a>/// batch verified, therefore this particular signature verified" is a tautology only for a loop.
+<a href=#132 id=132 data-nosnippet>132</a>/// `Ed25519Signature::verify_batch` — present in the crate, and marked unused in consensus — is a
+<a href=#133 id=133 data-nosnippet>133</a>/// genuine batch scheme that differs in two ways:
+<a href=#134 id=134 data-nosnippet>134</a>///
+<a href=#135 id=135 data-nosnippet>135</a>/// * its soundness is *probabilistic*: it draws a random 128-bit scalar per signature and checks
+<a href=#136 id=136 data-nosnippet>136</a>///   one aggregate equation, so an invalid signature survives with negligible but nonzero
+<a href=#137 id=137 data-nosnippet>137</a>///   probability;
+<a href=#138 id=138 data-nosnippet>138</a>/// * it does not accept the same set as single verification. `VerifyingKey::verify_strict`
+<a href=#139 id=139 data-nosnippet>139</a>///   rejects small-order components explicitly and the batch path does not, and `ed25519-dalek`'s
+<a href=#140 id=140 data-nosnippet>140</a>///   own documentation describes a malleability under which a mutated signature passes the batch
+<a href=#141 id=141 data-nosnippet>141</a>///   though it "will not pass single signature verification".
+<a href=#142 id=142 data-nosnippet>142</a>///
+<a href=#143 id=143 data-nosnippet>143</a>/// Switching [`ValidatorSignature`] to such a scheme would leave
+<a href=#144 id=144 data-nosnippet>144</a>/// [`CertificateCarriesCorrectVote`] standing — it needs only that *some* signature was produced
+<a href=#145 id=145 data-nosnippet>145</a>/// by a correct validator — while silently invalidating this lemma and everything pointwise built
+<a href=#146 id=146 data-nosnippet>146</a>/// on it. [`ConflictCompleteness`] is the sharp end: it extracts signatures out of certificates
+<a href=#147 id=147 data-nosnippet>147</a>/// and re-verifies them *individually* through [`EquivocationProof::check`], so a batch/single
+<a href=#148 id=148 data-nosnippet>148</a>/// divergence would make [`extract_equivocations`] emit proofs that verification rejects,
+<a href=#149 id=149 data-nosnippet>149</a>/// breaking accountability completeness exactly where it is needed.
+<a href=#150 id=150 data-nosnippet>150</a>///
+<a href=#151 id=151 data-nosnippet>151</a>/// [`LiteCertificate::check`]: crate::types::LiteCertificate::check
+<a href=#152 id=152 data-nosnippet>152</a>/// [`SignedVotePayload`]: super::objects::SignedVotePayload
+<a href=#153 id=153 data-nosnippet>153</a>/// [`ValidatorSignature`]: linera_base::crypto::ValidatorSignature
+<a href=#154 id=154 data-nosnippet>154</a>/// [`ConflictCompleteness`]: crate::justification::proof::ConflictCompleteness
+<a href=#155 id=155 data-nosnippet>155</a>/// [`EquivocationProof::check`]: crate::justification::EquivocationProof::check
+<a href=#156 id=156 data-nosnippet>156</a>/// [`extract_equivocations`]: crate::justification::extract_equivocations
+<a href=#157 id=157 data-nosnippet>157</a></span><span class="kw">pub trait </span>CertificateSignaturesVerify {}
+<a href=#158 id=158 data-nosnippet>158</a>
+<a href=#159 id=159 data-nosnippet>159</a><span class="doccomment">/// **Lemma (A correct signer of a valid certificate cast its vote).** If a certificate `c` is
+<a href=#160 id=160 data-nosnippet>160</a>/// valid for a committee and a *correct* validator `v` is among its signers, then `v` itself cast
+<a href=#161 id=161 data-nosnippet>161</a>/// a vote with `c`'s exact signed payload.
+<a href=#162 id=162 data-nosnippet>162</a>///
+<a href=#163 id=163 data-nosnippet>163</a>/// The validator is identified by other means — in practice by
+<a href=#164 id=164 data-nosnippet>164</a>/// [`CorrectValidatorInIntersection`]. [`CertificateCarriesCorrectVote`] is the existential form.
+<a href=#165 id=165 data-nosnippet>165</a>///
+<a href=#166 id=166 data-nosnippet>166</a>/// *Proof.* By [`CertificateSignaturesVerify`], `v`'s signature verifies over `c`'s payload. By
+<a href=#167 id=167 data-nosnippet>167</a>/// [`UnforgeableSignatures`] no party without `v`'s secret key produces a signature that verifies
+<a href=#168 id=168 data-nosnippet>168</a>/// for `v`, so `v` produced it. By [`CorrectValidator`], a correct validator's signatures are
+<a href=#169 id=169 data-nosnippet>169</a>/// produced only by this code driven through its public entry points, so producing that signature
+<a href=#170 id=170 data-nosnippet>170</a>/// means casting that vote. ∎
+<a href=#171 id=171 data-nosnippet>171</a>///
+<a href=#172 id=172 data-nosnippet>172</a>/// Note what this does *not* need: no [`MaxByzantineWeight`], no [`ThresholdArithmetic`], no
+<a href=#173 id=173 data-nosnippet>173</a>/// [`Quorum`]. The hypothesis already hands us the validator, so none of the weight machinery is
+<a href=#174 id=174 data-nosnippet>174</a>/// involved — which is why this form, unlike the existential one, is available to
+<a href=#175 id=175 data-nosnippet>175</a>/// [`crate::justification::proof`], where the fault bound is assumed *not* to hold.
+<a href=#176 id=176 data-nosnippet>176</a></span><span class="kw">pub trait </span>CorrectSignerCastItsVote:
+<a href=#177 id=177 data-nosnippet>177</a>    CertificateSignaturesVerify + UnforgeableSignatures + CorrectValidator
+<a href=#178 id=178 data-nosnippet>178</a>{
+<a href=#179 id=179 data-nosnippet>179</a>}
+<a href=#180 id=180 data-nosnippet>180</a>
+<a href=#181 id=181 data-nosnippet>181</a><span class="doccomment">/// **Lemma (Every valid certificate carries a correct validator's vote).** For every
+<a href=#182 id=182 data-nosnippet>182</a>/// certificate valid for its committee there is at least one *correct* validator that itself cast
+<a href=#183 id=183 data-nosnippet>183</a>/// a vote with that certificate's exact signed payload.
+<a href=#184 id=184 data-nosnippet>184</a>///
+<a href=#185 id=185 data-nosnippet>185</a>/// This turns "a certificate exists" into "a correct validator executed the code path that
+<a href=#186 id=186 data-nosnippet>186</a>/// produces this vote", and thereby lets the local implementation properties of
+<a href=#187 id=187 data-nosnippet>187</a>/// [`crate::manager::proof::voting`] constrain what certificates can exist at all. An argument
+<a href=#188 id=188 data-nosnippet>188</a>/// about a *particular* validator needs [`CorrectSignerCastItsVote`].
+<a href=#189 id=189 data-nosnippet>189</a>///
+<a href=#190 id=190 data-nosnippet>190</a>/// *Proof.* By [`CertificateEmbedsQuorum`] the signers form a quorum, of weight at least `q`. By
+<a href=#191 id=191 data-nosnippet>191</a>/// [`ThresholdArithmetic`], `q ≥ (N + f⁺)/2 ≥ f⁺`, using `N ≥ f⁺ = ⌈N/3⌉`. By
+<a href=#192 id=192 data-nosnippet>192</a>/// [`MaxByzantineWeight`] faulty validators hold at most `f⁺ − 1`, so some signer is correct.
+<a href=#193 id=193 data-nosnippet>193</a>/// Apply [`CorrectSignerCastItsVote`] to it. ∎
+<a href=#194 id=194 data-nosnippet>194</a></span><span class="kw">pub trait </span>CertificateCarriesCorrectVote:
+<a href=#195 id=195 data-nosnippet>195</a>    CorrectSignerCastItsVote + CertificateEmbedsQuorum + ThresholdArithmetic + MaxByzantineWeight
+<a href=#196 id=196 data-nosnippet>196</a>{
+<a href=#197 id=197 data-nosnippet>197</a>}
+<a href=#198 id=198 data-nosnippet>198</a>
+<a href=#199 id=199 data-nosnippet>199</a><span class="doccomment">/// **Lemma (The correct validators alone form a quorum).** The set of all correct validators of
+<a href=#200 id=200 data-nosnippet>200</a>/// a committee is a [`Quorum`].
+<a href=#201 id=201 data-nosnippet>201</a>///
+<a href=#202 id=202 data-nosnippet>202</a>/// This is the availability counterpart of [`Intersection`]: it is what lets a correct proposer
+<a href=#203 id=203 data-nosnippet>203</a>/// collect a certificate without any cooperation from faulty validators, and so it is a
+<a href=#204 id=204 data-nosnippet>204</a>/// dependency of every progress result rather than of any safety result.
+<a href=#205 id=205 data-nosnippet>205</a>///
+<a href=#206 id=206 data-nosnippet>206</a>/// *Proof.* By [`MaxByzantineWeight`] the correct validators hold weight at least `N − f⁺ + 1`,
+<a href=#207 id=207 data-nosnippet>207</a>/// so it suffices to show `N − f⁺ + 1 ≥ q`. Write `N = 3k + i` with `i ∈ {0, 1, 2}`; by
+<a href=#208 id=208 data-nosnippet>208</a>/// [`ThresholdArithmetic`], `f⁺ = ⌈N/3⌉`.
+<a href=#209 id=209 data-nosnippet>209</a>///
+<a href=#210 id=210 data-nosnippet>210</a>/// ```text
+<a href=#211 id=211 data-nosnippet>211</a>/// i = 0:  f⁺ = k,      q = ⌈(4k)/2⌉     = 2k,     N − f⁺ + 1 = 2k + 1 ≥ q.
+<a href=#212 id=212 data-nosnippet>212</a>/// i = 1:  f⁺ = k + 1,  q = ⌈(4k+2)/2⌉   = 2k + 1, N − f⁺ + 1 = 2k + 1 ≥ q.
+<a href=#213 id=213 data-nosnippet>213</a>/// i = 2:  f⁺ = k + 1,  q = ⌈(4k+3)/2⌉   = 2k + 2, N − f⁺ + 1 = 2k + 2 ≥ q.
+<a href=#214 id=214 data-nosnippet>214</a>/// ```
+<a href=#215 id=215 data-nosnippet>215</a>///
+<a href=#216 id=216 data-nosnippet>216</a>/// In each case the correct validators reach the quorum threshold. ∎
+<a href=#217 id=217 data-nosnippet>217</a></span><span class="kw">pub trait </span>CorrectValidatorsFormQuorum: ThresholdArithmetic + MaxByzantineWeight {}
+<a href=#218 id=218 data-nosnippet>218</a>
+<a href=#219 id=219 data-nosnippet>219</a><span class="doccomment">/// **Remark (Where quorums are assembled, and why that is not load-bearing).** Certificates are
+<a href=#220 id=220 data-nosnippet>220</a>/// built in two places, with different guarantees:
+<a href=#221 id=221 data-nosnippet>221</a>///
+<a href=#222 id=222 data-nosnippet>222</a>/// * [`SignatureAggregator::append`] performs the same three membership/distinctness/threshold
+<a href=#223 id=223 data-nosnippet>223</a>///   checks as [`CertificateEmbedsQuorum`] incrementally, and verifies each signature as it is
+<a href=#224 id=224 data-nosnippet>224</a>///   added, so a certificate it emits is valid by construction.
+<a href=#225 id=225 data-nosnippet>225</a>/// * [`LiteCertificate::try_from_votes`] does **not** verify signatures, and instead requires
+<a href=#226 id=226 data-nosnippet>226</a>///   its caller to have done so. Its one production caller,
+<a href=#227 id=227 data-nosnippet>227</a>///   `linera_core::Client::communicate_chain_action`, verifies each vote against the responding
+<a href=#228 id=228 data-nosnippet>228</a>///   validator's public key (in `linera_core::updater`) before aggregating, and groups incoming
+<a href=#229 id=229 data-nosnippet>229</a>///   votes by their *full* signed payload — all six components of
+<a href=#230 id=230 data-nosnippet>230</a>///   [`SignedVotePayload`](super::objects::SignedVotePayload) — so votes that disagree on the
+<a href=#231 id=231 data-nosnippet>231</a>///   unlocking round, the first-round attestation or the justification commitment are never
+<a href=#232 id=232 data-nosnippet>232</a>///   merged into one certificate.
+<a href=#233 id=233 data-nosnippet>233</a>///
+<a href=#234 id=234 data-nosnippet>234</a>/// Neither fact is load-bearing for safety. A certificate that a correct validator *acts on* is
+<a href=#235 id=235 data-nosnippet>235</a>/// re-verified through [`LiteCertificate::check`] at every entry point that consumes one, so
+<a href=#236 id=236 data-nosnippet>236</a>/// [`CertificateEmbedsQuorum`] applies to it however it was assembled; a malformed certificate
+<a href=#237 id=237 data-nosnippet>237</a>/// that never passes `check` never influences a correct validator's state. The assembly path
+<a href=#238 id=238 data-nosnippet>238</a>/// matters only for liveness, where a correct proposer needs its own certificates to be
+<a href=#239 id=239 data-nosnippet>239</a>/// well-formed.
+<a href=#240 id=240 data-nosnippet>240</a>///
+<a href=#241 id=241 data-nosnippet>241</a>/// [`SignatureAggregator::append`]: crate::data_types::SignatureAggregator::append
+<a href=#242 id=242 data-nosnippet>242</a>/// [`LiteCertificate::try_from_votes`]: crate::types::LiteCertificate::try_from_votes
+<a href=#243 id=243 data-nosnippet>243</a>/// [`LiteCertificate::check`]: crate::types::LiteCertificate::check
+<a href=#244 id=244 data-nosnippet>244</a></span><span class="kw">pub trait </span>QuorumAssembly {}
+</code></pre></div></section></main></body></html>
