@@ -130,7 +130,7 @@ pub struct Options {
     #[arg(
         long = "notification-circuit-breaker-initial-probe-interval-ms",
         default_value = "300000",
-        value_parser = util::parse_millis
+        value_parser = util::parse_millis_nonzero
     )]
     pub notification_circuit_breaker_initial_probe_interval: Duration,
 
@@ -139,7 +139,7 @@ pub struct Options {
     #[arg(
         long = "notification-circuit-breaker-max-probe-interval-ms",
         default_value = "3600000",
-        value_parser = util::parse_millis
+        value_parser = util::parse_millis_nonzero
     )]
     pub notification_circuit_breaker_max_probe_interval: Duration,
 

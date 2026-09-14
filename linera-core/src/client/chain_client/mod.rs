@@ -3,11 +3,15 @@
 
 mod state;
 use std::{
-    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{
+        hash_map::{self, DefaultHasher},
+        BTreeMap, BTreeSet, HashMap, HashSet,
+    },
     convert::Infallible,
+    hash::{Hash as _, Hasher as _},
     iter,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicU64, Ordering},
         Arc,
     },
 };
@@ -137,15 +141,23 @@ pub struct Options {
     pub max_event_stream_queries: usize,
 }
 
-/// A validator's notification stream: its abort handle, plus whether `subscribe`
-/// ever resolved for it.
+/// A validator's notification stream: its abort handle, plus when it began serving.
 pub(super) struct StreamHandle {
     pub(super) abort: AbortHandle,
-    /// Set once `subscribe` returns, i.e. the stream exists rather than merely being
-    /// attempted. Recovery keys off this instead of "the task has not died yet", which a
-    /// probe still blocked in `subscribe` also satisfies. It is set before the initial
-    /// sync, so a sync still running counts as subscribed — the stream does exist.
-    pub(super) subscribed: Arc<AtomicBool>,
+    /// Microseconds at which `subscribe` *and* the initial sync both returned, or
+    /// [`NOT_SERVING`] while either is still in flight. Nothing polls the notification
+    /// stream until the sync returns, so "subscribe resolved" is too weak to mean healthy.
+    pub(super) serving_since: Arc<AtomicU64>,
+}
+
+impl StreamHandle {
+    /// How long the stream has been serving notifications, or `None` if it never started.
+    fn serving_for(&self, now: Timestamp) -> Option<Duration> {
+        match self.serving_since.load(Ordering::Relaxed) {
+            NOT_SERVING => None,
+            micros => Some(now.duration_since(Timestamp::from(micros))),
+        }
+    }
 }
 
 pub(super) struct CircuitBreakerState {
@@ -153,13 +165,44 @@ pub(super) struct CircuitBreakerState {
     pub(super) probe_interval: Duration,
 }
 
-/// Floor for a circuit-breaker probe interval.
+impl CircuitBreakerState {
+    /// A breaker armed one interval out from `now`.
+    fn new(now: Timestamp, probe_interval: Duration, spread: Duration) -> Self {
+        let mut state = CircuitBreakerState {
+            next_probe_at: now,
+            probe_interval,
+        };
+        state.arm(now, spread);
+        state
+    }
+
+    /// Doubles the interval, up to `max`, and re-arms.
+    fn escalate(&mut self, now: Timestamp, max: Duration, spread: Duration) {
+        self.probe_interval = self.probe_interval.saturating_mul(2).min(max);
+        self.arm(now, spread);
+    }
+
+    /// Re-arms one interval out, plus a per-validator offset so that a fleet-wide stream
+    /// loss does not re-converge every chain's probes on the same instant at every
+    /// doubling.
+    fn arm(&mut self, now: Timestamp, spread: Duration) {
+        self.next_probe_at =
+            now.saturating_add(TimeDelta::from_duration(self.probe_interval + spread));
+    }
+}
+
+/// Sentinel in [`StreamHandle::serving_since`] for a stream that has not started serving.
+pub(super) const NOT_SERVING: u64 = u64::MAX;
+
+/// Floor for the circuit-breaker probe interval.
 ///
-/// The interval is operator-settable and unvalidated, and `0` is meaningful for its
-/// sibling delay flags ("no throttle"). Once a timer consumes it, though, `0` would
-/// mean "re-probe as fast as the CPU allows" — measured at ~3,600 subscribes/s against
-/// a down validator. Flooring it here keeps `0` meaning "no backoff".
-const MIN_PROBE_INTERVAL: Duration = Duration::from_millis(1);
+/// The flags are validated where they are parsed, so this is a backstop for programmatic
+/// [`Options`], not a guard against arithmetic: a sub-second probe is a storm, since each
+/// one is a `subscribe` plus a full `synchronize_chain_state_from`.
+const MIN_PROBE_INTERVAL: Duration = Duration::from_secs(1);
+
+/// Fraction of the probe interval used as the per-validator spread, as a divisor.
+const PROBE_SPREAD_DIVISOR: u32 = 8;
 
 /// A fingerprint of the chain manager's observable consensus state, used to detect
 /// whether a per-validator updater absorbed new info during a proposal attempt.
@@ -3286,8 +3329,10 @@ impl<Env: Environment> ChainClient<Env> {
         let mut process_notifications = FuturesUnordered::new();
 
         // A failed update here leaves no streams, no breakers and nothing to wake the
-        // loop, and `ChainListener` never calls `listen()` again — so the retry deadline
-        // has to be armed from the start, exactly as the in-loop failure path does.
+        // loop, and nothing retries `listen()` on failure — so the retry deadline has to
+        // be armed from the start, exactly as the in-loop failure path does. (A chain
+        // whose listening mode is later UPGRADED does get a fresh `listen()`, which
+        // discards this listener's accumulated breaker state.)
         let mut retry_update_at: Option<Timestamp> = None;
         match self
             .update_notification_streams(&mut senders, &mut circuit_breakers)
@@ -3387,13 +3432,11 @@ impl<Env: Environment> ChainClient<Env> {
                             // The update returns before touching any breaker, so every
                             // deadline it would have advanced is still in the past and
                             // would keep winning `min()` below, re-firing the timer into
-                            // the same failing call. Push them out to the retry.
+                            // the same failing call. Push out only those — clamping the
+                            // rest up to `retry` would postpone a probe that is genuinely
+                            // due sooner, which is what taking the `min` exists to avoid.
                             let retry = this.retry_update_deadline();
-                            for state in circuit_breakers.values_mut() {
-                                if state.next_probe_at < retry {
-                                    state.next_probe_at = retry;
-                                }
-                            }
+                            this.defer_due_probes(&mut circuit_breakers, retry);
                             retry_update_at = Some(retry);
                         }
                     }
@@ -3411,16 +3454,47 @@ impl<Env: Environment> ChainClient<Env> {
         Ok((update_streams, AbortOnDrop(abort), notifications))
     }
 
+    /// The configured initial probe interval, floored.
+    fn initial_probe_interval(&self) -> Duration {
+        self.options
+            .notification_circuit_breaker_initial_probe_interval
+            .max(MIN_PROBE_INTERVAL)
+    }
+
+    /// A stable per-validator offset within the probe interval, so that probes armed by
+    /// one fleet-wide event stay spread out instead of re-converging at every doubling.
+    fn probe_spread(&self, validator: &ValidatorPublicKey, interval: Duration) -> Duration {
+        let mut hasher = DefaultHasher::new();
+        (self.chain_id, validator).hash(&mut hasher);
+        (interval / PROBE_SPREAD_DIVISOR).mul_f64((hasher.finish() % 1_000) as f64 / 1_000.0)
+    }
+
+    /// Pushes the already-due probe deadlines out to `retry`, after an update failed
+    /// before it could touch any of them.
+    ///
+    /// Only the due ones: they are what would otherwise keep winning `min()` and re-fire
+    /// the timer straight back into the same failing call. Clamping the rest up to `retry`
+    /// as well would postpone a probe that is legitimately due sooner, which is exactly
+    /// what taking the `min` over both deadlines exists to avoid.
+    pub(super) fn defer_due_probes(
+        &self,
+        circuit_breakers: &mut HashMap<ValidatorPublicKey, CircuitBreakerState>,
+        retry: Timestamp,
+    ) {
+        let now = self.storage_client().clock().current_time();
+        for state in circuit_breakers.values_mut() {
+            if state.next_probe_at <= now {
+                state.next_probe_at = retry;
+            }
+        }
+    }
+
     /// When to retry an update that failed before it could touch the breaker state.
     fn retry_update_deadline(&self) -> Timestamp {
-        let interval = self
-            .options
-            .notification_circuit_breaker_initial_probe_interval
-            .max(MIN_PROBE_INTERVAL);
         self.storage_client()
             .clock()
             .current_time()
-            .saturating_add(TimeDelta::from_duration(interval))
+            .saturating_add(TimeDelta::from_duration(self.initial_probe_interval()))
     }
 
     /// Creates or repairs the per-validator notification stream tasks for this chain,
@@ -3433,14 +3507,13 @@ impl<Env: Environment> ChainClient<Env> {
         senders: &mut HashMap<ValidatorPublicKey, StreamHandle>,
         circuit_breakers: &mut HashMap<ValidatorPublicKey, CircuitBreakerState>,
     ) -> Result<Vec<MaybeSendBoxFuture<'static, ()>>, Error> {
-        let initial_probe_interval = self
-            .options
-            .notification_circuit_breaker_initial_probe_interval
-            .max(MIN_PROBE_INTERVAL);
+        let initial_probe_interval = self.initial_probe_interval();
+        // Floored by the initial interval rather than by `MIN_PROBE_INTERVAL`: sharing the
+        // floor would let a `0` max pin both ends together and delete escalation entirely.
         let max_probe_interval = self
             .options
             .notification_circuit_breaker_max_probe_interval
-            .max(MIN_PROBE_INTERVAL);
+            .max(initial_probe_interval);
         // Read the (possibly simulated) node clock once, so circuit-breaker probe scheduling can
         // be driven deterministically in tests instead of depending on the wall clock.
         let now = self.storage_client().clock().current_time();
@@ -3465,19 +3538,21 @@ impl<Env: Environment> ChainClient<Env> {
         };
         // Detect circuit breaker state transitions before cleaning up senders.
         //
-        // Health is judged on whether `subscribe` ever resolved, not on the task still
-        // running: the probe body keeps awaiting the initial sync afterwards, so "alive"
-        // on its own also covers a probe that has established nothing at all.
+        // Health is judged on whether the stream reached the point of serving
+        // notifications, not on the task still running: the probe body awaits the initial
+        // sync before anything polls the stream, so "alive" on its own also covers a probe
+        // that has delivered nothing and may never deliver anything.
         let mut abort_stalled_probes = Vec::new();
         for (validator, handle) in senders.iter() {
             if !nodes.contains_key(validator) {
                 continue;
             }
             let died = handle.abort.is_aborted();
-            let subscribed = handle.subscribed.load(Ordering::Relaxed);
-            match (died, subscribed) {
-                // Subscribed and still running: healthy, whatever the deadline says.
-                (false, true) => {
+            let serving_for = handle.serving_for(now);
+            let spread = self.probe_spread(validator, initial_probe_interval);
+            match (died, serving_for) {
+                // Serving and still running: healthy, whatever the deadline says.
+                (false, Some(_)) => {
                     if circuit_breakers.remove(validator).is_some() {
                         info!(
                             %validator,
@@ -3486,51 +3561,43 @@ impl<Env: Environment> ChainClient<Env> {
                         );
                     }
                 }
-                // Still blocked in `subscribe` when the deadline passed. Abort it, or its
+                // Still connecting or syncing when the deadline passed. Abort it, or its
                 // `senders` entry stays occupied and the validator is never probed again.
-                (false, false) => {
+                (false, None) => {
                     if let Some(state) = circuit_breakers.get_mut(validator) {
                         if now >= state.next_probe_at {
-                            state.probe_interval =
-                                (state.probe_interval * 2).min(max_probe_interval);
-                            state.next_probe_at =
-                                now.saturating_add(TimeDelta::from_duration(state.probe_interval));
+                            state.escalate(now, max_probe_interval, spread);
                             abort_stalled_probes.push(*validator);
                             warn!(
                                 %validator,
                                 chain_id = %self.chain_id,
                                 next_probe_in = ?state.probe_interval,
-                                "Probe did not establish a stream in time; retrying later"
+                                "Probe did not start serving in time; retrying later"
                             );
                         }
                     }
                 }
-                // Died after subscribing: the stream worked, so this is churn (an idle
-                // proxy timeout, a validator restart), not an unreachable validator.
-                // Re-arm at the initial interval rather than doubling, or routine churn
-                // shorter than the current interval ratchets it to the cap for good.
-                (true, true) => {
+                // Died after serving for at least one interval: the stream did real work
+                // before stopping, so re-arm at the initial interval instead of doubling.
+                // Below that threshold it is not churn — the transport already absorbs
+                // reconnects internally, so a short-lived stream means a persistent fault.
+                (true, Some(lifetime)) if lifetime >= initial_probe_interval => {
                     circuit_breakers.insert(
                         *validator,
-                        CircuitBreakerState {
-                            next_probe_at: now
-                                .saturating_add(TimeDelta::from_duration(initial_probe_interval)),
-                            probe_interval: initial_probe_interval,
-                        },
+                        CircuitBreakerState::new(now, initial_probe_interval, spread),
                     );
                     info!(
                         %validator,
                         chain_id = %self.chain_id,
+                        ?lifetime,
                         next_probe_in = ?initial_probe_interval,
-                        "Established validator notification stream ended; re-probing"
+                        "Long-lived validator notification stream ended; re-probing"
                     );
                 }
-                // Died without ever subscribing: genuinely unreachable, back off.
-                (true, false) => {
+                // Died without serving, or after too short a life to count as churn.
+                (true, _) => {
                     if let Some(state) = circuit_breakers.get_mut(validator) {
-                        state.probe_interval = (state.probe_interval * 2).min(max_probe_interval);
-                        state.next_probe_at =
-                            now.saturating_add(TimeDelta::from_duration(state.probe_interval));
+                        state.escalate(now, max_probe_interval, spread);
                         warn!(
                             %validator,
                             chain_id = %self.chain_id,
@@ -3540,12 +3607,7 @@ impl<Env: Environment> ChainClient<Env> {
                     } else {
                         circuit_breakers.insert(
                             *validator,
-                            CircuitBreakerState {
-                                next_probe_at: now.saturating_add(TimeDelta::from_duration(
-                                    initial_probe_interval,
-                                )),
-                                probe_interval: initial_probe_interval,
-                            },
+                            CircuitBreakerState::new(now, initial_probe_interval, spread),
                         );
                         error!(
                             %validator,
@@ -3577,34 +3639,46 @@ impl<Env: Environment> ChainClient<Env> {
                 continue;
             };
 
-            // Circuit breaker: skip if not time to probe yet.
-            if let Some(state) = circuit_breakers.get_mut(&public_key) {
-                if now < state.next_probe_at {
-                    continue;
+            let spread = self.probe_spread(&public_key, initial_probe_interval);
+            match circuit_breakers.entry(public_key) {
+                hash_map::Entry::Occupied(mut breaker) => {
+                    let state = breaker.get_mut();
+                    if now < state.next_probe_at {
+                        continue;
+                    }
+                    // Re-arm before launching: the outcome is only known at a later
+                    // update, and a deadline left in the past re-enters this loop at once.
+                    state.arm(now, spread);
+                    debug!(
+                        validator = %public_key,
+                        chain_id = %self.chain_id,
+                        "Probing unhealthy validator"
+                    );
                 }
-                // Re-arm before launching: the outcome is only known at a later
-                // update, and a deadline left in the past re-enters this loop at once.
-                state.next_probe_at =
-                    now.saturating_add(TimeDelta::from_duration(state.probe_interval));
-                debug!(
-                    validator = %public_key,
-                    chain_id = %self.chain_id,
-                    "Probing unhealthy validator"
-                );
+                // A validator's first launch. Arm a deadline anyway, or a `subscribe` or
+                // sync that never returns leaves nothing to abort it and nothing to wake
+                // the timer on its account. Recovery drops the breaker once it serves.
+                hash_map::Entry::Vacant(breaker) => {
+                    breaker.insert(CircuitBreakerState::new(
+                        now,
+                        initial_probe_interval,
+                        spread,
+                    ));
+                }
             }
 
             let address = node.address();
             let this = self.clone();
             let listening_mode_for_sync = self.listening_mode();
-            let subscribed = Arc::new(AtomicBool::new(false));
-            let subscribed_for_task = subscribed.clone();
+            let serving_since = Arc::new(AtomicU64::new(NOT_SERVING));
+            let serving_since_for_task = serving_since.clone();
             let stream = stream::once({
                 let node = node.clone();
                 async move {
                     let stream = node.subscribe(vec![this.chain_id]).await?;
-                    subscribed_for_task.store(true, Ordering::Relaxed);
-                    // Only now the notification stream is established. We may have missed
-                    // notifications since the last time we synchronized.
+                    // The stream is established but nothing polls it until this block
+                    // returns, so the sync below still has to finish before the validator
+                    // counts as serving.
                     let remote_node = RemoteNode { public_key, node };
                     if listening_mode_for_sync
                         .as_ref()
@@ -3633,6 +3707,10 @@ impl<Env: Environment> ChainClient<Env> {
                             }
                         }
                     }
+                    serving_since_for_task.store(
+                        this.storage_client().clock().current_time().micros(),
+                        Ordering::Relaxed,
+                    );
                     Ok::<_, Error>(stream)
                 }
             })
@@ -3680,7 +3758,10 @@ impl<Env: Environment> ChainClient<Env> {
                 );
                 abort_on_exit.abort();
             }));
-            entry.insert(StreamHandle { abort, subscribed });
+            entry.insert(StreamHandle {
+                abort,
+                serving_since,
+            });
         }
         Ok(validator_tasks)
     }

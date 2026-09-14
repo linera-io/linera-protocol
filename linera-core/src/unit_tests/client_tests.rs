@@ -53,7 +53,8 @@ use crate::{
         ValidatorNode,
     },
     test_utils::{
-        ClientOutcomeResultExt as _, FaultType, MemoryStorageBuilder, StorageBuilder, TestBuilder,
+        wait_until, ClientOutcomeResultExt as _, FaultType, MemoryStorageBuilder, StorageBuilder,
+        TestBuilder,
     },
     updater::CommunicationError,
     worker::{Notification, Reason, WorkerError},
@@ -227,6 +228,13 @@ where
         let mut repaired = false;
         for _ in 0..10 {
             clock.add(TimeDelta::from_secs(3700));
+            // Wait for the probe itself rather than for a duration: the work behind it is
+            // a `subscribe` plus a full sync against whichever storage backend this case
+            // runs on, so a fixed sleep is what makes this family flaky under load.
+            wait_until(std::time::Duration::from_secs(10), || async {
+                builder.subscribe_calls(1).await > subscribes_before
+            })
+            .await;
             sender
                 .transfer_to_account(
                     AccountOwner::CHAIN,
@@ -236,8 +244,7 @@ where
                 .await
                 .unwrap_ok_committed();
             let outcome =
-                tokio::time::timeout(std::time::Duration::from_millis(500), notifications.next())
-                    .await;
+                tokio::time::timeout(std::time::Duration::from_secs(5), notifications.next()).await;
             if let Ok(Some(notification)) = outcome {
                 assert_eq!(notification.chain_id, receiver.chain_id());
                 repaired = true;
@@ -5922,24 +5929,24 @@ where
     Ok(())
 }
 
-/// Pins the circuit-breaker transitions on whether `subscribe` ever resolved, rather
-/// than on the probe task merely still running.
+/// Pins the circuit-breaker transitions on whether the stream reached the point of
+/// SERVING notifications, rather than on the probe task merely still running.
 ///
-/// The probe body is `subscribe` followed by an initial sync, so "the task is alive"
-/// covers a probe that established nothing, and "it outlived one interval" covers a sync
-/// that is simply slow. Three cases, each a distinct bug if the discriminator regresses
-/// to liveness or to an elapsed deadline:
-///   * alive and subscribed        -> recovered now, without waiting out an interval;
-///   * died after subscribing      -> churn, re-armed at the INITIAL interval, so a proxy
-///                                    whose idle timeout is shorter than the current
-///                                    interval cannot ratchet the backoff to its cap;
-///   * alive, never subscribed,
-///     deadline elapsed            -> still blocked in `subscribe`: abort it and escalate,
+/// The probe body subscribes and then syncs, and nothing polls the stream until the sync
+/// returns, so neither "the task is alive" nor "subscribe resolved" means healthy. Four
+/// cases, each a distinct bug if the discriminator regresses:
+///   * alive and serving           -> recovered now, without waiting out an interval;
+///   * died after serving a while  -> churn, re-armed at the INITIAL interval;
+///   * died after serving briefly  -> NOT churn. The gRPC client reconnects internally
+///                                    with backoff, so a stream that dies anyway has
+///                                    failed for good and must escalate;
+///   * alive, never served,
+///     deadline elapsed            -> stuck connecting or syncing: abort it and escalate,
 ///                                    or its `senders` entry stays occupied and the
 ///                                    validator is never probed again.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[test_log::test(tokio::test)]
-async fn test_breaker_transitions_key_off_subscribe_not_liveness<B>(
+async fn test_breaker_transitions_key_off_serving_not_liveness<B>(
     storage_builder: B,
 ) -> anyhow::Result<()>
 where
@@ -5947,19 +5954,23 @@ where
 {
     use std::{
         collections::HashMap,
-        sync::{atomic::AtomicBool, Arc},
+        sync::{atomic::AtomicU64, Arc},
     };
 
     use futures::stream::AbortHandle;
+
+    use crate::client::chain_client::NOT_SERVING;
 
     let signer = InMemorySigner::new(None);
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
     let chain = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let validator = builder.node(0).name();
+    // The breaker's escalated interval. The initial interval is the default 300s, so a
+    // stream must have served for at least that long to count as churn.
     let interval = std::time::Duration::from_secs(600);
 
-    let handle = |aborted: bool, subscribed: bool| {
+    let handle = |aborted: bool, serving_since: u64| {
         let (abort, registration) = AbortHandle::new_pair();
         drop(registration);
         if aborted {
@@ -5967,22 +5978,21 @@ where
         }
         StreamHandle {
             abort,
-            subscribed: Arc::new(AtomicBool::new(subscribed)),
+            serving_since: Arc::new(AtomicU64::new(serving_since)),
         }
     };
     let breaker = |next_probe_at, probe_interval| CircuitBreakerState {
         next_probe_at,
         probe_interval,
     };
+    let now = clock.current_time();
 
-    // Alive and subscribed: recovered immediately, no interval to wait out.
-    let mut senders = HashMap::from([(validator, handle(false, true))]);
+    // Alive and serving: recovered immediately, no interval to wait out.
+    let mut senders = HashMap::from([(validator, handle(false, now.micros()))]);
     let mut breakers = HashMap::from([(
         validator,
         breaker(
-            clock
-                .current_time()
-                .saturating_add(TimeDelta::from_duration(interval)),
+            now.saturating_add(TimeDelta::from_duration(interval)),
             interval,
         ),
     )]);
@@ -5991,12 +6001,14 @@ where
         .await?;
     assert!(
         !breakers.contains_key(&validator),
-        "a subscribed, live stream must clear the breaker without waiting out an interval"
+        "a serving, live stream must clear the breaker without waiting out an interval"
     );
 
-    // Died after subscribing: churn, not an unreachable validator — back to the initial
-    // interval rather than double the current one.
-    let mut senders = HashMap::from([(validator, handle(true, true))]);
+    // Died after serving for longer than the initial interval: churn, so back to the
+    // initial interval rather than double the current one.
+    clock.add(TimeDelta::from_secs(3600));
+    let long_lived = handle(true, now.micros());
+    let mut senders = HashMap::from([(validator, long_lived)]);
     let mut breakers = HashMap::from([(validator, breaker(clock.current_time(), interval))]);
     chain
         .update_notification_streams(&mut senders, &mut breakers)
@@ -6006,13 +6018,32 @@ where
         .expect("a stream that died must stay breakered");
     assert!(
         state.probe_interval < interval,
-        "a stream that died AFTER subscribing is churn; escalating it lets any proxy whose \
-         idle timeout is shorter than the interval ratchet the backoff to its cap"
+        "a stream that served for an hour before dying is churn; escalating it lets any \
+         proxy whose idle timeout is shorter than the interval ratchet the backoff to its cap"
     );
 
-    // Alive but never subscribed, past its deadline: the probe is stuck. It must be
-    // aborted, or `senders` stays occupied and the validator is never probed again.
-    let stuck = handle(false, false);
+    // Died seconds after it started serving: the transport already retries reconnects
+    // internally, so reaching us means a persistent fault, not churn.
+    let now = clock.current_time();
+    let short_lived = handle(true, now.saturating_sub(TimeDelta::from_secs(5)).micros());
+    let mut senders = HashMap::from([(validator, short_lived)]);
+    let mut breakers = HashMap::from([(validator, breaker(now, interval))]);
+    chain
+        .update_notification_streams(&mut senders, &mut breakers)
+        .await?;
+    let state = breakers
+        .get(&validator)
+        .expect("a stream that died must stay breakered");
+    assert!(
+        state.probe_interval > interval,
+        "a stream that died seconds after subscribing is not churn — the gRPC client \
+         reconnects internally, so it reached the breaker only after giving up"
+    );
+
+    // Alive but never serving, past its deadline: the probe is stuck in `subscribe` or in
+    // the sync. It must be aborted, or `senders` stays occupied and the validator is
+    // never probed again.
+    let stuck = handle(false, NOT_SERVING);
     let stuck_abort = stuck.abort.clone();
     let mut senders = HashMap::from([(validator, stuck)]);
     let mut breakers = HashMap::from([(validator, breaker(clock.current_time(), interval))]);
@@ -6021,15 +6052,15 @@ where
         .await?;
     assert!(
         stuck_abort.is_aborted(),
-        "a probe that never subscribed by its deadline must be aborted, or its senders \
-         entry stays occupied and the validator is never probed again"
+        "a probe that never started serving by its deadline must be aborted, or its \
+         senders entry stays occupied and the validator is never probed again"
     );
     let state = breakers
         .get(&validator)
         .expect("a stalled probe must stay breakered");
     assert!(
         state.probe_interval > interval,
-        "a probe that never established a stream must escalate the backoff"
+        "a probe that never started serving must escalate the backoff"
     );
     Ok(())
 }
@@ -6065,7 +6096,7 @@ where
     tokio::spawn(listener);
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     assert_eq!(
-        builder.subscribe_calls(0).await,
+        builder.subscribe_calls(1).await,
         0,
         "the injected failures should have prevented every subscribe"
     );
@@ -6073,16 +6104,28 @@ where
     // Let the retries succeed, so streams come up and the breakers clear.
     for _ in 0..10 {
         clock.add(TimeDelta::from_secs(400));
-        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
-        if builder.subscribe_calls(0).await > 0 {
+        wait_until(std::time::Duration::from_secs(5), || async {
+            builder.subscribe_calls(1).await > 0
+        })
+        .await;
+        if builder.subscribe_calls(1).await > 0 {
             break;
         }
     }
     assert!(
-        builder.subscribe_calls(0).await > 0,
+        builder.subscribe_calls(1).await > 0,
         "the listener never subscribed after its startup update failed: nothing armed a \
          timer, and an idle chain with no streams can produce neither a notification nor \
          a stream death"
+    );
+    // Both injected failures reached the listener: the startup update AND the retry the
+    // timer drove. Without this the budget could be consumed elsewhere and the in-loop
+    // retry path would never be exercised.
+    assert_eq!(
+        builder.validator_set_build_failures_left(),
+        0,
+        "the listener consumed only part of the injected budget, so the retry this test \
+         is named for was not the thing that failed"
     );
 
     // Now the second absorbing state. Sever every stream so each validator gets a breaker
@@ -6143,8 +6186,10 @@ where
 
     // One simulated step past the deadline, then real time with the clock held still.
     // Paced, the failure pushes its deadline into the simulated future and the loop
-    // sleeps; unpaced, it re-fires on the same elapsed deadline continuously.
-    clock.add(TimeDelta::from_secs(400));
+    // sleeps; unpaced, it re-fires on the same elapsed deadline continuously. The step
+    // clears 700s because severing an immediately-established stream escalates to twice
+    // the initial interval, plus this validator's spread.
+    clock.add(TimeDelta::from_secs(700));
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     let attempts = budget - builder.validator_set_build_failures_left();
 
@@ -6187,6 +6232,11 @@ where
     let (listener, _listen_handle, _) = observer.listen().await?;
     tokio::spawn(listener);
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    // Let the probe timer fire once while every validator is healthy. That update sees
+    // them serving and drops the breakers armed at launch, which is what leaves the map
+    // empty for the failure below — the state this test exists to cover.
+    clock.add(TimeDelta::from_secs(400));
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     let before = builder.subscribe_calls(1).await;
 
     // Arm the failures BEFORE severing, so the update the stream deaths trigger returns
@@ -6207,4 +6257,157 @@ where
          nothing was left to wake it, because an idle chain whose streams have all died \
          produces neither a notification nor another stream death"
     );
+}
+
+/// A first launch must arm a probe deadline, not only a re-probe.
+///
+/// Without one, a `subscribe` or initial sync that never returns leaves the `senders`
+/// entry occupied with nothing to abort it and nothing to wake the timer on its account,
+/// so the `Entry::Vacant` guard skips that validator for the life of the process.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_a_first_launch_arms_a_probe_deadline<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use std::collections::HashMap;
+
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let chain = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+
+    // No senders and no breakers: every validator takes the first-launch path.
+    let mut senders = HashMap::new();
+    let mut breakers = HashMap::new();
+    let tasks = chain
+        .update_notification_streams(&mut senders, &mut breakers)
+        .await?;
+
+    assert!(!tasks.is_empty(), "the update launched nothing to test");
+    assert_eq!(
+        breakers.len(),
+        senders.len(),
+        "every first launch must arm a deadline, or a probe that never resolves is never \
+         aborted and never retried"
+    );
+    for state in breakers.values() {
+        assert!(
+            state.next_probe_at > clock.current_time(),
+            "a first launch must arm its deadline in the future, not in the past"
+        );
+    }
+    Ok(())
+}
+
+/// A sync that stalls after `subscribe` returns must NOT read as a serving validator.
+///
+/// Nothing polls the notification stream until the initial sync returns, so a probe that
+/// subscribed and then stalled is delivering nothing. Recording it as healthy drops its
+/// breaker, and because its `senders` entry stays occupied the validator is then never
+/// probed again — the chain goes deaf exactly as it did in the incident.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_a_stalled_sync_is_not_mistaken_for_a_serving_stream<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use std::collections::HashMap;
+
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let chain = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let stalled = builder.node(0).name();
+
+    // Hold every chain-info query at validator 0, so its probe gets past `subscribe` and
+    // then stops inside `synchronize_chain_state_from`.
+    let _stall = builder.stall_chain_info_queries(0).await;
+
+    let mut senders = HashMap::new();
+    let mut breakers = HashMap::new();
+    let tasks = chain
+        .update_notification_streams(&mut senders, &mut breakers)
+        .await?;
+    // Drive the probe tasks far enough to clear `subscribe` and reach the stalled sync.
+    let mut tasks = futures::stream::FuturesUnordered::from_iter(tasks);
+    let _timed_out: Result<_, _> = tokio::time::timeout(
+        std::time::Duration::from_millis(500),
+        futures::StreamExt::next(&mut tasks),
+    )
+    .await;
+
+    // Walk past the deadline armed at launch and re-evaluate.
+    clock.add(TimeDelta::from_secs(3700));
+    chain
+        .update_notification_streams(&mut senders, &mut breakers)
+        .await?;
+
+    assert!(
+        breakers.contains_key(&stalled),
+        "a validator whose initial sync stalled was recorded as recovered; its senders \
+         entry stays occupied, so nothing re-probes it and the chain stays deaf"
+    );
+    Ok(())
+}
+
+/// A failed update must defer only the probes that are already due.
+///
+/// The failure returns before touching any breaker, so an already-elapsed deadline would
+/// keep winning `min()` and re-fire the timer into the same failing call. Deferring the
+/// rest as well would postpone a probe that is legitimately due sooner — which is what
+/// taking the `min` over the probe and retry deadlines exists to avoid.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_a_failed_update_defers_only_the_due_probes<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use std::collections::HashMap;
+
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let chain = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let due = builder.node(0).name();
+    let soon = builder.node(1).name();
+
+    let now = clock.current_time();
+    let retry = now.saturating_add(TimeDelta::from_secs(300));
+    let soon_at = now.saturating_add(TimeDelta::from_secs(10));
+    let interval = std::time::Duration::from_secs(600);
+    let mut breakers = HashMap::from([
+        (
+            due,
+            CircuitBreakerState {
+                next_probe_at: now,
+                probe_interval: interval,
+            },
+        ),
+        (
+            soon,
+            CircuitBreakerState {
+                next_probe_at: soon_at,
+                probe_interval: interval,
+            },
+        ),
+    ]);
+
+    chain.defer_due_probes(&mut breakers, retry);
+
+    assert_eq!(
+        breakers[&due].next_probe_at, retry,
+        "an already-due probe must be deferred, or the timer re-fires into the same \
+         failing call"
+    );
+    assert_eq!(
+        breakers[&soon].next_probe_at, soon_at,
+        "a probe due BEFORE the retry deadline must be left alone; deferring it too makes \
+         taking the min of the two deadlines a no-op and postpones the repair"
+    );
+    Ok(())
 }

@@ -14,7 +14,7 @@ use async_trait::async_trait;
 use futures::{
     future::Either,
     lock::{Mutex, MutexGuard},
-    stream, Future,
+    stream, Future, StreamExt as _,
 };
 use linera_base::{
     crypto::{
@@ -110,6 +110,9 @@ where
     public_key: ValidatorPublicKey,
     client: Arc<Mutex<LocalValidator<S>>>,
     fault_type: FaultType,
+    /// Held open for reading by every chain-info query. A test takes the write lock to
+    /// stall the initial sync a probe runs after `subscribe` has already succeeded.
+    chain_info_gate: Arc<tokio::sync::RwLock<()>>,
 }
 
 impl<S> ValidatorNode for LocalValidatorClient<S>
@@ -352,6 +355,7 @@ where
             public_key,
             client: Arc::new(Mutex::new(client)),
             fault_type: FaultType::Honest,
+            chain_info_gate: Arc::default(),
         }
     }
 
@@ -523,6 +527,8 @@ where
         query: ChainInfoQuery,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
+        let gate = self.chain_info_gate.clone();
+        let _open = gate.read().await;
         let validator = self.client.lock().await;
         let result = match self.fault_type {
             FaultType::Offline => Err(NodeError::ClientIoError {
@@ -561,6 +567,15 @@ where
         }
         let rx = validator.notifier.subscribe(chains);
         let (stream, abort) = stream::abortable(UnboundedReceiverStream::new(rx));
+        // Marking the handle aborted when the client merely DROPS its end is what makes
+        // the prune below see the real set: a dropped stream is never aborted by anyone,
+        // so without this the vec grows across every re-subscribe and
+        // `disconnect_notification_subscribers` walks handles nobody holds.
+        let abort_on_drop = AbortOnDrop(abort.clone());
+        let stream = stream.map(move |notification| {
+            let _abort_on_drop = &abort_on_drop;
+            notification
+        });
         validator
             .notification_stream_aborts
             .retain(|abort| !abort.is_aborted());
@@ -802,6 +817,39 @@ where
     }
 }
 
+/// Polls `condition` until it holds, or gives up after `timeout` of real time.
+///
+/// The probe-timer tests drive a simulated clock but still have to let a spawned listener
+/// run; waiting on an observable counter rather than a fixed sleep keeps them from failing
+/// as "never repaired" on a loaded runner, where the real work is a `subscribe` plus a
+/// full sync against the storage backend under test.
+pub async fn wait_until<F, Fut>(timeout: Duration, mut condition: F) -> bool
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = bool>,
+{
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        if condition().await {
+            return true;
+        }
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+/// Aborts its handle when dropped, so a notification stream the client lets go of is
+/// distinguishable from one that is still held.
+struct AbortOnDrop(stream::AbortHandle);
+
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
 /// A [`ValidatorNodeProvider`] holding the in-process test validator clients.
 #[derive(Clone)]
 pub struct NodeProvider<S>
@@ -820,6 +868,17 @@ where
 {
     fn all_nodes(&self) -> Vec<LocalValidatorClient<S>> {
         self.clients.lock().unwrap().clone()
+    }
+
+    /// The same validators, with a private failure counter. The validators' own export
+    /// tasks resolve each other through a provider too, so without this they would race
+    /// the chain client for injected failures and a test could pass without ever failing
+    /// the update it names.
+    fn without_failure_injection(&self) -> Self {
+        Self {
+            clients: self.clients.clone(),
+            failures_left: Arc::default(),
+        }
     }
 }
 
@@ -1119,7 +1178,7 @@ where
             if let Some(export_config) = block_export.clone() {
                 let handle = crate::spawn_block_export_queue(
                     storage.clone(),
-                    Arc::new(node_provider.clone()),
+                    Arc::new(node_provider.without_failure_injection()),
                     export_config,
                     Some(validator_public_key),
                 );
@@ -1186,6 +1245,19 @@ where
         self.node_provider
             .failures_left
             .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Stalls every chain-info query at the validator at `index` until the returned guard
+    /// is dropped, which stalls the initial sync a probe runs once `subscribe` succeeds.
+    pub async fn stall_chain_info_queries(
+        &self,
+        index: usize,
+    ) -> tokio::sync::OwnedRwLockWriteGuard<()> {
+        self.node_provider.all_nodes()[index]
+            .chain_info_gate
+            .clone()
+            .write_owned()
+            .await
     }
 
     /// How many times the validator at `index` has been asked to `subscribe`.
