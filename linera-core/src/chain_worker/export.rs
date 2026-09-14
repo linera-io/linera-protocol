@@ -2137,6 +2137,20 @@ pub(crate) struct SharedStream<N: ValidatorNode> {
     unsupported: Arc<std::sync::atomic::AtomicBool>,
 }
 
+/// Whether an error means the stream itself is finished, rather than one certificate refused.
+///
+/// `PushRefused` is deliberately absent: it arrives as a well-formed answer, which proves the
+/// stream is alive. Discarding on it would let one chain's refusal tear down a stream every other
+/// chain on it is still using — the whole point of carrying many chains on one stream.
+fn ends_the_stream(error: &NodeError) -> bool {
+    matches!(
+        error,
+        NodeError::PushStreamUnsupported
+            | NodeError::PushStreamClosed
+            | NodeError::GrpcError { .. }
+    )
+}
+
 impl<N: ValidatorNode> Clone for SharedStream<N> {
     fn clone(&self) -> Self {
         Self {
@@ -2461,18 +2475,13 @@ where
             Ok(result) => result,
             Err(_) => Err(NodeError::PushStreamClosed),
         };
-        // Any transport-level refusal means this stream is finished, not just a closed one: a
-        // peer that killed it mid-run answers with whatever status it chose, and leaving it
-        // installed would fail every later run against a stream nobody is reading.
-        match &result {
-            Err(NodeError::PushStreamUnsupported) => {
+        if let Err(error) = &result {
+            if matches!(error, NodeError::PushStreamUnsupported) {
                 self.stream.latch_unsupported();
+            }
+            if ends_the_stream(error) {
                 self.stream.discard(&stream).await;
             }
-            Err(NodeError::PushStreamClosed | NodeError::GrpcError { .. }) => {
-                self.stream.discard(&stream).await;
-            }
-            _ => {}
         }
         result
     }
@@ -2573,6 +2582,36 @@ mod tests {
     use linera_base::crypto::CryptoHash;
 
     use super::*;
+
+    /// A refused certificate must not discard the stream that carried it.
+    ///
+    /// One stream carries every chain going to a destination, so treating an in-band refusal as a
+    /// transport failure stops export for all of them — the blast radius this design exists to
+    /// avoid, just moved to the sender. Adding `PushRefused` to `ends_the_stream` makes this fail.
+    #[test]
+    fn only_a_transport_failure_ends_the_stream() {
+        for fatal in [
+            NodeError::PushStreamUnsupported,
+            NodeError::PushStreamClosed,
+            NodeError::GrpcError {
+                error: "the connection dropped".to_string(),
+            },
+        ] {
+            assert!(ends_the_stream(&fatal), "{fatal} must discard the stream");
+        }
+        for survivable in [
+            NodeError::PushRefused {
+                error: "the shard is not keeping up with the stream".to_string(),
+            },
+            NodeError::BlobsNotFound(vec![]),
+            NodeError::EmptyCertificateRun,
+        ] {
+            assert!(
+                !ends_the_stream(&survivable),
+                "{survivable} answers one certificate and must leave the stream installed",
+            );
+        }
+    }
 
     /// Every rejection in `check()` guards a distinct failure mode, so each invalid field must be
     /// caught on its own — including `max_retry_delay`, whose zero used to slip through and turn

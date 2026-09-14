@@ -50,7 +50,7 @@ fn refuse(
         attempt: request.attempt,
         result: Some(api::ChainInfoResult {
             inner: Some(api::chain_info_result::Inner::Error(
-                bincode::serialize(&NodeError::GrpcError {
+                bincode::serialize(&NodeError::PushRefused {
                     error: error.to_string(),
                 })
                 .expect("a `NodeError` always serializes"),
