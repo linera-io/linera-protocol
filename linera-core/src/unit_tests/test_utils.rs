@@ -804,16 +804,22 @@ where
 
 /// A [`ValidatorNodeProvider`] holding the in-process test validator clients.
 #[derive(Clone)]
-pub struct NodeProvider<S>(Arc<std::sync::Mutex<Vec<LocalValidatorClient<S>>>>)
+pub struct NodeProvider<S>
 where
-    S: Storage;
+    S: Storage,
+{
+    clients: Arc<std::sync::Mutex<Vec<LocalValidatorClient<S>>>>,
+    /// How many further calls to build the validator set must fail, so a test can make
+    /// `update_notification_streams` return `Err` at a chosen moment.
+    failures_left: Arc<std::sync::atomic::AtomicUsize>,
+}
 
 impl<S> NodeProvider<S>
 where
     S: Storage + Clone,
 {
     fn all_nodes(&self) -> Vec<LocalValidatorClient<S>> {
-        self.0.lock().unwrap().clone()
+        self.clients.lock().unwrap().clone()
     }
 }
 
@@ -834,7 +840,20 @@ where
     where
         A: AsRef<str>,
     {
-        let list = self.0.lock().unwrap();
+        if self
+            .failures_left
+            .fetch_update(
+                std::sync::atomic::Ordering::Relaxed,
+                std::sync::atomic::Ordering::Relaxed,
+                |n| n.checked_sub(1),
+            )
+            .is_ok()
+        {
+            return Err(NodeError::CannotResolveValidatorAddress {
+                address: "injected failure".to_string(),
+            });
+        }
+        let list = self.clients.lock().unwrap();
         Ok(validators
             .into_iter()
             .map(|(public_key, address)| {
@@ -858,7 +877,10 @@ where
     where
         T: IntoIterator<Item = LocalValidatorClient<S>>,
     {
-        Self(Arc::new(std::sync::Mutex::new(iter.into_iter().collect())))
+        Self {
+            clients: Arc::new(std::sync::Mutex::new(iter.into_iter().collect())),
+            failures_left: Arc::default(),
+        }
     }
 }
 
@@ -1071,7 +1093,10 @@ where
         let initial_committee = Committee::make_simple(for_committee);
         // Created up front and filled in below, so that each validator's export tasks can resolve
         // the others through it even though those clients do not exist yet.
-        let node_provider = NodeProvider(Arc::new(std::sync::Mutex::new(Vec::new())));
+        let node_provider = NodeProvider {
+            clients: Arc::new(std::sync::Mutex::new(Vec::new())),
+            failures_left: Arc::default(),
+        };
         let mut validator_storages = HashMap::new();
         let mut validator_key_pairs = HashMap::new();
         let mut faulty_validators = HashSet::new();
@@ -1105,7 +1130,7 @@ where
                 faulty_validators.insert(validator_public_key);
                 validator.set_fault_type(FaultType::NoChains);
             }
-            node_provider.0.lock().unwrap().push(validator);
+            node_provider.clients.lock().unwrap().push(validator);
             validator_storages.insert(validator_public_key, storage);
             validator_key_pairs.insert(validator_public_key, secret_key_copy);
         }
@@ -1138,13 +1163,29 @@ where
 
     /// Sets the cross-chain message chunk limit on every validator in the test setup.
     pub fn with_cross_chain_message_chunk_limit(self, limit: usize) -> Self {
-        let validator_clients = self.node_provider.0.lock().unwrap();
+        let validator_clients = self.node_provider.clients.lock().unwrap();
         for validator in validator_clients.iter() {
             let mut inner = validator.client.try_lock().expect("no contention at setup");
             inner.state.set_cross_chain_message_chunk_limit(limit);
         }
         drop(validator_clients);
         self
+    }
+
+    /// Makes the next `count` attempts to build the validator set fail, so a test can
+    /// force `update_notification_streams` to return `Err` at a chosen moment.
+    pub fn fail_next_validator_set_builds(&self, count: usize) {
+        self.node_provider
+            .failures_left
+            .store(count, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// How many of the injected validator-set-build failures are still pending, so a
+    /// test can count how often a failing update was retried.
+    pub fn validator_set_build_failures_left(&self) -> usize {
+        self.node_provider
+            .failures_left
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// How many times the validator at `index` has been asked to `subscribe`.
@@ -1167,7 +1208,7 @@ where
     /// if no validator with that key is in the test setup.
     pub fn fault_type(&self, public_key: &ValidatorPublicKey) -> Option<FaultType> {
         self.node_provider
-            .0
+            .clients
             .lock()
             .unwrap()
             .iter()
@@ -1178,7 +1219,7 @@ where
     /// Sets the [`FaultType`] for the validators at the given indexes.
     pub fn set_fault_type(&mut self, indexes: impl AsRef<[usize]>, fault_type: FaultType) {
         let mut faulty_validators = vec![];
-        let mut validator_clients = self.node_provider.0.lock().unwrap();
+        let mut validator_clients = self.node_provider.clients.lock().unwrap();
         for index in indexes.as_ref() {
             let validator = &mut validator_clients[*index];
             validator.set_fault_type(fault_type);
@@ -1313,7 +1354,7 @@ where
 
     /// Returns a clone of the validator client at the given index.
     pub fn node(&mut self, index: usize) -> LocalValidatorClient<B::Storage> {
-        self.node_provider.0.lock().unwrap()[index].clone()
+        self.node_provider.clients.lock().unwrap()[index].clone()
     }
 
     /// Builds a fresh storage seeded with the network description and genesis chains.

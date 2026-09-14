@@ -6035,15 +6035,90 @@ where
     Ok(())
 }
 
-/// A failed update at listener startup must still arm the retry deadline.
+/// A failed update must not cost the listener its timer — at startup or on a probe wake.
 ///
-/// `ChainListener` calls `listen()` once per chain and never again, so a transient
-/// committee-read failure that leaves no streams, no breakers and no timer is an
-/// absorbing state: nothing wakes the loop, because the only remaining `select!` arm
-/// needs a `NewBlock` that can arrive only over streams that were never created.
+/// `ChainListener` calls `listen()` once per chain and never again, and the failure is
+/// correlated with the outage it has to recover from: `local_committee()` falls back to
+/// `synchronize_chain_state()`, which needs a quorum of the very validators that are
+/// down. So both a failed FIRST update (no streams, no breakers, nothing armed) and a
+/// failure on a probe wake-up (deadlines left in the past, and a `Fuse` that has already
+/// fired) are absorbing states unless the retry deadline is armed and the timer rebuilt.
+///
+/// Drives the real path rather than the arithmetic: the validator set fails to build for
+/// the first two attempts, so the startup update and its first retry both error.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[test_log::test(tokio::test)]
-async fn test_failed_startup_update_arms_the_retry_deadline<B>(
+async fn test_failed_update_still_leaves_a_timer_armed<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let chain = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let observer = builder
+        .make_client(chain.chain_id(), None, BlockHeight::ZERO)
+        .await?;
+
+    // Fail the startup update and the retry that follows it. Nothing subscribes.
+    builder.fail_next_validator_set_builds(2);
+    let (listener, _listen_handle, _) = observer.listen().await?;
+    tokio::spawn(listener);
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    assert_eq!(
+        builder.subscribe_calls(0).await,
+        0,
+        "the injected failures should have prevented every subscribe"
+    );
+
+    // Let the retries succeed, so streams come up and the breakers clear.
+    for _ in 0..10 {
+        clock.add(TimeDelta::from_secs(400));
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+        if builder.subscribe_calls(0).await > 0 {
+            break;
+        }
+    }
+    assert!(
+        builder.subscribe_calls(0).await > 0,
+        "the listener never subscribed after its startup update failed: nothing armed a \
+         timer, and an idle chain with no streams can produce neither a notification nor \
+         a stream death"
+    );
+
+    // Now the second absorbing state. Sever every stream so each validator gets a breaker
+    // with a real deadline, then make the update that fires at that deadline fail. The
+    // update returns before touching any breaker, so those deadlines stay in the past and
+    // keep winning the `min()` — and the timer that just fired is a `Fuse`, which
+    // `select!` skips in silence once terminated.
+    builder.disconnect_notification_subscribers().await;
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    let before = builder.subscribe_calls(0).await;
+    builder.fail_next_validator_set_builds(1);
+    for _ in 0..12 {
+        clock.add(TimeDelta::from_secs(400));
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+        if builder.subscribe_calls(0).await > before {
+            return Ok(());
+        }
+    }
+    panic!(
+        "the listener stopped waking after an update failed on a probe deadline: the \
+         stale deadlines it did not touch keep winning min(), so the rebuilt timer would \
+         fire into the same failing call — and an unrebuilt one never fires again"
+    );
+}
+
+/// A persistently failing update must be PACED by the retry deadline, not retried as fast
+/// as the loop can spin.
+///
+/// The update returns before touching any breaker, so a deadline that has already elapsed
+/// is still elapsed afterwards. Waking on it again immediately turns an outage into a hot
+/// loop against `local_committee`/`synchronize_chain_state` — the very calls that are
+/// failing, and which reach the validators that are down.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_a_failing_update_is_paced_by_the_retry_deadline<B>(
     storage_builder: B,
 ) -> anyhow::Result<()>
 where
@@ -6053,11 +6128,36 @@ where
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
     let chain = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let observer = builder
+        .make_client(chain.chain_id(), None, BlockHeight::ZERO)
+        .await?;
+    let (listener, _listen_handle, _) = observer.listen().await?;
+    tokio::spawn(listener);
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
-    let deadline = chain.retry_update_deadline();
+    // Sever every stream so each validator carries a breaker with a real deadline, then
+    // make every subsequent update fail.
+    builder.disconnect_notification_subscribers().await;
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    let budget = 10_000;
+    builder.fail_next_validator_set_builds(budget);
+
+    // One simulated step past the deadline, then real time with the clock held still.
+    // Paced, the failure pushes its deadline into the simulated future and the loop
+    // sleeps; unpaced, it re-fires on the same elapsed deadline continuously.
+    clock.add(TimeDelta::from_secs(400));
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let attempts = budget - builder.validator_set_build_failures_left();
+
     assert!(
-        deadline > clock.current_time(),
-        "the retry deadline must be in the future, otherwise a failed update spins"
+        attempts >= 1,
+        "the failing update was never attempted, so this test proves nothing"
+    );
+    assert!(
+        attempts < 50,
+        "the failing update was retried {attempts} times against a clock that never moved: \
+         a stale elapsed deadline is re-winning min() on every pass, so an outage becomes a \
+         hot loop against the calls that are already failing"
     );
     Ok(())
 }

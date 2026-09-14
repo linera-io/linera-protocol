@@ -3365,8 +3365,15 @@ impl<Env: Environment> ChainClient<Env> {
                         // a probe gets scheduled even if this chain never produces
                         // another block.
                         _ = process_notifications.select_next_some() => true,
-                        // A circuit-breaker probe is due.
-                        _ = probe_due => true,
+                        // A circuit-breaker probe is due. Clear the armed deadline so
+                        // the timer is rebuilt below: it is a `Fuse` that has now
+                        // completed, and `select!` skips terminated arms in silence, so
+                        // leaving it in place when the recomputed deadline happens to be
+                        // unchanged would cost the listener its only timer wake-up.
+                        _ = probe_due => {
+                            armed_probe_at = None;
+                            true
+                        }
                     };
                     if !update_now {
                         continue;
@@ -3389,7 +3396,17 @@ impl<Env: Environment> ChainClient<Env> {
                             }
                             Err(error) => {
                                 error!("Failed to update committee: {error}");
-                                retry_update_at = Some(this.retry_update_deadline());
+                                // The update returns before touching any breaker, so every
+                                // deadline it would have advanced is still in the past and
+                                // would keep winning `min()` below, re-firing the timer into
+                                // the same failing call. Push them out to the retry.
+                                let retry = this.retry_update_deadline();
+                                for state in circuit_breakers.values_mut() {
+                                    if state.next_probe_at < retry {
+                                        state.next_probe_at = retry;
+                                    }
+                                }
+                                retry_update_at = Some(retry);
                                 break;
                             }
                         }
