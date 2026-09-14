@@ -16,6 +16,7 @@
 //! reading, the pump stops writing, which closes the HTTP/2 window back to the original sender.
 
 use futures::StreamExt as _;
+use linera_core::node::NodeError;
 use linera_rpc::grpc::api::{
     self, validator_node_client::ValidatorNodeClient,
     validator_worker_client::ValidatorWorkerClient,
@@ -31,16 +32,39 @@ const PUMP_QUEUE: usize = 256;
 /// The merged answers flowing back to whoever opened the stream.
 pub type ResponseStream = ReceiverStream<Result<api::PushCertificateResponse, Status>>;
 
+/// Answers one certificate with an error, so a shard's failure costs that certificate and not
+/// every other chain the stream is carrying.
+///
+/// Needs no decoding: the sender names the chain and height on the request for exactly this.
+fn refuse(request: &api::PushCertificateRequest, error: &str) -> api::PushCertificateResponse {
+    api::PushCertificateResponse {
+        chain_id: request.chain_id.clone(),
+        height: request.height,
+        attempt: request.attempt,
+        result: Some(api::ChainInfoResult {
+            inner: Some(api::chain_info_result::Inner::Error(
+                bincode::serialize(&NodeError::GrpcError {
+                    error: error.to_string(),
+                })
+                .expect("a `NodeError` always serializes"),
+            )),
+        }),
+    }
+}
+
 /// Fans a sender's single push stream out across the shards owning the chains it carries, and
 /// merges their answers back onto one stream.
-pub fn demultiplex<F>(
+pub fn demultiplex<K, C, S>(
     mut certificates: Streaming<api::PushCertificateRequest>,
-    shard_client: F,
+    shard_of: K,
+    connect: C,
 ) -> ResponseStream
 where
-    F: Fn(&api::PushCertificateRequest) -> Result<(String, ValidatorWorkerClient<Channel>), Status>
-        + Send
-        + 'static,
+    // Split so the per-certificate cost is only the routing key: building a client is what the
+    // second closure does, and it runs once per shard rather than once per certificate.
+    K: Fn(&api::PushCertificateRequest) -> Result<(String, S), Status> + Send + 'static,
+    C: Fn(&S) -> Result<ValidatorWorkerClient<Channel>, Status> + Send + 'static,
+    S: Send + 'static,
 {
     let (responses, response_receiver) = mpsc::channel(PUMP_QUEUE);
     tokio::spawn(async move {
@@ -59,25 +83,45 @@ where
             };
             // Keyed by the shard's address, which is what makes every chain living on one shard
             // share a single outbound stream rather than opening one stream per chain.
-            let (key, mut client) = match shard_client(&request) {
+            let (key, shard) = match shard_of(&request) {
                 Ok(shard) => shard,
+                // One unroutable certificate, not the whole stream: this carries every chain
+                // going to this validator, and the shard side states the same rule.
                 Err(status) => {
-                    responses.send(Err(status)).await.ok();
-                    break;
+                    let answer = refuse(&request, status.message());
+                    if responses.send(Ok(answer)).await.is_err() {
+                        break;
+                    }
+                    continue;
                 }
             };
             let sender = match shards.get(&key) {
                 Some(sender) if !sender.is_closed() => sender.clone(),
                 _ => {
+                    let mut client = match connect(&shard) {
+                        Ok(client) => client,
+                        Err(status) => {
+                            let answer = refuse(&request, status.message());
+                            if responses.send(Ok(answer)).await.is_err() {
+                                break;
+                            }
+                            continue;
+                        }
+                    };
                     let (sender, receiver) = mpsc::channel(PUMP_QUEUE);
                     let outbound = match client
                         .push_confirmed_certificates(ReceiverStream::new(receiver))
                         .await
                     {
                         Ok(outbound) => outbound.into_inner(),
+                        // A shard we cannot reach fails its own certificates; the shards that
+                        // are up keep serving theirs.
                         Err(status) => {
-                            responses.send(Err(status)).await.ok();
-                            break;
+                            let answer = refuse(&request, status.message());
+                            if responses.send(Ok(answer)).await.is_err() {
+                                break;
+                            }
+                            continue;
                         }
                     };
                     tokio::spawn(pump_responses(outbound, responses.clone()));
@@ -90,15 +134,12 @@ where
             // that carrying many chains on one stream exists to avoid.
             match sender.try_send(request) {
                 Ok(()) => {}
-                Err(mpsc::error::TrySendError::Full(_)) => {
-                    warn!("A shard is not keeping up with the push stream; ending it");
-                    responses
-                        .send(Err(Status::resource_exhausted(
-                            "a shard is not keeping up with the certificate push stream",
-                        )))
-                        .await
-                        .ok();
-                    break;
+                Err(mpsc::error::TrySendError::Full(request)) => {
+                    warn!(%key, "A shard is not keeping up with the push stream");
+                    let answer = refuse(&request, "the shard is not keeping up with the stream");
+                    if responses.send(Ok(answer)).await.is_err() {
+                        break;
+                    }
                 }
                 Err(mpsc::error::TrySendError::Closed(_)) => {
                     warn!("A shard's push stream closed; dropping it");

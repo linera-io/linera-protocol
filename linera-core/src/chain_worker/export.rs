@@ -2161,23 +2161,24 @@ impl<N: ValidatorNode> SharedStream<N> {
         if self.unsupported.load(std::sync::atomic::Ordering::Relaxed) {
             return Err(NodeError::PushStreamUnsupported);
         }
-        let mut guard = self.stream.lock().await;
-        match guard.as_ref() {
-            Some(stream) => Ok(stream.clone()),
-            None => match node.open_push_stream().await {
-                Ok(opened) => {
-                    let opened = Arc::new(opened);
-                    *guard = Some(opened.clone());
-                    Ok(opened)
-                }
-                Err(NodeError::PushStreamUnsupported) => {
-                    self.unsupported
-                        .store(true, std::sync::atomic::Ordering::Relaxed);
-                    Err(NodeError::PushStreamUnsupported)
-                }
-                Err(error) => Err(error),
-            },
+        if let Some(stream) = self.stream.lock().await.as_ref() {
+            return Ok(stream.clone());
         }
+        // Opened WITHOUT the lock. Holding it across a dial that nothing bounds would queue every
+        // other in-flight job for this destination behind one connect, each still holding the
+        // in-flight slot it is occupying. The cost is that two jobs can dial at once; the loser
+        // drops its stream below, which is cheaper than serialising all of them.
+        let opened = match node.open_push_stream().await {
+            Ok(opened) => Arc::new(opened),
+            Err(NodeError::PushStreamUnsupported) => {
+                self.unsupported
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+                return Err(NodeError::PushStreamUnsupported);
+            }
+            Err(error) => return Err(error),
+        };
+        let mut guard = self.stream.lock().await;
+        Ok(guard.get_or_insert(opened).clone())
     }
 
     /// Marks this destination as one that does not serve the stream, so later runs go straight
@@ -2308,11 +2309,12 @@ where
                 }
                 let (run, remaining) = rest.split_at(take);
                 let reached = self.push_run(run).await?.next_block_height;
-                // A destination that answers without advancing would spin here on the same run;
-                // ending the round hands it to the queue's backoff instead.
+                // Returns rather than breaks: the enclosing `for` would otherwise go on to the
+                // next chunk, whose heights are all above where the destination is stuck, and
+                // push a run that is certain to be refused. Ending the round hands the
+                // destination to the queue's backoff, which is what decides when to try again.
                 if reached <= next_height {
-                    next_height = reached;
-                    break;
+                    return Ok(reached);
                 }
                 next_height = reached;
                 rest = remaining;
@@ -2336,17 +2338,20 @@ where
             .ok_or(NodeError::EmptyCertificateRun)?
             .inner()
             .chain_id();
+        // Narrowed on every resume, so the fallback and the metrics below describe what this pass
+        // actually pushed rather than the run as it was first formed.
+        let mut pending = certificates;
         #[cfg(with_metrics)]
-        let started = linera_base::time::Instant::now();
-        let mut result = self.stream_run(certificates).await;
+        let mut started = linera_base::time::Instant::now();
+        let mut result = self.stream_run(pending).await;
         // The same once-per-cause loop as `send_confirmed_certificate`, over the run: a run stops
         // at the destination's first refusal, so its next `BlobsNotFound` names the *next*
         // certificate's blobs. Recovering once would strand a blob-per-block chain after one of
         // them. Terminates: `required` is finite and every pass uploads at least one new id.
-        let required = certificates
-            .iter()
-            .flat_map(|certificate| certificate.inner().required_blob_ids())
-            .collect::<BTreeSet<_>>();
+        //
+        // Built on first need rather than up front, because the success path never reads it and
+        // would otherwise walk every certificate of the run for nothing.
+        let mut required: Option<BTreeSet<_>> = None;
         let mut uploaded = BTreeSet::new();
         loop {
             match result {
@@ -2354,13 +2359,19 @@ where
                 // That path times and counts each certificate itself, so this arm must not also
                 // time the run or the two would double-count.
                 Err(NodeError::PushStreamUnsupported) => {
-                    return self.push_one_at_a_time(certificates).await;
+                    return self.push_one_at_a_time(pending).await;
                 }
                 Err(NodeError::BlobsNotFound(blob_ids))
                     if blob_ids.iter().any(|id| !uploaded.contains(id)) =>
                 {
+                    let required = required.get_or_insert_with(|| {
+                        certificates
+                            .iter()
+                            .flat_map(|certificate| certificate.inner().required_blob_ids())
+                            .collect()
+                    });
                     self.remote_node
-                        .check_blobs_not_found(&required, &blob_ids)?;
+                        .check_blobs_not_found(required, &blob_ids)?;
                     let blobs = self.resolve_blobs(&blob_ids, &[]).await?;
                     self.remote_node
                         .node
@@ -2374,7 +2385,7 @@ where
                     #[cfg(with_metrics)]
                     metrics::CERTIFICATES_PUSHED
                         .with_label_values(&[&self.address])
-                        .inc_by(certificates.len() as u64);
+                        .inc_by(pending.len() as u64);
                     #[cfg(with_metrics)]
                     metrics::RUN_LATENCY
                         .with_label_values(&[&self.address])
@@ -2391,12 +2402,19 @@ where
                 .await
                 .map(|info| info.next_block_height)
                 .unwrap_or(BlockHeight::ZERO);
-            let remaining = certificates
-                .partition_point(|certificate| certificate.block().header.height < resume);
-            if remaining >= certificates.len() {
+            let remaining =
+                pending.partition_point(|certificate| certificate.block().header.height < resume);
+            if remaining >= pending.len() {
                 break;
             }
-            result = self.stream_run(&certificates[remaining..]).await;
+            pending = &pending[remaining..];
+            // Reset here so the metric times the streamed run it documents, not the chain-info
+            // query, storage read and blob upload this recovery pass also performed.
+            #[cfg(with_metrics)]
+            {
+                started = linera_base::time::Instant::now();
+            }
+            result = self.stream_run(pending).await;
         }
         let info = self
             .remote_node
@@ -2405,11 +2423,10 @@ where
         Ok(info)
     }
 
-    /// Sends the run one certificate at a time, as catch-up did before streaming.
+    /// Sends the run one certificate at a time, for a destination with no stream.
     ///
     /// Each answer moves the cursor, so a certificate the destination has since reported holding
-    /// is skipped rather than re-sent — the rule the per-certificate loop this replaces applied,
-    /// and without it a destination that raced ahead is handed blocks it already has.
+    /// is skipped: without that, a destination that raced ahead is handed blocks it already has.
     async fn push_one_at_a_time(
         &mut self,
         certificates: &[CacheArc<ConfirmedBlockCertificate>],

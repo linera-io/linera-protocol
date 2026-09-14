@@ -769,15 +769,18 @@ where
         let this = self.clone();
         Ok(Response::new(crate::push_relay::demultiplex(
             request.into_inner(),
-            move |certificate| {
-                let shard = this
-                    .shard_for(certificate)
-                    .ok_or_else(|| Status::invalid_argument("missing chain id"))?;
-                let address = shard.http_address();
-                let client = this
-                    .worker_client_for_shard(&shard)
-                    .map_err(|error| Status::unavailable(error.to_string()))?;
-                Ok((address, client))
+            {
+                let this = this.clone();
+                move |certificate| {
+                    let shard = this
+                        .shard_for(certificate)
+                        .ok_or_else(|| Status::invalid_argument("missing chain id"))?;
+                    Ok((shard.http_address(), shard))
+                }
+            },
+            move |shard| {
+                this.worker_client_for_shard(shard)
+                    .map_err(|error| Status::unavailable(error.to_string()))
             },
         )))
     }
