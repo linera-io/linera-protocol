@@ -441,6 +441,16 @@ message PushCertificateRequest {
 
   // Whether the sender understands the aggregated `MissingCrossChainUpdates` error.
   bool supports_aggregated_missing = 3;
+
+  // The certificate's height, so a proxy can answer this message without decoding the certificate.
+  BlockHeight height = 4;
+
+  // Which attempt of a run this belongs to, unique per stream and shared by the run's messages.
+  //
+  // A run stops at the destination's first refusal, so everything after it in the same attempt is
+  // unlandable and must not be applied. It also lets a sender discard answers from an attempt it
+  // has already given up on, which is what keeps a stale answer from resolving the retry.
+  uint64 attempt = 5;
 }
 
 // The outcome of one pushed certificate.
@@ -451,6 +461,9 @@ message PushCertificateResponse {
   ChainId chain_id = 1;
   BlockHeight height = 2;
   ChainInfoResult result = 3;
+
+  // Echoed from the request it answers, so a sender can tell it apart from an earlier attempt's.
+  uint64 attempt = 4;
 }
 
 // A request for a pending blob.

@@ -14,11 +14,14 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
 };
 
 use futures::{Stream, StreamExt as _};
-use linera_base::{data_types::BlockHeight, identifiers::ChainId};
+use linera_base::{data_types::BlockHeight, identifiers::ChainId, task::Task};
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::{
     data_types::ChainInfoResponse,
@@ -38,13 +41,19 @@ const WRITE_QUEUE: usize = PUSH_WINDOW;
 /// What a caller is waiting for: the answer to one chain's certificate at one height.
 type Waiter = oneshot::Sender<Result<ChainInfoResponse, NodeError>>;
 
-/// Who is waiting for which chain's answer, and at what height.
-type Waiters = Arc<Mutex<HashMap<ChainId, Vec<(BlockHeight, Waiter)>>>>;
+/// Who is waiting for which chain's answer, at what height, and for which attempt.
+type Waiters = Arc<Mutex<HashMap<ChainId, Vec<(u64, BlockHeight, Waiter)>>>>;
 
 /// A live push stream to one validator.
 pub struct PushStream {
     certificates: mpsc::Sender<api::PushCertificateRequest>,
     waiters: Waiters,
+    /// Stamped on every message of a run, so the receiver can drop the tail of a run it refused
+    /// and the sender can drop answers from an attempt it has given up on.
+    attempts: AtomicU64,
+    /// Held, not detached: [`Task`] cancels on drop, so letting this go would stop routing answers
+    /// and hang every waiter until its push timeout.
+    _router: Task<()>,
 }
 
 impl PushStream {
@@ -60,10 +69,15 @@ impl PushStream {
             + 'static,
     ) -> Self {
         let waiters = Arc::new(Mutex::new(HashMap::new()));
-        tokio::spawn(route_responses(responses, waiters.clone()));
+        // `linera_base::task`, not `tokio::spawn`: this module is compiled for wasm32 — unlike
+        // `push_stream`, it is not behind `with_server` — and on web there is no tokio runtime to
+        // spawn onto.
+        let router = Task::spawn(route_responses(responses, waiters.clone()));
         Self {
             certificates,
             waiters,
+            attempts: AtomicU64::new(0),
+            _router: router,
         }
     }
 
@@ -75,6 +89,7 @@ impl PushStream {
         &self,
         chain_id: ChainId,
         height: BlockHeight,
+        attempt: u64,
     ) -> oneshot::Receiver<Result<ChainInfoResponse, NodeError>> {
         let (sender, receiver) = oneshot::channel();
         self.waiters
@@ -82,18 +97,18 @@ impl PushStream {
             .expect("the waiter table is never held across a panic")
             .entry(chain_id)
             .or_default()
-            .push((height, sender));
+            .push((attempt, height, sender));
         receiver
     }
 
     /// Drops a chain's waiter at `height`, so a run that failed to write does not leak one.
-    fn forget(&self, chain_id: ChainId, height: BlockHeight) {
+    fn forget(&self, chain_id: ChainId, height: BlockHeight, attempt: u64) {
         let mut waiters = self
             .waiters
             .lock()
             .expect("the waiter table is never held across a panic");
         if let Some(chain) = waiters.get_mut(&chain_id) {
-            chain.retain(|(waiting, _)| *waiting != height);
+            chain.retain(|(tried, waiting, _)| (*tried, *waiting) != (attempt, height));
             if chain.is_empty() {
                 waiters.remove(&chain_id);
             }
@@ -117,11 +132,20 @@ impl CertificatePushStream for PushStream {
                 length: certificates.len(),
             });
         }
-        let answer = self.expect(chain_id, height);
+        let attempt = self.attempts.fetch_add(1, Ordering::Relaxed);
+        let answer = self.expect(chain_id, height, attempt);
         for certificate in &certificates {
-            let request = push_certificate_request(certificate)?;
+            // Every exit between `expect` and the last write has to forget the waiter, or a later
+            // answer for this chain fires a dead `oneshot` and the entry outlives the stream.
+            let request = match push_certificate_request(certificate, attempt) {
+                Ok(request) => request,
+                Err(error) => {
+                    self.forget(chain_id, height, attempt);
+                    return Err(error.into());
+                }
+            };
             if self.certificates.send(request).await.is_err() {
-                self.forget(chain_id, height);
+                self.forget(chain_id, height, attempt);
                 return Err(NodeError::PushStreamClosed);
             }
         }
@@ -162,7 +186,7 @@ async fn route_responses(
         let Some(answered) = read_answer(response) else {
             continue;
         };
-        let (chain_id, height, result) = answered;
+        let (chain_id, height, attempt, result) = answered;
         let failed = result.is_err();
         let woken = {
             let mut table = waiters
@@ -171,17 +195,19 @@ async fn route_responses(
             let Some(chain) = table.get_mut(&chain_id) else {
                 continue;
             };
-            let (woken, waiting): (Vec<_>, Vec<_>) =
-                chain
-                    .drain(..)
-                    .partition(|(at, _)| if failed { *at >= height } else { *at <= height });
+            // Only this attempt's waiter can be woken. An answer left over from an attempt the
+            // sender has already abandoned names heights that look current, and without this it
+            // would resolve the retry's waiter with the previous attempt's outcome.
+            let (woken, waiting): (Vec<_>, Vec<_>) = chain.drain(..).partition(|(tried, at, _)| {
+                *tried == attempt && if failed { *at >= height } else { *at <= height }
+            });
             *chain = waiting;
             if chain.is_empty() {
                 table.remove(&chain_id);
             }
             woken
         };
-        for (_, waiter) in woken {
+        for (_, _, waiter) in woken {
             waiter.send(result.clone()).ok();
         }
     }
@@ -192,7 +218,7 @@ async fn route_responses(
             .expect("the waiter table is never held across a panic"),
     );
     for (_, chain) in table {
-        for (_, waiter) in chain {
+        for (_, _, waiter) in chain {
             waiter
                 .send(Err(ended.clone().unwrap_or(NodeError::PushStreamClosed)))
                 .ok();
@@ -203,9 +229,15 @@ async fn route_responses(
 /// Reads one answer, or `None` if it is too malformed to attribute to a waiter.
 fn read_answer(
     response: api::PushCertificateResponse,
-) -> Option<(ChainId, BlockHeight, Result<ChainInfoResponse, NodeError>)> {
+) -> Option<(
+    ChainId,
+    BlockHeight,
+    u64,
+    Result<ChainInfoResponse, NodeError>,
+)> {
     let chain_id = ChainId::try_from(response.chain_id?).ok()?;
     let height = BlockHeight::from(response.height?);
+    let attempt = response.attempt;
     let result = match response.result?.inner? {
         api::chain_info_result::Inner::ChainInfoResponse(info) => {
             info.try_into().map_err(|error| NodeError::GrpcError {
@@ -219,7 +251,7 @@ fn read_answer(
                 error: format!("failed to unmarshal error message: {error}"),
             })),
     };
-    Some((chain_id, height, result))
+    Some((chain_id, height, attempt, result))
 }
 
 /// The write half handed to a transport, plus the queue it drains.
@@ -254,6 +286,11 @@ mod tests {
     }
 
     fn answer(chain_id: ChainId, height: u64) -> api::PushCertificateResponse {
+        attempted(chain_id, height, 0)
+    }
+
+    /// The same refusal, but naming which run attempt it answers.
+    fn attempted(chain_id: ChainId, height: u64, attempt: u64) -> api::PushCertificateResponse {
         api::PushCertificateResponse {
             chain_id: Some(chain_id.into()),
             height: Some(BlockHeight(height).into()),
@@ -262,6 +299,7 @@ mod tests {
                     bincode::serialize(&NodeError::PushStreamClosed).expect("serializes"),
                 )),
             }),
+            attempt,
         }
     }
 
@@ -296,6 +334,7 @@ mod tests {
                     response.try_into().expect("converts"),
                 )),
             }),
+            attempt: 0,
         }
     }
 
@@ -306,6 +345,7 @@ mod tests {
             chain_id: Some(chain_id.into()),
             height: Some(BlockHeight(height).into()),
             result: None,
+            attempt: 0,
         }
     }
 
@@ -318,8 +358,8 @@ mod tests {
         let (mut responses, response_stream) = futures_mpsc::unbounded();
         let stream = PushStream::new(certificates, response_stream.map(Ok));
 
-        let first = stream.expect(chain(1), BlockHeight(7));
-        let mut second = stream.expect(chain(2), BlockHeight(7));
+        let first = stream.expect(chain(1), BlockHeight(7), 0);
+        let mut second = stream.expect(chain(2), BlockHeight(7), 0);
 
         responses
             .start_send(answer(chain(1), 7))
@@ -333,6 +373,44 @@ mod tests {
         );
     }
 
+    /// An answer from an attempt the sender has already abandoned must not resolve the retry.
+    ///
+    /// The heights of a retried run overlap the run it replaces, so height alone cannot tell the
+    /// two apart: without the attempt, a stale refusal for a height at-or-above the new waiter
+    /// wakes it with the *previous* attempt's error, and a run that is genuinely in flight is
+    /// reported as failed. Deleting `*tried == attempt` from the partition makes this hang, since
+    /// the stale answer consumes the waiter the live one would have woken.
+    #[test_log::test(tokio::test)]
+    async fn a_stale_attempts_answer_does_not_resolve_the_retry() {
+        let (certificates, _queue) = mpsc::channel(4);
+        let (mut responses, response_stream) = futures_mpsc::unbounded();
+        let stream = PushStream::new(certificates, response_stream.map(Ok));
+
+        // The retry is attempt 1; attempt 0 is the run it replaced, covering the same heights.
+        let retry = stream.expect(chain(1), BlockHeight(20), 1);
+        responses
+            .start_send(attempted(chain(1), 20, 0))
+            .expect("the channel is open");
+
+        // Still waiting: that answer belongs to a run this caller is no longer running.
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(50), retry)
+                .await
+                .is_err(),
+            "an abandoned attempt's answer must not resolve the run that replaced it",
+        );
+
+        // And the waiter is still there for its own attempt, rather than having been consumed.
+        let live = stream.expect(chain(2), BlockHeight(20), 1);
+        responses
+            .start_send(attempted(chain(2), 20, 1))
+            .expect("the channel is open");
+        assert!(
+            live.await.expect("the waiter is still registered").is_err(),
+            "the matching attempt's answer must still be delivered",
+        );
+    }
+
     /// A run is written whole and awaited once, so the answer to its last certificate is what
     /// resolves it — and it must also satisfy anything queued below, or a caller whose
     /// certificates the destination had already applied waits for an answer never coming.
@@ -342,9 +420,9 @@ mod tests {
         let (mut responses, response_stream) = futures_mpsc::unbounded();
         let stream = PushStream::new(certificates, response_stream.map(Ok));
 
-        let below = stream.expect(chain(1), BlockHeight(3));
-        let at = stream.expect(chain(1), BlockHeight(9));
-        let mut above = stream.expect(chain(1), BlockHeight(11));
+        let below = stream.expect(chain(1), BlockHeight(3), 0);
+        let at = stream.expect(chain(1), BlockHeight(9), 0);
+        let mut above = stream.expect(chain(1), BlockHeight(11), 0);
 
         responses
             .start_send(success(chain(1), 9))
@@ -367,7 +445,7 @@ mod tests {
         let (mut responses, response_stream) = futures_mpsc::unbounded();
         let stream = PushStream::new(certificates, response_stream.map(Ok));
 
-        let mut waiting = stream.expect(chain(1), BlockHeight(1));
+        let mut waiting = stream.expect(chain(1), BlockHeight(1), 0);
         responses
             .start_send(unattributable(chain(1), 1))
             .expect("the channel is open");
@@ -391,7 +469,7 @@ mod tests {
         let stream = PushStream::new(certificates, response_stream.map(Ok));
 
         // The caller pushed heights 5..=7, so only 7 has a waiter.
-        let waiting = stream.expect(chain(1), BlockHeight(7));
+        let waiting = stream.expect(chain(1), BlockHeight(7), 0);
 
         let missing = vec![linera_base::identifiers::BlobId::default()];
         responses
@@ -404,6 +482,7 @@ mod tests {
                             .expect("serializes"),
                     )),
                 }),
+                attempt: 0,
             })
             .expect("the channel is open");
 
@@ -421,7 +500,7 @@ mod tests {
         let (responses, response_stream) = futures_mpsc::unbounded();
         let stream = PushStream::new(certificates, response_stream.map(Ok));
 
-        let waiting = stream.expect(chain(1), BlockHeight(1));
+        let waiting = stream.expect(chain(1), BlockHeight(1), 0);
         drop(responses);
 
         assert!(

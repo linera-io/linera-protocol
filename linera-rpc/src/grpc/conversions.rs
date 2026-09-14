@@ -524,12 +524,16 @@ impl TryFrom<api::PushCertificateRequest> for ConfirmedBlockCertificate {
 /// single-certificate path still holds it.
 pub fn push_certificate_request(
     certificate: &ConfirmedBlockCertificate,
+    attempt: u64,
 ) -> Result<api::PushCertificateRequest, GrpcProtoConversionError> {
     Ok(api::PushCertificateRequest {
         chain_id: Some(certificate.inner().chain_id().into()),
+        // Carried beside the certificate so a proxy can answer this message without decoding it.
+        height: Some(certificate.block().header.height.into()),
         certificate: Some(certificate.try_into()?),
         // This binary understands the aggregated `MissingCrossChainUpdates` error.
         supports_aggregated_missing: true,
+        attempt,
     })
 }
 

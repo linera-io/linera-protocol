@@ -54,7 +54,7 @@ type NotificationSender = tokio::sync::broadcast::Sender<Notification>;
 /// they understand the aggregated form, keeping the wire protocol backward compatible. Such a
 /// client only learns about the first missing sender and recovers one rejection at a time, as
 /// before. Capable clients (and all other errors) pass through unchanged.
-fn adapt_dependency_error(error: NodeError, supports_aggregated: bool) -> NodeError {
+pub(crate) fn adapt_dependency_error(error: NodeError, supports_aggregated: bool) -> NodeError {
     if supports_aggregated {
         return error;
     }

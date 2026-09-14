@@ -28,7 +28,10 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Status, Streaming};
 use tracing::{debug, warn};
 
-use super::{api, server::GrpcServer};
+use super::{
+    api,
+    server::{adapt_dependency_error, GrpcServer},
+};
 
 /// Certificates one chain may have queued, and so the most a sender may leave unacknowledged for
 /// it. Sized to cover a round trip at a fast chain's apply rate, so the chain's task is not left
@@ -84,7 +87,7 @@ where
     let inflight = Arc::new(Semaphore::new(STREAM_QUEUE));
 
     tokio::spawn(async move {
-        let mut chains: HashMap<ChainId, mpsc::Sender<Queued>> = HashMap::new();
+        let mut chains: HashMap<ChainId, Chain> = HashMap::new();
         let mut refused_a_chain = false;
         loop {
             // Taken before reading, not after: a permit acquired afterwards would mean the
@@ -100,6 +103,9 @@ where
                     break;
                 }
             };
+            // Read before the conversion consumes the request.
+            let (attempt, supports_aggregated) =
+                (request.attempt, request.supports_aggregated_missing);
             let certificate = match ConfirmedBlockCertificate::try_from(request) {
                 Ok(certificate) => certificate,
                 // A certificate we cannot even read is the sender's bug, and answering it would
@@ -113,9 +119,9 @@ where
                 }
             };
             let chain_id = certificate.inner().chain_id();
-            // Chains whose task has finished are forgotten here rather than accumulating for the
-            // life of the stream.
-            chains.retain(|_, queue| !queue.is_closed());
+            // Chains whose task has RETURNED are forgotten here rather than accumulating for
+            // the life of the stream. Not `is_closed`: see `Chain`.
+            chains.retain(|_, chain| chain.running());
             // Refusing the one certificate, not the stream: ending it here would punish every
             // other chain the stream carries for one peer naming too many at once.
             if !chains.contains_key(&chain_id) && chains.len() >= CHAINS_PER_STREAM {
@@ -135,6 +141,7 @@ where
                         chain_id: Some(chain_id.into()),
                         height: Some(certificate.block().header.height.into()),
                         result: Some(result),
+                        attempt,
                     };
                     if responses.send(Ok(answer)).await.is_err() {
                         break;
@@ -142,24 +149,31 @@ where
                 }
                 continue;
             }
-            let queue = chains.entry(chain_id).or_insert_with(|| {
+            let chain = chains.entry(chain_id).or_insert_with(|| {
                 let (sender, receiver) = mpsc::channel(CHAIN_QUEUE);
+                let alive = Arc::new(());
                 tokio::spawn(apply_chain(
                     server.clone(),
                     chain_id,
                     receiver,
                     responses.clone(),
+                    alive.clone(),
                 ));
-                sender
+                Chain {
+                    queue: sender,
+                    alive,
+                }
             });
             let queued = Queued {
                 certificate,
+                attempt,
+                supports_aggregated,
                 permit,
             };
             // `try_send`, not `send`: waiting here for one chain's queue to drain is exactly the
             // head-of-line stall that carrying many chains on one stream exists to avoid. A
             // sender that respects `CHAIN_QUEUE` never reaches this.
-            match queue.try_send(queued) {
+            match chain.queue.try_send(queued) {
                 Ok(()) => {}
                 // Either the sender overran its window, or it stopped reading answers and the
                 // backlog reached here. Both end the stream and are reported as one, because from
@@ -178,22 +192,27 @@ where
                         .ok();
                     break;
                 }
-                // The chain's task retired between the lookup and the send. Dropping the
-                // certificate here would leave its sender waiting for an answer that never
-                // comes, so a fresh task takes it.
+                // The chain's task closed its queue between the lookup and the send, and may
+                // still be draining. Starting a second task now is what would break ordering, so
+                // the certificate is refused instead: the sender retries, and by then the entry
+                // has been pruned and a fresh task takes it. Dropping it silently is the one
+                // thing we must not do — its sender would wait out the whole push timeout.
                 Err(mpsc::error::TrySendError::Closed(queued)) => {
-                    let (sender, receiver) = mpsc::channel(CHAIN_QUEUE);
-                    tokio::spawn(apply_chain(
-                        server.clone(),
-                        chain_id,
-                        receiver,
-                        responses.clone(),
-                    ));
-                    if sender.try_send(queued).is_err() {
-                        warn!(%chain_id, "Could not hand a certificate to a fresh chain task");
-                        break;
+                    chains.remove(&chain_id);
+                    let refusal = NodeError::GrpcError {
+                        error: "the chain's queue retired; retry".to_string(),
+                    };
+                    if let Ok(result) = refusal.try_into() {
+                        let answer = api::PushCertificateResponse {
+                            chain_id: Some(chain_id.into()),
+                            height: Some(queued.certificate.block().header.height.into()),
+                            result: Some(result),
+                            attempt: queued.attempt,
+                        };
+                        if responses.send(Ok(answer)).await.is_err() {
+                            break;
+                        }
                     }
-                    chains.insert(chain_id, sender);
                 }
             }
         }
@@ -219,9 +238,31 @@ async fn next_or_retire<T>(queue: &mut mpsc::Receiver<T>, idle: Duration) -> Opt
     }
 }
 
+/// One chain's queue, plus a token its task holds for as long as it runs.
+///
+/// `is_closed` is NOT a safe pruning test: `next_or_retire` closes the queue before its final
+/// drain, so a task can be closed and still be inside `handle_confirmed_certificate`. Pruning
+/// then lets the reader spawn a second task for the same chain, and the two race for the chain
+/// worker's lock with no defined order — exactly the property this queue exists to provide.
+struct Chain {
+    queue: mpsc::Sender<Queued>,
+    alive: Arc<()>,
+}
+
+impl Chain {
+    /// Whether the task still holds its token, i.e. has not returned.
+    fn running(&self) -> bool {
+        Arc::strong_count(&self.alive) > 1
+    }
+}
+
 /// A certificate waiting for its chain, holding the stream slot it occupies.
 struct Queued {
     certificate: ConfirmedBlockCertificate,
+    /// Which run attempt this belongs to, so the tail of a refused run can be skipped.
+    attempt: u64,
+    /// Whether its sender understands the aggregated `MissingCrossChainUpdates` error.
+    supports_aggregated: bool,
     /// Released when the certificate has been answered, which is what lets the reader take
     /// another one.
     permit: OwnedSemaphorePermit,
@@ -233,35 +274,68 @@ async fn apply_chain<S>(
     chain_id: ChainId,
     mut queue: mpsc::Receiver<Queued>,
     responses: mpsc::Sender<Result<api::PushCertificateResponse, Status>>,
+    // Held for the whole body: the reader prunes this chain only once this is dropped.
+    _alive: Arc<()>,
 ) where
     S: Storage + Clone + Send + Sync + 'static,
 {
+    // The attempt whose run was refused, and the error that refused it. A run stops at the
+    // destination's first refusal, so everything the sender already wrote after that certificate
+    // is unlandable: applying it would produce `UnexpectedBlockHeight` answers that say nothing
+    // and race the retry. Cleared as soon as a later attempt arrives.
+    let mut refused: Option<(u64, NodeError)> = None;
     while let Some(queued) = next_or_retire(&mut queue, CHAIN_IDLE).await {
         let height = queued.certificate.block().header.height;
-        let result = server
-            .worker()
-            .handle_confirmed_certificate(queued.certificate, ProcessConfirmedBlockMode::Auto, None)
-            .await;
+        let attempt = queued.attempt;
+        if refused.as_ref().is_some_and(|(at, _)| *at != attempt) {
+            refused = None;
+        }
+        let result = match &refused {
+            Some((_, error)) => Err(error.clone()),
+            None => {
+                let applied = server
+                    .worker()
+                    .handle_confirmed_certificate(
+                        queued.certificate,
+                        ProcessConfirmedBlockMode::Auto,
+                        None,
+                    )
+                    .await;
+                match applied {
+                    Ok((info, actions)) => {
+                        server.handle_network_actions(actions);
+                        Ok(info)
+                    }
+                    // An answer, not the end of the stream: certificates for every other chain on
+                    // this stream must keep flowing when one chain's fail. Logged through the
+                    // server's own policy rather than at a flat level: a remote-caused failure
+                    // like `BlobsNotFound` is the designed blob-recovery handshake and belongs at
+                    // debug, while a local one like a poisoned worker must stay at error so it
+                    // still trips alerting.
+                    Err(error) => {
+                        server.log_error(&error, "Failed to apply a pushed certificate");
+                        // Adapted exactly as the unary handler does, or a peer that does not
+                        // understand the aggregated form gets an error it cannot dispatch on.
+                        let error = adapt_dependency_error(
+                            NodeError::from(error),
+                            queued.supports_aggregated,
+                        );
+                        refused = Some((attempt, error.clone()));
+                        Err(error)
+                    }
+                }
+            }
+        };
         let result = match result {
-            Ok((info, actions)) => {
-                server.handle_network_actions(actions);
-                info.try_into()
-            }
-            // An answer, not the end of the stream: certificates for every other chain on this
-            // stream must keep flowing when one chain's fail. Logged through the server's own
-            // policy rather than at a flat level: a remote-caused failure like `BlobsNotFound`
-            // is the designed blob-recovery handshake and belongs at debug, while a local one
-            // like a poisoned worker must stay at error so it still trips alerting.
-            Err(error) => {
-                server.log_error(&error, "Failed to apply a pushed certificate");
-                NodeError::from(error).try_into()
-            }
+            Ok(info) => info.try_into(),
+            Err(error) => error.try_into(),
         };
         let response = match result {
             Ok(result) => api::PushCertificateResponse {
                 chain_id: Some(chain_id.into()),
                 height: Some(height.into()),
                 result: Some(result),
+                attempt,
             },
             Err(error) => {
                 responses
@@ -286,12 +360,8 @@ mod tests {
 
     /// Retiring must close the queue, and must not drop what the reader already handed over.
     ///
-    /// Drives `next_or_retire` itself rather than a copy of its loop: the previous two versions
-    /// of this test asserted a property of a hand-written duplicate and stayed green under the
-    /// regression they named. Deleting the `timeout` in `next_or_retire` makes the second
-    /// assertion here hang, and deleting the `queue.close()` makes the second fail — the retiring
-    /// await is bounded so that mutation surfaces as a failure rather than a hung test binary,
-    /// which would take every other test in the crate down with it.
+    /// Drives `next_or_retire` itself rather than a copy of its loop, so it cannot pass against a
+    /// duplicate that has since diverged.
     #[test_log::test(tokio::test(start_paused = true))]
     async fn retiring_closes_the_queue_and_keeps_what_it_was_given() {
         let (sender, mut queue) = mpsc::channel::<u8>(CHAIN_QUEUE);
@@ -325,9 +395,6 @@ mod tests {
     /// idle can never win — the previous rewrite of this test deadlocked itself that way and was
     /// deterministically red. A reserved permit deposits into an already-closed queue, which is
     /// exactly the state the close-and-drain arm has to cope with.
-    ///
-    /// Deleting `queue.close()` leaves the sender open and the last assertion fails; deleting the
-    /// whole `Err` arm strands both items and the first assertion fails.
     #[test_log::test(tokio::test(start_paused = true))]
     async fn retirement_drains_what_arrived_at_the_deadline() {
         let (sender, mut queue) = mpsc::channel::<u8>(CHAIN_QUEUE);
