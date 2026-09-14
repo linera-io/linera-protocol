@@ -63,6 +63,23 @@ use crate::{
     HandleLiteCertRequest, HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
 };
 
+/// How much longer than `recv_timeout` the bulk transfer methods are given.
+const BULK_TIMEOUT_FACTOR: u32 = 8;
+
+/// Attaches `timeout` to a request as its deadline, so that the validator stops working on
+/// it once we have given up on it. A zero duration means no deadline.
+///
+/// Both ends stop applying the deadline once the response headers are sent, so on a
+/// streaming method it bounds the wait for the validator to accept the request without
+/// limiting how long the stream then lives.
+fn with_deadline<T>(message: T, timeout: Duration) -> Request<T> {
+    let mut request = Request::new(message);
+    if !timeout.is_zero() {
+        request.set_timeout(timeout);
+    }
+    request
+}
+
 /// Wraps a response stream so that it fails instead of hanging when the validator stops
 /// sending.
 ///
@@ -172,11 +189,21 @@ impl GrpcClient {
         }
     }
 
+    /// The budget for methods that transfer blobs or certificates, which carry up to
+    /// [`GRPC_MAX_MESSAGE_SIZE`] per message: flow control alone spends several round trips
+    /// on a message that large, so the budget that suits a chain info query cannot fit one.
+    fn bulk_timeout(&self) -> Duration {
+        self.options
+            .recv_timeout
+            .saturating_mul(BULK_TIMEOUT_FACTOR)
+    }
+
     async fn delegate<F, Fut, R, S>(
         &self,
         f: F,
         request: impl TryInto<R> + fmt::Debug + Clone,
         handler: &str,
+        timeout: Duration,
     ) -> Result<S, NodeError>
     where
         F: Fn(ValidatorNodeClient<transport::Channel>, Request<R>) -> Fut,
@@ -188,14 +215,8 @@ impl GrpcClient {
             error: "could not convert request to proto".to_string(),
         })?;
         loop {
-            let mut request = Request::new(request_inner.clone());
-            // Send the deadline along with the request, so that the validator stops working
-            // on it when we give up and retry. The channel-level timeout is local to us: on
-            // its own it turns one slow request into several concurrent copies of the same
-            // work on the shard.
-            if !self.options.recv_timeout.is_zero() {
-                request.set_timeout(self.options.recv_timeout);
-            }
+            #[allow(unused_mut)]
+            let mut request = with_deadline(request_inner.clone(), timeout);
             // Inject OpenTelemetry context (trace context + baggage) into gRPC metadata.
             // This uses get_context_with_traffic_type() to also check the LINERA_TRAFFIC_TYPE
             // environment variable, allowing benchmark tools to mark their traffic as synthetic.
@@ -264,7 +285,13 @@ impl TryFrom<api::PendingBlobResult> for BlobContent {
 }
 
 macro_rules! client_delegate {
-    ($self:ident, $handler:ident, $req:ident) => {{
+    ($self:ident, $handler:ident, $req:ident) => {
+        client_delegate!($self, $handler, $req, $self.options.recv_timeout)
+    };
+    ($self:ident, $handler:ident, $req:ident, bulk) => {
+        client_delegate!($self, $handler, $req, $self.bulk_timeout())
+    };
+    ($self:ident, $handler:ident, $req:ident, $timeout:expr) => {{
         debug!(
             handler = stringify!($handler),
             request = ?$req,
@@ -275,6 +302,7 @@ macro_rules! client_delegate {
                 |mut client, req| async move { client.$handler(req).await },
                 $req,
                 stringify!($handler),
+                $timeout,
             )
             .await
     }};
@@ -390,11 +418,12 @@ impl ValidatorNode for GrpcClient {
             chain_ids: chains.into_iter().map(|chain| chain.into()).collect(),
         };
         let mut client = self.client.clone();
+        let recv_timeout = self.options.recv_timeout;
 
         // Make the first connection attempt before returning from this method.
         let mut stream = Some(
             client
-                .subscribe(subscription_request.clone())
+                .subscribe(with_deadline(subscription_request.clone(), recv_timeout))
                 .await
                 .map_err(|status| {
                     subscription_cooldowns
@@ -423,7 +452,10 @@ impl ValidatorNode for GrpcClient {
                 let stream = if let Some(stream) = stream.take() {
                     future::Either::Right(stream)
                 } else {
-                    match client.subscribe(subscription_request.clone()).await {
+                    match client
+                        .subscribe(with_deadline(subscription_request.clone(), recv_timeout))
+                        .await
+                    {
                         Err(err) => future::Either::Left(stream::iter(iter::once(Err(err)))),
                         Ok(response) => {
                             // Reset retry count on successful reconnection.
@@ -509,12 +541,12 @@ impl ValidatorNode for GrpcClient {
 
     #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
     async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError> {
-        Ok(client_delegate!(self, upload_blob, content)?.try_into()?)
+        Ok(client_delegate!(self, upload_blob, content, bulk)?.try_into()?)
     }
 
     #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
     async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
-        Ok(client_delegate!(self, download_blob, blob_id)?.try_into()?)
+        Ok(client_delegate!(self, download_blob, blob_id, bulk)?.try_into()?)
     }
 
     #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
@@ -528,7 +560,7 @@ impl ValidatorNode for GrpcClient {
         let stream = self
             .client
             .clone()
-            .download_blobs(request)
+            .download_blobs(with_deadline(request, self.options.recv_timeout))
             .await
             .map_err(|status| NodeError::GrpcError {
                 error: status.to_string(),
@@ -554,7 +586,7 @@ impl ValidatorNode for GrpcClient {
         blob_id: BlobId,
     ) -> Result<BlobContent, NodeError> {
         let req = (chain_id, blob_id);
-        client_delegate!(self, download_pending_blob, req)?.try_into()
+        client_delegate!(self, download_pending_blob, req, bulk)?.try_into()
     }
 
     #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
@@ -564,7 +596,7 @@ impl ValidatorNode for GrpcClient {
         blob: BlobContent,
     ) -> Result<ChainInfoResponse, NodeError> {
         let req = (chain_id, blob);
-        GrpcClient::try_into_chain_info(client_delegate!(self, handle_pending_blob, req)?)
+        GrpcClient::try_into_chain_info(client_delegate!(self, handle_pending_blob, req, bulk)?)
     }
 
     #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
@@ -575,7 +607,8 @@ impl ValidatorNode for GrpcClient {
         ConfirmedBlockCertificate::try_from(Certificate::try_from(client_delegate!(
             self,
             download_certificate,
-            hash
+            hash,
+            bulk
         )?)?)
         .map_err(|_| NodeError::UnexpectedCertificateValue)
     }
@@ -593,7 +626,8 @@ impl ValidatorNode for GrpcClient {
             let mut received: Vec<_> = Vec::<Certificate>::try_from(client_delegate!(
                 self,
                 download_certificates,
-                missing
+                missing,
+                bulk
             )?)?
             .into_iter()
             .map(|cert| {
@@ -632,7 +666,7 @@ impl ValidatorNode for GrpcClient {
                 heights: missing.iter().copied().collect(),
             };
             let mut received: Vec<_> =
-                client_delegate!(self, download_raw_certificates_by_heights, request)?
+                client_delegate!(self, download_raw_certificates_by_heights, request, bulk)?
                     .certificates
                     .into_iter()
                     .map(
@@ -677,7 +711,7 @@ impl ValidatorNode for GrpcClient {
         &self,
         blob_id: BlobId,
     ) -> Result<ConfirmedBlockCertificate, NodeError> {
-        Ok(client_delegate!(self, blob_last_used_by_certificate, blob_id)?.try_into()?)
+        Ok(client_delegate!(self, blob_last_used_by_certificate, blob_id, bulk)?.try_into()?)
     }
 
     #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
@@ -717,9 +751,21 @@ mod tests {
     use linera_base::time::Duration;
     use linera_core::node::NodeError;
 
-    use super::with_idle_timeout;
+    use super::{with_deadline, with_idle_timeout, BULK_TIMEOUT_FACTOR};
 
     const IDLE_TIMEOUT: Duration = Duration::from_secs(4);
+
+    #[test]
+    fn deadlines_are_sent_to_the_validator() {
+        let request = with_deadline((), IDLE_TIMEOUT.saturating_mul(BULK_TIMEOUT_FACTOR));
+        assert_eq!(
+            request.metadata().get("grpc-timeout").unwrap(),
+            "32000000u" // 32 s, in microseconds
+        );
+
+        let request = with_deadline((), Duration::ZERO);
+        assert!(request.metadata().get("grpc-timeout").is_none());
+    }
 
     #[tokio::test(start_paused = true)]
     async fn idle_timeout_ends_a_stalled_stream() {

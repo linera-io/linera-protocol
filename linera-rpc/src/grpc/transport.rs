@@ -8,7 +8,8 @@ use crate::NodeOptions;
 pub struct Options {
     /// The maximum time to wait when establishing a connection.
     pub connect_timeout: Option<linera_base::time::Duration>,
-    /// The maximum time to wait for a request to complete.
+    /// The maximum time to wait for a request to complete, applied to every request on the
+    /// channel. Leave it unset to give each request its own deadline instead.
     pub timeout: Option<linera_base::time::Duration>,
 }
 
@@ -16,7 +17,12 @@ impl From<&'_ NodeOptions> for Options {
     fn from(node_options: &NodeOptions) -> Self {
         Self {
             connect_timeout: Some(node_options.send_timeout),
-            timeout: Some(node_options.recv_timeout),
+            // A single channel-wide timeout would apply `recv_timeout` to bulk transfers as
+            // well, so [`GrpcClient`] sets a per-request deadline instead. `tonic` enforces
+            // that one locally too, on top of sending it to the validator.
+            //
+            // [`GrpcClient`]: super::GrpcClient
+            timeout: None,
         }
     }
 }
