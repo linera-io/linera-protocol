@@ -188,8 +188,14 @@ impl GrpcClient {
             error: "could not convert request to proto".to_string(),
         })?;
         loop {
-            #[allow(unused_mut)]
             let mut request = Request::new(request_inner.clone());
+            // Send the deadline along with the request, so that the validator stops working
+            // on it when we give up and retry. The channel-level timeout is local to us: on
+            // its own it turns one slow request into several concurrent copies of the same
+            // work on the shard.
+            if !self.options.recv_timeout.is_zero() {
+                request.set_timeout(self.options.recv_timeout);
+            }
             // Inject OpenTelemetry context (trace context + baggage) into gRPC metadata.
             // This uses get_context_with_traffic_type() to also check the LINERA_TRAFFIC_TYPE
             // environment variable, allowing benchmark tools to mark their traffic as synthetic.
