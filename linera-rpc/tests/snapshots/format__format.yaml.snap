@@ -842,6 +842,10 @@ NodeError:
           - chain_id:
               TYPENAME: ChainId
           - length: U64
+    36:
+      PushRefused:
+        STRUCT:
+          - error: STR
 OpenChainConfig:
   STRUCT:
     - ownership:
