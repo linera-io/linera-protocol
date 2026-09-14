@@ -34,8 +34,12 @@ use tracing::debug;
 
 use super::{api, conversions::push_certificate_request};
 
-/// Certificates buffered before writing blocks. Only a bound on the local queue — the destination
-/// enforces its own window, and HTTP/2 flow control is what actually paces the wire.
+/// How many certificates may sit between `push` and the transport before writing blocks.
+///
+/// Sized to [`PUSH_WINDOW`] so a single run never blocks on its own queue: a run is written whole
+/// and only then awaited, so a shorter queue would stall the write half-way and serialise what the
+/// stream exists to pipeline. It bounds only this buffer — the destination enforces its own
+/// per-chain window, and HTTP/2 flow control is what actually paces the wire.
 const WRITE_QUEUE: usize = PUSH_WINDOW;
 
 /// What a caller is waiting for: the answer to one chain's certificate at one height.

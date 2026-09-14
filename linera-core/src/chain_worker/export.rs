@@ -298,10 +298,12 @@ pub struct BlockExportConfig {
     /// bounds what a live block may wait behind, and a validator that just joined reports height
     /// 0, so its catch-up is otherwise arbitrarily large.
     pub max_catch_up_blocks: u64,
-    /// How long one run may go unanswered before its stream is treated as dead. Generous next to
-    /// a request timeout: a run is many certificates and the destination applies them all before
-    /// the last answer comes back.
-    pub push_timeout: Duration,
+    /// How long one streamed run may go unanswered before its stream is treated as dead.
+    ///
+    /// Generous next to a request timeout: a run is many certificates and the destination applies
+    /// them all before the last answer comes back. Nothing else bounds a push in time, because a
+    /// channel's per-request timeout does not apply to a stream body.
+    pub stream_timeout: Duration,
     /// How long a converged chain's record is kept before being forgotten. Long enough for the
     /// chain's worker to fold the final heights into `exported_heights` on its next save; after
     /// it, a lost cursor costs one query to rebuild.
@@ -341,7 +343,7 @@ impl BlockExportConfig {
                     .into(),
             );
         }
-        if self.push_timeout.is_zero() {
+        if self.stream_timeout.is_zero() {
             // Every run would time out before it could be answered.
             return Err("block export push timeout must be greater than zero".into());
         }
@@ -385,7 +387,7 @@ impl Default for BlockExportConfig {
             max_retry_delay: Duration::from_secs(60),
             idle_catch_up_interval: Duration::from_millis(200),
             max_catch_up_blocks: 200,
-            push_timeout: Duration::from_secs(60),
+            stream_timeout: Duration::from_secs(60),
             converged_chain_retention: Duration::from_secs(300),
         }
     }
@@ -1940,7 +1942,7 @@ where
             storage: storage.clone(),
             certificate_upload_batch_size: config.certificate_upload_batch_size,
             stream,
-            push_timeout: config.push_timeout,
+            stream_timeout: config.stream_timeout,
             #[cfg(with_metrics)]
             address: dest.address.clone(),
         };
@@ -2231,7 +2233,7 @@ pub(crate) struct BlockSender<S, N: ValidatorNode> {
     /// The destination's push stream, shared with every other job going there.
     pub(crate) stream: SharedStream<N>,
     /// How long one run may go unanswered before the stream is treated as dead.
-    pub(crate) push_timeout: Duration,
+    pub(crate) stream_timeout: Duration,
     /// Destination address, carried only to label per-certificate latency.
     #[cfg(with_metrics)]
     pub(crate) address: String,
@@ -2471,7 +2473,7 @@ where
         // this job — and its in-flight slot — forever, since nothing else bounds a push in time.
         // Timing out drops the stream so the next round reopens it, and hands the destination to
         // the queue's backoff, which is what decides whether it is worth attempting at all.
-        let result = match timeout(self.push_timeout, stream.push(certificates.to_vec())).await {
+        let result = match timeout(self.stream_timeout, stream.push(certificates.to_vec())).await {
             Ok(result) => result,
             Err(_) => Err(NodeError::PushStreamClosed),
         };
@@ -2641,7 +2643,7 @@ mod tests {
                 ..BlockExportConfig::default()
             },
             BlockExportConfig {
-                push_timeout: Duration::ZERO,
+                stream_timeout: Duration::ZERO,
                 ..BlockExportConfig::default()
             },
             BlockExportConfig {
