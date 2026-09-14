@@ -36,10 +36,17 @@ pub type ResponseStream = ReceiverStream<Result<api::PushCertificateResponse, St
 /// every other chain the stream is carrying.
 ///
 /// Needs no decoding: the sender names the chain and height on the request for exactly this.
-fn refuse(request: &api::PushCertificateRequest, error: &str) -> api::PushCertificateResponse {
-    api::PushCertificateResponse {
-        chain_id: request.chain_id.clone(),
-        height: request.height,
+///
+/// `None` when the request names neither, because an answer the sender cannot attribute is one it
+/// discards — leaving whoever pushed it waiting out the whole push timeout for nothing.
+fn refuse(
+    request: &api::PushCertificateRequest,
+    error: &str,
+) -> Option<api::PushCertificateResponse> {
+    let (chain_id, height) = (request.chain_id.clone()?, request.height?);
+    Some(api::PushCertificateResponse {
+        chain_id: Some(chain_id),
+        height: Some(height),
         attempt: request.attempt,
         result: Some(api::ChainInfoResult {
             inner: Some(api::chain_info_result::Inner::Error(
@@ -49,7 +56,7 @@ fn refuse(request: &api::PushCertificateRequest, error: &str) -> api::PushCertif
                 .expect("a `NodeError` always serializes"),
             )),
         }),
-    }
+    })
 }
 
 /// Fans a sender's single push stream out across the shards owning the chains it carries, and
@@ -88,7 +95,17 @@ where
                 // One unroutable certificate, not the whole stream: this carries every chain
                 // going to this validator, and the shard side states the same rule.
                 Err(status) => {
-                    let answer = refuse(&request, status.message());
+                    // Unanswerable requests end the stream: the sender named no chain or height, so
+                    // nothing we send back can be matched to what it is waiting for.
+                    let Some(answer) = refuse(&request, status.message()) else {
+                        responses
+                            .send(Err(Status::invalid_argument(
+                                "a pushed certificate must name its chain and height",
+                            )))
+                            .await
+                            .ok();
+                        break;
+                    };
                     if responses.send(Ok(answer)).await.is_err() {
                         break;
                     }
@@ -101,7 +118,17 @@ where
                     let mut client = match connect(&shard) {
                         Ok(client) => client,
                         Err(status) => {
-                            let answer = refuse(&request, status.message());
+                            // Unanswerable requests end the stream: the sender named no chain or height, so
+                            // nothing we send back can be matched to what it is waiting for.
+                            let Some(answer) = refuse(&request, status.message()) else {
+                                responses
+                                    .send(Err(Status::invalid_argument(
+                                        "a pushed certificate must name its chain and height",
+                                    )))
+                                    .await
+                                    .ok();
+                                break;
+                            };
                             if responses.send(Ok(answer)).await.is_err() {
                                 break;
                             }
@@ -117,7 +144,17 @@ where
                         // A shard we cannot reach fails its own certificates; the shards that
                         // are up keep serving theirs.
                         Err(status) => {
-                            let answer = refuse(&request, status.message());
+                            // Unanswerable requests end the stream: the sender named no chain or height, so
+                            // nothing we send back can be matched to what it is waiting for.
+                            let Some(answer) = refuse(&request, status.message()) else {
+                                responses
+                                    .send(Err(Status::invalid_argument(
+                                        "a pushed certificate must name its chain and height",
+                                    )))
+                                    .await
+                                    .ok();
+                                break;
+                            };
                             if responses.send(Ok(answer)).await.is_err() {
                                 break;
                             }
@@ -136,7 +173,19 @@ where
                 Ok(()) => {}
                 Err(mpsc::error::TrySendError::Full(request)) => {
                     warn!(%key, "A shard is not keeping up with the push stream");
-                    let answer = refuse(&request, "the shard is not keeping up with the stream");
+                    // Unanswerable requests end the stream: the sender named no chain or height, so
+                    // nothing we send back can be matched to what it is waiting for.
+                    let Some(answer) =
+                        refuse(&request, "the shard is not keeping up with the stream")
+                    else {
+                        responses
+                            .send(Err(Status::invalid_argument(
+                                "a pushed certificate must name its chain and height",
+                            )))
+                            .await
+                            .ok();
+                        break;
+                    };
                     if responses.send(Ok(answer)).await.is_err() {
                         break;
                     }
