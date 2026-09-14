@@ -67,6 +67,7 @@ fn valid_block_element_with_chain_id(chain_suffix: &str) -> Element {
         blobs: vec![],
         operation_results: vec![],
         previous_event_blocks: BTreeMap::<StreamId, (CryptoHash, BlockHeight)>::new(),
+        previous_checkpoint: None,
         previous_message_blocks: BTreeMap::<ChainId, (CryptoHash, BlockHeight)>::new(),
     };
 
