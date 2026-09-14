@@ -215,7 +215,7 @@ where
         // does. The receiver chain never executes a block of its own (its bundles are
         // never processed into blocks by anyone), so nothing but the probe timer can
         // re-subscribe it.
-        let subscribes_before = builder.subscribe_calls(0).await;
+        let subscribes_before = builder.subscribe_calls(1).await;
         builder.disconnect_notification_subscribers().await;
 
         // Drive the probe timer. Each pass jumps the simulated clock beyond any
@@ -249,9 +249,10 @@ where
             "the notification streams were never repaired after sever round {round}"
         );
         // A notification alone could still be in flight from the previous round; only a
-        // fresh `subscribe` proves the timer re-armed and re-probed for THIS round.
+        // fresh `subscribe` proves the timer re-probed for THIS round. Validator 1 is
+        // counted because validator 0 is the `NoChains` one, whose probes always die.
         assert!(
-            builder.subscribe_calls(0).await > subscribes_before,
+            builder.subscribe_calls(1).await > subscribes_before,
             "round {round} saw no new subscribe, so the notification did not come from a \
              repair the probe timer performed in this round"
         );
@@ -272,11 +273,9 @@ where
 /// This is the half of the probe timer that
 /// `test_probe_timer_repairs_severed_notification_streams` cannot see: that test advances
 /// the clock past the maximum interval before every attempt, so a validator stuck at a
-/// constant interval still repairs inside its window. Two mutations it passes and this
-/// test kills: deleting the re-arm before a probe is launched (the deadline stays in the
-/// past, the still-connecting probe is read as recovered, and the breaker resets to the
-/// initial interval forever), and deleting the `now < next_probe_at` skip entirely (every
-/// wake-up re-subscribes, with no backoff at all).
+/// constant interval still repairs inside its window. It is the only test that kills
+/// deleting the `now < next_probe_at` skip, which re-subscribes on every wake-up with no
+/// backoff at all.
 ///
 /// Backoff matters in production because each probe is a `subscribe` plus a full
 /// `synchronize_chain_state_from`, per validator per chain, against a fleet that is down.
@@ -324,8 +323,8 @@ where
     assert!(
         probes <= 6,
         "the down validator was probed {probes} times in a simulated 2h; correct exponential \
-         backoff schedules them at 300s, 900s, 2100s and 4500s — at most 6 with slack. The breaker is not escalating \
-         — check the re-arm before the probe launch and the `now < next_probe_at` skip."
+         backoff schedules them at 300s, 900s, 2100s and 4500s — at most 6 with slack. The \
+         breaker is not escalating — check the `now < next_probe_at` skip."
     );
     Ok(())
 }
@@ -5854,8 +5853,8 @@ where
 ///   2. A probe that is still in flight is NOT read as a recovered stream. The handle is
 ///      non-aborted from the instant the task is created, long before `subscribe`
 ///      resolves, so a second update landing inside that window must leave the breaker —
-///      and its accumulated backoff — intact (delete the elapsed-deadline guard and
-///      assertion 2 fails).
+///      and its accumulated backoff — intact (key recovery on liveness rather than on
+///      `subscribe` having resolved, and assertion 2 fails).
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[test_log::test(tokio::test)]
 async fn test_in_flight_probe_is_not_treated_as_recovered<B>(
