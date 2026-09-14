@@ -23,7 +23,9 @@
 //! prevent unbounded growth.
 //!
 //! For the invariant to hold, all inserts of hash-consed values must go
-//! through the cache (e.g. [`ValueCache::insert`] or [`ValueCache::insert_hashed`]).
+//! through the cache: [`ValueCache::intern`] for values that may not be in storage,
+//! [`ValueCache::insert`] or [`ValueCache::insert_hashed`] once storage is known to
+//! hold them.
 //! The [`Arc`] newtype enforces this structurally: it has no public constructor,
 //! so callers cannot bypass the cache by calling `std::sync::Arc::new` directly.
 

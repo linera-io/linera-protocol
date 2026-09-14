@@ -4,7 +4,7 @@ Caching utilities for the Linera protocol.
 
 ## Hash-consing and the "one allocation per content" invariant
 
-[`ValueCache`] is the canonical home for content-addressed immutable data
+`ValueCache` is the canonical home for content-addressed immutable data
 (also known as hash-consed data) such as `Block`, `Blob`, and
 `ConfirmedBlockCertificate`. For such types the cache guarantees that at
 most one allocation exists per distinct content at any time, and all
@@ -22,9 +22,11 @@ A background task periodically sweeps dead `Weak` entries from the index to
 prevent unbounded growth.
 
 For the invariant to hold, all inserts of hash-consed values must go
-through the cache (e.g. [`ValueCache::insert_hashed`] or
-[`ValueCache::insert_arc`]). Constructing an `Arc::new(value)` off-path
-creates a duplicate allocation that bypasses the dedup index.
+through the cache: `ValueCache::intern` for values that may not be in storage,
+`ValueCache::insert` or `ValueCache::insert_hashed` once storage is known to
+hold them.
+The `Arc` newtype enforces this structurally: it has no public constructor,
+so callers cannot bypass the cache by calling `std::sync::Arc::new` directly.
 
 <!-- cargo-rdme end -->
 

@@ -5,8 +5,8 @@
 //!
 //! [`Arc<T>`] is identical to [`std::sync::Arc<T>`] at runtime but has no
 //! public constructor. The only way to obtain one is through
-//! [`ValueCache::insert`], [`ValueCache::insert_hashed`], or
-//! [`ValueCache::get`]. This makes the "one allocation per content" invariant
+//! [`ValueCache::intern`], [`ValueCache::insert`], [`ValueCache::insert_hashed`],
+//! or [`ValueCache::get`]. This makes the "one allocation per content" invariant
 //! structurally enforced: callers cannot bypass the cache by calling
 //! `Arc::new` directly.
 

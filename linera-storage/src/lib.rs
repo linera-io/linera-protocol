@@ -79,10 +79,18 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     /// storage. This can lead to invalid states and data corruption.
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError>;
 
-    /// Tests the existence of a blob with the given blob ID.
+    /// Tests whether this node has a blob with the given blob ID available.
+    ///
+    /// This answers "is the blob available to this node", **not** "is the blob durably stored
+    /// under its own root key": an interned blob counts as present even if it has only been
+    /// seen as part of a proposed or locking block. Do not use this as evidence that a write
+    /// can be skipped — see [`Storage::intern_blob`].
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
-    /// Returns what blobs from the input are missing from storage.
+    /// Returns what blobs from the input are not available to this node.
+    ///
+    /// Carries the same caveat as [`Storage::contains_blob`]: interned-but-unwritten blobs are
+    /// not reported as missing.
     async fn missing_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobId>, ViewError>;
 
     /// Tests existence of a blob state with the given blob ID.
@@ -116,6 +124,9 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     ) -> Result<Vec<Option<BlobState>>, ViewError>;
 
     /// Writes the given blob.
+    ///
+    /// Blobs already known to be in storage are not rewritten: a blob ID is the hash of its
+    /// content, so a value recorded as stored under that ID is byte-identical to this one.
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError>;
 
     /// Writes blobs and certificate
@@ -137,37 +148,50 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     ) -> Result<(), ViewError>;
 
     /// Writes several blobs.
+    ///
+    /// Carries the same elision as [`Storage::write_blob`].
     async fn write_blobs(&self, blobs: &[Blob]) -> Result<(), ViewError>;
 
-    /// Tests existence of the certificate with the given hash.
+    /// Tests whether this node has the certificate with the given hash available.
+    ///
+    /// Carries the same caveat as [`Storage::contains_blob`]: a certificate interned by
+    /// [`Storage::intern_certificate`] counts as present before it has been persisted.
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError>;
 
-    /// Inserts a certificate into the in-memory dedup cache and returns the
-    /// canonical [`Arc`]. If the cache already holds an `Arc` for this hash,
-    /// the passed-in `certificate` is dropped and the existing `Arc` is
-    /// returned. This must be used (rather than `Arc::new`) for any
-    /// freshly-constructed [`ConfirmedBlockCertificate`] that should
-    /// participate in the "one allocation per content" invariant.
-    fn cache_certificate(
+    /// Interns a certificate and returns the canonical [`Arc`]. If an `Arc` for this hash
+    /// already exists, the passed-in `certificate` is dropped and the existing `Arc` is
+    /// returned. This must be used (rather than `Arc::new`) for any freshly-constructed
+    /// [`ConfirmedBlockCertificate`] that should participate in the "one allocation per
+    /// content" invariant.
+    ///
+    /// **Interning says nothing about durability.** Callers may intern a value that has not
+    /// been written to storage — and do: certificates are interned as soon as they are
+    /// downloaded from a validator, before they are validated or persisted. See the note on
+    /// [`Storage::contains_certificate`].
+    fn intern_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,
     ) -> Arc<ConfirmedBlockCertificate>;
 
-    /// Inserts a blob into the in-memory dedup cache and returns the canonical
-    /// [`Arc`]. If the cache already holds an `Arc` for this blob ID, the
-    /// passed-in `blob` is dropped and the existing `Arc` is returned. This
-    /// must be used (rather than `Arc::new`) for any freshly-constructed
-    /// [`Blob`] that should participate in the "one allocation per content"
-    /// invariant.
-    fn cache_blob(&self, blob: Blob) -> Arc<Blob>;
+    /// Interns a blob and returns the canonical [`Arc`]. If an `Arc` for this blob ID already
+    /// exists, the passed-in `blob` is dropped and the existing `Arc` is returned. This must
+    /// be used (rather than `Arc::new`) for any freshly-constructed [`Blob`] that should
+    /// participate in the "one allocation per content" invariant.
+    ///
+    /// **Interning says nothing about durability.** In particular, blobs belonging to a
+    /// proposed or locking block are interned while they live only in the chain manager, under
+    /// the chain's own root key rather than the blob's. See the note on
+    /// [`Storage::contains_blob`].
+    fn intern_blob(&self, blob: Blob) -> Arc<Blob>;
 
-    /// Inserts a confirmed block into the in-memory dedup cache and returns
-    /// the canonical [`Arc`]. If the cache already holds an `Arc` for this
-    /// hash, the passed-in `block` is dropped and the existing `Arc` is
-    /// returned. This must be used (rather than `Arc::new`) for any
-    /// freshly-constructed [`ConfirmedBlock`] that should participate in the
-    /// "one allocation per content" invariant.
-    fn cache_confirmed_block(&self, block: ConfirmedBlock) -> Arc<ConfirmedBlock>;
+    /// Interns a confirmed block and returns the canonical [`Arc`]. If an `Arc` for this hash
+    /// already exists, the passed-in `block` is dropped and the existing `Arc` is returned.
+    /// This must be used (rather than `Arc::new`) for any freshly-constructed
+    /// [`ConfirmedBlock`] that should participate in the "one allocation per content"
+    /// invariant.
+    ///
+    /// **Interning says nothing about durability**; see [`Storage::intern_certificate`].
+    fn intern_confirmed_block(&self, block: ConfirmedBlock) -> Arc<ConfirmedBlock>;
 
     /// Reads the certificate with the given hash.
     async fn read_certificate(
@@ -231,6 +255,15 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
 
     /// Tests existence of the event with the given ID.
     async fn contains_event(&self, id: EventId) -> Result<bool, ViewError>;
+
+    /// Drops a blob from the in-memory record of what storage holds, so that the next
+    /// read and the next write both have to consult storage again.
+    ///
+    /// Tests that mean to assert a blob really reached the database need this: reads and
+    /// the write elision both answer from that record, so without it a read-back can be
+    /// satisfied by the value the write itself cached.
+    #[cfg(with_testing)]
+    fn forget_cached_blob(&self, blob_id: BlobId);
 
     /// Lists all the events from a starting index
     async fn read_events_from_index(
@@ -761,16 +794,42 @@ mod tests {
 
         // Test single blob write
         storage.write_blob(&test_blob1).await?;
+        storage.forget_cached_blob(blob_id1);
         assert!(storage.contains_blob(blob_id1).await?);
+
+        // Rewriting an already-stored blob is elided, and the stored copy is unaffected.
+        storage.write_blob(&test_blob1).await?;
+        storage.forget_cached_blob(blob_id1);
+        assert_eq!(
+            storage.read_blob(blob_id1).await?.as_deref(),
+            Some(&test_blob1)
+        );
+
+        // Interning does not mark a blob as stored, so a later write must not be elided.
+        // The `CacheArc` is held across the write: dropping it would empty the weak index
+        // and let the assertion pass even if interning had populated the stored set.
+        let interned_blob = Blob::new_data(vec![70, 80, 90]);
+        let interned_blob_id = interned_blob.id();
+        let interned_arc = storage.intern_blob(interned_blob.clone());
+        storage.write_blob(&interned_blob).await?;
+        storage.forget_cached_blob(interned_blob_id);
+        drop(interned_arc);
+        assert_eq!(
+            storage.read_blob(interned_blob_id).await?.as_deref(),
+            Some(&interned_blob)
+        );
 
         // Test multiple blob write (write_blobs)
         storage
             .write_blobs(&[test_blob2.clone(), test_blob3.clone()])
             .await?;
+        storage.forget_cached_blob(blob_id2);
+        storage.forget_cached_blob(blob_id3);
         assert!(storage.contains_blob(blob_id2).await?);
         assert!(storage.contains_blob(blob_id3).await?);
 
         // Test single blob read
+        storage.forget_cached_blob(blob_id1);
         let read_blob = storage.read_blob(blob_id1).await?;
         assert_eq!(read_blob.as_deref(), Some(&test_blob1));
 
