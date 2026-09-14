@@ -142,8 +142,9 @@ pub struct Options {
 pub(super) struct StreamHandle {
     pub(super) abort: AbortHandle,
     /// Set once `subscribe` returns, i.e. the stream exists rather than merely being
-    /// attempted. Recovery keys off this instead of "the task has not died yet",
-    /// which a slow or hung `synchronize_chain_state_from` also satisfies.
+    /// attempted. Recovery keys off this instead of "the task has not died yet", which a
+    /// probe still blocked in `subscribe` also satisfies. It is set before the initial
+    /// sync, so a sync still running counts as subscribed — the stream does exist.
     pub(super) subscribed: Arc<AtomicBool>,
 }
 
@@ -3465,8 +3466,8 @@ impl<Env: Environment> ChainClient<Env> {
         // Detect circuit breaker state transitions before cleaning up senders.
         //
         // Health is judged on whether `subscribe` ever resolved, not on the task still
-        // running: the probe body also awaits `synchronize_chain_state_from`, which has
-        // no deadline, so "alive" covers a stream that was never established.
+        // running: the probe body keeps awaiting the initial sync afterwards, so "alive"
+        // on its own also covers a probe that has established nothing at all.
         let mut abort_stalled_probes = Vec::new();
         for (validator, handle) in senders.iter() {
             if !nodes.contains_key(validator) {
@@ -3485,9 +3486,8 @@ impl<Env: Environment> ChainClient<Env> {
                         );
                     }
                 }
-                // Never subscribed and the deadline passed: the probe is stuck in
-                // `subscribe`/sync. Abort it, or its `senders` entry stays occupied and
-                // the validator is never probed again.
+                // Still blocked in `subscribe` when the deadline passed. Abort it, or its
+                // `senders` entry stays occupied and the validator is never probed again.
                 (false, false) => {
                     if let Some(state) = circuit_breakers.get_mut(validator) {
                         if now >= state.next_probe_at {

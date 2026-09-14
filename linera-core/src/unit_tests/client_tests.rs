@@ -5925,18 +5925,18 @@ where
 /// Pins the circuit-breaker transitions on whether `subscribe` ever resolved, rather
 /// than on the probe task merely still running.
 ///
-/// The probe body is `subscribe` followed by an undeadlined `synchronize_chain_state_from`,
-/// so "the task is alive" covers a stream that was never established, and "it outlived one
-/// interval" covers a sync that is simply slow. Three cases, each a distinct bug if the
-/// discriminator regresses to liveness or to an elapsed deadline:
+/// The probe body is `subscribe` followed by an initial sync, so "the task is alive"
+/// covers a probe that established nothing, and "it outlived one interval" covers a sync
+/// that is simply slow. Three cases, each a distinct bug if the discriminator regresses
+/// to liveness or to an elapsed deadline:
 ///   * alive and subscribed        -> recovered now, without waiting out an interval;
 ///   * died after subscribing      -> churn, re-armed at the INITIAL interval, so a proxy
 ///                                    whose idle timeout is shorter than the current
 ///                                    interval cannot ratchet the backoff to its cap;
 ///   * alive, never subscribed,
-///     deadline elapsed            -> the probe is stuck in `subscribe`/sync: abort it and
-///                                    escalate, or its `senders` entry stays occupied and
-///                                    the validator is never probed again.
+///     deadline elapsed            -> still blocked in `subscribe`: abort it and escalate,
+///                                    or its `senders` entry stays occupied and the
+///                                    validator is never probed again.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[test_log::test(tokio::test)]
 async fn test_breaker_transitions_key_off_subscribe_not_liveness<B>(
