@@ -383,6 +383,15 @@ pub enum NodeError {
 
     #[error("Pushed {length} certificates for chain {chain_id} at once, past the window")]
     PushRunTooLong { chain_id: ChainId, length: usize },
+
+    /// One certificate was refused; the stream carrying it is still healthy.
+    ///
+    /// Distinct from [`NodeError::GrpcError`] on purpose: that one means the transport failed and
+    /// the stream must be torn down, and a refusal answered in band proves the opposite. Sharing
+    /// a variant let one chain's refusal discard a stream every other chain was still using.
+    // Appended, never inserted: these are bincode-encoded by position and cross the wire.
+    #[error("A pushed certificate was refused: {error}")]
+    PushRefused { error: String },
 }
 
 /// A live stream for pushing confirmed certificates to one validator.
@@ -506,7 +515,8 @@ impl NodeError {
             | NodeError::PushStreamUnsupported
             | NodeError::PushStreamClosed
             | NodeError::EmptyCertificateRun
-            | NodeError::PushRunTooLong { .. } => false,
+            | NodeError::PushRunTooLong { .. }
+            | NodeError::PushRefused { .. } => false,
         }
     }
 }

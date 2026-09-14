@@ -131,7 +131,7 @@ where
                     refused_a_chain = true;
                     warn!(%chain_id, "Push stream naming more than {CHAINS_PER_STREAM} chains");
                 }
-                let refusal = NodeError::GrpcError {
+                let refusal = NodeError::PushRefused {
                     error: format!(
                         "a push stream may carry at most {CHAINS_PER_STREAM} chains at once"
                     ),
@@ -199,7 +199,7 @@ where
                 // thing we must not do — its sender would wait out the whole push timeout.
                 Err(mpsc::error::TrySendError::Closed(queued)) => {
                     chains.remove(&chain_id);
-                    let refusal = NodeError::GrpcError {
+                    let refusal = NodeError::PushRefused {
                         error: "the chain's queue retired; retry".to_string(),
                     };
                     if let Ok(result) = refusal.try_into() {
