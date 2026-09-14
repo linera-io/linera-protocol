@@ -6160,3 +6160,51 @@ where
     );
     Ok(())
 }
+
+/// An update that fails before any breaker exists must still arm the retry deadline.
+///
+/// Over an empty breaker map the Err arm's clamp loop has nothing to push forward, so
+/// `retry_update_at` is the only remaining wake-up — and every sibling test leaves either
+/// a populated map or a retry already armed at startup, so all of them stay green with
+/// the in-loop arming deleted.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_a_failed_update_with_no_breakers_still_arms_the_retry<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    // No faulty validator: one stays breakered forever, which would hand the clamp loop a
+    // deadline to advance and hide the very gap this test exists to cover.
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let chain = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let observer = builder
+        .make_client(chain.chain_id(), None, BlockHeight::ZERO)
+        .await?;
+    let (listener, _listen_handle, _) = observer.listen().await?;
+    tokio::spawn(listener);
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    let before = builder.subscribe_calls(1).await;
+
+    // Arm the failures BEFORE severing, so the update the stream deaths trigger returns
+    // early and leaves the breaker map empty — unlike the post-sever failures elsewhere.
+    builder.fail_next_validator_set_builds(3);
+    builder.disconnect_notification_subscribers().await;
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+    for _ in 0..12 {
+        clock.add(TimeDelta::from_secs(400));
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+        if builder.subscribe_calls(1).await > before {
+            return Ok(());
+        }
+    }
+    panic!(
+        "the listener never re-subscribed after an update failed with no breakers armed: \
+         nothing was left to wake it, because an idle chain whose streams have all died \
+         produces neither a notification nor another stream death"
+    );
+}

@@ -549,8 +549,8 @@ where
     ) -> Result<(), Result<NotificationStream, NodeError>> {
         let mut validator = self.client.lock().await;
         validator.subscribe_calls += 1;
-        // Honour `Offline` here as the query paths already do, so a test can make a
-        // circuit-breaker probe genuinely FAIL and observe the backoff escalate.
+        // Both offline variants refuse: a notification stream is not the info query that
+        // `OfflineWithInfo` still answers, and a probe must be able to genuinely FAIL.
         if matches!(
             self.fault_type,
             FaultType::Offline | FaultType::OfflineWithInfo
