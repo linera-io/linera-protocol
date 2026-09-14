@@ -59,18 +59,45 @@ use super::{
 #[cfg(feature = "opentelemetry")]
 use crate::propagation::{get_context_with_traffic_type, inject_context};
 use crate::{
-    grpc::api::RawCertificate, HandleConfirmedCertificateRequest, HandleLiteCertRequest,
-    HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
+    grpc::api::RawCertificate, node_provider::NodeOptions, HandleConfirmedCertificateRequest,
+    HandleLiteCertRequest, HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
 };
+
+/// Wraps a response stream so that it fails instead of hanging when the validator stops
+/// sending.
+///
+/// The channel-level timeout only covers the wait for response headers, which for a
+/// streaming method arrive before any payload. Without this, a stall in the middle of a
+/// stream is only caught by HTTP/2 keep-alive pings, which a validator that is connected
+/// but no longer producing data keeps answering.
+fn with_idle_timeout<T>(
+    stream: impl stream::Stream<Item = Result<T, NodeError>>,
+    idle_timeout: Duration,
+    handler: &'static str,
+) -> impl stream::Stream<Item = Result<T, NodeError>> {
+    stream::unfold(Some(Box::pin(stream)), move |state| async move {
+        let mut stream = state?;
+        let sleep = Box::pin(linera_base::time::timer::sleep(idle_timeout));
+        match future::select(stream.next(), sleep).await {
+            future::Either::Left((item, _)) => Some((item?, Some(stream))),
+            future::Either::Right(((), _)) => {
+                let error = NodeError::GrpcError {
+                    error: format!(
+                        "remote request [{handler}] stalled: no response for {idle_timeout:?}"
+                    ),
+                };
+                Some((Err(error), None))
+            }
+        }
+    })
+}
 
 /// A gRPC client for communicating with a validator node.
 #[derive(Clone)]
 pub struct GrpcClient {
     address: String,
     client: ValidatorNodeClient<transport::Channel>,
-    retry_delay: Duration,
-    max_retries: u32,
-    max_backoff: Duration,
+    options: NodeOptions,
     /// Shared across all `GrpcClient` instances created by the same `GrpcNodeProvider`.
     /// Tracks when each validator address last had a subscription failure, so that
     /// other chains don't independently retry the same dead validator.
@@ -82,9 +109,7 @@ impl GrpcClient {
     pub fn new(
         address: String,
         channel: transport::Channel,
-        retry_delay: Duration,
-        max_retries: u32,
-        max_backoff: Duration,
+        options: NodeOptions,
         subscription_cooldowns: Arc<papaya::HashMap<String, Instant>>,
     ) -> Self {
         let client = ValidatorNodeClient::new(channel)
@@ -93,9 +118,7 @@ impl GrpcClient {
         Self {
             address,
             client,
-            retry_delay,
-            max_retries,
-            max_backoff,
+            options,
             subscription_cooldowns,
         }
     }
@@ -173,11 +196,11 @@ impl GrpcClient {
             #[cfg(feature = "opentelemetry")]
             inject_context(&get_context_with_traffic_type(), request.metadata_mut());
             match f(self.client.clone(), request).await {
-                Err(s) if Self::is_retryable(&s) && retry_count < self.max_retries => {
+                Err(s) if Self::is_retryable(&s) && retry_count < self.options.max_retries => {
                     let delay = crate::jittered_backoff_delay(
-                        self.retry_delay,
+                        self.options.retry_delay,
                         retry_count,
-                        self.max_backoff,
+                        self.options.max_backoff,
                     );
                     retry_count += 1;
                     linera_base::time::timer::sleep(delay).await;
@@ -334,9 +357,9 @@ impl ValidatorNode for GrpcClient {
 
     #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn subscribe(&self, chains: Vec<ChainId>) -> Result<Self::NotificationStream, NodeError> {
-        let retry_delay = self.retry_delay;
-        let max_retries = self.max_retries;
-        let max_backoff = self.max_backoff;
+        let retry_delay = self.options.retry_delay;
+        let max_retries = self.options.max_retries;
+        let max_backoff = self.options.max_backoff;
         let address = self.address.clone();
         let subscription_cooldowns = self.subscription_cooldowns.clone();
 
@@ -511,7 +534,11 @@ impl ValidatorNode for GrpcClient {
                 error: status.to_string(),
             }),
         });
-        Ok(Box::pin(blob_stream))
+        Ok(Box::pin(with_idle_timeout(
+            blob_stream,
+            self.options.recv_timeout,
+            "download_blobs",
+        )))
     }
 
     #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
@@ -675,5 +702,42 @@ impl ValidatorNode for GrpcClient {
             shard_id: response.shard_id as usize,
             total_shards: response.total_shards as usize,
         })
+    }
+}
+
+#[cfg(all(test, not(web)))]
+mod tests {
+    use futures::StreamExt as _;
+    use linera_base::time::Duration;
+    use linera_core::node::NodeError;
+
+    use super::with_idle_timeout;
+
+    const IDLE_TIMEOUT: Duration = Duration::from_secs(4);
+
+    #[tokio::test(start_paused = true)]
+    async fn idle_timeout_ends_a_stalled_stream() {
+        let stalling = futures::stream::once(async { Ok(1) }).chain(futures::stream::pending());
+        let mut stream = Box::pin(with_idle_timeout(stalling, IDLE_TIMEOUT, "test"));
+
+        assert!(matches!(stream.next().await, Some(Ok(1))));
+        assert!(matches!(
+            stream.next().await,
+            Some(Err(NodeError::GrpcError { .. }))
+        ));
+        assert!(stream.next().await.is_none());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn slow_but_progressing_stream_is_not_interrupted() {
+        let items = futures::stream::iter(0..3).then(|i| async move {
+            linera_base::time::timer::sleep(IDLE_TIMEOUT / 2).await;
+            Ok::<_, NodeError>(i)
+        });
+        let stream = with_idle_timeout(items, IDLE_TIMEOUT, "test");
+
+        let received = stream.collect::<Vec<_>>().await;
+        assert_eq!(received.len(), 3);
+        assert!(received.into_iter().all(|result| result.is_ok()));
     }
 }
