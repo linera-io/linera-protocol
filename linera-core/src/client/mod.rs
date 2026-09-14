@@ -1793,8 +1793,7 @@ impl<Env: Environment> Client<Env> {
                     let mut certificates_with_check_results = vec![];
                     for cert in certificates {
                         let check_result = self.check_certificate(&cert).await?;
-                        certificates_with_check_results
-                            .push((cert, check_result.into_result().is_ok()));
+                        certificates_with_check_results.push((cert, check_result));
                     }
                     Ok(certificates_with_check_results)
                 },
@@ -1837,14 +1836,108 @@ impl<Env: Environment> Client<Env> {
 
             let mut to_remove_from_queue = BTreeSet::new();
 
+            // Certificates from an epoch our admin-chain view hasn't reached yet can
+            // become verifiable: catch the admin chain up and re-check, mirroring what
+            // `receive_sender_certificate` does for a single certificate. Without
+            // this, a freshly restarted client with a stale epoch view drops these
+            // certificates and re-downloads them on every sync.
+            let mut certificates = certificates;
+            if certificates
+                .iter()
+                .any(|(_, result)| matches!(result, CheckCertificateResult::FutureEpoch))
+            {
+                // Re-check locally first: many sender-chain batches run concurrently,
+                // and once one of them has caught the admin chain up, the rest can
+                // skip their own sync — the check itself only reads local storage.
+                for (certificate, check_result) in &mut certificates {
+                    if matches!(check_result, CheckCertificateResult::FutureEpoch) {
+                        match self.check_certificate(certificate).await {
+                            Ok(result) => *check_result = result,
+                            Err(error) => {
+                                warn!(%error, "failed to re-check certificate")
+                            }
+                        }
+                    }
+                }
+            }
+            if certificates
+                .iter()
+                .any(|(_, result)| matches!(result, CheckCertificateResult::FutureEpoch))
+            {
+                let admin_chain_id = self.admin_chain_id;
+                info!(
+                    %sender_chain_id,
+                    "batch contains certificates from an unknown epoch; \
+                     synchronizing the admin chain"
+                );
+                // Prefer the nodes serving this chain: they evidently know the newer
+                // epoch even if our own committee view is stale or unreachable, same
+                // as the single-certificate path. A sync only counts if it actually
+                // made the epoch known.
+                let sample_certificate = certificates
+                    .iter()
+                    .find(|(_, result)| matches!(result, CheckCertificateResult::FutureEpoch))
+                    .map(|(certificate, _)| certificate.clone());
+                let synced_from_serving_node = if let Some(certificate) = &sample_certificate {
+                    communicate_concurrently(
+                        &nodes,
+                        |node| {
+                            Box::pin(async move {
+                                self.synchronize_chain_state_from(&node, admin_chain_id)
+                                    .await?;
+                                match self.check_certificate(certificate).await? {
+                                    CheckCertificateResult::FutureEpoch => {
+                                        Err(chain_client::Error::CommitteeSynchronizationError)
+                                    }
+                                    _ => Ok(()),
+                                }
+                            })
+                        },
+                        self.options.blob_download_hedge_delay,
+                        self.storage_client().clock(),
+                    )
+                    .await
+                    .is_ok()
+                } else {
+                    false
+                };
+                if !synced_from_serving_node {
+                    if let Err(error) = Box::pin(self.synchronize_chain_state(admin_chain_id)).await
+                    {
+                        warn!(%error, "failed to synchronize the admin chain for epoch re-check");
+                    }
+                }
+                for (certificate, check_result) in &mut certificates {
+                    if matches!(check_result, CheckCertificateResult::FutureEpoch) {
+                        match self.check_certificate(certificate).await {
+                            Ok(result) => *check_result = result,
+                            Err(error) => {
+                                warn!(
+                                    %error,
+                                    hash = %certificate.hash(),
+                                    "failed to re-check certificate after admin sync"
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             for (certificate, check_result) in certificates {
                 let hash = certificate.hash();
                 let chain_id = certificate.block().header.chain_id;
                 let height = certificate.block().header.height;
-                if !check_result {
+                if check_result.into_result().is_err() {
                     // The certificate was correctly signed, but we were missing a committee to
                     // validate it properly - do not receive it, but also do not attempt to
                     // re-download it.
+                    warn!(
+                        %hash,
+                        %chain_id,
+                        %height,
+                        ?check_result,
+                        "dropping certificate that could not be verified",
+                    );
                     to_remove_from_queue.insert(height);
                     continue;
                 }
@@ -2830,6 +2923,7 @@ enum ReceiveCertificateMode {
     AlreadyChecked,
 }
 
+#[derive(Debug, Clone, Copy)]
 enum CheckCertificateResult {
     /// The certificate's epoch has been revoked on the admin chain.
     OldEpoch,
