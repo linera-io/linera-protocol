@@ -998,25 +998,24 @@ where
             return Ok(certificates_by_height.into_iter().flatten().collect());
         }
 
-        // Fallback to the traditional approach
-        let hashes = self
-            .local_node
-            .get_block_hashes(chain_id, heights.clone())
-            .await?;
+        // Fallback to the traditional approach. This drops the heights we do not hold, so it
+        // cannot tell us which height each hash answers; the index derives that from the block.
+        let hashes = self.local_node.get_block_hashes(chain_id, heights).await?;
 
         let certificates = storage.read_certificates(&hashes).await?;
 
         match ResultReadCertificates::new(certificates, hashes.clone()) {
             ResultReadCertificates::Certificates(certs) => {
-                // Write back the height->hash indices we learned from the fallback
-                let indices: Vec<_> = heights.into_iter().zip(hashes.clone()).collect();
-                storage
-                    .write_certificate_height_indices(chain_id, &indices)
-                    .await?;
-                Ok(certs
+                // Index what the fallback found, so the direct lookup can serve it next time. Each
+                // height comes from the block itself, so this cannot repeat the old mispairing.
+                let certs = certs
                     .into_iter()
                     .map(|c| storage.cache_certificate(c))
-                    .collect())
+                    .collect::<Vec<_>>();
+                storage
+                    .write_certificate_height_indices(chain_id, &certs)
+                    .await?;
+                Ok(certs)
             }
             ResultReadCertificates::InvalidHashes(hashes) => {
                 Err(chain_client::Error::ReadCertificatesError(hashes))

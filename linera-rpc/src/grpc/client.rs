@@ -50,7 +50,7 @@ use linera_core::{
 use linera_storage::Arc as CacheArc;
 use linera_version::VersionInfo;
 use tonic::{Code, IntoRequest, Request, Status};
-use tracing::{debug, instrument, trace, Level};
+use tracing::{debug, instrument, trace, warn, Level};
 
 use super::{
     api::{self, validator_node_client::ValidatorNodeClient, SubscriptionRequest},
@@ -625,12 +625,37 @@ impl ValidatorNode for GrpcClient {
                 break;
             }
 
-            // Remove only the heights we actually received from missing set.
-            for cert in &received {
-                missing.remove(&cert.inner().height());
-            }
+            // Keep only certificates we actually asked for. `missing.remove` alone filters
+            // nothing, so a validator answering with an extra block — or one from another chain
+            // at the same height — would have it appended and, after the sort below, returned
+            // first to callers that index straight into the result.
+            let outstanding = missing.len();
+            received.retain(|cert| {
+                let block = cert.inner();
+                block.chain_id() == chain_id && missing.remove(&block.height())
+            });
             certs_collected.append(&mut received);
+            // A validator whose height index points at the wrong blocks answers with certificates
+            // we did not ask for, which removes nothing and leaves the request identical — so
+            // without this the loop re-sends it forever.
+            if missing.len() == outstanding {
+                warn!(
+                    outstanding,
+                    "validator returned none of the requested heights"
+                );
+                break;
+            }
         }
+        // Like the sibling `download_certificates`, refuse to return a partial result: callers
+        // index straight into this (`cli/validator.rs`), so answering `Ok` with certificates at
+        // heights nobody asked for turns a validator fault into a wrong answer or a panic.
+        ensure!(
+            missing.is_empty(),
+            NodeError::MissingCertificatesByHeights {
+                chain_id,
+                heights: missing.into_iter().collect(),
+            }
+        );
         certs_collected.sort_by_key(|cert| cert.inner().height());
         Ok(certs_collected)
     }
