@@ -3,7 +3,7 @@
 
 use std::{str::FromStr as _, sync::Arc};
 
-use linera_base::time::{Duration, Instant};
+use linera_base::time::Instant;
 use linera_core::node::{NodeError, ValidatorNodeProvider};
 
 use super::GrpcClient;
@@ -17,9 +17,7 @@ use crate::{
 #[derive(Clone)]
 pub struct GrpcNodeProvider {
     pool: GrpcConnectionPool,
-    retry_delay: Duration,
-    max_retries: u32,
-    max_backoff: Duration,
+    options: NodeOptions,
     /// Shared across all `GrpcClient` instances. When a subscription to a validator
     /// fails, the failure time is recorded here so that other chains (which share the
     /// same provider) skip retrying the same dead validator.
@@ -29,16 +27,10 @@ pub struct GrpcNodeProvider {
 impl GrpcNodeProvider {
     /// Creates a new [`GrpcNodeProvider`] with the given node options.
     pub fn new(options: NodeOptions) -> Self {
-        let transport_options = transport::Options::from(&options);
-        let retry_delay = options.retry_delay;
-        let max_retries = options.max_retries;
-        let max_backoff = options.max_backoff;
-        let pool = GrpcConnectionPool::new(transport_options);
+        let pool = GrpcConnectionPool::new(transport::Options::from(&options));
         Self {
             pool,
-            retry_delay,
-            max_retries,
-            max_backoff,
+            options,
             subscription_cooldowns: Arc::new(papaya::HashMap::new()),
         }
     }
@@ -64,9 +56,7 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
         Ok(GrpcClient::new(
             http_address,
             channel,
-            self.retry_delay,
-            self.max_retries,
-            self.max_backoff,
+            self.options,
             self.subscription_cooldowns.clone(),
         ))
     }

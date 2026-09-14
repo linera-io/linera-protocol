@@ -16,8 +16,6 @@ async fn client() {
         GrpcClient,
     };
 
-    let retry_delay = Duration::from_millis(100);
-    let max_retries = 5;
     let address = "http://127.0.0.1:9000".to_string();
     let options = Options {
         connect_timeout: Some(Duration::from_millis(100)),
@@ -27,9 +25,13 @@ async fn client() {
     GrpcClient::new(
         address,
         channel,
-        retry_delay,
-        max_retries,
-        linera_rpc::node_provider::DEFAULT_MAX_BACKOFF,
+        linera_rpc::node_provider::NodeOptions {
+            send_timeout: Duration::from_millis(100),
+            recv_timeout: Duration::from_millis(100),
+            retry_delay: Duration::from_millis(100),
+            max_retries: 5,
+            max_backoff: linera_rpc::node_provider::DEFAULT_MAX_BACKOFF,
+        },
         std::sync::Arc::new(papaya::HashMap::new()),
     )
     .get_version_info()
