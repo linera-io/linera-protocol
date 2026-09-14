@@ -3429,7 +3429,7 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// When to retry an update that failed before it could touch the breaker state.
-    pub(super) fn retry_update_deadline(&self) -> Timestamp {
+    fn retry_update_deadline(&self) -> Timestamp {
         let interval = self
             .options
             .notification_circuit_breaker_initial_probe_interval
