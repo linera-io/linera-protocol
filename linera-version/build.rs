@@ -36,6 +36,14 @@ fn main() {
         version_info
     };
 
+    let hash_tokens = |hash: Option<Hash>| match hash {
+        Some(hash) => quote::quote! { Some(::std::borrow::Cow::Borrowed(#hash)) },
+        None => quote::quote! { None },
+    };
+    let rpc_hash = hash_tokens(rpc_hash);
+    let graphql_hash = hash_tokens(graphql_hash);
+    let wit_hash = hash_tokens(wit_hash);
+
     let static_code = quote::quote! {
         VersionInfo {
             crate_version: crate::serde_pretty::Pretty::new(
@@ -43,9 +51,9 @@ fn main() {
             ),
             git_commit: ::std::borrow::Cow::Borrowed(#git_commit),
             git_dirty: #git_dirty,
-            rpc_hash: ::std::borrow::Cow::Borrowed(#rpc_hash),
-            graphql_hash: ::std::borrow::Cow::Borrowed(#graphql_hash),
-            wit_hash: ::std::borrow::Cow::Borrowed(#wit_hash),
+            rpc_hash: #rpc_hash,
+            graphql_hash: #graphql_hash,
+            wit_hash: #wit_hash,
         }
     };
 
