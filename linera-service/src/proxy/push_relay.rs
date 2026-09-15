@@ -227,19 +227,16 @@ where
                         break;
                     }
                 }
-                // The pump answers whatever this shard had outstanding, but not this one — it
-                // never reached the queue — so it is refused here and the entry dropped, which
-                // makes the next certificate for that shard reconnect.
+                // Refuses everything this shard still owed, not just this certificate. The pump
+                // takes its snapshot and returns, but the read loop can keep writing into a
+                // channel whose reader is already gone — those would be answered by nobody and
+                // their senders would wait out the stream timeout. This is the last point at
+                // which we learn the shard is unreachable, so it drains the rest here. `pending`
+                // is in the table too, having been recorded before the send.
                 Err(mpsc::error::TrySendError::Closed(_)) => {
                     warn!(%key, "A shard's push stream closed; dropping it");
                     shards.remove(&key);
-                    forget(&outstanding, &pending);
-                    let Some(answer) = refuse(&pending, "the shard's push stream closed") else {
-                        continue;
-                    };
-                    if responses.send(Ok(answer)).await.is_err() {
-                        break;
-                    }
+                    strand(&responses, &outstanding, "the shard's push stream closed").await;
                 }
             }
         }
