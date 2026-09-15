@@ -5888,6 +5888,7 @@ where
         CircuitBreakerState {
             next_probe_at: clock.current_time(),
             probe_interval: interval,
+            tripped: true,
         },
     );
 
@@ -5984,6 +5985,7 @@ where
     let breaker = |next_probe_at, probe_interval| CircuitBreakerState {
         next_probe_at,
         probe_interval,
+        tripped: true,
     };
     let now = clock.current_time();
 
@@ -6296,6 +6298,11 @@ where
             state.next_probe_at > clock.current_time(),
             "a first launch must arm its deadline in the future, not in the past"
         );
+        assert!(
+            !state.tripped,
+            "a deadline armed at launch must not count as a tripped breaker, or every \
+             healthy validator announces a recovery it never had as soon as it serves"
+        );
     }
     Ok(())
 }
@@ -6345,10 +6352,15 @@ where
         .update_notification_streams(&mut senders, &mut breakers)
         .await?;
 
+    let state = breakers.get(&stalled).expect(
+        "a validator whose initial sync stalled was recorded as recovered; its \
+                 senders entry stays occupied, so nothing re-probes it and the chain \
+                 stays deaf",
+    );
     assert!(
-        breakers.contains_key(&stalled),
-        "a validator whose initial sync stalled was recorded as recovered; its senders \
-         entry stays occupied, so nothing re-probes it and the chain stays deaf"
+        state.tripped,
+        "a probe that stalled past its deadline must TRIP the breaker, or its later \
+         recovery is not reported"
     );
     Ok(())
 }
@@ -6386,6 +6398,7 @@ where
             CircuitBreakerState {
                 next_probe_at: now,
                 probe_interval: interval,
+                tripped: true,
             },
         ),
         (
@@ -6393,6 +6406,7 @@ where
             CircuitBreakerState {
                 next_probe_at: soon_at,
                 probe_interval: interval,
+                tripped: true,
             },
         ),
     ]);

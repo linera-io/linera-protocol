@@ -163,22 +163,37 @@ impl StreamHandle {
 pub(super) struct CircuitBreakerState {
     pub(super) next_probe_at: Timestamp,
     pub(super) probe_interval: Duration,
+    /// Whether the stream has actually failed, as opposed to this being the deadline
+    /// armed when it was launched. Only a breaker that tripped reports a recovery.
+    pub(super) tripped: bool,
 }
 
 impl CircuitBreakerState {
-    /// A breaker armed one interval out from `now`.
-    fn new(now: Timestamp, probe_interval: Duration, spread: Duration) -> Self {
+    /// The deadline every launch arms, before anything is known about the stream.
+    fn launched(now: Timestamp, probe_interval: Duration, spread: Duration) -> Self {
+        Self::armed(now, probe_interval, spread, false)
+    }
+
+    /// A breaker for a stream that has failed.
+    fn failed(now: Timestamp, probe_interval: Duration, spread: Duration) -> Self {
+        Self::armed(now, probe_interval, spread, true)
+    }
+
+    fn armed(now: Timestamp, probe_interval: Duration, spread: Duration, tripped: bool) -> Self {
         let mut state = CircuitBreakerState {
             next_probe_at: now,
             probe_interval,
+            tripped,
         };
         state.arm(now, spread);
         state
     }
 
-    /// Doubles the interval, up to `max`, and re-arms.
+    /// Doubles the interval, up to `max`, and re-arms. Only a failure escalates, so this
+    /// also trips the breaker.
     fn escalate(&mut self, now: Timestamp, max: Duration, spread: Duration) {
         self.probe_interval = self.probe_interval.saturating_mul(2).min(max);
+        self.tripped = true;
         self.arm(now, spread);
     }
 
@@ -3553,7 +3568,14 @@ impl<Env: Environment> ChainClient<Env> {
             match (died, serving_for) {
                 // Serving and still running: healthy, whatever the deadline says.
                 (false, Some(_)) => {
-                    if circuit_breakers.remove(validator).is_some() {
+                    // Drop the breaker either way so the timer goes quiet, but only report
+                    // a recovery for one that actually tripped: every launch arms a
+                    // deadline, so gating on the removal alone announces a recovery for
+                    // every healthy validator on the first update after it starts serving.
+                    if circuit_breakers
+                        .remove(validator)
+                        .is_some_and(|state| state.tripped)
+                    {
                         info!(
                             %validator,
                             chain_id = %self.chain_id,
@@ -3584,7 +3606,7 @@ impl<Env: Environment> ChainClient<Env> {
                 (true, Some(lifetime)) if lifetime >= initial_probe_interval => {
                     circuit_breakers.insert(
                         *validator,
-                        CircuitBreakerState::new(now, initial_probe_interval, spread),
+                        CircuitBreakerState::failed(now, initial_probe_interval, spread),
                     );
                     info!(
                         %validator,
@@ -3607,7 +3629,7 @@ impl<Env: Environment> ChainClient<Env> {
                     } else {
                         circuit_breakers.insert(
                             *validator,
-                            CircuitBreakerState::new(now, initial_probe_interval, spread),
+                            CircuitBreakerState::failed(now, initial_probe_interval, spread),
                         );
                         error!(
                             %validator,
@@ -3659,7 +3681,7 @@ impl<Env: Environment> ChainClient<Env> {
                 // sync that never returns leaves nothing to abort it and nothing to wake
                 // the timer on its account. Recovery drops the breaker once it serves.
                 hash_map::Entry::Vacant(breaker) => {
-                    breaker.insert(CircuitBreakerState::new(
+                    breaker.insert(CircuitBreakerState::launched(
                         now,
                         initial_probe_interval,
                         spread,
