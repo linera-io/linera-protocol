@@ -196,7 +196,7 @@ where
                 // still be draining. Starting a second task now is what would break ordering, so
                 // the certificate is refused instead: the sender retries, and by then the entry
                 // has been pruned and a fresh task takes it. Dropping it silently is the one
-                // thing we must not do — its sender would wait out the whole push timeout.
+                // thing we must not do — its sender would wait out the whole stream timeout.
                 Err(mpsc::error::TrySendError::Closed(queued)) => {
                     chains.remove(&chain_id);
                     let refusal = NodeError::PushRefused {
@@ -226,7 +226,7 @@ where
 /// Retiring is what lets the stream forget a chain it has finished with; the sender re-creates
 /// the task on that chain's next certificate. The queue is **closed before** the last drain, so a
 /// certificate the reader accepted in the instant before the deadline is still returned rather
-/// than dropped — dropping it would leave its sender waiting out the whole push timeout for an
+/// than dropped — dropping it would leave its sender waiting out the whole stream timeout for an
 /// answer that is never coming.
 async fn next_or_retire<T>(queue: &mut mpsc::Receiver<T>, idle: Duration) -> Option<T> {
     match timeout(idle, queue.recv()).await {

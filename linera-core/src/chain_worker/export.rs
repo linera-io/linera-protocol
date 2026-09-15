@@ -345,7 +345,7 @@ impl BlockExportConfig {
         }
         if self.stream_timeout.is_zero() {
             // Every run would time out before it could be answered.
-            return Err("block export push timeout must be greater than zero".into());
+            return Err("block export stream timeout must be greater than zero".into());
         }
         if self.max_catch_up_blocks == 0 {
             // Every gap would stay open forever, silently.
