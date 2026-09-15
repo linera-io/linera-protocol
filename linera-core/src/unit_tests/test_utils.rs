@@ -860,6 +860,9 @@ where
     /// How many further calls to build the validator set must fail, so a test can make
     /// `update_notification_streams` return `Err` at a chosen moment.
     failures_left: Arc<std::sync::atomic::AtomicUsize>,
+    /// Every attempt to build the validator set, successful or not. Monotonic, so a test
+    /// can freeze the clock and assert the listener is PARKED rather than spinning.
+    builds: Arc<std::sync::atomic::AtomicUsize>,
 }
 
 impl<S> NodeProvider<S>
@@ -878,6 +881,8 @@ where
         Self {
             clients: self.clients.clone(),
             failures_left: Arc::default(),
+            // A private build counter too, so export-task builds stay out of a test's count.
+            builds: Arc::default(),
         }
     }
 }
@@ -899,6 +904,8 @@ where
     where
         A: AsRef<str>,
     {
+        self.builds
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if self
             .failures_left
             .fetch_update(
@@ -939,6 +946,7 @@ where
         Self {
             clients: Arc::new(std::sync::Mutex::new(iter.into_iter().collect())),
             failures_left: Arc::default(),
+            builds: Arc::default(),
         }
     }
 }
@@ -1155,6 +1163,7 @@ where
         let node_provider = NodeProvider {
             clients: Arc::new(std::sync::Mutex::new(Vec::new())),
             failures_left: Arc::default(),
+            builds: Arc::default(),
         };
         let mut validator_storages = HashMap::new();
         let mut validator_key_pairs = HashMap::new();
@@ -1258,6 +1267,13 @@ where
             .clone()
             .write_owned()
             .await
+    }
+
+    /// Every attempt the chain clients have made to build the validator set.
+    pub fn validator_set_builds(&self) -> usize {
+        self.node_provider
+            .builds
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// How many times the validator at `index` has been asked to `subscribe`.

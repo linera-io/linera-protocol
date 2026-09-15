@@ -6081,6 +6081,24 @@ where
     );
     assert!(state.tripped, "a first failure must trip the breaker");
 
+    // Already at the cap: escalation must not carry it past `max_probe_interval`, or the
+    // interval doubles without bound until the validator is effectively never probed.
+    let cap = std::time::Duration::from_secs(3600);
+    let now = clock.current_time();
+    let at_cap = handle(true, now.saturating_sub(TimeDelta::from_secs(5)).micros());
+    let mut senders = HashMap::from([(validator, at_cap)]);
+    let mut breakers = HashMap::from([(validator, breaker(now, cap, true))]);
+    chain
+        .update_notification_streams(&mut senders, &mut breakers)
+        .await?;
+    let state = breakers
+        .get(&validator)
+        .expect("a stream that died must stay breakered");
+    assert_eq!(
+        state.probe_interval, cap,
+        "escalation must saturate at the configured maximum, not double past it"
+    );
+
     // Alive but never serving, past its deadline: the probe is stuck in `subscribe` or in
     // the sync. It must be aborted, or `senders` stays occupied and the validator is
     // never probed again.
@@ -6485,6 +6503,61 @@ where
         breakers[&soon].next_probe_at, soon_at,
         "a probe due BEFORE the retry deadline must be left alone; deferring it too makes \
          taking the min of the two deadlines a no-op and postpones the repair"
+    );
+    Ok(())
+}
+
+/// A successful update must CLEAR the retry deadline, or the listener spins forever.
+///
+/// The deadline is armed on failure and read through `min()` alongside the breaker
+/// deadlines. Breaker deadlines are always in the future after a successful update, so a
+/// retry deadline left behind from an earlier failure wins `min()` permanently, and both
+/// clocks return immediately on an elapsed deadline — one transient failure would leave
+/// every listener in the process re-running `local_committee()` as fast as it can.
+///
+/// Entered from the RECOVERED state deliberately: with failures still armed, each one
+/// re-arms the deadline into the future and hides the spin.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_a_recovered_listener_parks_instead_of_spinning<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let chain = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let observer = builder
+        .make_client(chain.chain_id(), None, BlockHeight::ZERO)
+        .await?;
+
+    // Fail the startup update exactly once, so a retry deadline is armed...
+    builder.fail_next_validator_set_builds(1);
+    let (listener, _listen_handle, _) = observer.listen().await?;
+    tokio::spawn(listener);
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+    // ...then walk past it so the retry SUCCEEDS, which is what must clear the deadline.
+    clock.add(TimeDelta::from_secs(400));
+    wait_until(std::time::Duration::from_secs(5), || async {
+        builder.validator_set_build_failures_left() == 0 && builder.subscribe_calls(1).await > 0
+    })
+    .await;
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+    // From here the clock never moves, so every remaining deadline is in the future and a
+    // correct listener has nothing to do.
+    let before = builder.validator_set_builds();
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let builds = builder.validator_set_builds() - before;
+
+    assert!(
+        builds < 20,
+        "the listener rebuilt the validator set {builds} times in 500ms against a frozen \
+         clock: a retry deadline from an earlier failure is still winning min(), so every \
+         pass re-fires on an elapsed deadline and re-runs local_committee()"
     );
     Ok(())
 }
