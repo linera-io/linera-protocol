@@ -5967,9 +5967,12 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
     let chain = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let validator = builder.node(0).name();
-    // The breaker's escalated interval. The initial interval is the default 300s, so a
-    // stream must have served for at least that long to count as churn.
+    // The breaker's already-escalated interval, and the configured initial one. A stream
+    // must have served at least `initial` to count as churn, and `escalate` must double
+    // `interval` rather than jump to the cap.
     let interval = std::time::Duration::from_secs(600);
+    let initial = std::time::Duration::from_secs(300);
+    let doubled = std::time::Duration::from_secs(1200);
 
     let handle = |aborted: bool, serving_since: u64| {
         let (abort, registration) = AbortHandle::new_pair();
@@ -6019,10 +6022,12 @@ where
     let state = breakers
         .get(&validator)
         .expect("a stream that died must stay breakered");
-    assert!(
-        state.probe_interval < interval,
-        "a stream that served for an hour before dying is churn; escalating it lets any \
-         proxy whose idle timeout is shorter than the interval ratchet the backoff to its cap"
+    assert_eq!(
+        state.probe_interval, initial,
+        "a stream that served for an hour before dying is churn and must re-arm at exactly \
+         the initial interval: escalating lets any proxy whose idle timeout is shorter than \
+         the interval ratchet the backoff to its cap, and a merely-smaller value would let \
+         it re-probe far faster than configured"
     );
 
     // Died seconds after it started serving: the transport already retries reconnects
@@ -6037,16 +6042,17 @@ where
     let state = breakers
         .get(&validator)
         .expect("a stream that died must stay breakered");
-    assert!(
-        state.probe_interval > interval,
+    assert_eq!(
+        state.probe_interval, doubled,
         "a stream that died seconds after subscribing is not churn — the gRPC client \
-         reconnects internally, so it reached the breaker only after giving up"
+         reconnects internally, so it reached the breaker only after giving up. It must \
+         DOUBLE the interval; a bare `>` bound is also satisfied by jumping to the cap, \
+         which turns one transient failure into an hour of deafness"
     );
 
     // A validator's FIRST stream death, against the deadline armed at launch. That
     // breaker never tripped, so this is the first recorded failure and belongs at the
     // configured interval — escalating off it doubles the window the chain stays deaf.
-    let initial = std::time::Duration::from_secs(300);
     let now = clock.current_time();
     let first_death = handle(true, now.saturating_sub(TimeDelta::from_secs(5)).micros());
     let mut senders = HashMap::from([(validator, first_death)]);
@@ -6090,9 +6096,10 @@ where
     let state = breakers
         .get(&validator)
         .expect("a stalled probe must stay breakered");
-    assert!(
-        state.probe_interval > interval,
-        "a probe that never started serving must escalate the backoff"
+    assert_eq!(
+        state.probe_interval, doubled,
+        "a probe that never started serving must DOUBLE the backoff; a bare `>` bound is \
+         also satisfied by jumping straight to the cap"
     );
     Ok(())
 }
@@ -6219,8 +6226,9 @@ where
     // One simulated step past the deadline, then real time with the clock held still.
     // Paced, the failure pushes its deadline into the simulated future and the loop
     // sleeps; unpaced, it re-fires on the same elapsed deadline continuously. The step
-    // clears 700s because severing an immediately-established stream escalates to twice
-    // the initial interval, plus this validator's spread.
+    // clears the initial interval plus this validator's spread: a first death arms at the
+    // configured interval rather than escalating, because the breaker armed at launch has
+    // not tripped.
     clock.add(TimeDelta::from_secs(700));
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     let attempts = budget - builder.validator_set_build_failures_left();
