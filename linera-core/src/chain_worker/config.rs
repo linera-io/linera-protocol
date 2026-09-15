@@ -52,6 +52,24 @@ pub struct ChainWorkerConfig {
     pub cross_chain_batch_size_limit: usize,
     /// Whether to attempt recovery via `RevertConfirm` when an inbox gap is detected.
     pub allow_revert_confirm: bool,
+    /// Whether to accept "super-sparse" sender catch-up: a proposer may push only the sender
+    /// blocks its current proposal consumes, omitting message-bearing ancestors the recipient
+    /// has *already consumed* by anticipation.
+    ///
+    /// Two relaxations are enabled together, and only together:
+    ///
+    /// * the sender's outbox will schedule a preprocessed block for a recipient even when the
+    ///   recipient's outbox is not caught up to that block's declared predecessor, deferring the
+    ///   decision to the recipient (which is where the consumption frontier lives);
+    /// * the recipient accepts such an update when it has already consumed past the declared
+    ///   predecessor, and drops the matching stale entries from its anticipation queue.
+    ///
+    /// Bundles the recipient has *not* consumed are still delivered contiguously, so ordering
+    /// guarantees for unskippable bundles are unchanged.
+    ///
+    /// Requires [`Self::allow_revert_confirm`] to be sound: when the recipient reports a genuine
+    /// gap, the resulting `RevertConfirm` is what repairs the sender's outbox high-water mark.
+    pub allow_sparse_sender_catchup: bool,
     /// If set, reset the chain state and re-execute all blocks when the chain
     /// state is detected to be corrupted — but only if the given duration has
     /// elapsed since block 0 was last executed (to prevent reset loops).
@@ -103,6 +121,7 @@ impl Default for ChainWorkerConfig {
             exported_heights_fold_interval: linera_base::time::Duration::from_secs(5),
             cross_chain_batch_size_limit: 1000,
             allow_revert_confirm: false,
+            allow_sparse_sender_catchup: false,
             reset_on_corrupted_chain_state: None,
             recovery_whitelist: None,
         }

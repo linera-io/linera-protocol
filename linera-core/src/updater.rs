@@ -574,11 +574,11 @@ where
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let chain_id = proposal.content.block.chain_id;
         // `sent_cross_chain_updates` tracks per-origin progress for the legacy per-sender
-        // `MissingCrossChainUpdate` path (a non-upgraded validator); `synced_cross_chain_updates`
-        // is the one-shot guard for the aggregated `MissingCrossChainUpdates` path;
+        // `MissingCrossChainUpdate` path (a non-upgraded validator); `cross_chain_update_attempts`
+        // is the two-shot guard for the aggregated `MissingCrossChainUpdates` path;
         // `synced_round_and_height` is the one-shot guard for the round/height mismatch path.
         let mut sent_cross_chain_updates = BTreeMap::new();
-        let mut synced_cross_chain_updates = false;
+        let mut cross_chain_update_attempts = 0u8;
         let mut synced_round_and_height = false;
         let mut publisher_chain_ids_sent = BTreeSet::new();
         let storage = self.local_node.storage_client();
@@ -651,7 +651,7 @@ where
                     bundles,
                 }) if dependencies_chain_id == proposal.content.block.chain_id => {
                     ensure!(
-                        !synced_cross_chain_updates,
+                        cross_chain_update_attempts < 2,
                         NodeError::ResponseHandlingError {
                             error: format!(
                                 "validator still reports missing cross-chain updates for chain \
@@ -659,26 +659,51 @@ where
                             ),
                         }
                     );
-                    synced_cross_chain_updates = true;
-                    tracing::debug!(
-                        remote_node = %self.remote_node.address(),
-                        %chain_id,
-                        bundles = bundles.len(),
-                        "validator reported missing cross-chain updates; syncing them in one batch",
-                    );
-                    // Sync each reported origin chain up to the needed height, collapsing any
-                    // duplicate origins to the highest height.
-                    let mut origin_heights: BTreeMap<ChainId, BlockHeight> = BTreeMap::new();
-                    for (origin, height) in bundles {
-                        let target = height.try_add_one()?;
-                        let entry = origin_heights.entry(origin).or_insert(target);
-                        *entry = (*entry).max(target);
+                    cross_chain_update_attempts += 1;
+                    // First attempt: push *only* the sender blocks this proposal consumes
+                    // ("super-sparse"), which is all a validator with
+                    // `allow_sparse_sender_catchup` needs. If the validator does not support it,
+                    // or the gap is a genuine one rather than already-consumed ancestors, it
+                    // reports the same error again and the second attempt falls back to pushing
+                    // each origin's locally-held prefix, exactly as before.
+                    if cross_chain_update_attempts == 1 {
+                        let mut origin_heights: BTreeMap<ChainId, BTreeSet<BlockHeight>> =
+                            BTreeMap::new();
+                        for (origin, height) in &bundles {
+                            origin_heights.entry(*origin).or_default().insert(*height);
+                        }
+                        tracing::debug!(
+                            remote_node = %self.remote_node.address(),
+                            %chain_id,
+                            bundles = bundles.len(),
+                            "validator reported missing cross-chain updates; trying a sparse push",
+                        );
+                        self.send_chain_info_at_heights(
+                            origin_heights,
+                            CrossChainMessageDelivery::Blocking,
+                        )
+                        .await?;
+                    } else {
+                        tracing::debug!(
+                            remote_node = %self.remote_node.address(),
+                            %chain_id,
+                            bundles = bundles.len(),
+                            "sparse push was not enough; syncing full prefixes in one batch",
+                        );
+                        // Sync each reported origin chain up to the needed height, collapsing any
+                        // duplicate origins to the highest height.
+                        let mut origin_heights: BTreeMap<ChainId, BlockHeight> = BTreeMap::new();
+                        for (origin, height) in bundles {
+                            let target = height.try_add_one()?;
+                            let entry = origin_heights.entry(origin).or_insert(target);
+                            *entry = (*entry).max(target);
+                        }
+                        self.send_chain_info_up_to_heights(
+                            origin_heights,
+                            CrossChainMessageDelivery::Blocking,
+                        )
+                        .await?;
                     }
-                    self.send_chain_info_up_to_heights(
-                        origin_heights,
-                        CrossChainMessageDelivery::Blocking,
-                    )
-                    .await?;
                 }
                 Err(NodeError::MissingCrossChainUpdate {
                     chain_id,
