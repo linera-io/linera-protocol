@@ -64,12 +64,12 @@ pub struct VersionInfo {
     pub git_commit: Hash,
     /// Whether the git checkout was dirty
     pub git_dirty: bool,
-    /// A hash of the RPC API
-    pub rpc_hash: Hash,
-    /// A hash of the GraphQL API
-    pub graphql_hash: Hash,
-    /// A hash of the WIT API
-    pub wit_hash: Hash,
+    /// A hash of the RPC API, or `None` if its source files were not available
+    pub rpc_hash: Option<Hash>,
+    /// A hash of the GraphQL API, or `None` if its source files were not available
+    pub graphql_hash: Option<Hash>,
+    /// A hash of the WIT API, or `None` if its source files were not available
+    pub wit_hash: Option<Hash>,
 }
 
 #[cfg(linera_version_building)]
@@ -182,14 +182,17 @@ struct CargoVcsInfoGit {
 }
 
 /// The hashes of the protocol's external APIs.
+///
+/// A hash is `None` when the files it is computed from were not available, as is the case in a
+/// published crate. Unknown hashes never establish a match.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ApiHashes {
     /// A hash of the RPC API.
-    pub rpc: String,
+    pub rpc: Option<String>,
     /// A hash of the GraphQL API.
-    pub graphql: String,
+    pub graphql: Option<String>,
     /// A hash of the WIT API.
-    pub wit: String,
+    pub wit: Option<String>,
 }
 
 impl VersionInfo {
@@ -215,7 +218,6 @@ impl VersionInfo {
         );
 
         let cargo_vcs_info_path = crate_dir.join(".cargo_vcs_info.json");
-        let api_hashes_path = crate_dir.join("api-hashes.json");
         let mut git_dirty = false;
         let git_commit = if let Ok(git_commit) = std::env::var("GIT_COMMIT") {
             git_commit
@@ -237,16 +239,14 @@ impl VersionInfo {
         }
         .into();
 
-        let api_hashes: ApiHashes = serde_json::from_reader(fs_err::File::open(api_hashes_path)?)?;
-
         let rpc_hash = get_hash(
             paths,
             &metadata,
             "linera-rpc",
             "tests/snapshots/format__format.yaml.snap",
         )
-        .unwrap_or(api_hashes.rpc)
-        .into();
+        .ok()
+        .map(Into::into);
 
         let graphql_hash = get_hash(
             paths,
@@ -254,12 +254,12 @@ impl VersionInfo {
             "linera-service-graphql-client",
             "gql/*.graphql",
         )
-        .unwrap_or(api_hashes.graphql)
-        .into();
+        .ok()
+        .map(Into::into);
 
         let wit_hash = get_hash(paths, &metadata, "linera-sdk", "wit/*.wit")
-            .unwrap_or(api_hashes.wit)
-            .into();
+            .ok()
+            .map(Into::into);
 
         Ok(Self {
             crate_version,
@@ -274,9 +274,9 @@ impl VersionInfo {
     /// Returns the hashes of the RPC, GraphQL, and WIT APIs.
     pub fn api_hashes(&self) -> ApiHashes {
         ApiHashes {
-            rpc: self.rpc_hash.clone().into_owned(),
-            wit: self.wit_hash.clone().into_owned(),
-            graphql: self.graphql_hash.clone().into_owned(),
+            rpc: self.rpc_hash.clone().map(|hash| hash.into_owned()),
+            wit: self.wit_hash.clone().map(|hash| hash.into_owned()),
+            graphql: self.graphql_hash.clone().map(|hash| hash.into_owned()),
         }
     }
 }

@@ -1463,9 +1463,12 @@ VersionInfo:
         TYPENAME: CrateVersion
     - git_commit: STR
     - git_dirty: BOOL
-    - rpc_hash: STR
-    - graphql_hash: STR
-    - wit_hash: STR
+    - rpc_hash:
+        OPTION: STR
+    - graphql_hash:
+        OPTION: STR
+    - wit_hash:
+        OPTION: STR
 VmRuntime:
   ENUM:
     0:

@@ -122,15 +122,20 @@ impl From<api::CrateVersion> for linera_version::CrateVersion {
     }
 }
 
+/// An API hash that could not be computed travels as the empty string.
+fn api_hash(hash: String) -> Option<linera_version::Hash> {
+    (!hash.is_empty()).then_some(hash.into())
+}
+
 impl From<linera_version::VersionInfo> for api::VersionInfo {
     fn from(version_info: linera_version::VersionInfo) -> api::VersionInfo {
         api::VersionInfo {
             crate_version: Some(version_info.crate_version.value.into()),
             git_commit: version_info.git_commit.into(),
             git_dirty: version_info.git_dirty,
-            rpc_hash: version_info.rpc_hash.into(),
-            graphql_hash: version_info.graphql_hash.into(),
-            wit_hash: version_info.wit_hash.into(),
+            rpc_hash: version_info.rpc_hash.unwrap_or_default().into(),
+            graphql_hash: version_info.graphql_hash.unwrap_or_default().into(),
+            wit_hash: version_info.wit_hash.unwrap_or_default().into(),
         }
     }
 }
@@ -150,9 +155,9 @@ impl From<api::VersionInfo> for linera_version::VersionInfo {
             ),
             git_commit: version_info.git_commit.into(),
             git_dirty: version_info.git_dirty,
-            rpc_hash: version_info.rpc_hash.into(),
-            graphql_hash: version_info.graphql_hash.into(),
-            wit_hash: version_info.wit_hash.into(),
+            rpc_hash: api_hash(version_info.rpc_hash),
+            graphql_hash: api_hash(version_info.graphql_hash),
+            wit_hash: api_hash(version_info.wit_hash),
         }
     }
 }
