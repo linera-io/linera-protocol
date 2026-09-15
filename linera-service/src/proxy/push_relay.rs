@@ -158,11 +158,9 @@ where
                     (sender.clone(), outstanding.clone())
                 }
                 _ => {
-                    let mut client = match connect(&shard) {
+                    let client = match connect(&shard) {
                         Ok(client) => client,
                         Err(status) => {
-                            // Unanswerable requests end the stream: the sender named no chain or height, so
-                            // nothing we send back can be matched to what it is waiting for.
                             let Some(answer) = refuse(&Pending::of(&request), status.message())
                             else {
                                 responses
@@ -180,35 +178,14 @@ where
                         }
                     };
                     let (sender, receiver) = mpsc::channel(PUMP_QUEUE);
-                    let outbound = match client
-                        .push_confirmed_certificates(ReceiverStream::new(receiver))
-                        .await
-                    {
-                        Ok(outbound) => outbound.into_inner(),
-                        // A shard we cannot reach fails its own certificates; the shards that
-                        // are up keep serving theirs.
-                        Err(status) => {
-                            // Unanswerable requests end the stream: the sender named no chain or height, so
-                            // nothing we send back can be matched to what it is waiting for.
-                            let Some(answer) = refuse(&Pending::of(&request), status.message())
-                            else {
-                                responses
-                                    .send(Err(Status::invalid_argument(
-                                        "a pushed certificate must name its chain and height",
-                                    )))
-                                    .await
-                                    .ok();
-                                break;
-                            };
-                            if responses.send(Ok(answer)).await.is_err() {
-                                break;
-                            }
-                            continue;
-                        }
-                    };
                     let outstanding: Outstanding = Arc::new(Mutex::new(Vec::new()));
-                    tokio::spawn(pump_responses(
-                        outbound,
+                    // The dial happens on its own task, never here. Awaiting it in this loop
+                    // parks every chain on every OTHER shard for as long as one unreachable
+                    // shard takes to time out — the same head-of-line stall the `try_send`
+                    // below exists to avoid, and the reason the sender dials outside its mutex.
+                    tokio::spawn(open_and_pump(
+                        client,
+                        receiver,
                         responses.clone(),
                         outstanding.clone(),
                     ));
@@ -343,7 +320,6 @@ where
     ReceiverStream::new(response_receiver)
 }
 
-/// Forwards one peer's or shard's answers onto the merged stream.
 /// Forwards one peer's answers verbatim, errors included.
 ///
 /// For [`relay`] only, where the proxy is a pipe to a single destination: an error there means the
@@ -384,19 +360,47 @@ async fn pump_responses(
             return;
         }
     }
-    // Whatever this shard never answered is refused here, so its senders retry instead of waiting
-    // out the stream timeout for an answer that is no longer coming.
     let reason = ended.map_or_else(
         || "the shard closed its push stream".to_string(),
         |status| status.message().to_string(),
     );
+    strand(&responses, &outstanding, &reason).await;
+}
+
+/// Opens a shard's stream and pumps its answers, refusing what it never answered if it fails.
+///
+/// Separate task on purpose: awaiting the dial in the read loop parks every other shard's chains.
+async fn open_and_pump(
+    mut client: ValidatorWorkerClient<Channel>,
+    receiver: mpsc::Receiver<api::PushCertificateRequest>,
+    responses: mpsc::Sender<Result<api::PushCertificateResponse, Status>>,
+    outstanding: Outstanding,
+) {
+    match client
+        .push_confirmed_certificates(ReceiverStream::new(receiver))
+        .await
+    {
+        Ok(outbound) => pump_responses(outbound.into_inner(), responses, outstanding).await,
+        // Dropping `receiver` here is what makes the next certificate for this shard see `Closed`
+        // and reconnect; the ones already written are refused rather than left unanswered.
+        Err(status) => strand(&responses, &outstanding, status.message()).await,
+    }
+}
+
+/// Refuses everything a shard still owed an answer for, so its senders retry rather than wait out
+/// the stream timeout for an answer that is no longer coming.
+async fn strand(
+    responses: &mpsc::Sender<Result<api::PushCertificateResponse, Status>>,
+    outstanding: &Outstanding,
+    reason: &str,
+) {
     let stranded = std::mem::take(
         &mut *outstanding
             .lock()
             .expect("the outstanding table is never held across a panic"),
     );
     for pending in stranded {
-        let Some(answer) = refuse(&pending, &reason) else {
+        let Some(answer) = refuse(&pending, reason) else {
             continue;
         };
         if responses.send(Ok(answer)).await.is_err() {
