@@ -158,6 +158,13 @@ where
                     (sender.clone(), outstanding.clone())
                 }
                 _ => {
+                    // A dead entry is drained before it is replaced. The pump refuses the snapshot
+                    // it took and returns, but the read loop can keep writing until `is_closed`
+                    // flips — and it is this arm, not the `Closed` one, that the guard above sends
+                    // those to. Replacing without draining drops the only handle to them.
+                    if let Some((_, stale)) = shards.remove(&key) {
+                        strand(&responses, &stale, "the shard's push stream closed").await;
+                    }
                     let client = match connect(&shard) {
                         Ok(client) => client,
                         Err(status) => {
@@ -227,11 +234,8 @@ where
                         break;
                     }
                 }
-                // Refuses everything this shard still owed, not just this certificate. The pump
-                // takes its snapshot and returns, but the read loop can keep writing into a
-                // channel whose reader is already gone — those would be answered by nobody and
-                // their senders would wait out the stream timeout. This is the last point at
-                // which we learn the shard is unreachable, so it drains the rest here. `pending`
+                // Refuses everything this shard still owed, not just this certificate: anything
+                // written after the pump took its snapshot has nobody left to answer it. `pending`
                 // is in the table too, having been recorded before the send.
                 Err(mpsc::error::TrySendError::Closed(_)) => {
                     warn!(%key, "A shard's push stream closed; dropping it");
