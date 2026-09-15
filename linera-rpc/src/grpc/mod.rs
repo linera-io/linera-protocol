@@ -6,6 +6,9 @@ mod conversions;
 mod node_provider;
 /// A pool of reusable gRPC transport channels.
 pub mod pool;
+mod push_client;
+#[cfg(with_server)]
+mod push_stream;
 mod relay;
 #[cfg(with_server)]
 mod server;
@@ -15,6 +18,7 @@ pub mod transport;
 pub use client::*;
 pub use conversions::*;
 pub use node_provider::*;
+pub use push_client::PushStream;
 pub use relay::{RelayClient, RelayNodeProvider};
 #[cfg(with_server)]
 pub use server::*;

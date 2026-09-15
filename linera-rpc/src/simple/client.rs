@@ -19,7 +19,10 @@ use linera_chain::{
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
-    node::{BlobStream, CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
+    node::{
+        BlobStream, CrossChainMessageDelivery, NoPushStream, NodeError, NotificationStream,
+        ValidatorNode,
+    },
 };
 use linera_storage::Arc as CacheArc;
 use linera_version::VersionInfo;
@@ -84,6 +87,12 @@ impl ValidatorNode for SimpleClient {
             "{}://{}:{}",
             self.network.protocol, self.network.host, self.network.port
         )
+    }
+
+    type PushStream = NoPushStream;
+
+    async fn open_push_stream(&self) -> Result<Self::PushStream, NodeError> {
+        Err(NodeError::PushStreamUnsupported)
     }
 
     /// Initiates a new block.

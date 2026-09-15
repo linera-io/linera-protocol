@@ -69,7 +69,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::{
     transport::{Channel, Identity, Server, ServerTlsConfig},
-    Request, Response, Status,
+    Request, Response, Status, Streaming,
 };
 use tonic_web::GrpcWebLayer;
 use tower::{builder::ServiceBuilder, Layer, Service};
@@ -758,6 +758,33 @@ where
             .await
     }
 
+    type PushConfirmedCertificatesStream = crate::push_relay::ResponseStream;
+
+    /// Accepts a push stream carrying many chains and spreads it across the shards that own them.
+    #[instrument(skip_all, fields(method = "push_confirmed_certificates"))]
+    async fn push_confirmed_certificates(
+        &self,
+        request: Request<Streaming<api::PushCertificateRequest>>,
+    ) -> Result<Response<Self::PushConfirmedCertificatesStream>, Status> {
+        let this = self.clone();
+        Ok(Response::new(crate::push_relay::demultiplex(
+            request.into_inner(),
+            {
+                let this = this.clone();
+                move |certificate| {
+                    let shard = this
+                        .shard_for(certificate)
+                        .ok_or_else(|| Status::invalid_argument("missing chain id"))?;
+                    Ok((shard.http_address(), shard))
+                }
+            },
+            move |shard| {
+                this.worker_client_for_shard(shard)
+                    .map_err(|error| Status::unavailable(error.to_string()))
+            },
+        )))
+    }
+
     #[instrument(
         skip_all,
         err(Display),
@@ -1194,6 +1221,27 @@ where
             .await?
             .handle_confirmed_certificate(Request::new(inner))
             .await
+    }
+
+    type RelayConfirmedCertificatesStream = crate::push_relay::ResponseStream;
+
+    /// Carries a shard's push stream to the peer it names, forwarding both directions.
+    #[instrument(skip_all, fields(method = "relay_confirmed_certificates"))]
+    async fn relay_confirmed_certificates(
+        &self,
+        request: Request<Streaming<api::RelayPushRequest>>,
+    ) -> Result<Response<Self::RelayConfirmedCertificatesStream>, Status> {
+        let this = self.clone();
+        Ok(Response::new(crate::push_relay::relay(
+            request.into_inner(),
+            move |destination| {
+                let destination = destination.to_owned();
+                Box::pin(async move {
+                    this.peer(&destination, "relay_confirmed_certificates")
+                        .await
+                })
+            },
+        )))
     }
 
     #[instrument(skip_all, err(Display), fields(method = "relay_chain_info_query"))]

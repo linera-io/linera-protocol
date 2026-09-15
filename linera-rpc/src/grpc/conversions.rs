@@ -48,6 +48,8 @@ pub enum GrpcProtoConversionError {
     CryptoError(#[from] CryptoError),
     #[error("Inconsistent outer/inner chain IDs")]
     InconsistentChainId,
+    #[error("Inconsistent outer/inner block heights")]
+    InconsistentBlockHeight,
     #[error("Unrecognized certificate type")]
     InvalidCertificateType,
     #[error(
@@ -496,6 +498,54 @@ impl TryFrom<HandleConfirmedCertificateRequest> for api::HandleConfirmedCertific
     }
 }
 
+/// Reads a pushed certificate, rejecting one whose chain does not match the routing id.
+///
+/// The id is what the receiving proxy shards on, so a mismatch would land the certificate on a
+/// worker that does not own the chain.
+impl TryFrom<api::PushCertificateRequest> for ConfirmedBlockCertificate {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(request: api::PushCertificateRequest) -> Result<Self, Self::Error> {
+        let certificate: ConfirmedBlockCertificate = request
+            .certificate
+            .ok_or(GrpcProtoConversionError::MissingField)?
+            .try_into()?;
+        let chain_id: ChainId = request
+            .chain_id
+            .ok_or(GrpcProtoConversionError::MissingField)?
+            .try_into()?;
+        ensure!(
+            certificate.inner().chain_id() == chain_id,
+            GrpcProtoConversionError::InconsistentChainId
+        );
+        // Checked like the chain id, because a proxy routes and answers from these outer fields
+        // without decoding: a height that disagrees with the certificate would have it record an
+        // answer identity no shard can ever produce.
+        ensure!(
+            request.height.map(BlockHeight::from) == Some(certificate.block().header.height),
+            GrpcProtoConversionError::InconsistentBlockHeight
+        );
+        Ok(certificate)
+    }
+}
+
+/// Builds a pushed certificate without consuming it, so a sender that has to fall back to the
+/// single-certificate path still holds it.
+pub fn push_certificate_request(
+    certificate: &ConfirmedBlockCertificate,
+    attempt: u64,
+) -> Result<api::PushCertificateRequest, GrpcProtoConversionError> {
+    Ok(api::PushCertificateRequest {
+        chain_id: Some(certificate.inner().chain_id().into()),
+        // Carried beside the certificate so a proxy can answer this message without decoding it.
+        height: Some(certificate.block().header.height.into()),
+        certificate: Some(certificate.try_into()?),
+        // This binary understands the aggregated `MissingCrossChainUpdates` error.
+        supports_aggregated_missing: true,
+        attempt,
+    })
+}
+
 impl TryFrom<HandleValidatedCertificateRequest> for api::HandleValidatedCertificateRequest {
     type Error = GrpcProtoConversionError;
 
@@ -587,21 +637,24 @@ impl TryFrom<TimeoutCertificate> for api::Certificate {
     }
 }
 
+impl TryFrom<&ConfirmedBlockCertificate> for api::Certificate {
+    type Error = GrpcProtoConversionError;
+
+    fn try_from(certificate: &ConfirmedBlockCertificate) -> Result<Self, Self::Error> {
+        Ok(Self {
+            value: bincode::serialize(certificate.value())?,
+            round: bincode::serialize(&certificate.round)?,
+            signatures: bincode::serialize(certificate.signatures())?,
+            kind: api::CertificateKind::Confirmed as i32,
+        })
+    }
+}
+
 impl TryFrom<ConfirmedBlockCertificate> for api::Certificate {
     type Error = GrpcProtoConversionError;
 
     fn try_from(certificate: ConfirmedBlockCertificate) -> Result<Self, Self::Error> {
-        let round = bincode::serialize(&certificate.round)?;
-        let signatures = bincode::serialize(certificate.signatures())?;
-
-        let value = bincode::serialize(certificate.value())?;
-
-        Ok(Self {
-            value,
-            round,
-            signatures,
-            kind: api::CertificateKind::Confirmed as i32,
-        })
+        (&certificate).try_into()
     }
 }
 
@@ -1469,6 +1522,53 @@ pub mod tests {
         let request = HandleValidatedCertificateRequest { certificate };
 
         round_trip_check::<_, api::HandleValidatedCertificateRequest>(&request);
+    }
+
+    /// A pushed certificate must agree with the chain and height named beside it.
+    ///
+    /// The proxy routes and answers from those outer fields without decoding the certificate, so a
+    /// height that disagrees would have it record an answer identity no shard can ever produce —
+    /// and the entry it keeps while the certificate is in flight would never be cleared.
+    #[test]
+    pub fn push_certificate_request_must_agree_with_its_certificate() {
+        let key_pair = ValidatorKeypair::generate();
+        let certificate = ConfirmedBlockCertificate::new(
+            ConfirmedBlock::new(
+                BlockExecutionOutcome {
+                    state_hash: CryptoHash::new(&Foo("test".into())),
+                    ..BlockExecutionOutcome::default()
+                }
+                .with(get_block()),
+            ),
+            Round::MultiLeader(3),
+            vec![(
+                key_pair.public_key,
+                ValidatorSignature::new(&Foo("test".into()), &key_pair.secret_key),
+            )],
+        );
+        let honest = push_certificate_request(&certificate, 7).expect("the request converts");
+        let height = certificate.block().header.height;
+        assert_eq!(honest.height.map(BlockHeight::from), Some(height));
+        ConfirmedBlockCertificate::try_from(honest.clone()).expect("an honest request is accepted");
+
+        for forged in [
+            api::PushCertificateRequest {
+                height: Some(BlockHeight(height.0 + 1).into()),
+                ..honest.clone()
+            },
+            api::PushCertificateRequest {
+                height: None,
+                ..honest.clone()
+            },
+        ] {
+            assert!(
+                matches!(
+                    ConfirmedBlockCertificate::try_from(forged),
+                    Err(GrpcProtoConversionError::InconsistentBlockHeight)
+                ),
+                "a height that disagrees with the certificate must be refused at the parser",
+            );
+        }
     }
 
     #[test]
