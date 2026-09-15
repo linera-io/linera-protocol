@@ -6541,10 +6541,19 @@ where
 
     // ...then walk past it so the retry SUCCEEDS, which is what must clear the deadline.
     clock.add(TimeDelta::from_secs(400));
-    wait_until(std::time::Duration::from_secs(5), || async {
-        builder.validator_set_build_failures_left() == 0 && builder.subscribe_calls(1).await > 0
+    // Asserted, not merely awaited: the check below is an UPPER bound on activity, and a
+    // listener that never recovered is the quietest thing in the process — it would sail
+    // through. (`failures_left == 0` is true the moment the startup update consumes the
+    // injection, so it is not evidence of recovery and is deliberately not part of this.)
+    let recovered = wait_until(std::time::Duration::from_secs(5), || async {
+        builder.subscribe_calls(1).await > 0
     })
     .await;
+    assert!(
+        recovered,
+        "the retry never succeeded, so the listener never entered the recovered state that \
+         this test exists to measure"
+    );
     tokio::time::sleep(std::time::Duration::from_millis(300)).await;
 
     // From here the clock never moves, so every remaining deadline is in the future and a
