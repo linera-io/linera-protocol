@@ -38,7 +38,7 @@ pub type ResponseStream = ReceiverStream<Result<api::PushCertificateResponse, St
 /// Needs no decoding: the sender names the chain and height on the request for exactly this.
 ///
 /// `None` when the request names neither, because an answer the sender cannot attribute is one it
-/// discards — leaving whoever pushed it waiting out the whole push timeout for nothing.
+/// discards — leaving whoever pushed it waiting out the whole stream timeout for nothing.
 fn refuse(
     request: &api::PushCertificateRequest,
     error: &str,

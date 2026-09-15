@@ -56,7 +56,7 @@ pub struct PushStream {
     /// and the sender can drop answers from an attempt it has given up on.
     attempts: AtomicU64,
     /// Held, not detached: [`Task`] cancels on drop, so letting this go would stop routing answers
-    /// and hang every waiter until its push timeout.
+    /// and hang every waiter until its stream timeout.
     _router: Task<()>,
 }
 
