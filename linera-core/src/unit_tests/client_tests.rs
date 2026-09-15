@@ -5982,10 +5982,10 @@ where
             serving_since: Arc::new(AtomicU64::new(serving_since)),
         }
     };
-    let breaker = |next_probe_at, probe_interval| CircuitBreakerState {
+    let breaker = |next_probe_at, probe_interval, tripped| CircuitBreakerState {
         next_probe_at,
         probe_interval,
-        tripped: true,
+        tripped,
     };
     let now = clock.current_time();
 
@@ -5996,6 +5996,7 @@ where
         breaker(
             now.saturating_add(TimeDelta::from_duration(interval)),
             interval,
+            true,
         ),
     )]);
     chain
@@ -6011,7 +6012,7 @@ where
     clock.add(TimeDelta::from_secs(3600));
     let long_lived = handle(true, now.micros());
     let mut senders = HashMap::from([(validator, long_lived)]);
-    let mut breakers = HashMap::from([(validator, breaker(clock.current_time(), interval))]);
+    let mut breakers = HashMap::from([(validator, breaker(clock.current_time(), interval, true))]);
     chain
         .update_notification_streams(&mut senders, &mut breakers)
         .await?;
@@ -6029,7 +6030,7 @@ where
     let now = clock.current_time();
     let short_lived = handle(true, now.saturating_sub(TimeDelta::from_secs(5)).micros());
     let mut senders = HashMap::from([(validator, short_lived)]);
-    let mut breakers = HashMap::from([(validator, breaker(now, interval))]);
+    let mut breakers = HashMap::from([(validator, breaker(now, interval, true))]);
     chain
         .update_notification_streams(&mut senders, &mut breakers)
         .await?;
@@ -6042,13 +6043,42 @@ where
          reconnects internally, so it reached the breaker only after giving up"
     );
 
+    // A validator's FIRST stream death, against the deadline armed at launch. That
+    // breaker never tripped, so this is the first recorded failure and belongs at the
+    // configured interval — escalating off it doubles the window the chain stays deaf.
+    let initial = std::time::Duration::from_secs(300);
+    let now = clock.current_time();
+    let first_death = handle(true, now.saturating_sub(TimeDelta::from_secs(5)).micros());
+    let mut senders = HashMap::from([(validator, first_death)]);
+    let mut breakers = HashMap::from([(
+        validator,
+        breaker(
+            now.saturating_add(TimeDelta::from_duration(interval)),
+            interval,
+            false,
+        ),
+    )]);
+    chain
+        .update_notification_streams(&mut senders, &mut breakers)
+        .await?;
+    let state = breakers
+        .get(&validator)
+        .expect("a stream that died must stay breakered");
+    assert_eq!(
+        state.probe_interval, initial,
+        "a first stream death must schedule at the configured initial interval; escalating \
+         off the untripped breaker every launch arms starts the ladder at double, and \
+         makes the error-level record that a stream was lost unreachable"
+    );
+    assert!(state.tripped, "a first failure must trip the breaker");
+
     // Alive but never serving, past its deadline: the probe is stuck in `subscribe` or in
     // the sync. It must be aborted, or `senders` stays occupied and the validator is
     // never probed again.
     let stuck = handle(false, NOT_SERVING);
     let stuck_abort = stuck.abort.clone();
     let mut senders = HashMap::from([(validator, stuck)]);
-    let mut breakers = HashMap::from([(validator, breaker(clock.current_time(), interval))]);
+    let mut breakers = HashMap::from([(validator, breaker(clock.current_time(), interval, true))]);
     chain
         .update_notification_streams(&mut senders, &mut breakers)
         .await?;
@@ -6361,6 +6391,12 @@ where
         state.tripped,
         "a probe that stalled past its deadline must TRIP the breaker, or its later \
          recovery is not reported"
+    );
+    assert_eq!(
+        state.probe_interval,
+        std::time::Duration::from_secs(300),
+        "a FIRST stall belongs at the configured initial interval; escalating off the \
+         untripped breaker every launch arms starts the ladder at double"
     );
     Ok(())
 }

@@ -3588,13 +3588,24 @@ impl<Env: Environment> ChainClient<Env> {
                 (false, None) => {
                     if let Some(state) = circuit_breakers.get_mut(validator) {
                         if now >= state.next_probe_at {
-                            state.escalate(now, max_probe_interval, spread);
+                            // A breaker that has not tripped is the deadline armed at
+                            // launch, so this is the stream's FIRST recorded failure and
+                            // belongs at the configured interval, not at twice it.
+                            if state.tripped {
+                                state.escalate(now, max_probe_interval, spread);
+                            } else {
+                                *state = CircuitBreakerState::failed(
+                                    now,
+                                    initial_probe_interval,
+                                    spread,
+                                );
+                            }
                             abort_stalled_probes.push(*validator);
                             warn!(
                                 %validator,
                                 chain_id = %self.chain_id,
                                 next_probe_in = ?state.probe_interval,
-                                "Probe did not start serving in time; retrying later"
+                                "Stream did not start serving in time; aborting and retrying later"
                             );
                         }
                     }
@@ -3618,7 +3629,15 @@ impl<Env: Environment> ChainClient<Env> {
                 }
                 // Died without serving, or after too short a life to count as churn.
                 (true, _) => {
-                    if let Some(state) = circuit_breakers.get_mut(validator) {
+                    // Escalate only a breaker that already tripped. Every launch arms one,
+                    // so keying on presence alone charges a validator's FIRST stream death
+                    // as a failed probe: the ladder starts at twice the configured
+                    // interval and the error-level record that a stream was lost at all
+                    // becomes unreachable.
+                    if let Some(state) = circuit_breakers
+                        .get_mut(validator)
+                        .filter(|state| state.tripped)
+                    {
                         state.escalate(now, max_probe_interval, spread);
                         warn!(
                             %validator,
