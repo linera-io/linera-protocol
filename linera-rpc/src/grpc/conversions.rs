@@ -48,6 +48,8 @@ pub enum GrpcProtoConversionError {
     CryptoError(#[from] CryptoError),
     #[error("Inconsistent outer/inner chain IDs")]
     InconsistentChainId,
+    #[error("Inconsistent outer/inner block heights")]
+    InconsistentBlockHeight,
     #[error("Unrecognized certificate type")]
     InvalidCertificateType,
     #[error(
@@ -515,6 +517,13 @@ impl TryFrom<api::PushCertificateRequest> for ConfirmedBlockCertificate {
         ensure!(
             certificate.inner().chain_id() == chain_id,
             GrpcProtoConversionError::InconsistentChainId
+        );
+        // Checked like the chain id, because a proxy routes and answers from these outer fields
+        // without decoding: a height that disagrees with the certificate would have it record an
+        // answer identity no shard can ever produce.
+        ensure!(
+            request.height.map(BlockHeight::from) == Some(certificate.block().header.height),
+            GrpcProtoConversionError::InconsistentBlockHeight
         );
         Ok(certificate)
     }
@@ -1513,6 +1522,53 @@ pub mod tests {
         let request = HandleValidatedCertificateRequest { certificate };
 
         round_trip_check::<_, api::HandleValidatedCertificateRequest>(&request);
+    }
+
+    /// A pushed certificate must agree with the chain and height named beside it.
+    ///
+    /// The proxy routes and answers from those outer fields without decoding the certificate, so a
+    /// height that disagrees would have it record an answer identity no shard can ever produce —
+    /// and the entry it keeps while the certificate is in flight would never be cleared.
+    #[test]
+    pub fn push_certificate_request_must_agree_with_its_certificate() {
+        let key_pair = ValidatorKeypair::generate();
+        let certificate = ConfirmedBlockCertificate::new(
+            ConfirmedBlock::new(
+                BlockExecutionOutcome {
+                    state_hash: CryptoHash::new(&Foo("test".into())),
+                    ..BlockExecutionOutcome::default()
+                }
+                .with(get_block()),
+            ),
+            Round::MultiLeader(3),
+            vec![(
+                key_pair.public_key,
+                ValidatorSignature::new(&Foo("test".into()), &key_pair.secret_key),
+            )],
+        );
+        let honest = push_certificate_request(&certificate, 7).expect("the request converts");
+        let height = certificate.block().header.height;
+        assert_eq!(honest.height.map(BlockHeight::from), Some(height));
+        ConfirmedBlockCertificate::try_from(honest.clone()).expect("an honest request is accepted");
+
+        for forged in [
+            api::PushCertificateRequest {
+                height: Some(BlockHeight(height.0 + 1).into()),
+                ..honest.clone()
+            },
+            api::PushCertificateRequest {
+                height: None,
+                ..honest.clone()
+            },
+        ] {
+            assert!(
+                matches!(
+                    ConfirmedBlockCertificate::try_from(forged),
+                    Err(GrpcProtoConversionError::InconsistentBlockHeight)
+                ),
+                "a height that disagrees with the certificate must be refused at the parser",
+            );
+        }
     }
 
     #[test]
