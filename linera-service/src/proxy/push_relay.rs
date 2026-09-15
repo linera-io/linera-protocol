@@ -15,6 +15,8 @@
 //! Both directions are bounded by channels rather than by buffering: when a downstream stops
 //! reading, the pump stops writing, which closes the HTTP/2 window back to the original sender.
 
+use std::sync::{Arc, Mutex};
+
 use futures::StreamExt as _;
 use linera_core::node::NodeError;
 use linera_rpc::grpc::api::{
@@ -59,6 +61,13 @@ fn refuse(
     })
 }
 
+/// What one shard still owes an answer for, so its teardown can be answered per certificate.
+///
+/// A shard's stream dying must not reach the sender as a stream error: one stream carries every
+/// chain going to this validator, and the sender ends the whole thing on a transport failure. So
+/// the proxy answers that shard's outstanding certificates itself and leaves the stream up.
+type Outstanding = Arc<Mutex<Vec<api::PushCertificateRequest>>>;
+
 /// Fans a sender's single push stream out across the shards owning the chains it carries, and
 /// merges their answers back onto one stream.
 pub fn demultiplex<K, C, S>(
@@ -78,7 +87,7 @@ where
         // One outbound stream per shard, opened the first time a chain of that shard appears.
         let mut shards: std::collections::HashMap<
             String,
-            mpsc::Sender<api::PushCertificateRequest>,
+            (mpsc::Sender<api::PushCertificateRequest>, Outstanding),
         > = std::collections::HashMap::new();
         while let Some(message) = certificates.next().await {
             let request = match message {
@@ -112,8 +121,10 @@ where
                     continue;
                 }
             };
-            let sender = match shards.get(&key) {
-                Some(sender) if !sender.is_closed() => sender.clone(),
+            let (sender, outstanding) = match shards.get(&key) {
+                Some((sender, outstanding)) if !sender.is_closed() => {
+                    (sender.clone(), outstanding.clone())
+                }
                 _ => {
                     let mut client = match connect(&shard) {
                         Ok(client) => client,
@@ -161,14 +172,25 @@ where
                             continue;
                         }
                     };
-                    tokio::spawn(pump_responses(outbound, responses.clone()));
-                    shards.insert(key.clone(), sender.clone());
-                    sender
+                    let outstanding: Outstanding = Arc::new(Mutex::new(Vec::new()));
+                    tokio::spawn(pump_responses(
+                        outbound,
+                        responses.clone(),
+                        outstanding.clone(),
+                    ));
+                    shards.insert(key.clone(), (sender.clone(), outstanding.clone()));
+                    (sender, outstanding)
                 }
             };
             // `try_send`, not `send`: waiting for one shard's queue to drain would park this
             // loop and stop every chain on every *other* shard with it — the head-of-line stall
             // that carrying many chains on one stream exists to avoid.
+            // Recorded before the send, so a shard that dies mid-flight can still be told which
+            // certificates it never answered.
+            outstanding
+                .lock()
+                .expect("the outstanding table is never held across a panic")
+                .push(request.clone());
             match sender.try_send(request) {
                 Ok(()) => {}
                 Err(mpsc::error::TrySendError::Full(request)) => {
@@ -190,9 +212,25 @@ where
                         break;
                     }
                 }
-                Err(mpsc::error::TrySendError::Closed(_)) => {
-                    warn!("A shard's push stream closed; dropping it");
+                // The pump answers whatever this shard had outstanding, but not this one — it
+                // never reached the queue — so it is refused here and the entry dropped, which
+                // makes the next certificate for that shard reconnect.
+                Err(mpsc::error::TrySendError::Closed(request)) => {
+                    warn!(%key, "A shard's push stream closed; dropping it");
                     shards.remove(&key);
+                    outstanding
+                        .lock()
+                        .expect("the outstanding table is never held across a panic")
+                        .retain(|queued| {
+                            (queued.chain_id.as_ref(), queued.height, queued.attempt)
+                                != (request.chain_id.as_ref(), request.height, request.attempt)
+                        });
+                    let Some(answer) = refuse(&request, "the shard's push stream closed") else {
+                        continue;
+                    };
+                    if responses.send(Ok(answer)).await.is_err() {
+                        break;
+                    }
                 }
             }
         }
@@ -251,7 +289,7 @@ where
                 return;
             }
         };
-        tokio::spawn(pump_responses(outbound, responses));
+        tokio::spawn(forward_responses(outbound, responses));
         while let Some(message) = inbound.next().await {
             match message {
                 Ok(api::RelayPushRequest {
@@ -274,12 +312,65 @@ where
 }
 
 /// Forwards one peer's or shard's answers onto the merged stream.
-async fn pump_responses(
+/// Forwards one peer's answers verbatim, errors included.
+///
+/// For [`relay`] only, where the proxy is a pipe to a single destination: an error there means the
+/// one stream the shard is using has ended, and the shard has to be told. [`demultiplex`] must not
+/// do this — it merges many shards onto one stream, so see [`pump_responses`].
+async fn forward_responses(
     mut outbound: Streaming<api::PushCertificateResponse>,
     responses: mpsc::Sender<Result<api::PushCertificateResponse, Status>>,
 ) {
     while let Some(message) = outbound.next().await {
         if responses.send(message).await.is_err() {
+            return;
+        }
+    }
+}
+
+async fn pump_responses(
+    mut outbound: Streaming<api::PushCertificateResponse>,
+    responses: mpsc::Sender<Result<api::PushCertificateResponse, Status>>,
+    outstanding: Outstanding,
+) {
+    let mut ended = None;
+    while let Some(message) = outbound.next().await {
+        let answer = match message {
+            Ok(answer) => answer,
+            // NOT forwarded: an `Err` reaching the sender ends the merged stream, and this shard's
+            // failure is not the other shards' problem. Its own certificates are refused below.
+            Err(status) => {
+                ended = Some(status);
+                break;
+            }
+        };
+        outstanding
+            .lock()
+            .expect("the outstanding table is never held across a panic")
+            .retain(|request| {
+                (request.chain_id.as_ref(), request.height, request.attempt)
+                    != (answer.chain_id.as_ref(), answer.height, answer.attempt)
+            });
+        if responses.send(Ok(answer)).await.is_err() {
+            return;
+        }
+    }
+    // Whatever this shard never answered is refused here, so its senders retry instead of waiting
+    // out the stream timeout for an answer that is no longer coming.
+    let reason = ended.map_or_else(
+        || "the shard closed its push stream".to_string(),
+        |status| status.message().to_string(),
+    );
+    let stranded = std::mem::take(
+        &mut *outstanding
+            .lock()
+            .expect("the outstanding table is never held across a panic"),
+    );
+    for request in stranded {
+        let Some(answer) = refuse(&request, &reason) else {
+            continue;
+        };
+        if responses.send(Ok(answer)).await.is_err() {
             return;
         }
     }
