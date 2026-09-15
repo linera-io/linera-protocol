@@ -5900,10 +5900,13 @@ where
     let state = circuit_breakers
         .get(&down)
         .expect("launching a probe must not drop the breaker");
+    // Two-sided: `> now` alone is satisfied by 1us, by double the interval, or by the cap,
+    // so it pins that a deadline was armed but nothing about WHICH one.
+    let delay = state.next_probe_at.duration_since(clock.current_time());
     assert!(
-        state.next_probe_at > clock.current_time(),
-        "launching a probe must re-arm the deadline, otherwise the probe timer re-fires \
-         immediately while the probe is still connecting"
+        delay >= interval && delay <= interval * 9 / 8,
+        "launching a probe must re-arm exactly one interval out, plus at most the spread \
+         (an eighth); got {delay:?} against an interval of {interval:?}"
     );
     assert_eq!(
         state.probe_interval, interval,
@@ -6331,10 +6334,17 @@ where
         "every first launch must arm a deadline, or a probe that never resolves is never \
          aborted and never retried"
     );
+    let initial = std::time::Duration::from_secs(300);
     for state in breakers.values() {
+        assert_eq!(
+            state.probe_interval, initial,
+            "a first launch must arm at the CONFIGURED initial interval; arming at the cap \
+             instead leaves a stalled subscribe undetected for an hour rather than minutes"
+        );
+        let delay = state.next_probe_at.duration_since(clock.current_time());
         assert!(
-            state.next_probe_at > clock.current_time(),
-            "a first launch must arm its deadline in the future, not in the past"
+            delay >= initial && delay <= initial * 9 / 8,
+            "a first launch must arm one interval out plus at most the spread; got {delay:?}"
         );
         assert!(
             !state.tripped,
@@ -6342,6 +6352,15 @@ where
              healthy validator announces a recovery it never had as soon as it serves"
         );
     }
+    // The spread exists so a fleet-wide stream loss does not re-converge every chain's
+    // probes on one instant; with it removed, every validator here would share a deadline.
+    let deadlines: std::collections::HashSet<_> =
+        breakers.values().map(|state| state.next_probe_at).collect();
+    assert!(
+        deadlines.len() > 1,
+        "probe deadlines must be spread per validator, or one fleet-wide event re-converges \
+         every probe on the same instant at every doubling"
+    );
     Ok(())
 }
 
