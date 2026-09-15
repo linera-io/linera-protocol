@@ -14,7 +14,7 @@ use async_trait::async_trait;
 use futures::{
     future::Either,
     lock::{Mutex, MutexGuard},
-    Future,
+    stream, Future, StreamExt as _,
 };
 use linera_base::{
     crypto::{
@@ -92,6 +92,13 @@ where
 {
     state: WorkerState<S>,
     notifier: Arc<ChannelNotifier<Notification>>,
+    /// Abort handles for the notification streams handed out by `do_subscribe`, so
+    /// tests can sever them mid-flight as a validator (or proxy) restart would.
+    notification_stream_aborts: Vec<stream::AbortHandle>,
+    /// How many times `do_subscribe` has been called. Monotonic — never drained by
+    /// `disconnect_notification_subscribers` — so a test can bound how often a client
+    /// re-subscribes, which is what pins the circuit breaker's backoff.
+    subscribe_calls: usize,
 }
 
 /// A client used by tests to talk to an in-process `LocalValidator`.
@@ -103,6 +110,9 @@ where
     public_key: ValidatorPublicKey,
     client: Arc<Mutex<LocalValidator<S>>>,
     fault_type: FaultType,
+    /// Held open for reading by every chain-info query. A test takes the write lock to
+    /// stall the initial sync a probe runs after `subscribe` has already succeeded.
+    chain_info_gate: Arc<tokio::sync::RwLock<()>>,
 }
 
 impl<S> ValidatorNode for LocalValidatorClient<S>
@@ -338,11 +348,14 @@ where
         let client = LocalValidator {
             state,
             notifier: Arc::new(ChannelNotifier::default()),
+            notification_stream_aborts: Vec::new(),
+            subscribe_calls: 0,
         };
         Self {
             public_key,
             client: Arc::new(Mutex::new(client)),
             fault_type: FaultType::Honest,
+            chain_info_gate: Arc::default(),
         }
     }
 
@@ -354,6 +367,20 @@ where
     /// Returns the validator's currently configured [`FaultType`].
     pub fn fault_type(&self) -> FaultType {
         self.fault_type
+    }
+
+    /// How many times this validator has been asked to `subscribe`.
+    pub async fn subscribe_calls(&self) -> usize {
+        self.client.lock().await.subscribe_calls
+    }
+
+    /// Ends every notification stream previously handed out by this validator — as
+    /// clients experience when the validator (or its proxy) restarts.
+    pub async fn disconnect_notification_subscribers(&self) {
+        let mut validator = self.client.lock().await;
+        for abort in validator.notification_stream_aborts.drain(..) {
+            abort.abort();
+        }
     }
 
     fn set_fault_type(&mut self, fault_type: FaultType) {
@@ -500,6 +527,8 @@ where
         query: ChainInfoQuery,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
+        let gate = self.chain_info_gate.clone();
+        let _open = gate.read().await;
         let validator = self.client.lock().await;
         let result = match self.fault_type {
             FaultType::Offline => Err(NodeError::ClientIoError {
@@ -524,9 +553,34 @@ where
         chains: Vec<ChainId>,
         sender: oneshot::Sender<Result<NotificationStream, NodeError>>,
     ) -> Result<(), Result<NotificationStream, NodeError>> {
-        let validator = self.client.lock().await;
+        let mut validator = self.client.lock().await;
+        validator.subscribe_calls += 1;
+        // Both offline variants refuse: a notification stream is not the info query that
+        // `OfflineWithInfo` still answers, and a probe must be able to genuinely FAIL.
+        if matches!(
+            self.fault_type,
+            FaultType::Offline | FaultType::OfflineWithInfo
+        ) {
+            return sender.send(Err(NodeError::ClientIoError {
+                error: "offline".to_string(),
+            }));
+        }
         let rx = validator.notifier.subscribe(chains);
-        let stream: NotificationStream = Box::pin(UnboundedReceiverStream::new(rx));
+        let (stream, abort) = stream::abortable(UnboundedReceiverStream::new(rx));
+        // Marking the handle aborted when the client merely DROPS its end is what makes
+        // the prune below see the real set: a dropped stream is never aborted by anyone,
+        // so without this the vec grows across every re-subscribe and
+        // `disconnect_notification_subscribers` walks handles nobody holds.
+        let abort_on_drop = AbortOnDrop(abort.clone());
+        let stream = stream.map(move |notification| {
+            let _abort_on_drop = &abort_on_drop;
+            notification
+        });
+        validator
+            .notification_stream_aborts
+            .retain(|abort| !abort.is_aborted());
+        validator.notification_stream_aborts.push(abort);
+        let stream: NotificationStream = Box::pin(stream);
         sender.send(Ok(stream))
     }
 
@@ -763,18 +817,73 @@ where
     }
 }
 
+/// Polls `condition` until it holds, or gives up after `timeout` of real time.
+///
+/// The probe-timer tests drive a simulated clock but still have to let a spawned listener
+/// run; waiting on an observable counter rather than a fixed sleep keeps them from failing
+/// as "never repaired" on a loaded runner, where the real work is a `subscribe` plus a
+/// full sync against the storage backend under test.
+pub async fn wait_until<F, Fut>(timeout: Duration, mut condition: F) -> bool
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = bool>,
+{
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        if condition().await {
+            return true;
+        }
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+/// Aborts its handle when dropped, so a notification stream the client lets go of is
+/// distinguishable from one that is still held.
+struct AbortOnDrop(stream::AbortHandle);
+
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
 /// A [`ValidatorNodeProvider`] holding the in-process test validator clients.
 #[derive(Clone)]
-pub struct NodeProvider<S>(Arc<std::sync::Mutex<Vec<LocalValidatorClient<S>>>>)
+pub struct NodeProvider<S>
 where
-    S: Storage;
+    S: Storage,
+{
+    clients: Arc<std::sync::Mutex<Vec<LocalValidatorClient<S>>>>,
+    /// How many further calls to build the validator set must fail, so a test can make
+    /// `update_notification_streams` return `Err` at a chosen moment.
+    failures_left: Arc<std::sync::atomic::AtomicUsize>,
+    /// Every attempt to build the validator set, successful or not. Monotonic, so a test
+    /// can freeze the clock and assert the listener is PARKED rather than spinning.
+    builds: Arc<std::sync::atomic::AtomicUsize>,
+}
 
 impl<S> NodeProvider<S>
 where
     S: Storage + Clone,
 {
     fn all_nodes(&self) -> Vec<LocalValidatorClient<S>> {
-        self.0.lock().unwrap().clone()
+        self.clients.lock().unwrap().clone()
+    }
+
+    /// The same validators, with a private failure counter. The validators' own export
+    /// tasks resolve each other through a provider too, so without this they would race
+    /// the chain client for injected failures and a test could pass without ever failing
+    /// the update it names.
+    fn without_failure_injection(&self) -> Self {
+        Self {
+            clients: self.clients.clone(),
+            failures_left: Arc::default(),
+            // A private build counter too, so export-task builds stay out of a test's count.
+            builds: Arc::default(),
+        }
     }
 }
 
@@ -795,7 +904,22 @@ where
     where
         A: AsRef<str>,
     {
-        let list = self.0.lock().unwrap();
+        self.builds
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if self
+            .failures_left
+            .fetch_update(
+                std::sync::atomic::Ordering::Relaxed,
+                std::sync::atomic::Ordering::Relaxed,
+                |n| n.checked_sub(1),
+            )
+            .is_ok()
+        {
+            return Err(NodeError::CannotResolveValidatorAddress {
+                address: "injected failure".to_string(),
+            });
+        }
+        let list = self.clients.lock().unwrap();
         Ok(validators
             .into_iter()
             .map(|(public_key, address)| {
@@ -819,7 +943,11 @@ where
     where
         T: IntoIterator<Item = LocalValidatorClient<S>>,
     {
-        Self(Arc::new(std::sync::Mutex::new(iter.into_iter().collect())))
+        Self {
+            clients: Arc::new(std::sync::Mutex::new(iter.into_iter().collect())),
+            failures_left: Arc::default(),
+            builds: Arc::default(),
+        }
     }
 }
 
@@ -1032,7 +1160,11 @@ where
         let initial_committee = Committee::make_simple(for_committee);
         // Created up front and filled in below, so that each validator's export tasks can resolve
         // the others through it even though those clients do not exist yet.
-        let node_provider = NodeProvider(Arc::new(std::sync::Mutex::new(Vec::new())));
+        let node_provider = NodeProvider {
+            clients: Arc::new(std::sync::Mutex::new(Vec::new())),
+            failures_left: Arc::default(),
+            builds: Arc::default(),
+        };
         let mut validator_storages = HashMap::new();
         let mut validator_key_pairs = HashMap::new();
         let mut faulty_validators = HashSet::new();
@@ -1055,7 +1187,7 @@ where
             if let Some(export_config) = block_export.clone() {
                 let handle = crate::spawn_block_export_queue(
                     storage.clone(),
-                    Arc::new(node_provider.clone()),
+                    Arc::new(node_provider.without_failure_injection()),
                     export_config,
                     Some(validator_public_key),
                 );
@@ -1066,7 +1198,7 @@ where
                 faulty_validators.insert(validator_public_key);
                 validator.set_fault_type(FaultType::NoChains);
             }
-            node_provider.0.lock().unwrap().push(validator);
+            node_provider.clients.lock().unwrap().push(validator);
             validator_storages.insert(validator_public_key, storage);
             validator_key_pairs.insert(validator_public_key, secret_key_copy);
         }
@@ -1099,7 +1231,7 @@ where
 
     /// Sets the cross-chain message chunk limit on every validator in the test setup.
     pub fn with_cross_chain_message_chunk_limit(self, limit: usize) -> Self {
-        let validator_clients = self.node_provider.0.lock().unwrap();
+        let validator_clients = self.node_provider.clients.lock().unwrap();
         for validator in validator_clients.iter() {
             let mut inner = validator.client.try_lock().expect("no contention at setup");
             inner.state.set_cross_chain_message_chunk_limit(limit);
@@ -1108,11 +1240,63 @@ where
         self
     }
 
+    /// Makes the next `count` attempts to build the validator set fail, so a test can
+    /// force `update_notification_streams` to return `Err` at a chosen moment.
+    pub fn fail_next_validator_set_builds(&self, count: usize) {
+        self.node_provider
+            .failures_left
+            .store(count, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// How many of the injected validator-set-build failures are still pending, so a
+    /// test can count how often a failing update was retried.
+    pub fn validator_set_build_failures_left(&self) -> usize {
+        self.node_provider
+            .failures_left
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Stalls every chain-info query at the validator at `index` until the returned guard
+    /// is dropped, which stalls the initial sync a probe runs once `subscribe` succeeds.
+    pub async fn stall_chain_info_queries(
+        &self,
+        index: usize,
+    ) -> tokio::sync::OwnedRwLockWriteGuard<()> {
+        self.node_provider.all_nodes()[index]
+            .chain_info_gate
+            .clone()
+            .write_owned()
+            .await
+    }
+
+    /// Every attempt the chain clients have made to build the validator set.
+    pub fn validator_set_builds(&self) -> usize {
+        self.node_provider
+            .builds
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// How many times the validator at `index` has been asked to `subscribe`.
+    pub async fn subscribe_calls(&self, index: usize) -> usize {
+        self.node_provider.all_nodes()[index]
+            .subscribe_calls()
+            .await
+    }
+
+    /// Severs every notification stream on every validator in the test setup, as a
+    /// fleet-wide proxy restart does. Clients keep their (now dead) ends of the streams
+    /// until they notice and re-subscribe.
+    pub async fn disconnect_notification_subscribers(&self) {
+        for validator in self.node_provider.all_nodes() {
+            validator.disconnect_notification_subscribers().await;
+        }
+    }
+
     /// Returns the [`FaultType`] currently configured for the given validator, or `None`
     /// if no validator with that key is in the test setup.
     pub fn fault_type(&self, public_key: &ValidatorPublicKey) -> Option<FaultType> {
         self.node_provider
-            .0
+            .clients
             .lock()
             .unwrap()
             .iter()
@@ -1123,7 +1307,7 @@ where
     /// Sets the [`FaultType`] for the validators at the given indexes.
     pub fn set_fault_type(&mut self, indexes: impl AsRef<[usize]>, fault_type: FaultType) {
         let mut faulty_validators = vec![];
-        let mut validator_clients = self.node_provider.0.lock().unwrap();
+        let mut validator_clients = self.node_provider.clients.lock().unwrap();
         for index in indexes.as_ref() {
             let validator = &mut validator_clients[*index];
             validator.set_fault_type(fault_type);
@@ -1258,7 +1442,7 @@ where
 
     /// Returns a clone of the validator client at the given index.
     pub fn node(&mut self, index: usize) -> LocalValidatorClient<B::Storage> {
-        self.node_provider.0.lock().unwrap()[index].clone()
+        self.node_provider.clients.lock().unwrap()[index].clone()
     }
 
     /// Builds a fresh storage seeded with the network description and genesis chains.
