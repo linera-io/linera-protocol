@@ -41,15 +41,12 @@ pub type ResponseStream = ReceiverStream<Result<api::PushCertificateResponse, St
 ///
 /// `None` when the request names neither, because an answer the sender cannot attribute is one it
 /// discards — leaving whoever pushed it waiting out the whole stream timeout for nothing.
-fn refuse(
-    request: &api::PushCertificateRequest,
-    error: &str,
-) -> Option<api::PushCertificateResponse> {
-    let (chain_id, height) = (request.chain_id.clone()?, request.height?);
+fn refuse(pending: &Pending, error: &str) -> Option<api::PushCertificateResponse> {
+    let (chain_id, height) = (pending.chain_id.clone()?, pending.height?);
     Some(api::PushCertificateResponse {
         chain_id: Some(chain_id),
         height: Some(height),
-        attempt: request.attempt,
+        attempt: pending.attempt,
         result: Some(api::ChainInfoResult {
             inner: Some(api::chain_info_result::Inner::Error(
                 bincode::serialize(&NodeError::PushRefused {
@@ -61,12 +58,47 @@ fn refuse(
     })
 }
 
+/// The identity an answer needs, which is all the proxy keeps while a certificate is in flight.
+///
+/// Deliberately not the request: that owns the certificate, and holding ~1280 of them per shard —
+/// the outbound channel plus the shard's own window — at a 1 MB block limit is gigabytes for
+/// something only three fields are ever read from.
+#[derive(Clone, PartialEq)]
+struct Pending {
+    chain_id: Option<api::ChainId>,
+    height: Option<api::BlockHeight>,
+    attempt: u64,
+}
+
+impl Pending {
+    fn of(request: &api::PushCertificateRequest) -> Self {
+        Self {
+            chain_id: request.chain_id.clone(),
+            height: request.height,
+            attempt: request.attempt,
+        }
+    }
+
+    fn answers(&self, response: &api::PushCertificateResponse) -> bool {
+        (&self.chain_id, self.height, self.attempt)
+            == (&response.chain_id, response.height, response.attempt)
+    }
+}
+
+/// Drops one entry from a shard's outstanding list, for a certificate that will never be answered.
+fn forget(outstanding: &Outstanding, pending: &Pending) {
+    outstanding
+        .lock()
+        .expect("the outstanding table is never held across a panic")
+        .retain(|queued| queued != pending);
+}
+
 /// What one shard still owes an answer for, so its teardown can be answered per certificate.
 ///
 /// A shard's stream dying must not reach the sender as a stream error: one stream carries every
 /// chain going to this validator, and the sender ends the whole thing on a transport failure. So
 /// the proxy answers that shard's outstanding certificates itself and leaves the stream up.
-type Outstanding = Arc<Mutex<Vec<api::PushCertificateRequest>>>;
+type Outstanding = Arc<Mutex<Vec<Pending>>>;
 
 /// Fans a sender's single push stream out across the shards owning the chains it carries, and
 /// merges their answers back onto one stream.
@@ -106,7 +138,7 @@ where
                 Err(status) => {
                     // Unanswerable requests end the stream: the sender named no chain or height, so
                     // nothing we send back can be matched to what it is waiting for.
-                    let Some(answer) = refuse(&request, status.message()) else {
+                    let Some(answer) = refuse(&Pending::of(&request), status.message()) else {
                         responses
                             .send(Err(Status::invalid_argument(
                                 "a pushed certificate must name its chain and height",
@@ -131,7 +163,8 @@ where
                         Err(status) => {
                             // Unanswerable requests end the stream: the sender named no chain or height, so
                             // nothing we send back can be matched to what it is waiting for.
-                            let Some(answer) = refuse(&request, status.message()) else {
+                            let Some(answer) = refuse(&Pending::of(&request), status.message())
+                            else {
                                 responses
                                     .send(Err(Status::invalid_argument(
                                         "a pushed certificate must name its chain and height",
@@ -157,7 +190,8 @@ where
                         Err(status) => {
                             // Unanswerable requests end the stream: the sender named no chain or height, so
                             // nothing we send back can be matched to what it is waiting for.
-                            let Some(answer) = refuse(&request, status.message()) else {
+                            let Some(answer) = refuse(&Pending::of(&request), status.message())
+                            else {
                                 responses
                                     .send(Err(Status::invalid_argument(
                                         "a pushed certificate must name its chain and height",
@@ -185,20 +219,24 @@ where
             // `try_send`, not `send`: waiting for one shard's queue to drain would park this
             // loop and stop every chain on every *other* shard with it — the head-of-line stall
             // that carrying many chains on one stream exists to avoid.
-            // Recorded before the send, so a shard that dies mid-flight can still be told which
-            // certificates it never answered.
+            // Recorded BEFORE the send: an answer can come back before this line would otherwise
+            // run, and an unrecorded answer would leave the entry behind forever. Every arm that
+            // does not reach the shard removes it again.
+            let pending = Pending::of(&request);
             outstanding
                 .lock()
                 .expect("the outstanding table is never held across a panic")
-                .push(request.clone());
+                .push(pending.clone());
             match sender.try_send(request) {
                 Ok(()) => {}
-                Err(mpsc::error::TrySendError::Full(request)) => {
+                Err(mpsc::error::TrySendError::Full(_)) => {
                     warn!(%key, "A shard is not keeping up with the push stream");
+                    // Never reached the shard, so nothing will ever answer it.
+                    forget(&outstanding, &pending);
                     // Unanswerable requests end the stream: the sender named no chain or height, so
                     // nothing we send back can be matched to what it is waiting for.
                     let Some(answer) =
-                        refuse(&request, "the shard is not keeping up with the stream")
+                        refuse(&pending, "the shard is not keeping up with the stream")
                     else {
                         responses
                             .send(Err(Status::invalid_argument(
@@ -215,17 +253,11 @@ where
                 // The pump answers whatever this shard had outstanding, but not this one — it
                 // never reached the queue — so it is refused here and the entry dropped, which
                 // makes the next certificate for that shard reconnect.
-                Err(mpsc::error::TrySendError::Closed(request)) => {
+                Err(mpsc::error::TrySendError::Closed(_)) => {
                     warn!(%key, "A shard's push stream closed; dropping it");
                     shards.remove(&key);
-                    outstanding
-                        .lock()
-                        .expect("the outstanding table is never held across a panic")
-                        .retain(|queued| {
-                            (queued.chain_id.as_ref(), queued.height, queued.attempt)
-                                != (request.chain_id.as_ref(), request.height, request.attempt)
-                        });
-                    let Some(answer) = refuse(&request, "the shard's push stream closed") else {
+                    forget(&outstanding, &pending);
+                    let Some(answer) = refuse(&pending, "the shard's push stream closed") else {
                         continue;
                     };
                     if responses.send(Ok(answer)).await.is_err() {
@@ -347,10 +379,7 @@ async fn pump_responses(
         outstanding
             .lock()
             .expect("the outstanding table is never held across a panic")
-            .retain(|request| {
-                (request.chain_id.as_ref(), request.height, request.attempt)
-                    != (answer.chain_id.as_ref(), answer.height, answer.attempt)
-            });
+            .retain(|queued| !queued.answers(&answer));
         if responses.send(Ok(answer)).await.is_err() {
             return;
         }
@@ -366,8 +395,8 @@ async fn pump_responses(
             .lock()
             .expect("the outstanding table is never held across a panic"),
     );
-    for request in stranded {
-        let Some(answer) = refuse(&request, &reason) else {
+    for pending in stranded {
+        let Some(answer) = refuse(&pending, &reason) else {
             continue;
         };
         if responses.send(Ok(answer)).await.is_err() {
