@@ -6029,14 +6029,10 @@ where
         validator,
         handle(false, now.saturating_sub(TimeDelta::from_secs(5)).micros()),
     )]);
-    let mut breakers = HashMap::from([(
-        validator,
-        breaker(
-            now.saturating_add(TimeDelta::from_duration(interval)),
-            interval,
-            true,
-        ),
-    )]);
+    // Deadline ALREADY ELAPSED: that is the reachable case, since a probe arms at
+    // launch + interval + spread while the stream only starts serving once its sync
+    // returns, so any sync outlasting the jitter lands here past the deadline.
+    let mut breakers = HashMap::from([(validator, breaker(now, interval, true))]);
     chain
         .update_notification_streams(&mut senders, &mut breakers)
         .await?;
@@ -6046,6 +6042,12 @@ where
     assert_eq!(
         state.probe_interval, interval,
         "a briefly-serving stream must leave the accumulated backoff untouched"
+    );
+    assert!(
+        state.next_probe_at > clock.current_time(),
+        "an elapsed deadline must be re-armed here, or it keeps winning min() in listen() \
+         and the listener runs a full update every pass until the stream's lifetime \
+         crosses the threshold"
     );
 
     // Died after serving for longer than the initial interval: churn, so back to the
@@ -6663,6 +6665,12 @@ where
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     let updates = builder.validator_set_builds() - before;
 
+    assert!(
+        updates >= 1,
+        "the stream deaths drove no update at all: this test's upper bound alone is \
+         satisfied by doing nothing, so without this it cannot fail for half the property \
+         it names"
+    );
     assert!(
         updates <= 2,
         "four simultaneous stream deaths drove {updates} validator-set builds; the ready \

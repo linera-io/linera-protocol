@@ -3629,9 +3629,26 @@ impl<Env: Environment> ChainClient<Env> {
                         );
                     }
                 }
-                // Serving, but not yet for long enough to clear the breaker. Nothing to
-                // do: the breaker's deadline is already in the future.
-                (false, Some(_)) => {}
+                // Serving, but not yet for long enough to clear the breaker.
+                //
+                // Its deadline is NOT necessarily in the future: a probe arms at
+                // `launch + probe_interval + spread` while the stream only starts serving
+                // after its sync returns, so whenever that sync outlasts this validator's
+                // jitter offset the timer fires here with the deadline already elapsed.
+                // Leaving it elapsed would keep it winning `min()` in `listen()`, and
+                // `sleep_until` on a past instant returns immediately — a full
+                // `update_notification_streams` per pass until the lifetime finally
+                // crosses the threshold. Re-arm at exactly the qualifying instant; the
+                // interval and the ladder are untouched.
+                (false, Some(lifetime)) => {
+                    if let Some(state) = circuit_breakers.get_mut(validator) {
+                        if now >= state.next_probe_at {
+                            state.next_probe_at = now.saturating_add(TimeDelta::from_duration(
+                                initial_probe_interval.saturating_sub(lifetime),
+                            ));
+                        }
+                    }
+                }
                 // Still connecting or syncing when the deadline passed. Abort it, or its
                 // `senders` entry stays occupied and the validator is never probed again.
                 (false, None) => {
