@@ -110,9 +110,15 @@ where
     public_key: ValidatorPublicKey,
     client: Arc<Mutex<LocalValidator<S>>>,
     fault_type: FaultType,
-    /// Held open for reading by every chain-info query. A test takes the write lock to
-    /// stall the initial sync a probe runs after `subscribe` has already succeeded.
+    /// Held open for reading by every chain-info query, but ONLY once armed. A test takes
+    /// the write lock to stall the initial sync a probe runs after `subscribe` succeeded.
+    ///
+    /// The flag gate matters: `tokio::sync::RwLock` is write-preferring, so taking the read
+    /// unconditionally would queue every chain-info query at every validator in every test
+    /// behind a writer that only one test ever creates — and would hold the guard across
+    /// the validator mutex and the whole query.
     chain_info_gate: Arc<tokio::sync::RwLock<()>>,
+    chain_info_gate_armed: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl<S> ValidatorNode for LocalValidatorClient<S>
@@ -356,6 +362,7 @@ where
             client: Arc::new(Mutex::new(client)),
             fault_type: FaultType::Honest,
             chain_info_gate: Arc::default(),
+            chain_info_gate_armed: Arc::default(),
         }
     }
 
@@ -528,7 +535,14 @@ where
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let gate = self.chain_info_gate.clone();
-        let _open = gate.read().await;
+        let _open = if self
+            .chain_info_gate_armed
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            Some(gate.read().await)
+        } else {
+            None
+        };
         let validator = self.client.lock().await;
         let result = match self.fault_type {
             FaultType::Offline => Err(NodeError::ClientIoError {
@@ -863,6 +877,11 @@ where
     /// Every attempt to build the validator set, successful or not. Monotonic, so a test
     /// can freeze the clock and assert the listener is PARKED rather than spinning.
     builds: Arc<std::sync::atomic::AtomicUsize>,
+    /// Microseconds to advance the clock on each build, simulating a SLOW committee read —
+    /// the one await in `update_notification_streams`. A test uses it to prove deadlines
+    /// are computed from a clock sampled after that await rather than before it.
+    slow_build_micros: Arc<std::sync::atomic::AtomicU64>,
+    clock: Option<TestClock>,
 }
 
 impl<S> NodeProvider<S>
@@ -883,6 +902,8 @@ where
             failures_left: Arc::default(),
             // A private build counter too, so export-task builds stay out of a test's count.
             builds: Arc::default(),
+            slow_build_micros: Arc::default(),
+            clock: self.clock.clone(),
         }
     }
 }
@@ -906,6 +927,14 @@ where
     {
         self.builds
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let slow = self
+            .slow_build_micros
+            .load(std::sync::atomic::Ordering::Relaxed);
+        if slow > 0 {
+            if let Some(clock) = &self.clock {
+                clock.add(TimeDelta::from_micros(slow));
+            }
+        }
         if self
             .failures_left
             .fetch_update(
@@ -947,6 +976,8 @@ where
             clients: Arc::new(std::sync::Mutex::new(iter.into_iter().collect())),
             failures_left: Arc::default(),
             builds: Arc::default(),
+            slow_build_micros: Arc::default(),
+            clock: None,
         }
     }
 }
@@ -1164,6 +1195,8 @@ where
             clients: Arc::new(std::sync::Mutex::new(Vec::new())),
             failures_left: Arc::default(),
             builds: Arc::default(),
+            slow_build_micros: Arc::default(),
+            clock: Some(storage_builder.clock().clone()),
         };
         let mut validator_storages = HashMap::new();
         let mut validator_key_pairs = HashMap::new();
@@ -1262,11 +1295,18 @@ where
         &self,
         index: usize,
     ) -> tokio::sync::OwnedRwLockWriteGuard<()> {
-        self.node_provider.all_nodes()[index]
-            .chain_info_gate
-            .clone()
-            .write_owned()
-            .await
+        let node = &self.node_provider.all_nodes()[index];
+        node.chain_info_gate_armed
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        node.chain_info_gate.clone().write_owned().await
+    }
+
+    /// Makes every validator-set build advance the clock, simulating a committee read slow
+    /// enough that deadlines computed from a clock sampled BEFORE it are already elapsed.
+    pub fn slow_validator_set_builds(&self, by: TimeDelta) {
+        self.node_provider
+            .slow_build_micros
+            .store(by.as_micros(), std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Every attempt the chain clients have made to build the validator set.

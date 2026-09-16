@@ -179,14 +179,21 @@ impl CircuitBreakerState {
         Self::armed(now, probe_interval, spread, true)
     }
 
+    /// A breaker for a long-lived stream that ended — routine, so it does not trip.
+    ///
+    /// Tripping here would report a recovery on the next successful probe for something
+    /// this arm has just classified as healthy: one rolling validator restart would emit a
+    /// spurious "recovered" line per chain per validator.
+    fn churned(now: Timestamp, probe_interval: Duration, spread: Duration) -> Self {
+        Self::armed(now, probe_interval, spread, false)
+    }
+
     fn armed(now: Timestamp, probe_interval: Duration, spread: Duration, tripped: bool) -> Self {
-        let mut state = CircuitBreakerState {
-            next_probe_at: now,
+        CircuitBreakerState {
+            next_probe_at: now.saturating_add(TimeDelta::from_duration(probe_interval + spread)),
             probe_interval,
             tripped,
-        };
-        state.arm(now, spread);
-        state
+        }
     }
 
     /// Doubles the interval, up to `max`, and re-arms. Only a failure escalates, so this
@@ -218,6 +225,15 @@ const MIN_PROBE_INTERVAL: Duration = Duration::from_secs(1);
 
 /// Fraction of the probe interval used as the per-validator spread, as a divisor.
 const PROBE_SPREAD_DIVISOR: u32 = 8;
+
+/// How much longer a stream's FIRST launch gets before it is abandoned as stalled.
+///
+/// A re-probe and a first sync are different quantities. "How often to retry a validator"
+/// is the probe interval; "how long an initial `synchronize_chain_state_from` may take" is
+/// unbounded by nature — a chain tens of thousands of certificates behind legitimately
+/// needs longer. Sharing one deadline aborts every stream at once on exactly the chains
+/// furthest behind, throwing away the tail of each attempt just as the backoff doubles.
+const FIRST_LAUNCH_GRACE: u32 = 4;
 
 /// A fingerprint of the chain manager's observable consensus state, used to detect
 /// whether a per-validator updater absorbed new info during a proposal attempt.
@@ -3414,7 +3430,18 @@ impl<Env: Environment> ChainClient<Env> {
                         // that the ended stream is registered in the circuit breaker and
                         // a probe gets scheduled even if this chain never produces
                         // another block.
-                        _ = process_notifications.select_next_some() => true,
+                        _ = process_notifications.select_next_some() => {
+                            // Drain the completions that are already ready first. The tasks
+                            // are individual, so a simultaneous loss of every stream on this
+                            // chain queues one per stream, and each would otherwise drive a
+                            // full update of its own — an N-times amplification per chain at
+                            // exactly the moment a fleet-wide event has hit every chain on
+                            // the worker, with each update able to become a quorum
+                            // `synchronize_chain_state()` through the `BlobsNotFound`
+                            // fallback. One pass registers all of them.
+                            while process_notifications.next().now_or_never().flatten().is_some() {}
+                            true
+                        }
                         // A circuit-breaker probe is due. Clear the armed deadline so
                         // the timer is rebuilt below: it is a `Fuse` that has now
                         // completed, and `select!` skips terminated arms in silence, so
@@ -3476,12 +3503,17 @@ impl<Env: Environment> ChainClient<Env> {
             .max(MIN_PROBE_INTERVAL)
     }
 
-    /// A stable per-validator offset within the probe interval, so that probes armed by
-    /// one fleet-wide event stay spread out instead of re-converging at every doubling.
-    fn probe_spread(&self, validator: &ValidatorPublicKey, interval: Duration) -> Duration {
+    /// A stable per-validator offset, so that probes armed by one fleet-wide event stay
+    /// spread out instead of re-converging at every doubling.
+    ///
+    /// Always a fraction of the INITIAL interval, never of the current escalated one — a
+    /// parameter here would read as though the spread grows with the backoff, which would
+    /// make a capped breaker's jitter larger than the gap it is jittering.
+    fn probe_spread(&self, validator: &ValidatorPublicKey) -> Duration {
         let mut hasher = DefaultHasher::new();
         (self.chain_id, validator).hash(&mut hasher);
-        (interval / PROBE_SPREAD_DIVISOR).mul_f64((hasher.finish() % 1_000) as f64 / 1_000.0)
+        (self.initial_probe_interval() / PROBE_SPREAD_DIVISOR)
+            .mul_f64((hasher.finish() % 1_000) as f64 / 1_000.0)
     }
 
     /// Pushes the already-due probe deadlines out to `retry`, after an update failed
@@ -3529,9 +3561,6 @@ impl<Env: Environment> ChainClient<Env> {
             .options
             .notification_circuit_breaker_max_probe_interval
             .max(initial_probe_interval);
-        // Read the (possibly simulated) node clock once, so circuit-breaker probe scheduling can
-        // be driven deterministically in tests instead of depending on the wall clock.
-        let now = self.storage_client().clock().current_time();
         let (nodes, local_node) = {
             // For EventsOnly chains we may not have the chain's own committee locally,
             // and attempting to fetch it would trigger a full sync. Use the admin
@@ -3551,6 +3580,16 @@ impl<Env: Environment> ChainClient<Env> {
                 .collect::<HashMap<_, _>>();
             (nodes, self.client.local_node.clone())
         };
+        // Read the (possibly simulated) node clock once, so circuit-breaker probe scheduling
+        // can be driven deterministically in tests instead of depending on the wall clock.
+        //
+        // AFTER the committee read above, which is this function's only await and can be a
+        // quorum round trip via `local_committee()`'s `BlobsNotFound` fallback. Sampling it
+        // before would arm every deadline below at a moment already past by the time the
+        // update returns — an unpaced retry on the `Ok` path, which has no `defer_due_probes`
+        // — and would make `serving_for` saturate to zero for a stream that began serving
+        // during the await, charging a healthy stream as a persistent fault.
+        let now = self.storage_client().clock().current_time();
         // Detect circuit breaker state transitions before cleaning up senders.
         //
         // Health is judged on whether the stream reached the point of serving
@@ -3564,10 +3603,17 @@ impl<Env: Environment> ChainClient<Env> {
             }
             let died = handle.abort.is_aborted();
             let serving_for = handle.serving_for(now);
-            let spread = self.probe_spread(validator, initial_probe_interval);
             match (died, serving_for) {
-                // Serving and still running: healthy, whatever the deadline says.
-                (false, Some(_)) => {
+                // Serving for at least one interval and still running: healthy.
+                //
+                // The same threshold the churn arm uses, and for the same reason. Dropping
+                // the breaker after ANY amount of serving would make the ladder depend on
+                // whether an unrelated update happened to land inside a brief serving
+                // window — the initial sync emits `NewBlock`, so on an active chain one
+                // usually does — and a validator that had escalated to the cap would be
+                // reset to the base cadence by a stream that served for seconds. Below the
+                // threshold the breaker simply stays, and its deadline is in the future.
+                (false, Some(lifetime)) if lifetime >= initial_probe_interval => {
                     // Drop the breaker either way so the timer goes quiet, but only report
                     // a recovery for one that actually tripped: every launch arms a
                     // deadline, so gating on the removal alone announces a recovery for
@@ -3583,6 +3629,9 @@ impl<Env: Environment> ChainClient<Env> {
                         );
                     }
                 }
+                // Serving, but not yet for long enough to clear the breaker. Nothing to
+                // do: the breaker's deadline is already in the future.
+                (false, Some(_)) => {}
                 // Still connecting or syncing when the deadline passed. Abort it, or its
                 // `senders` entry stays occupied and the validator is never probed again.
                 (false, None) => {
@@ -3592,12 +3641,16 @@ impl<Env: Environment> ChainClient<Env> {
                             // launch, so this is the stream's FIRST recorded failure and
                             // belongs at the configured interval, not at twice it.
                             if state.tripped {
-                                state.escalate(now, max_probe_interval, spread);
+                                state.escalate(
+                                    now,
+                                    max_probe_interval,
+                                    self.probe_spread(validator),
+                                );
                             } else {
                                 *state = CircuitBreakerState::failed(
                                     now,
                                     initial_probe_interval,
-                                    spread,
+                                    self.probe_spread(validator),
                                 );
                             }
                             abort_stalled_probes.push(*validator);
@@ -3617,7 +3670,11 @@ impl<Env: Environment> ChainClient<Env> {
                 (true, Some(lifetime)) if lifetime >= initial_probe_interval => {
                     circuit_breakers.insert(
                         *validator,
-                        CircuitBreakerState::failed(now, initial_probe_interval, spread),
+                        CircuitBreakerState::churned(
+                            now,
+                            initial_probe_interval,
+                            self.probe_spread(validator),
+                        ),
                     );
                     info!(
                         %validator,
@@ -3638,7 +3695,7 @@ impl<Env: Environment> ChainClient<Env> {
                         .get_mut(validator)
                         .filter(|state| state.tripped)
                     {
-                        state.escalate(now, max_probe_interval, spread);
+                        state.escalate(now, max_probe_interval, self.probe_spread(validator));
                         warn!(
                             %validator,
                             chain_id = %self.chain_id,
@@ -3648,7 +3705,11 @@ impl<Env: Environment> ChainClient<Env> {
                     } else {
                         circuit_breakers.insert(
                             *validator,
-                            CircuitBreakerState::failed(now, initial_probe_interval, spread),
+                            CircuitBreakerState::failed(
+                                now,
+                                initial_probe_interval,
+                                self.probe_spread(validator),
+                            ),
                         );
                         error!(
                             %validator,
@@ -3680,7 +3741,7 @@ impl<Env: Environment> ChainClient<Env> {
                 continue;
             };
 
-            let spread = self.probe_spread(&public_key, initial_probe_interval);
+            let spread = self.probe_spread(&public_key);
             match circuit_breakers.entry(public_key) {
                 hash_map::Entry::Occupied(mut breaker) => {
                     let state = breaker.get_mut();
@@ -3702,7 +3763,7 @@ impl<Env: Environment> ChainClient<Env> {
                 hash_map::Entry::Vacant(breaker) => {
                     breaker.insert(CircuitBreakerState::launched(
                         now,
-                        initial_probe_interval,
+                        initial_probe_interval * FIRST_LAUNCH_GRACE,
                         spread,
                     ));
                 }

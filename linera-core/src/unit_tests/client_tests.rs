@@ -5993,10 +5993,19 @@ where
         probe_interval,
         tripped,
     };
+    // Off zero, so that `now - initial` below is a real instant rather than a saturated one.
+    clock.add(TimeDelta::from_secs(7200));
     let now = clock.current_time();
 
-    // Alive and serving: recovered immediately, no interval to wait out.
-    let mut senders = HashMap::from([(validator, handle(false, now.micros()))]);
+    // Alive and serving for at least the initial interval: recovered.
+    let mut senders = HashMap::from([(
+        validator,
+        handle(
+            false,
+            now.saturating_sub(TimeDelta::from_duration(initial))
+                .micros(),
+        ),
+    )]);
     let mut breakers = HashMap::from([(
         validator,
         breaker(
@@ -6010,7 +6019,33 @@ where
         .await?;
     assert!(
         !breakers.contains_key(&validator),
-        "a serving, live stream must clear the breaker without waiting out an interval"
+        "a stream serving for at least the initial interval must clear the breaker"
+    );
+
+    // Alive but serving only briefly: NOT recovered. Clearing here would let an unrelated
+    // update landing inside a short serving window reset a validator that had escalated to
+    // the cap — the same stream behaviour, opposite ladder, decided by timing.
+    let mut senders = HashMap::from([(
+        validator,
+        handle(false, now.saturating_sub(TimeDelta::from_secs(5)).micros()),
+    )]);
+    let mut breakers = HashMap::from([(
+        validator,
+        breaker(
+            now.saturating_add(TimeDelta::from_duration(interval)),
+            interval,
+            true,
+        ),
+    )]);
+    chain
+        .update_notification_streams(&mut senders, &mut breakers)
+        .await?;
+    let state = breakers
+        .get(&validator)
+        .expect("a stream serving for only seconds must keep its breaker and its ladder");
+    assert_eq!(
+        state.probe_interval, interval,
+        "a briefly-serving stream must leave the accumulated backoff untouched"
     );
 
     // Died after serving for longer than the initial interval: churn, so back to the
@@ -6031,6 +6066,12 @@ where
          the initial interval: escalating lets any proxy whose idle timeout is shorter than \
          the interval ratchet the backoff to its cap, and a merely-smaller value would let \
          it re-probe far faster than configured"
+    );
+    assert!(
+        !state.tripped,
+        "this arm's own verdict is that the loss was routine, so its breaker must not trip: \
+         a tripped one reports `Validator recovered` on the next probe, which is one \
+         spurious line per chain per validator for a single rolling restart"
     );
 
     // Died seconds after it started serving: the transport already retries reconnects
@@ -6260,9 +6301,11 @@ where
     );
     assert!(
         attempts < 50,
-        "the failing update was retried {attempts} times against a clock that never moved: \
-         a stale elapsed deadline is re-winning min() on every pass, so an outage becomes a \
-         hot loop against the calls that are already failing"
+        "{attempts} validator-set builds failed against a clock that never moved. The \
+         counter is provider-wide, so this bounds ALL builds on this provider rather than \
+         the listener's alone — but only the listener is active here, and the shape it is \
+         detecting is a stale elapsed deadline re-winning min() on every pass, turning an \
+         outage into a hot loop against the calls that are already failing"
     );
     Ok(())
 }
@@ -6295,8 +6338,10 @@ where
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     // Let the probe timer fire once while every validator is healthy. That update sees
     // them serving and drops the breakers armed at launch, which is what leaves the map
-    // empty for the failure below — the state this test exists to cover.
-    clock.add(TimeDelta::from_secs(400));
+    // empty for the failure below — the state this test exists to cover. The step must
+    // clear the FIRST-LAUNCH GRACE (4x the interval) plus the spread, not just the
+    // interval, or the launch breakers never come due and the map is never empty.
+    clock.add(TimeDelta::from_secs(1_400));
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     let before = builder.subscribe_calls(1).await;
 
@@ -6352,17 +6397,22 @@ where
         "every first launch must arm a deadline, or a probe that never resolves is never \
          aborted and never retried"
     );
-    let initial = std::time::Duration::from_secs(300);
+    // A first launch gets a longer grace than a re-probe: the initial sync it is waiting on
+    // is unbounded by nature, and sharing the probe interval would abort every stream at
+    // once on exactly the chains furthest behind.
+    let grace = std::time::Duration::from_secs(300) * 4;
     for state in breakers.values() {
         assert_eq!(
-            state.probe_interval, initial,
-            "a first launch must arm at the CONFIGURED initial interval; arming at the cap \
-             instead leaves a stalled subscribe undetected for an hour rather than minutes"
+            state.probe_interval, grace,
+            "a first launch must arm at the configured interval times the first-launch \
+             grace; arming at the bare interval cuts a legitimately slow initial sync, and \
+             arming at the cap leaves a stalled subscribe undetected for an hour"
         );
         let delay = state.next_probe_at.duration_since(clock.current_time());
         assert!(
-            delay >= initial && delay <= initial * 9 / 8,
-            "a first launch must arm one interval out plus at most the spread; got {delay:?}"
+            delay >= grace && delay <= grace + std::time::Duration::from_secs(300) / 8,
+            "a first launch must arm one grace period out plus at most the spread; got \
+             {delay:?}"
         );
         assert!(
             !state.tripped,
@@ -6568,5 +6618,104 @@ where
          clock: a retry deadline from an earlier failure is still winning min(), so every \
          pass re-fires on an elapsed deadline and re-runs local_committee()"
     );
+    Ok(())
+}
+
+/// A simultaneous loss of every stream must drive ONE update, not one per stream.
+///
+/// The per-validator tasks are individual so a single death is observable, which means a
+/// fleet-wide event queues one completion per stream. Each would otherwise run a full
+/// update — an N-times amplification per chain at the moment every chain on the worker is
+/// hit at once, and each update can become a quorum `synchronize_chain_state()`.
+///
+/// Under memory storage the committee read yields, so `await_while_polling` already drains
+/// the other completions and this passes with or without the explicit drain in `listen()`.
+/// It is a regression guard on the observable property, NOT coverage of that drain, whose
+/// case — a committee read that resolves without yielding — this harness cannot produce.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_a_simultaneous_stream_loss_drives_one_update<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let chain = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let observer = builder
+        .make_client(chain.chain_id(), None, BlockHeight::ZERO)
+        .await?;
+    let (listener, _listen_handle, _) = observer.listen().await?;
+    tokio::spawn(listener);
+    assert!(
+        wait_until(std::time::Duration::from_secs(5), || async {
+            builder.subscribe_calls(1).await > 0
+        })
+        .await,
+        "the listener never subscribed, so there are no streams to lose"
+    );
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+    // Kill all four at once. The clock never moves, so the probe timer cannot contribute.
+    let before = builder.validator_set_builds();
+    builder.disconnect_notification_subscribers().await;
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let updates = builder.validator_set_builds() - before;
+
+    assert!(
+        updates <= 2,
+        "four simultaneous stream deaths drove {updates} validator-set builds; the ready \
+         completions must be drained into a single update, or a fleet-wide event costs one \
+         full update per stream per chain"
+    );
+    Ok(())
+}
+
+/// Deadlines must be computed from a clock read taken AFTER the committee fetch.
+///
+/// That fetch is the update's only await and can be a quorum round trip via
+/// `local_committee()`'s `BlobsNotFound` fallback. Sampling the clock before it arms every
+/// deadline at a moment already past by the time the update returns: `min()` picks the
+/// elapsed deadline, `sleep_until` returns at once, and the loop re-enters the same slow
+/// call — an unpaced retry on the `Ok` path, which has no `defer_due_probes` guard.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_deadlines_are_armed_from_a_clock_read_after_the_fetch<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    use std::collections::HashMap;
+
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let chain = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+
+    // A committee read that takes far longer than the interval any deadline is armed with.
+    builder.slow_validator_set_builds(TimeDelta::from_secs(9_000));
+
+    let mut senders = HashMap::new();
+    let mut breakers = HashMap::new();
+    chain
+        .update_notification_streams(&mut senders, &mut breakers)
+        .await?;
+
+    let after = clock.current_time();
+    assert!(
+        !breakers.is_empty(),
+        "the update armed no deadlines to check"
+    );
+    for state in breakers.values() {
+        assert!(
+            state.next_probe_at > after,
+            "a deadline was armed at {:?}, already elapsed against the post-fetch clock \
+             {after:?}: it was computed from a clock sampled before the committee read, so \
+             the listener re-fires into the same slow call with no pacing",
+            state.next_probe_at
+        );
+    }
     Ok(())
 }
