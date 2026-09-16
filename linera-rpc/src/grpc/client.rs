@@ -67,7 +67,7 @@ use crate::{
 const RECEIVED_STATUS_PREFIX: &str = "while receiving response with status: ";
 
 /// Recovers the HTTP status from a proxy's non-gRPC response, which tonic reports as
-/// `Code::Internal` instead of mapping it to `Code::Unavailable` (tonic#2365).
+/// `Code::Internal` instead of applying its HTTP-to-gRPC status mapping (tonic#2365).
 fn proxy_http_status(message: &str) -> Option<u16> {
     message
         .rsplit_once(RECEIVED_STATUS_PREFIX)
@@ -141,9 +141,10 @@ impl GrpcClient {
                 true
             }
             Code::Internal if proxy_http_status(status.message()).is_some_and(is_server_error) => {
-                // Per the gRPC spec every HTTP 5xx from a proxy/ingress maps to UNAVAILABLE,
-                // which is retryable; matching the whole class rather than one reason phrase is
-                // what stops the next status code regressing the way 503 did.
+                // Retry the whole 5xx class: enumerating reason phrases is what let 503 regress
+                // after 502 was special-cased. tonic maps 502/503/504 to UNAVAILABLE and other
+                // 5xx to UNKNOWN, but only when it can parse the body — tonic#2365 is when it
+                // cannot.
                 trace!("gRPC proxy error: {status:?}; retrying");
                 true
             }
