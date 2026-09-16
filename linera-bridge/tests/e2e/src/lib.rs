@@ -28,6 +28,9 @@ pub const ANVIL_PRIVATE_KEY: &str =
 /// Anvil account 0 address (derived from the private key above).
 const ANVIL_DEPLOYER: &str = "f39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
+/// Wall-clock bound on each diagnostic `docker compose` call.
+const COMPOSE_DIAGNOSTIC_TIMEOUT_SECS: u32 = 120;
+
 /// Computes the deterministic CREATE address for a deployer at a given nonce.
 /// Uses `keccak256(rlp([sender, nonce]))[12..]`.
 pub fn create_address(deployer: Address, nonce: u64) -> Address {
@@ -55,21 +58,56 @@ pub fn compose_file_path() -> std::path::PathBuf {
         .join("docker/docker-compose.bridge-test.yml")
 }
 
-/// Dumps docker compose logs for debugging failures.
-pub fn dump_compose_logs(project_name: &str, compose_file: &std::path::Path) {
-    let output = Command::new("docker")
-        .args(["compose", "-p", project_name, "-f"])
-        .arg(compose_file)
-        .args(["logs", "--tail", "100"])
-        .output();
+/// Runs a `docker compose` subcommand and logs its full output.
+/// Wrapped in `timeout` where available so a wedged daemon cannot hang the job;
+/// `timeout` is GNU coreutils and absent on stock macOS, hence the fallback.
+fn log_compose_command(
+    project_name: &str,
+    compose_file: &std::path::Path,
+    args: &[&str],
+    what: &str,
+) {
+    let bound = COMPOSE_DIAGNOSTIC_TIMEOUT_SECS.to_string();
+    let has_timeout = Command::new("timeout").arg("--help").output().is_ok();
+    let mut command = if has_timeout {
+        let mut command = Command::new("timeout");
+        command.args([bound.as_str(), "docker"]);
+        command
+    } else {
+        Command::new("docker")
+    };
+    command.args(["compose", "-p", project_name, "-f"]);
+    command.arg(compose_file);
+    command.args(args);
 
-    if let Ok(output) = output {
-        tracing::info!(
+    match command.output() {
+        Ok(output) => tracing::info!(
+            status=?output.status.code(),
             stdout=%String::from_utf8_lossy(&output.stdout),
             stderr=%String::from_utf8_lossy(&output.stderr),
-            "Docker compose logs"
-        );
+            "{what}"
+        ),
+        Err(error) => tracing::info!(?error, "{what} could not be run"),
     }
+}
+
+/// Dumps docker compose state and logs for debugging failures.
+pub fn dump_compose_logs(project_name: &str, compose_file: &std::path::Path) {
+    // `ps -a` carries the per-service exit codes, which is what `up` exiting
+    // non-zero after the containers started actually means; `logs` shows the
+    // output but never says which service died, or with what status.
+    log_compose_command(
+        project_name,
+        compose_file,
+        &["ps", "-a"],
+        "Docker compose ps",
+    );
+    log_compose_command(
+        project_name,
+        compose_file,
+        &["logs", "--tail", "100"],
+        "Docker compose logs",
+    );
 }
 
 /// Executes a shell command inside a docker compose service, panicking on failure.
@@ -425,6 +463,9 @@ pub async fn start_compose(compose_file: &std::path::Path, project_name: &str) -
         .with_wait(false);
     compose.with_remove_volumes(true);
     if let Err(e) = compose.up().await {
+        // `e` carries only compose's first stderr line, which is a progress
+        // line; the full stderr is already in the testcontainers ERROR log.
+        // What is missing is per-service exit codes — see dump_compose_logs.
         dump_compose_logs(project_name, compose_file);
         panic!("docker compose up failed: {e}");
     }
