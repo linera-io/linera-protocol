@@ -27,6 +27,8 @@ serde_with = {{ version = ">=3, <3.18" }}
 time = {{ version = ">=0.3, <0.3.47" }}
 time-core = {{ version = ">=0.1, <0.1.8" }}
 unicode-segmentation = {{ version = ">=1.9, <1.13" }}
+yoke = {{ version = ">=0.8, <0.8.3" }}
+yoke-derive = {{ version = ">=0.8, <0.8.3" }}
 
 [dev-dependencies]
 {linera_sdk_dev_dep}
