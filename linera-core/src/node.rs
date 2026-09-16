@@ -59,6 +59,9 @@ pub trait ValidatorNode {
     /// The type of stream of notifications returned when subscribing.
     type NotificationStream: Stream<Item = Notification> + Unpin + MaybeSend;
 
+    /// The push stream this node hands out, if it accepts one.
+    type PushStream: CertificatePushStream + MaybeSend + MaybeSync;
+
     /// Returns the address of this validator node.
     fn address(&self) -> String;
 
@@ -81,9 +84,6 @@ pub trait ValidatorNode {
         certificate: CacheArc<GenericCertificate<ConfirmedBlock>>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
-
-    /// The push stream this node hands out, if it accepts one.
-    type PushStream: CertificatePushStream + MaybeSend + MaybeSync;
 
     /// Opens a stream for pushing confirmed certificates to this validator.
     ///
