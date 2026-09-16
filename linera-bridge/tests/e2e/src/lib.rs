@@ -91,10 +91,11 @@ fn log_compose_command(
     }
 }
 
-/// Dumps docker compose logs for debugging failures.
+/// Dumps docker compose state and logs for debugging failures.
 pub fn dump_compose_logs(project_name: &str, compose_file: &std::path::Path) {
-    // `logs` returns nothing when `up` died before creating any container, so
-    // ask for container state too — an empty table is itself the diagnosis.
+    // `ps -a` carries the per-service exit codes, which is what `up` exiting
+    // non-zero after the containers started actually means; `logs` shows the
+    // output but never says which service died, or with what status.
     log_compose_command(
         project_name,
         compose_file,
@@ -462,15 +463,9 @@ pub async fn start_compose(compose_file: &std::path::Path, project_name: &str) -
         .with_wait(false);
     compose.with_remove_volumes(true);
     if let Err(e) = compose.up().await {
-        // testcontainers surfaces only compose's FIRST stderr line, which is a
-        // progress line ("Network ... Creating"), never the reason. Re-running
-        // the up ourselves is the only way to capture the actual error.
-        log_compose_command(
-            project_name,
-            compose_file,
-            &["up", "-d"],
-            "Compose up retry",
-        );
+        // `e` carries only compose's first stderr line, which is a progress
+        // line; the full stderr is already in the testcontainers ERROR log.
+        // What is missing is per-service exit codes — see dump_compose_logs.
         dump_compose_logs(project_name, compose_file);
         panic!("docker compose up failed: {e}");
     }
