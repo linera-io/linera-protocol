@@ -24,7 +24,7 @@ use linera_core::{
     client::ChainClient,
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{
-        CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
+        CrossChainMessageDelivery, NoPushStream, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider,
     },
 };
@@ -43,6 +43,12 @@ impl ValidatorNode for DummyValidatorNode {
 
     fn address(&self) -> String {
         "dummy".to_string()
+    }
+
+    type PushStream = NoPushStream;
+
+    async fn open_push_stream(&self) -> Result<Self::PushStream, NodeError> {
+        Err(NodeError::PushStreamUnsupported)
     }
 
     async fn handle_block_proposal(
