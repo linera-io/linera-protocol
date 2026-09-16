@@ -17,7 +17,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use futures::StreamExt as _;
+use futures::{Stream, StreamExt as _};
 use linera_core::node::NodeError;
 use linera_rpc::grpc::api::{
     self, validator_node_client::ValidatorNodeClient,
@@ -102,12 +102,12 @@ type Outstanding = Arc<Mutex<Vec<Pending>>>;
 
 /// Fans a sender's single push stream out across the shards owning the chains it carries, and
 /// merges their answers back onto one stream.
-pub fn demultiplex<K, C, S>(
-    mut certificates: Streaming<api::PushCertificateRequest>,
-    shard_of: K,
-    connect: C,
-) -> ResponseStream
+pub fn demultiplex<K, C, S, I>(mut certificates: I, shard_of: K, connect: C) -> ResponseStream
 where
+    // Generic over the inbound stream, not `Streaming`, so the loop can be driven by a channel in
+    // a test: the arms that matter here are the ones that must NOT end the stream, and proving
+    // that needs to observe what comes back after a failure.
+    I: Stream<Item = Result<api::PushCertificateRequest, Status>> + Unpin + Send + 'static,
     // Split so the per-certificate cost is only the routing key: building a client is what the
     // second closure does, and it runs once per shard rather than once per certificate.
     K: Fn(&api::PushCertificateRequest) -> Result<(String, S), Status> + Send + 'static,
@@ -407,5 +407,193 @@ async fn strand(
         if responses.send(Ok(answer)).await.is_err() {
             return;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use futures::StreamExt as _;
+    use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
+
+    use super::*;
+
+    fn chain(seed: u8) -> api::ChainId {
+        ChainId(CryptoHash::test_hash(format!("chain {seed}"))).into()
+    }
+
+    fn request(seed: u8, height: u64, attempt: u64) -> api::PushCertificateRequest {
+        api::PushCertificateRequest {
+            chain_id: Some(chain(seed)),
+            certificate: None,
+            supports_aggregated_missing: true,
+            height: Some(BlockHeight(height).into()),
+            attempt,
+        }
+    }
+
+    /// The error a refusal carries, or `None` if it is not an in-band refusal at all.
+    fn refusal_of(answer: &api::PushCertificateResponse) -> Option<NodeError> {
+        match answer.result.as_ref()?.inner.as_ref()? {
+            api::chain_info_result::Inner::Error(error) => bincode::deserialize(error).ok(),
+            api::chain_info_result::Inner::ChainInfoResponse(_) => None,
+        }
+    }
+
+    /// Drives `demultiplex` with a shard that cannot be reached, which is the failure ma2bd's
+    /// first finding was about: it must cost those certificates and nothing else.
+    fn against_unreachable_shards(requests: Vec<api::PushCertificateRequest>) -> ResponseStream {
+        let inbound = futures::stream::iter(requests.into_iter().map(Ok));
+        demultiplex(
+            inbound,
+            // Routes by chain, so different chains land on different shards.
+            |request: &api::PushCertificateRequest| {
+                let chain_id = request
+                    .chain_id
+                    .clone()
+                    .ok_or_else(|| Status::invalid_argument("missing chain id"))?;
+                Ok((format!("{chain_id:?}"), ()))
+            },
+            |_: &()| Err(Status::unavailable("the shard is down")),
+        )
+    }
+
+    /// One shard's failure must not stop delivery for the chains on every other shard.
+    ///
+    /// This is the invariant the whole design exists for, and the one that broke in five different
+    /// places: a `break` in this loop, an error variant the sender read as a dead transport, a
+    /// status forwarded onto the shared channel, a dial awaited here, and a stale entry replaced
+    /// without draining. Each certificate must come back refused, and the stream must stay open
+    /// through all of them.
+    #[test_log::test(tokio::test)]
+    async fn a_dead_shard_costs_its_own_certificates_and_no_others() {
+        let answers: Vec<_> = against_unreachable_shards(vec![
+            request(1, 10, 0),
+            request(2, 20, 0),
+            request(3, 30, 0),
+        ])
+        .collect()
+        .await;
+
+        assert_eq!(
+            answers.len(),
+            3,
+            "every certificate must be answered, not just the first: {answers:?}",
+        );
+        for answer in &answers {
+            let answer = answer
+                .as_ref()
+                .expect("a shard failure is an answer, not a status");
+            assert!(
+                matches!(refusal_of(answer), Some(NodeError::PushRefused { .. })),
+                "a refusal must be `PushRefused` — `GrpcError` makes the sender discard the whole \
+                 stream, which is the same blast radius by another route: {answer:?}",
+            );
+        }
+        let heights: Vec<_> = answers
+            .iter()
+            .filter_map(|answer| answer.as_ref().ok()?.height)
+            .map(|height| height.height)
+            .collect();
+        assert_eq!(
+            heights,
+            vec![10, 20, 30],
+            "each answer must name the certificate it refuses, or the sender cannot match it",
+        );
+    }
+
+    /// An answer has to carry back the attempt it belongs to.
+    ///
+    /// Heights repeat across retries, so without the attempt a refusal from a run the sender has
+    /// abandoned resolves the run that replaced it.
+    #[test_log::test(tokio::test)]
+    async fn a_refusal_names_the_attempt_it_answers() {
+        let answers: Vec<_> = against_unreachable_shards(vec![request(1, 10, 7)])
+            .collect()
+            .await;
+        let answer = answers[0].as_ref().expect("refused in band");
+        assert_eq!(answer.attempt, 7, "the attempt must be echoed: {answer:?}");
+    }
+
+    /// A request naming no chain or height cannot be answered, so it ends the stream.
+    ///
+    /// The sender drops an answer it cannot attribute, so refusing such a request in band would
+    /// leave whoever pushed it waiting out the whole stream timeout for nothing.
+    #[test_log::test(tokio::test)]
+    async fn an_unattributable_request_ends_the_stream() {
+        let nameless = api::PushCertificateRequest {
+            chain_id: None,
+            ..request(1, 10, 0)
+        };
+        let answers: Vec<_> = against_unreachable_shards(vec![nameless, request(2, 20, 0)])
+            .collect()
+            .await;
+
+        assert_eq!(
+            answers.len(),
+            1,
+            "the stream ends at the bad request: {answers:?}"
+        );
+        let status = answers[0]
+            .as_ref()
+            .expect_err("it cannot be answered in band");
+        assert_eq!(status.code(), tonic::Code::InvalidArgument, "{status:?}");
+    }
+
+    /// Losing a shard refuses everything it still owed, not only the certificate in hand.
+    ///
+    /// `pump_responses` takes a snapshot and returns, but the read loop can keep writing into a
+    /// channel whose reader is already gone; those have nobody to answer them, and their senders
+    /// would wait out the stream timeout.
+    #[test_log::test(tokio::test)]
+    async fn stranding_refuses_every_certificate_still_owed() {
+        let (responses, receiver) = mpsc::channel(8);
+        let outstanding: Outstanding = Arc::new(Mutex::new(vec![
+            Pending::of(&request(1, 10, 0)),
+            Pending::of(&request(1, 11, 0)),
+            // Unanswerable, and must not stop the others being refused.
+            Pending::of(&api::PushCertificateRequest {
+                height: None,
+                ..request(1, 12, 0)
+            }),
+        ]));
+
+        strand(&responses, &outstanding, "the shard went away").await;
+        drop(responses);
+
+        assert!(
+            outstanding.lock().expect("not poisoned").is_empty(),
+            "stranding must empty the table, or the entries leak for the life of the stream",
+        );
+        let answers: Vec<_> = ReceiverStream::new(receiver).collect().await;
+        assert_eq!(
+            answers.len(),
+            2,
+            "both answerable certificates are refused; the third cannot be named: {answers:?}",
+        );
+    }
+
+    /// The identity a refusal is matched on is the whole triple.
+    ///
+    /// The proxy records what it forwarded and clears it on the matching answer. A mismatch means
+    /// the entry is never cleared — which is how an unvalidated wire height became an unbounded
+    /// leak on a public endpoint.
+    #[test]
+    fn an_answer_clears_only_the_certificate_it_names() {
+        let pending = Pending::of(&request(1, 10, 3));
+        let answer = |height: u64, attempt: u64| api::PushCertificateResponse {
+            chain_id: Some(chain(1)),
+            height: Some(BlockHeight(height).into()),
+            result: None,
+            attempt,
+        };
+        assert!(pending.answers(&answer(10, 3)));
+        assert!(
+            !pending.answers(&answer(11, 3)),
+            "a different height is a different certificate"
+        );
+        assert!(
+            !pending.answers(&answer(10, 4)),
+            "a different attempt is a different run"
+        );
     }
 }
