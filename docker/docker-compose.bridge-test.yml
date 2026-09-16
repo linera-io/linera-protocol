@@ -290,3 +290,10 @@ volumes:
 networks:
   linera-network:
     driver: bridge
+    # SCRATCH PROBE - NOT FOR MERGE. An invalid subnet makes
+    # `docker compose up` fail during network creation, which is the
+    # exact phase the real bridge-e2e failures die in. Used to prove
+    # the new diagnostics capture the real error on a runner.
+    ipam:
+      config:
+        - subnet: 999.999.999.0/24
