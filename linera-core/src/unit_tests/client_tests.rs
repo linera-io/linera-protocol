@@ -6043,11 +6043,14 @@ where
         state.probe_interval, interval,
         "a briefly-serving stream must leave the accumulated backoff untouched"
     );
-    assert!(
-        state.next_probe_at > clock.current_time(),
-        "an elapsed deadline must be re-armed here, or it keeps winning min() in listen() \
-         and the listener runs a full update every pass until the stream's lifetime \
-         crosses the threshold"
+    assert_eq!(
+        state.next_probe_at.duration_since(clock.current_time()),
+        initial - std::time::Duration::from_secs(5),
+        "an elapsed deadline must be re-armed at exactly the instant the stream qualifies — \
+         the initial interval minus the 5s already served. `> now` alone is satisfied by \
+         `now + 1us`, which IS the hot loop this arm removes: the deadline re-wins min() in \
+         listen() and a full update runs every pass. Overshooting is the mirror fault, \
+         leaving a healthy validator breakered for up to the cap"
     );
 
     // Died after serving for longer than the initial interval: churn, so back to the
@@ -6343,8 +6346,20 @@ where
     // empty for the failure below — the state this test exists to cover. The step must
     // clear the FIRST-LAUNCH GRACE (4x the interval) plus the spread, not just the
     // interval, or the launch breakers never come due and the map is never empty.
+    let builds_before = builder.validator_set_builds();
     clock.add(TimeDelta::from_secs(1_400));
-    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    // Asserted, not slept on: this update clearing the launch breakers is the ONLY thing
+    // that distinguishes this test from its siblings. If it has not run, the breakers are
+    // still populated, `defer_due_probes` keeps the listener awake off THEM, and the test
+    // silently degenerates into a duplicate that the in-loop arming deletion would survive.
+    assert!(
+        wait_until(std::time::Duration::from_secs(5), || async {
+            builder.validator_set_builds() > builds_before
+        })
+        .await,
+        "the probe timer never fired, so the launch breakers were never cleared and this \
+         test is not exercising the empty-breaker-map path it is named for"
+    );
     let before = builder.subscribe_calls(1).await;
 
     // Arm the failures BEFORE severing, so the update the stream deaths trigger returns
