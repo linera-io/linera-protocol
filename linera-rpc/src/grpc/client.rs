@@ -721,7 +721,6 @@ mod tests {
         data_types::BlockHeight,
         identifiers::{ApplicationId, GenericApplicationId, StreamId, StreamName},
     };
-
     use tonic::{Code, Status};
 
     use super::{api, GrpcClient, GRPC_MAX_MESSAGE_SIZE, MAX_STREAM_IDS_PER_REQUEST};
