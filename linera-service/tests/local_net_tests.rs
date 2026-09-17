@@ -1111,6 +1111,55 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
         })
         .await?;
 
+    // --rate-auto: assert the search reached a knee above its own start rate. A clean exit
+    // proves nothing here — a run that never converged, and one that converged at zero, both
+    // exit zero too, which is exactly what this case existed to rule out and did not.
+    let stderr = client
+        .benchmark_capturing_stderr(BenchmarkCommand::Single {
+            options: BenchmarkOptions {
+                num_chains: 2,
+                transactions_per_block: 10,
+                bps: 2,
+                rate_auto: true,
+                rate_start_bps: 1,
+                target_p99_ms: 2_000,
+                runtime_in_seconds: Some(120),
+                client_mode: ClientMode::Lite,
+                close_chains: true,
+                ..Default::default()
+            },
+        })
+        .await?;
+    // Either outcome is a real measurement. Whether the local net wedges before the search
+    // finishes bracketing is timing-dependent -- overshooting can leave a chain unable to
+    // commit again -- so requiring convergence specifically would make this case flaky for a
+    // reason that has nothing to do with the search.
+    let knee = stderr
+        .lines()
+        .find_map(|line| {
+            let field = if line.contains("rate search converged") {
+                "knee_bps="
+            } else if line.contains("rate search cut short") {
+                "best_bps="
+            } else {
+                return None;
+            };
+            line.split(field)
+                .nth(1)?
+                .split_whitespace()
+                .next()?
+                .parse::<usize>()
+                .ok()
+        })
+        .context("the rate search reported neither a converged knee nor a lower bound")?;
+    assert!(
+        knee > 1,
+        "the search converged at {knee} bps, no better than its start rate of 1: it found a \
+         ceiling rather than measuring one"
+    );
+    // Printed so a CI log carries the measured knee, not just a pass.
+    println!("rate search converged at {knee} bps");
+
     net.ensure_is_running().await?;
     net.terminate().await?;
 
