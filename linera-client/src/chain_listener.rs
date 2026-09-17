@@ -33,7 +33,7 @@ use tracing::{debug, error, info, instrument, warn, Instrument as _};
 use crate::error::{self, Error};
 
 /// The configuration for the chain listener.
-#[derive(Default, Debug, Clone, clap::Args, serde::Serialize, serde::Deserialize, tsify::Tsify)]
+#[derive(Debug, Clone, clap::Args, serde::Serialize, serde::Deserialize, tsify::Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct ChainListenerConfig {
     /// Do not create blocks automatically to receive incoming messages. Instead, wait for
@@ -80,6 +80,21 @@ pub struct ChainListenerConfig {
 /// The default value of [`ChainListenerConfig::background_sync_interval_ms`]: 15 minutes.
 fn default_background_sync_interval_ms() -> u64 {
     900_000
+}
+
+// Written out rather than derived: `#[derive(Default)]` would give
+// `background_sync_interval_ms = 0`, which means "never repeat the sync" and so disagrees
+// with the clap and serde defaults. Callers that build a config with `..Default::default()`
+// would silently opt out of the periodic sync.
+impl Default for ChainListenerConfig {
+    fn default() -> Self {
+        Self {
+            skip_process_inbox: false,
+            delay_before_ms: 0,
+            delay_after_ms: 0,
+            background_sync_interval_ms: default_background_sync_interval_ms(),
+        }
+    }
 }
 
 type ContextChainClient<C> = ChainClient<<C as ClientContext>::Environment>;
