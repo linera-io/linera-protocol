@@ -59,7 +59,8 @@ use crate::{
     remote_node::RemoteNode,
     updater::{communicate_with_quorum, CommunicateAction, RemoteNodeUpdater},
     worker::{Notification, ProcessableCertificate, Reason, WorkerError, WorkerState},
-    ChainWorkerConfig, ProcessConfirmedBlockMode, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
+    ChainWorkerConfig, MaybeSendBoxFuture, ProcessConfirmedBlockMode,
+    CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
 
 /// The client for interacting with a single chain.
@@ -388,15 +389,9 @@ pub struct Client<Env: Environment> {
     options: chain_client::Options,
 }
 
-/// Boxed future returned by `receive_sender_certificate`. It is `Send` off the `web`
-/// target (where futures must be `Send`) and `?Send` on `web` (single-threaded, where
-/// the validator node is not `Sync`).
-#[cfg(not(web))]
-type ReceiveSenderCertificateFuture<'a> =
-    std::pin::Pin<Box<dyn Future<Output = Result<(), chain_client::Error>> + Send + 'a>>;
-#[cfg(web)]
-type ReceiveSenderCertificateFuture<'a> =
-    std::pin::Pin<Box<dyn Future<Output = Result<(), chain_client::Error>> + 'a>>;
+/// Boxed future returned by `receive_sender_certificate`. `?Send` on `web` because the
+/// validator node is not `Sync` there.
+type ReceiveSenderCertificateFuture<'a> = MaybeSendBoxFuture<'a, Result<(), chain_client::Error>>;
 
 impl<Env: Environment> Client<Env> {
     /// Creates a new `Client` with a new cache and notifiers.
@@ -761,14 +756,8 @@ impl<Env: Environment> Client<Env> {
         // Download remaining certificates from the remote node using a pipelined
         // sliding window. A background task downloads up to `max_concurrent_batch_downloads`
         // batches concurrently and sends them through a channel for sequential processing.
-        #[cfg(not(web))]
-        type CertificateBatchFuture = std::pin::Pin<
-            Box<dyn Future<Output = Result<Vec<ConfirmedBlockCertificate>, NodeError>> + Send>,
-        >;
-        #[cfg(web)]
-        type CertificateBatchFuture = std::pin::Pin<
-            Box<dyn Future<Output = Result<Vec<ConfirmedBlockCertificate>, NodeError>>>,
-        >;
+        type CertificateBatchFuture =
+            crate::MaybeSendBoxFuture<'static, Result<Vec<ConfirmedBlockCertificate>, NodeError>>;
 
         let max_concurrent = self.options.max_concurrent_batch_downloads;
         let batch_size = self.options.certificate_download_batch_size;

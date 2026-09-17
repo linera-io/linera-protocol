@@ -129,9 +129,9 @@ pub trait NotificationChannelIsLossy {}
 /// same future calls `Client::synchronize_chain_state_from` against that validator before yielding
 /// the stream, precisely because, in the code's own words, "we may have missed notifications since
 /// the last time we synchronized". Since `update_notification_streams` is re-run on every
-/// `Reason::NewBlock`, and a dropped connection is re-established through the same path, a gap in
-/// the stream is closed by *state synchronization* rather than by recovering the messages that fell
-/// in it.
+/// `Reason::NewBlock`, on the death of any validator stream, and on the circuit breaker's probe
+/// timer, and a dropped connection is re-established through the same path, a gap in the stream is
+/// closed by *state synchronization* rather than by recovering the messages that fell in it.
 ///
 /// *Coalescing.* No handler applies the change it was told about; each brings the chain up to date.
 /// In `linera_client::chain_listener`, `Reason::NewIncomingBundle` and `Reason::NewEvents` both

@@ -29,6 +29,16 @@ mod local_node;
 pub mod node;
 /// Utilities for notifying subscribers about chain events.
 pub mod notifier;
+
+/// A boxed future that is `Send` on native targets and not on web, where there is a
+/// single thread. Keeps the `Send` policy for boxed futures in one place.
+#[cfg(not(web))]
+pub(crate) use futures::future::BoxFuture as MaybeSendBoxFuture;
+/// A boxed future that is `Send` on native targets and not on web, where there is a
+/// single thread. Keeps the `Send` policy for boxed futures in one place.
+#[cfg(web)]
+pub(crate) use futures::future::LocalBoxFuture as MaybeSendBoxFuture;
+
 pub mod proof;
 /// A validator node paired with the validator's public key.
 pub mod remote_node;
