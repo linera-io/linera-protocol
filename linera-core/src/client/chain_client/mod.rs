@@ -79,9 +79,10 @@ use crate::{
     worker::{Notification, Reason, WorkerError},
 };
 
-/// Number of received-log entries above which `find_received_certificates` reports its
-/// start, progress, and completion at `info` level. Smaller syncs stay quiet outside
-/// `debug`/`trace` logging.
+/// Number of certificates above which `find_received_certificates` reports its start,
+/// progress, and completion at `info` level. Smaller syncs stay quiet outside `debug`/`trace`
+/// logging. Counted in certificates, not in received-log entries: the entry total is summed
+/// over validators, so the two differ and the log line reports both.
 const LARGE_RECEIVED_CERTIFICATE_SYNC_THRESHOLD: usize = 50_000;
 
 /// Number of certificates processed between two `info`-level progress messages during a
@@ -1072,6 +1073,13 @@ impl<Env: Environment> ChainClient<Env> {
         };
 
         let received_logs_total = received_logs.iter().map(|x| x.1.len()).sum::<usize>();
+        // How far behind each validator's tracker was. These differ by orders of magnitude in
+        // practice — one validator can be millions of entries behind while the rest are a few
+        // thousand — and it is the per-validator number that says which walk is expensive.
+        let entries_per_validator = received_logs
+            .iter()
+            .map(|(public_key, batch)| (*public_key, batch.len()))
+            .collect::<Vec<_>>();
         #[cfg(with_metrics)]
         super::metrics::FIND_RECEIVED_CERTIFICATES_LOG_ENTRIES
             .with_label_values(&[])
@@ -1108,10 +1116,23 @@ impl<Env: Environment> ChainClient<Env> {
         let num_certs = received_logs.num_certs();
         let is_large_sync = num_certs >= LARGE_RECEIVED_CERTIFICATE_SYNC_THRESHOLD;
         if is_large_sync {
+            // Resolved here rather than above so the common, quiet path allocates nothing.
+            let entries_per_validator = entries_per_validator
+                .iter()
+                .map(|(public_key, entries)| {
+                    let address = nodes
+                        .iter()
+                        .find(|node| node.public_key == *public_key)
+                        .map_or_else(|| public_key.to_string(), |node| node.address());
+                    (address, *entries)
+                })
+                .collect::<Vec<_>>();
             info!(
                 %chain_id,
                 num_chains = %received_logs.num_chains(),
                 %num_certs,
+                num_log_entries = %received_logs_total,
+                ?entries_per_validator,
                 "starting a large sync of received certificates",
             );
         }
