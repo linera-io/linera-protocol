@@ -28,6 +28,16 @@ pub fn parse_millis(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_millis(s.parse()?))
 }
 
+/// Parses a number of milliseconds into a `Duration`, rejecting zero.
+///
+/// For a delay, zero usually means "no throttle". For anything a timer sleeps on it means
+/// "spin as fast as the CPU allows", so the flags that feed one are parsed through here.
+pub fn parse_millis_nonzero(s: &str) -> Result<Duration, anyhow::Error> {
+    let millis = s.parse::<u64>()?;
+    anyhow::ensure!(millis > 0, "must be greater than zero");
+    Ok(Duration::from_millis(millis))
+}
+
 /// Parses the string as a number of seconds into a `Duration`.
 pub fn parse_secs(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_secs(s.parse()?))
