@@ -700,9 +700,16 @@ mod tests {
     use super::GrpcClient;
 
     /// Verbatim from a PM worker on 2026-09-16, when validator-1's ingress answered a
-    /// `handle_block_proposal` with an HTML error page.
+    /// `handle_block_proposal` with an HTML error page. Its body began with a newline, so
+    /// tonic read `0x0a` as the compression flag.
     const PROXY_503: &str = "protocol error: received message with invalid compression flag: 10 \
          (valid flags are 0 and 1) while receiving response with status: 503 Service Unavailable";
+
+    /// The other message tonic builds with the same suffix, when the body parses as compressed
+    /// but does not decompress (`codec/decode.rs`). Both sites are the only ones that carry the
+    /// HTTP status, so both have to be recognized.
+    const PROXY_503_DECOMPRESS: &str = "Error decompressing: corrupt deflate stream, \
+         while receiving response with status: 503 Service Unavailable";
 
     fn is_retryable(message: &str) -> bool {
         GrpcClient::is_retryable(&Status::new(Code::Internal, message))
@@ -711,6 +718,7 @@ mod tests {
     #[test]
     fn proxy_server_errors_are_retryable() {
         assert!(is_retryable(PROXY_503));
+        assert!(is_retryable(PROXY_503_DECOMPRESS));
         for status in [
             "500 Internal Server Error",
             "502 Bad Gateway",
