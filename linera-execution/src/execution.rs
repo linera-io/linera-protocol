@@ -40,6 +40,7 @@ use crate::{
     execution_state_actor::ExecutionStateActor,
     resources::ResourceController,
     system::{SystemExecutionStateView, SystemMessage},
+    thread_pool::SERVICE_QUERY,
     transaction_tracker::PreparedCheckpoint,
     ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext, JsVec, Message,
     MessageContext, OperationContext, OutgoingMessage, ProcessStreamsContext, Query, QueryContext,
@@ -435,7 +436,7 @@ where
         let (codes, descriptions) = actor.service_and_dependencies(application_id).await?;
 
         let service_runtime_task = thread_pool
-            .run_send(JsVec(codes), move |codes| async move {
+            .run_send(SERVICE_QUERY, JsVec(codes), move |codes| async move {
                 let mut runtime = ServiceSyncRuntime::new_with_deadline(
                     execution_state_sender,
                     context,

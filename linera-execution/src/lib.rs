@@ -21,6 +21,7 @@ pub mod system;
 /// Helpers for writing tests that exercise the execution layer.
 #[cfg(with_testing)]
 pub mod test_utils;
+pub mod thread_pool;
 mod transaction_tracker;
 mod util;
 mod wasm;
@@ -54,7 +55,7 @@ use linera_views::{batch::Batch, ViewError};
 use serde::{Deserialize, Serialize};
 use system::AdminOperation;
 use thiserror::Error;
-pub use web_thread_pool::Pool as ThreadPool;
+pub use thread_pool::ThreadPool;
 use web_thread_select as web_thread;
 
 #[cfg(with_revm)]
@@ -1809,6 +1810,7 @@ pub fn init_metrics() {
     evm::revm::metrics::init_metrics();
     execution_state_actor::metrics::init_metrics();
     system::metrics::init_metrics();
+    thread_pool::metrics::init_metrics();
     #[cfg(with_wasm_runtime)]
     wasm::metrics::init_metrics();
 }
