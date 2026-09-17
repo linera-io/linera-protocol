@@ -15,13 +15,13 @@ pub(super) struct CacheEntry<R> {
     cached_at: Timestamp,
 }
 
-/// Cache for request results with TTL-based expiration and LRU eviction.
+/// Cache for request results with TTL-based expiration and oldest-first eviction.
 ///
 /// This cache supports:
 /// - Exact match lookups
 /// - Subsumption-based lookups (larger requests can satisfy smaller ones)
 /// - TTL-based expiration
-/// - LRU eviction
+/// - Oldest-first eviction when full
 #[derive(Debug, Clone)]
 pub(super) struct RequestsCache<K, R> {
     /// Cache of recently completed requests with their results and timestamps.
@@ -29,7 +29,7 @@ pub(super) struct RequestsCache<K, R> {
     cache: Arc<tokio::sync::RwLock<HashMap<K, CacheEntry<R>>>>,
     /// Time-to-live for cached entries. Entries older than this duration are considered expired.
     cache_ttl: Duration,
-    /// Maximum number of entries to store in the cache. When exceeded, oldest entries are evicted (LRU).
+    /// Maximum number of entries to store in the cache. When exceeded, oldest entries are evicted.
     max_cache_size: usize,
 }
 
@@ -60,25 +60,33 @@ where
     /// # Returns
     /// - `Some(T)` if a cached result is found (either exact or subsumed)
     /// - `None` if no suitable cached result exists
-    pub(super) async fn get<T>(&self, key: &K) -> Option<T>
+    pub(super) async fn get<T>(&self, key: &K, now: Timestamp) -> Option<T>
     where
         T: TryFrom<R>,
     {
         let cache = self.cache.read().await;
 
-        // Check cache for exact match first
+        // Check cache for exact match first. Expired entries are skipped here rather
+        // than only during store-time eviction: eviction only runs when the cache is
+        // at capacity, so without this check a quiet client would serve stale entries
+        // indefinitely.
         if let Some(entry) = cache.get(key) {
-            tracing::trace!(
-                key = ?key,
-                "cache hit (exact match) - returning cached result"
-            );
-            #[cfg(with_metrics)]
-            metrics::REQUEST_CACHE_HIT.inc();
-            return T::try_from((*entry.result).clone()).ok();
+            if now.duration_since(entry.cached_at) <= self.cache_ttl {
+                tracing::trace!(
+                    key = ?key,
+                    "cache hit (exact match) - returning cached result"
+                );
+                #[cfg(with_metrics)]
+                metrics::REQUEST_CACHE_HIT.inc();
+                return T::try_from((*entry.result).clone()).ok();
+            }
         }
 
         // Check cache for subsuming requests
         for (cached_key, entry) in cache.iter() {
+            if now.duration_since(entry.cached_at) > self.cache_ttl {
+                continue;
+            }
             if cached_key.subsumes(key) {
                 if let Some(extracted) = key.try_extract_result(cached_key, &entry.result) {
                     tracing::trace!(
@@ -95,10 +103,7 @@ where
         None
     }
 
-    /// Stores a result in the cache with LRU eviction if cache is full.
-    ///
-    /// If the cache is at capacity, this method removes the oldest expired entries first.
-    /// Entries are considered "oldest" based on their cached_at timestamp.
+    /// Stores a result in the cache, evicting expired and then oldest entries when full.
     ///
     /// # Arguments
     /// - `key`: The request key to cache
@@ -106,6 +111,18 @@ where
     pub(super) async fn store(&self, key: K, result: Arc<R>, now: Timestamp) {
         self.evict_expired_entries(now).await; // Clean up expired entries first
         let mut cache = self.cache.write().await;
+        // TTL eviction alone does not bound the cache: when every entry is still
+        // fresh, evict the oldest so the size cap holds.
+        while cache.len() >= self.max_cache_size {
+            let Some(oldest_key) = cache
+                .iter()
+                .min_by_key(|(_, entry)| entry.cached_at)
+                .map(|(key, _)| key.clone())
+            else {
+                break;
+            };
+            cache.remove(&oldest_key);
+        }
         // Insert new entry
         cache.insert(
             key.clone(),
@@ -222,7 +239,7 @@ mod tests {
         let cache: RequestsCache<RangeKey, RangeResult> =
             RequestsCache::new(Duration::from_secs(60), 10);
         let key = RangeKey { start: 0, end: 5 };
-        let result: Option<RangeResult> = cache.get(&key).await;
+        let result: Option<RangeResult> = cache.get(&key, Timestamp::from(0)).await;
         assert!(result.is_none());
     }
 
@@ -235,9 +252,52 @@ mod tests {
         cache
             .store(key.clone(), Arc::new(result.clone()), Timestamp::from(0))
             .await;
-        let retrieved: Option<RangeResult> = cache.get(&key).await;
+        let retrieved: Option<RangeResult> = cache.get(&key, Timestamp::from(0)).await;
 
         assert_eq!(retrieved, Some(result));
+    }
+
+    #[tokio::test]
+    async fn test_expired_entry_is_not_served() {
+        let cache = RequestsCache::new(Duration::from_secs(30), 10);
+        let key = RangeKey { start: 0, end: 5 };
+        let result = RangeResult(vec![0, 1, 2, 3, 4, 5]);
+
+        cache
+            .store(key.clone(), Arc::new(result.clone()), Timestamp::from(0))
+            .await;
+        // Within the TTL the entry is served; past it, it must not be — even though
+        // the cache is far below capacity and store-time eviction never runs.
+        let fresh: Option<RangeResult> = cache.get(&key, Timestamp::from(29_000_000)).await;
+        assert_eq!(fresh, Some(result));
+        let stale: Option<RangeResult> = cache.get(&key, Timestamp::from(31_000_000)).await;
+        assert!(stale.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_size_cap_holds_with_fresh_entries() {
+        let cache = RequestsCache::new(Duration::from_secs(60), 3);
+        // All entries fresh: TTL eviction frees nothing, so oldest-first eviction
+        // must keep the cache at its size cap.
+        for start in 0..10u64 {
+            let key = RangeKey {
+                start,
+                end: start + 1,
+            };
+            cache
+                .store(
+                    key,
+                    Arc::new(RangeResult(vec![start])),
+                    Timestamp::from(start),
+                )
+                .await;
+        }
+        assert!(cache.cache.read().await.len() <= 3);
+        // The newest entry survived.
+        let newest: Option<RangeResult> = cache
+            .get(&RangeKey { start: 9, end: 10 }, Timestamp::from(9))
+            .await;
+        assert_eq!(newest, Some(RangeResult(vec![9])));
     }
 
     #[tokio::test]
@@ -267,7 +327,7 @@ mod tests {
             .await;
 
         // Should get exact match, not extracted from larger range
-        let retrieved: Option<RangeResult> = cache.get(&exact_key).await;
+        let retrieved: Option<RangeResult> = cache.get(&exact_key, Timestamp::from(0)).await;
         assert_eq!(retrieved, Some(exact_result));
     }
 
@@ -288,7 +348,7 @@ mod tests {
 
         // Request a subset
         let subset_key = RangeKey { start: 3, end: 7 };
-        let retrieved: Option<RangeResult> = cache.get(&subset_key).await;
+        let retrieved: Option<RangeResult> = cache.get(&subset_key, Timestamp::from(0)).await;
 
         assert_eq!(retrieved, Some(RangeResult(vec![3, 4, 5, 6, 7])));
     }
@@ -305,7 +365,7 @@ mod tests {
 
         // Non-overlapping range
         let key2 = RangeKey { start: 10, end: 15 };
-        let retrieved: Option<RangeResult> = cache.get(&key2).await;
+        let retrieved: Option<RangeResult> = cache.get(&key2, Timestamp::from(0)).await;
 
         assert!(retrieved.is_none());
     }
@@ -406,7 +466,7 @@ mod tests {
             id: 5,
             always_fail_extraction: false,
         };
-        let retrieved: Option<SimpleResult> = cache.get(&target_key).await;
+        let retrieved: Option<SimpleResult> = cache.get(&target_key, Timestamp::from(0)).await;
 
         assert!(retrieved.is_some());
     }
