@@ -1961,7 +1961,8 @@ impl<Env: Environment> Client<Env> {
                 "get_received_log_from_validator: received log batch",
             );
             num_pages += 1;
-            if num_pages.is_multiple_of(RECEIVED_LOG_PAGES_PER_PROGRESS_MESSAGE) {
+            // `u64::is_multiple_of` is not stable on this branch's toolchain.
+            if num_pages % RECEIVED_LOG_PAGES_PER_PROGRESS_MESSAGE == 0 {
                 info!(
                     %chain_id,
                     remote_node = remote_node.address(),
