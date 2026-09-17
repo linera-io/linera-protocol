@@ -48,6 +48,20 @@ enum KeyTag {
     Index,
 }
 
+/// Appends `index` to `key` in big-endian order, so that comparing two keys byte by byte
+/// orders them by index.
+///
+/// The obvious `derive_tag_key` writes the index with BCS, which is little-endian: keys for
+/// indices 1 and 256 are `01000000` and `00010000`, so 256 sorts before 1. A contiguous range
+/// of indices is then scattered over the whole key space, which is why [`LogView::read`] can
+/// only fetch it one key at a time. Ordering the keys makes the entries of a range adjacent in
+/// the store, so a backend that keeps keys sorted reads them together instead of seeking once
+/// per entry.
+fn append_index(mut key: Vec<u8>, index: u32) -> Vec<u8> {
+    key.extend_from_slice(&index.to_be_bytes());
+    key
+}
+
 /// A view that supports logging values of type `T`.
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, T: Allocative")]
@@ -118,10 +132,8 @@ where
                 .checked_add(new_values_len)
                 .ok_or(ArithmeticError::Overflow)?;
             for (index, value) in (self.stored_count..).zip(&self.new_values) {
-                let key = self
-                    .context
-                    .base_key()
-                    .derive_tag_key(KeyTag::Index as u8, &index)?;
+                let key =
+                    append_index(self.context.base_key().base_tag(KeyTag::Index as u8), index);
                 batch.put_key_value(key, value)?;
             }
             let key = self.context.base_key().base_tag(KeyTag::Count as u8);
@@ -229,10 +241,7 @@ where
             self.new_values.get(index).cloned()
         } else if index < stored_count {
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
-            let key = self
-                .context
-                .base_key()
-                .derive_tag_key(KeyTag::Index as u8, &index)?;
+            let key = append_index(self.context.base_key().base_tag(KeyTag::Index as u8), index);
             self.context.store().read_value(&key).await?
         } else {
             self.new_values.get(index - stored_count).cloned()
@@ -326,11 +335,10 @@ where
         let mut keys = Vec::with_capacity(count);
         for index in range {
             let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
-            let key = self
-                .context
-                .base_key()
-                .derive_tag_key(KeyTag::Index as u8, &index)?;
-            keys.push(key);
+            keys.push(append_index(
+                self.context.base_key().base_tag(KeyTag::Index as u8),
+                index,
+            ));
         }
         let mut values = Vec::with_capacity(count);
         for entry in self.context.store().read_multi_values(&keys).await? {
@@ -471,5 +479,42 @@ mod graphql {
                 .read(start.unwrap_or_default()..end.unwrap_or_else(|| self.count()))
                 .await?)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::append_index;
+
+    fn key(index: u32) -> Vec<u8> {
+        append_index(vec![7, 42], index)
+    }
+
+    #[test]
+    fn index_keys_sort_like_indices() {
+        let indices = [0u32, 1, 2, 255, 256, 257, 20_000, 65_536, u32::MAX];
+        let mut keyed = indices.map(|index| (key(index), index));
+        keyed.sort();
+        let sorted = keyed.map(|(_, index)| index);
+        assert_eq!(sorted, indices);
+    }
+
+    /// A page of consecutive entries has to occupy a contiguous stretch of the key space:
+    /// no key outside the range may sort between its first and last key.
+    #[test]
+    fn a_range_of_indices_is_a_contiguous_range_of_keys() {
+        let (start, end) = (1_000u32, 1_100u32);
+        let first = key(start);
+        let last = key(end - 1);
+        assert!(first < last);
+        for index in start..end {
+            let key = key(index);
+            assert!(
+                key >= first && key <= last,
+                "index {index} falls outside the page"
+            );
+        }
+        assert!(key(start - 1) < first);
+        assert!(key(end) > last);
     }
 }
