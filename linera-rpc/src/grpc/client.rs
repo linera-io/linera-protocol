@@ -722,7 +722,9 @@ mod tests {
         identifiers::{ApplicationId, GenericApplicationId, StreamId, StreamName},
     };
 
-    use super::{api, GRPC_MAX_MESSAGE_SIZE, MAX_STREAM_IDS_PER_REQUEST};
+    use tonic::{Code, Status};
+
+    use super::{api, GrpcClient, GRPC_MAX_MESSAGE_SIZE, MAX_STREAM_IDS_PER_REQUEST};
 
     /// Verifies that a response with `MAX_STREAM_IDS_PER_REQUEST` entries fits within
     /// the gRPC message size limit, even with large stream IDs.
@@ -753,13 +755,6 @@ mod tests {
              exceeding the {GRPC_MAX_MESSAGE_SIZE}-byte gRPC limit"
         );
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use tonic::{Code, Status};
-
-    use super::GrpcClient;
 
     /// Verbatim from a PM worker on 2026-09-16, when validator-1's ingress answered a
     /// `handle_block_proposal` with an HTML error page. Its body began with a newline, so
