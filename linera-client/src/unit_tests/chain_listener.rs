@@ -927,3 +927,26 @@ async fn test_chain_listener_sparse_event_download() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+/// The background sync interval has three independent defaults — clap, serde and `Default` —
+/// and a caller cannot tell which one produced its config. They have to agree: a `Default` of
+/// 0 would mean "sync once and never again", silently reinstating the behaviour this interval
+/// exists to replace.
+#[test]
+fn background_sync_interval_defaults_agree() {
+    #[derive(clap::Parser)]
+    struct Wrapper {
+        #[command(flatten)]
+        config: ChainListenerConfig,
+    }
+
+    let from_clap = <Wrapper as clap::Parser>::parse_from(["test"]).config;
+    let from_serde: ChainListenerConfig = serde_json::from_str("{}").unwrap();
+
+    assert_eq!(from_clap.background_sync_interval_ms, 900_000);
+    assert_eq!(from_serde.background_sync_interval_ms, 900_000);
+    assert_eq!(
+        ChainListenerConfig::default().background_sync_interval_ms,
+        900_000
+    );
+}

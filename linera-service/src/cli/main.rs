@@ -757,6 +757,9 @@ impl Runnable for Job {
 
                         let listener_config = ChainListenerConfig {
                             skip_process_inbox: true,
+                            // Sync once at startup: repeating it would add unrelated
+                            // validator traffic to the measurement.
+                            background_sync_interval_ms: 0,
                             ..Default::default()
                         };
 
