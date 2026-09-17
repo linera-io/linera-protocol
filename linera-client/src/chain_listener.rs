@@ -29,7 +29,7 @@ use tracing::{debug, error, info, instrument, warn, Instrument as _};
 use crate::error::{self, Error};
 
 /// The configuration for the chain listener.
-#[derive(Default, Debug, Clone, clap::Args, serde::Serialize, serde::Deserialize, tsify::Tsify)]
+#[derive(Debug, Clone, clap::Args, serde::Serialize, serde::Deserialize, tsify::Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct ChainListenerConfig {
     /// Do not create blocks automatically to receive incoming messages. Instead, wait for
@@ -58,6 +58,39 @@ pub struct ChainListenerConfig {
         env = "LINERA_LISTENER_DELAY_AFTER"
     )]
     pub delay_after_ms: u64,
+
+    /// The time between two background received-certificate syncs of the same chain, in
+    /// milliseconds. Repeating the sync keeps the received-certificate trackers fresh,
+    /// so a process restart only has to walk the short backlog accumulated since the
+    /// last refresh instead of everything since the previous restart. Set to 0 to sync
+    /// only once, when the chain listener starts.
+    #[serde(default = "default_background_sync_interval_ms")]
+    #[arg(
+        long = "listener-background-sync-interval-ms",
+        default_value = "900000",
+        env = "LINERA_LISTENER_BACKGROUND_SYNC_INTERVAL_MS"
+    )]
+    pub background_sync_interval_ms: u64,
+}
+
+/// The default value of [`ChainListenerConfig::background_sync_interval_ms`]: 15 minutes.
+fn default_background_sync_interval_ms() -> u64 {
+    900_000
+}
+
+// Written out rather than derived: `#[derive(Default)]` would give
+// `background_sync_interval_ms = 0`, which means "never repeat the sync" and so disagrees
+// with the clap and serde defaults. Callers that build a config with `..Default::default()`
+// would silently opt out of the periodic sync.
+impl Default for ChainListenerConfig {
+    fn default() -> Self {
+        Self {
+            skip_process_inbox: false,
+            delay_before_ms: 0,
+            delay_after_ms: 0,
+            background_sync_interval_ms: default_background_sync_interval_ms(),
+        }
+    }
 }
 
 type ContextChainClient<C> = ChainClient<<C as ClientContext>::Environment>;
@@ -582,9 +615,19 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         }
 
         let context = Arc::clone(&self.context);
+        let interval = Duration::from_millis(self.config.background_sync_interval_ms);
         Task::spawn(async move {
-            if let Err(e) = Self::background_sync_received_certificates(context, chain_id).await {
-                warn!("Background sync failed for chain {chain_id}: {e}");
+            loop {
+                if let Err(e) =
+                    Self::background_sync_received_certificates(Arc::clone(&context), chain_id)
+                        .await
+                {
+                    warn!("Background sync failed for chain {chain_id}: {e}");
+                }
+                if interval.is_zero() {
+                    return;
+                }
+                linera_base::time::timer::sleep(interval).await;
             }
         })
     }
