@@ -6029,10 +6029,21 @@ where
         validator,
         handle(false, now.saturating_sub(TimeDelta::from_secs(5)).micros()),
     )]);
-    // Deadline ALREADY ELAPSED: that is the reachable case, since a probe arms at
-    // launch + interval + spread while the stream only starts serving once its sync
-    // returns, so any sync outlasting the jitter lands here past the deadline.
-    let mut breakers = HashMap::from([(validator, breaker(now, interval, true))]);
+    // Deadline ALREADY ELAPSED, by a REAL margin: that is the reachable case, since a probe
+    // arms at launch + interval + spread while the stream only starts serving once its sync
+    // returns, so any sync outlasting the jitter lands here past the deadline. The margin
+    // matters — at exactly `now`, re-arming off the stale deadline and re-arming off `now`
+    // give the same answer, so the assertion below could not tell them apart, and the
+    // stale-deadline form lands in the PAST again whenever the overshoot exceeds the
+    // remaining time to qualify.
+    let mut breakers = HashMap::from([(
+        validator,
+        breaker(
+            now.saturating_sub(TimeDelta::from_secs(600)),
+            interval,
+            true,
+        ),
+    )]);
     chain
         .update_notification_streams(&mut senders, &mut breakers)
         .await?;
