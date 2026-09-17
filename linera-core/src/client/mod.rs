@@ -68,11 +68,6 @@ use crate::{
 /// entries, so with the default page size a message is emitted every 500,000 entries.
 const RECEIVED_LOG_PAGES_PER_PROGRESS_MESSAGE: usize = 25;
 
-/// Number of full received-log pages a download may fetch back-to-back before pacing
-/// kicks in. With pages of [`CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES`] entries this lets
-/// backlogs of up to just under 100,000 entries sync at full speed.
-const RECEIVED_LOG_PAGES_BEFORE_PACING: usize = 5;
-
 /// The client for interacting with a single chain.
 pub mod chain_client;
 pub use chain_client::ChainClient;
@@ -182,6 +177,10 @@ pub static DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE: usize = 500;
 pub static DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE: usize = 20_000;
 /// Default maximum number of concurrent event stream queries.
 pub static DEFAULT_MAX_EVENT_STREAM_QUERIES: usize = 1000;
+/// Default number of full received-log pages a download may fetch back-to-back before pacing
+/// kicks in. With pages of [`CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES`] entries this lets backlogs
+/// of up to just under 100,000 entries sync at full speed.
+pub static DEFAULT_RECEIVED_LOG_PAGES_BEFORE_PACING: usize = 5;
 /// Default maximum number of certificate batch downloads to run concurrently.
 pub static DEFAULT_MAX_CONCURRENT_BATCH_DOWNLOADS: usize = 1;
 
@@ -1924,7 +1923,7 @@ impl<Env: Environment> Client<Env> {
             // capacity and automatically backs off further when the validator slows
             // down. Short syncs never reach this point and are unaffected.
             num_full_pages += 1;
-            if num_full_pages >= RECEIVED_LOG_PAGES_BEFORE_PACING {
+            if num_full_pages >= self.options.received_log_pages_before_pacing {
                 linera_base::time::timer::sleep(page_duration).await;
             }
         }
