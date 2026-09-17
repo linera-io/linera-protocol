@@ -67,6 +67,22 @@ use crate::{
     HandleTimeoutCertificateRequest, HandleValidatedCertificateRequest,
 };
 
+/// The text tonic puts before the HTTP status when it fails to decode a non-gRPC response body.
+const RECEIVED_STATUS_PREFIX: &str = "while receiving response with status: ";
+
+/// Recovers the HTTP status from a proxy's non-gRPC response, which tonic reports as
+/// `Code::Internal` instead of applying its HTTP-to-gRPC status mapping (tonic#2365).
+fn proxy_http_status(message: &str) -> Option<u16> {
+    message
+        .rsplit_once(RECEIVED_STATUS_PREFIX)
+        .and_then(|(_, rest)| rest.split_whitespace().next())
+        .and_then(|code| code.parse().ok())
+}
+
+fn is_server_error(status: u16) -> bool {
+    (500..600).contains(&status)
+}
+
 /// A gRPC client for communicating with a validator node.
 #[derive(Clone)]
 pub struct GrpcClient {
@@ -128,13 +144,12 @@ impl GrpcClient {
                 trace!("gRPC connection reset: {status:?}; retrying");
                 true
             }
-            Code::Internal if status.message().contains("502 Bad Gateway") => {
-                // When a proxy/ingress returns HTTP 502 (e.g. during rolling restarts),
-                // tonic's frame decoder fails on the non-gRPC response body before the
-                // HTTP-to-gRPC status mapping can run, producing Code::Internal instead
-                // of Code::Unavailable. Per the gRPC spec, HTTP 502 maps to UNAVAILABLE
-                // which is retryable. This works around tonic#2365.
-                trace!("gRPC proxy error (502): {status:?}; retrying");
+            Code::Internal if proxy_http_status(status.message()).is_some_and(is_server_error) => {
+                // Retry the whole 5xx class: enumerating reason phrases is what let 503 regress
+                // after 502 was special-cased. tonic maps 502/503/504 to UNAVAILABLE and other
+                // 5xx to UNKNOWN, but only when it can parse the body — tonic#2365 is when it
+                // cannot.
+                trace!("gRPC proxy error: {status:?}; retrying");
                 true
             }
             Code::NotFound => false, // This code is used if e.g. the validator is missing blobs.
@@ -706,8 +721,9 @@ mod tests {
         data_types::BlockHeight,
         identifiers::{ApplicationId, GenericApplicationId, StreamId, StreamName},
     };
+    use tonic::{Code, Status};
 
-    use super::{api, GRPC_MAX_MESSAGE_SIZE, MAX_STREAM_IDS_PER_REQUEST};
+    use super::{api, GrpcClient, GRPC_MAX_MESSAGE_SIZE, MAX_STREAM_IDS_PER_REQUEST};
 
     /// Verifies that a response with `MAX_STREAM_IDS_PER_REQUEST` entries fits within
     /// the gRPC message size limit, even with large stream IDs.
@@ -737,5 +753,55 @@ mod tests {
             "Response with {MAX_STREAM_IDS_PER_REQUEST} entries is {size} bytes, \
              exceeding the {GRPC_MAX_MESSAGE_SIZE}-byte gRPC limit"
         );
+    }
+
+    /// Verbatim from a PM worker on 2026-09-16, when validator-1's ingress answered a
+    /// `handle_block_proposal` with an HTML error page. Its body began with a newline, so
+    /// tonic read `0x0a` as the compression flag.
+    const PROXY_503: &str = "protocol error: received message with invalid compression flag: 10 \
+         (valid flags are 0 and 1) while receiving response with status: 503 Service Unavailable";
+
+    /// The other message tonic builds with the same suffix, when the body parses as compressed
+    /// but does not decompress (`codec/decode.rs`). Both sites are the only ones that carry the
+    /// HTTP status, so both have to be recognized.
+    const PROXY_503_DECOMPRESS: &str = "Error decompressing: corrupt deflate stream, \
+         while receiving response with status: 503 Service Unavailable";
+
+    fn is_retryable(message: &str) -> bool {
+        GrpcClient::is_retryable(&Status::new(Code::Internal, message))
+    }
+
+    #[test]
+    fn proxy_server_errors_are_retryable() {
+        assert!(is_retryable(PROXY_503));
+        assert!(is_retryable(PROXY_503_DECOMPRESS));
+        for status in [
+            "500 Internal Server Error",
+            "502 Bad Gateway",
+            "504 Gateway Timeout",
+        ] {
+            let message = format!("while receiving response with status: {status}");
+            assert!(is_retryable(&message), "{status} should be retryable");
+        }
+    }
+
+    #[test]
+    fn proxy_client_errors_are_not_retryable() {
+        for status in ["400 Bad Request", "404 Not Found", "429 Too Many Requests"] {
+            let message = format!("while receiving response with status: {status}");
+            assert!(!is_retryable(&message), "{status} should not be retryable");
+        }
+    }
+
+    #[test]
+    fn unrelated_internal_errors_are_not_retryable() {
+        assert!(!is_retryable("something else went wrong"));
+        // A 5xx that is not the status of the response must not be mistaken for one.
+        assert!(!is_retryable("the chain is at height 503"));
+    }
+
+    #[test]
+    fn connection_resets_are_retryable() {
+        assert!(is_retryable("h2 protocol error: stream closed"));
     }
 }
