@@ -81,7 +81,7 @@ pub const DEFAULT_EXECUTION_STATE_CACHE_SIZE: usize = 10_000;
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
 
-#[cfg(all(test, feature = "rocksdb"))]
+#[cfg(test)]
 #[path = "unit_tests/worker_backup_tests.rs"]
 mod worker_backup_tests;
 
