@@ -1,0 +1,9 @@
+(function() {
+    const implementors = Object.fromEntries([["alloy_primitives",[["impl <a class=\"trait\" href=\"const_hex/traits/trait.FromHex.html\" title=\"trait const_hex::traits::FromHex\">FromHex</a> for <a class=\"struct\" href=\"alloy_primitives/struct.Address.html\" title=\"struct alloy_primitives::Address\">Address</a>",0],["impl <a class=\"trait\" href=\"const_hex/traits/trait.FromHex.html\" title=\"trait const_hex::traits::FromHex\">FromHex</a> for <a class=\"struct\" href=\"alloy_primitives/struct.Bloom.html\" title=\"struct alloy_primitives::Bloom\">Bloom</a>",0],["impl <a class=\"trait\" href=\"const_hex/traits/trait.FromHex.html\" title=\"trait const_hex::traits::FromHex\">FromHex</a> for <a class=\"struct\" href=\"alloy_primitives/struct.Bytes.html\" title=\"struct alloy_primitives::Bytes\">Bytes</a>",0],["impl <a class=\"trait\" href=\"const_hex/traits/trait.FromHex.html\" title=\"trait const_hex::traits::FromHex\">FromHex</a> for <a class=\"struct\" href=\"alloy_primitives/struct.Function.html\" title=\"struct alloy_primitives::Function\">Function</a>",0],["impl&lt;const N: <a class=\"primitive\" href=\"https://doc.rust-lang.org/1.95.0/std/primitive.usize.html\">usize</a>&gt; <a class=\"trait\" href=\"const_hex/traits/trait.FromHex.html\" title=\"trait const_hex::traits::FromHex\">FromHex</a> for <a class=\"struct\" href=\"alloy_primitives/struct.FixedBytes.html\" title=\"struct alloy_primitives::FixedBytes\">FixedBytes</a>&lt;N&gt;",0]]],["const_hex",[]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":59,"fragment_lengths":[1422,17]}

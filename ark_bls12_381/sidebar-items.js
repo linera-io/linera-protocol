@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["FQ_ONE","FQ_ZERO"],"mod":["fq","fq12","fq2","fq6","fr","g1","g2"],"struct":["Config","Fq12Config","Fq2Config","Fq6Config","FqConfig","FrConfig"],"type":["Bls12_381","Fq","Fq12","Fq2","Fq6","Fr","G1Affine","G1Projective","G2Affine","G2Projective"]};

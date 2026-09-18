@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TEFlags"],"struct":["Affine","MontgomeryAffine","Projective"],"trait":["MontCurveConfig","TECurveConfig"]};

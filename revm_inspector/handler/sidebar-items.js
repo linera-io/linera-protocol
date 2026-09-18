@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["frame_end","frame_start","inspect_instructions"],"trait":["InspectorHandler"]};

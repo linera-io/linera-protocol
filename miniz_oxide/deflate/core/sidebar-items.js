@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CompressionStrategy","TDEFLFlush","TDEFLStatus"],"fn":["compress","compress_to_output","create_comp_flags_from_zip_params"],"mod":["deflate_flags"],"struct":["CallbackFunc","CompressorOxide"]};

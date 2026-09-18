@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"trait":["ConfirmationNeedsValidatedCertificate","ConfirmationOnlyInCurrentRound","FastConfirmationNeedsEmptyLock","NoValidationInFastRound","ProposalGate","UnlockingRequiresHigherCertificate","ValidationRoundStrictlyIncreases","VoteConstructionSites"]};

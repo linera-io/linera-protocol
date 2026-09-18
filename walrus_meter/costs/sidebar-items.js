@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Free","Wasmtime"],"trait":["Costs"]};

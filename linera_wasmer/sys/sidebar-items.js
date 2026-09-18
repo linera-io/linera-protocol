@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CraneliftOptLevel"],"fn":["get_default_compiler_config"],"struct":["Artifact","BaseTunables","Cranelift","EngineBuilder","Features","MiddlewareReaderState","Singlepass","VMConfig"],"trait":["CompilerConfig","FunctionMiddleware","ModuleMiddleware","NativeEngineExt","Tunables"]};

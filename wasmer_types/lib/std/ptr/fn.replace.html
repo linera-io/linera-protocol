@@ -1,0 +1,32 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Moves `src` into the pointed `dst`, returning the previous `dst` value."><title>replace in wasmer_types::lib::std::ptr - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="wasmer_types" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">replace</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../wasmer_types/index.html">wasmer_<wbr>types</a><span class="version">4.4.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">replace</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#safety" title="Safety">Safety</a></li><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In wasmer_<wbr>types::<wbr>lib::<wbr>std::<wbr>ptr</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../../index.html">wasmer_types</a>::<wbr><a href="../../index.html">lib</a>::<wbr><a href="../index.html">std</a>::<wbr><a href="index.html">ptr</a></div><h1>Function <span class="fn">replace</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><span class="since" title="Stable since Rust version 1.0.0, const since 1.83.0">1.0.0 (const: 1.83.0)</span> · <a class="src" href="https://doc.rust-lang.org/1.95.0/src/core/ptr/mod.rs.html#1542">Source</a> </span></div><pre class="rust item-decl"><code>pub const unsafe fn replace&lt;T&gt;(dst: <a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.pointer.html">*mut T</a>, src: T) -&gt; T</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Moves <code>src</code> into the pointed <code>dst</code>, returning the previous <code>dst</code> value.</p>
+<p>Neither value is dropped.</p>
+<p>This function is semantically equivalent to <a href="../mem/fn.replace.html" title="fn wasmer_types::lib::std::mem::replace"><code>mem::replace</code></a> except that it
+operates on raw pointers instead of references. When references are
+available, <a href="../mem/fn.replace.html" title="fn wasmer_types::lib::std::mem::replace"><code>mem::replace</code></a> should be preferred.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>Behavior is undefined if any of the following conditions are violated:</p>
+<ul>
+<li>
+<p><code>dst</code> must be <a href="index.html#safety" title="mod wasmer_types::lib::std::ptr">valid</a> for both reads and writes.</p>
+</li>
+<li>
+<p><code>dst</code> must be properly aligned.</p>
+</li>
+<li>
+<p><code>dst</code> must point to a properly initialized value of type <code>T</code>.</p>
+</li>
+</ul>
+<p>Note that even if <code>T</code> has size <code>0</code>, the pointer must be properly aligned.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::ptr;
+
+<span class="kw">let </span><span class="kw-2">mut </span>rust = <span class="macro">vec!</span>[<span class="string">'b'</span>, <span class="string">'u'</span>, <span class="string">'s'</span>, <span class="string">'t'</span>];
+
+<span class="comment">// `mem::replace` would have the same effect without requiring the unsafe
+// block.
+</span><span class="kw">let </span>b = <span class="kw">unsafe </span>{
+    ptr::replace(<span class="kw-2">&amp;mut </span>rust[<span class="number">0</span>], <span class="string">'r'</span>)
+};
+
+<span class="macro">assert_eq!</span>(b, <span class="string">'b'</span>);
+<span class="macro">assert_eq!</span>(rust, <span class="kw-2">&amp;</span>[<span class="string">'r'</span>, <span class="string">'u'</span>, <span class="string">'s'</span>, <span class="string">'t'</span>]);</code></pre></div></div></details></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Compression","PoolSize","WriteCoalescingDelay"],"mod":["caching_session","execution_profile","pager","session","session_builder"],"struct":["SelfIdentity"]};

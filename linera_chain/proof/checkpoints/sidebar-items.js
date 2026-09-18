@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"trait":["AcknowledgedMessagesMayBeForgotten","CheckpointPreservesBlobAvailability","CheckpointPreservesConsumptionBoundary","CheckpointRecertifiesReferencedBlocks","CheckpointRestoresExecutionState","CheckpointSummarizesUserStreams","EventFloorTracksCheckpoints"]};

@@ -1,0 +1,55 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This macro uses reverse-mode automatic differentiation to generate a new function. It may only be applied to a function. The new function will compute the derivative of the function to which the macro was applied."><title>autodiff_reverse in wasmtime_environ::__core::autodiff - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc attr"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">autodiff_reverse</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_<wbr>environ</a><span class="version">25.0.3</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">autodiff_<wbr>reverse</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#usage-examples" title="Usage examples:">Usage examples:</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In wasmtime_<wbr>environ::<wbr>__<wbr>core::<wbr>autodiff</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">autodiff</a></div><h1>Attribute Macro <span class="attr">autodiff_<wbr>reverse</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="https://doc.rust-lang.org/1.95.0/src/core/macros/mod.rs.html#1630">Source</a> </span></div><pre class="rust item-decl"><code>#[autodiff_reverse]</code></pre><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>autodiff</code>)</span></div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This macro uses reverse-mode automatic differentiation to generate a new function.
+It may only be applied to a function. The new function will compute the derivative
+of the function to which the macro was applied.</p>
+<p>The expected usage syntax is:
+<code>#[autodiff_reverse(NAME, INPUT_ACTIVITIES, OUTPUT_ACTIVITY)]</code></p>
+<ul>
+<li><code>NAME</code>: A string that represents a valid function name.</li>
+<li><code>INPUT_ACTIVITIES</code>: Specifies one valid activity for each input parameter.</li>
+<li><code>OUTPUT_ACTIVITY</code>: Must not be set if the function implicitly returns nothing
+(or explicitly returns <code>-&gt; ()</code>). Otherwise, it must be set to one of the allowed activities.</li>
+</ul>
+<p>ACTIVITIES might either be <code>Active</code>, <code>Duplicated</code> or <code>Const</code>, more options will be exposed later.</p>
+<p><code>Active</code> can be used for float scalar values.
+If used on an input, a new float will be appended to the return tuple of the generated
+function. If the function returns a float scalar, <code>Active</code> can be used for the return as
+well. In this case a float scalar will be appended to the argument list, it works as seed.</p>
+<p><code>Duplicated</code> can be used on references, raw pointers, or other indirect input
+arguments. It creates a new shadow argument of the same type, following the original argument.
+A const reference or pointer argument will receive a mutable reference or pointer as shadow.</p>
+<p><code>Const</code> should be used on non-float arguments, or float-based arguments as an optimization
+if we are not interested in computing the derivatives with respect to this argument.</p>
+<h4 id="usage-examples"><a class="doc-anchor" href="#usage-examples">§</a>Usage examples:</h4>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(autodiff)]
+</span><span class="kw">use </span>std::autodiff::<span class="kw-2">*</span>;
+<span class="attr">#[autodiff_reverse(rb_rev, Active, Active, Active)]
+</span><span class="kw">fn </span>rosenbrock(x: f64, y: f64) -&gt; f64 {
+    (<span class="number">1.0 </span>- x).powi(<span class="number">2</span>) + <span class="number">100.0 </span>* (y - x.powi(<span class="number">2</span>)).powi(<span class="number">2</span>)
+}
+<span class="attr">#[autodiff_reverse(rb_inp_rev, Active, Active, Duplicated)]
+</span><span class="kw">fn </span>rosenbrock_inp(x: f64, y: f64, out: <span class="kw-2">&amp;mut </span>f64) {
+    <span class="kw-2">*</span>out = (<span class="number">1.0 </span>- x).powi(<span class="number">2</span>) + <span class="number">100.0 </span>* (y - x.powi(<span class="number">2</span>)).powi(<span class="number">2</span>);
+}
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>(output1, dx1, dy1) = rb_rev(<span class="number">1.0</span>, <span class="number">3.0</span>, <span class="number">1.0</span>);
+    <span class="macro">dbg!</span>(output1, dx1, dy1); <span class="comment">// (400.0, -800.0, 400.0)
+    </span><span class="kw">let </span><span class="kw-2">mut </span>output2 = <span class="number">0.0</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>seed = <span class="number">1.0</span>;
+    <span class="kw">let </span>(dx2, dy2) = rb_inp_rev(<span class="number">1.0</span>, <span class="number">3.0</span>, <span class="kw-2">&amp;mut </span>output2, <span class="kw-2">&amp;mut </span>seed);
+    <span class="comment">// (dx2, dy2, output2, seed) == (-800.0, 400.0, 400.0, 0.0)
+</span>}</code></pre></div>
+<p>We often want to track how one or more input floats affect one output float. This output can
+be a scalar return value, or a mutable reference or pointer argument. In the latter case, the
+mutable input should be marked as duplicated and its shadow initialized to <code>0.0</code>. The shadow of
+the output should be marked as active or duplicated and initialized to <code>1.0</code>. After calling
+the generated function, the shadow(s) of the input(s) will contain the derivatives. The
+shadow of the outputs (“seed”) will be reset to zero.
+If the function has more than one output float marked as active or duplicated, users might want to
+set one of them to <code>1.0</code> and the others to <code>0.0</code> to compute partial derivatives.
+Unlike forward-mode, a call to the generated function does not reset the shadow of the
+inputs.
+Reverse mode is generally more efficient if we have more active/duplicated input than
+output floats.</p>
+<p>Related information can also be found under the term “Jacobian-Vector Product” (JVP).</p>
+</div></details></section></div></main></body></html>

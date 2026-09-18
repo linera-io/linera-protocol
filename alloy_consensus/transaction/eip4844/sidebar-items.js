@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TxEip4844Variant"],"struct":["TxEip4844","TxEip4844WithSidecar"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["build_opentelemetry_layer_with_test_exporter","init"]};

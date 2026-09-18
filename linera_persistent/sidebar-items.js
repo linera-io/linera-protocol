@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["file","memory"],"trait":["Persist","PersistExt"]};

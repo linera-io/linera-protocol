@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BinaryType"],"fn":["window"],"mod":["console"],"struct":["Blob","CloseEvent","DomException","Event","EventTarget","History","Location","MessageEvent","MessagePort","Storage","WebSocket","Window","Worker"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Algorithm","ChangeTag","DiffOp","DiffTag"],"fn":["capture_diff","capture_diff_deadline","capture_diff_slices","capture_diff_slices_deadline","get_close_matches","get_diff_ratio","group_diff_ops"],"mod":["algorithms","iter","udiff","utils"],"struct":["Change","InlineChange","TextDiff","TextDiffConfig"],"trait":["DiffableStr","DiffableStrRef"]};

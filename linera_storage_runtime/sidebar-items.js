@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["InnerStorageConfig","StoreConfig"],"struct":["AssertStorageV1","CommonStorageOptions","StorageCacheConfig","StorageConfig","StorageMigration"],"trait":["Runnable","RunnableWithStore"]};

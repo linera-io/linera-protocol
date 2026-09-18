@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Authenticator","Compression"],"fn":["compress_append","decompress","parse_response_body_extensions","read_response_frame"],"mod":["flag","frame_errors","protocol_features","request","response","server_event_type","types"],"struct":["CompressionFromStrError","FrameParams","ResponseBodyWithExtensions","SerializedRequest","TryFromPrimitiveError"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["OptionBoxResolver"],"struct":["ArchivedOptionBox"],"type":["Iter","IterMut"]};

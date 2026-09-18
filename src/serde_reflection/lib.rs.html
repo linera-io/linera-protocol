@@ -1,0 +1,377 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-reflection-0.6.0/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="serde_reflection" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">serde_reflection/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) Facebook, Inc. and its affiliates
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: MIT OR Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="attr">#![forbid(unsafe_code)]
+<a href=#5 id=5 data-nosnippet>5</a>
+<a href=#6 id=6 data-nosnippet>6</a></span><span class="doccomment">//! This crate provides a way to extract format descriptions for Rust containers that
+<a href=#7 id=7 data-nosnippet>7</a>//! implement the Serialize and/or Deserialize trait(s) of Serde.
+<a href=#8 id=8 data-nosnippet>8</a>//!
+<a href=#9 id=9 data-nosnippet>9</a>//! Format descriptions are useful in several ways:
+<a href=#10 id=10 data-nosnippet>10</a>//! * Stored under version control, formats can be tested to prevent unintended modifications
+<a href=#11 id=11 data-nosnippet>11</a>//!   of binary serialization formats (e.g. by changing variant order).
+<a href=#12 id=12 data-nosnippet>12</a>//!
+<a href=#13 id=13 data-nosnippet>13</a>//! * Formats can be passed to [`serde-generate`](https://docs.rs/serde-generate)
+<a href=#14 id=14 data-nosnippet>14</a>//!   in order to generate class definitions and provide Serde-compatible binary
+<a href=#15 id=15 data-nosnippet>15</a>//!   serialization in other languages (C++, python, Java, etc).
+<a href=#16 id=16 data-nosnippet>16</a>//!
+<a href=#17 id=17 data-nosnippet>17</a>//! * Together with the [`json_converter`] module, formats allow dynamic translation of
+<a href=#18 id=18 data-nosnippet>18</a>//!   binary-serialized values to JSON and from JSON.
+<a href=#19 id=19 data-nosnippet>19</a>//!
+<a href=#20 id=20 data-nosnippet>20</a>//! # Quick Start
+<a href=#21 id=21 data-nosnippet>21</a>//!
+<a href=#22 id=22 data-nosnippet>22</a>//! Very often, Serde traits are simply implemented using Serde derive macros. In this case,
+<a href=#23 id=23 data-nosnippet>23</a>//! you may obtain format descriptions as follows:
+<a href=#24 id=24 data-nosnippet>24</a>//! * call `trace_simple_type` on the desired top-level container definition(s), then
+<a href=#25 id=25 data-nosnippet>25</a>//! * add a call to `trace_simple_type` for each `enum` type. (This will fix any `MissingVariants` error.)
+<a href=#26 id=26 data-nosnippet>26</a>//!
+<a href=#27 id=27 data-nosnippet>27</a>//! ```rust
+<a href=#28 id=28 data-nosnippet>28</a>//! # use serde::Deserialize;
+<a href=#29 id=29 data-nosnippet>29</a>//! # use serde_reflection::{Error, Samples, Tracer, TracerConfig};
+<a href=#30 id=30 data-nosnippet>30</a>//! #[derive(Deserialize)]
+<a href=#31 id=31 data-nosnippet>31</a>//! struct Foo {
+<a href=#32 id=32 data-nosnippet>32</a>//!   bar: Bar,
+<a href=#33 id=33 data-nosnippet>33</a>//!   choice: Choice,
+<a href=#34 id=34 data-nosnippet>34</a>//! }
+<a href=#35 id=35 data-nosnippet>35</a>//!
+<a href=#36 id=36 data-nosnippet>36</a>//! #[derive(Deserialize)]
+<a href=#37 id=37 data-nosnippet>37</a>//! struct Bar(u64);
+<a href=#38 id=38 data-nosnippet>38</a>//!
+<a href=#39 id=39 data-nosnippet>39</a>//! #[derive(Deserialize)]
+<a href=#40 id=40 data-nosnippet>40</a>//! enum Choice { A, B, C }
+<a href=#41 id=41 data-nosnippet>41</a>//!
+<a href=#42 id=42 data-nosnippet>42</a>//! # fn main() -&gt; Result&lt;(), Error&gt; {
+<a href=#43 id=43 data-nosnippet>43</a>//! // Start the tracing session.
+<a href=#44 id=44 data-nosnippet>44</a>//! let mut tracer = Tracer::new(TracerConfig::default());
+<a href=#45 id=45 data-nosnippet>45</a>//!
+<a href=#46 id=46 data-nosnippet>46</a>//! // Trace the desired top-level type(s).
+<a href=#47 id=47 data-nosnippet>47</a>//! tracer.trace_simple_type::&lt;Foo&gt;()?;
+<a href=#48 id=48 data-nosnippet>48</a>//!
+<a href=#49 id=49 data-nosnippet>49</a>//! // Also trace each enum type separately to fix any `MissingVariants` error.
+<a href=#50 id=50 data-nosnippet>50</a>//! tracer.trace_simple_type::&lt;Choice&gt;()?;
+<a href=#51 id=51 data-nosnippet>51</a>//!
+<a href=#52 id=52 data-nosnippet>52</a>//! // Obtain the registry of Serde formats and serialize it in YAML (for instance).
+<a href=#53 id=53 data-nosnippet>53</a>//! let registry = tracer.registry()?;
+<a href=#54 id=54 data-nosnippet>54</a>//! let data = serde_yaml::to_string(&amp;registry).unwrap();
+<a href=#55 id=55 data-nosnippet>55</a>//! assert_eq!(&amp;data, r#"---
+<a href=#56 id=56 data-nosnippet>56</a>//! Bar:
+<a href=#57 id=57 data-nosnippet>57</a>//!   NEWTYPESTRUCT: U64
+<a href=#58 id=58 data-nosnippet>58</a>//! Choice:
+<a href=#59 id=59 data-nosnippet>59</a>//!   ENUM:
+<a href=#60 id=60 data-nosnippet>60</a>//!     0:
+<a href=#61 id=61 data-nosnippet>61</a>//!       A: UNIT
+<a href=#62 id=62 data-nosnippet>62</a>//!     1:
+<a href=#63 id=63 data-nosnippet>63</a>//!       B: UNIT
+<a href=#64 id=64 data-nosnippet>64</a>//!     2:
+<a href=#65 id=65 data-nosnippet>65</a>//!       C: UNIT
+<a href=#66 id=66 data-nosnippet>66</a>//! Foo:
+<a href=#67 id=67 data-nosnippet>67</a>//!   STRUCT:
+<a href=#68 id=68 data-nosnippet>68</a>//!     - bar:
+<a href=#69 id=69 data-nosnippet>69</a>//!         TYPENAME: Bar
+<a href=#70 id=70 data-nosnippet>70</a>//!     - choice:
+<a href=#71 id=71 data-nosnippet>71</a>//!         TYPENAME: Choice
+<a href=#72 id=72 data-nosnippet>72</a>//! "#);
+<a href=#73 id=73 data-nosnippet>73</a>//! # Ok(())
+<a href=#74 id=74 data-nosnippet>74</a>//! # }
+<a href=#75 id=75 data-nosnippet>75</a>//! ```
+<a href=#76 id=76 data-nosnippet>76</a>//!
+<a href=#77 id=77 data-nosnippet>77</a>//! # Features and Limitations
+<a href=#78 id=78 data-nosnippet>78</a>//!
+<a href=#79 id=79 data-nosnippet>79</a>//! `serde_reflection` is meant to extract formats for Rust containers (i.e. structs and
+<a href=#80 id=80 data-nosnippet>80</a>//! enums) with "reasonable" implementations of the Serde traits `Serialize` and
+<a href=#81 id=81 data-nosnippet>81</a>//! `Deserialize`.
+<a href=#82 id=82 data-nosnippet>82</a>//!
+<a href=#83 id=83 data-nosnippet>83</a>//! ## Supported features
+<a href=#84 id=84 data-nosnippet>84</a>//!
+<a href=#85 id=85 data-nosnippet>85</a>//! * Plain derived implementations obtained with `#[derive(Serialize, Deserialize)]` for
+<a href=#86 id=86 data-nosnippet>86</a>//!   Rust containers in the Serde [data model](https://serde.rs/data-model.html)
+<a href=#87 id=87 data-nosnippet>87</a>//!
+<a href=#88 id=88 data-nosnippet>88</a>//! * Customized derived implementations using Serde attributes that are compatible with
+<a href=#89 id=89 data-nosnippet>89</a>//!   binary serialization formats, such as `#[serde(rename = "Name")]`.
+<a href=#90 id=90 data-nosnippet>90</a>//!
+<a href=#91 id=91 data-nosnippet>91</a>//! * Hand-written implementations of `Deserialize` that are more restrictive than the
+<a href=#92 id=92 data-nosnippet>92</a>//!   derived ones, provided that `trace_value` is used during tracing to provide sample
+<a href=#93 id=93 data-nosnippet>93</a>//!   values for all such constrained types (see the detailed example below).
+<a href=#94 id=94 data-nosnippet>94</a>//!
+<a href=#95 id=95 data-nosnippet>95</a>//! * Mutually recursive types provided that the first variant of each enum is
+<a href=#96 id=96 data-nosnippet>96</a>//!   recursion-free. (For instance, `enum List { None, Some(Box&lt;List&gt;)}`.) Note that each
+<a href=#97 id=97 data-nosnippet>97</a>//!   enum must be traced separately with `trace_type` to discover all the variants.
+<a href=#98 id=98 data-nosnippet>98</a>//!
+<a href=#99 id=99 data-nosnippet>99</a>//! ## Unsupported idioms
+<a href=#100 id=100 data-nosnippet>100</a>//!
+<a href=#101 id=101 data-nosnippet>101</a>//! * Containers sharing the same base name (e.g. `Foo`) but from different modules. (Work
+<a href=#102 id=102 data-nosnippet>102</a>//!   around: use `#[serde(rename = ..)]`)
+<a href=#103 id=103 data-nosnippet>103</a>//!
+<a href=#104 id=104 data-nosnippet>104</a>//! * Generic types instantiated multiple times in the same tracing session. (Work around:
+<a href=#105 id=105 data-nosnippet>105</a>//!   use the crate [`serde-name`](https://crates.io/crates/serde-name) and its adapters `SerializeNameAdapter` and `DeserializeNameAdapter`.)
+<a href=#106 id=106 data-nosnippet>106</a>//!
+<a href=#107 id=107 data-nosnippet>107</a>//! * Attributes that are not compatible with binary formats (e.g. `#[serde(flatten)]`, `#[serde(tag = ..)]`)
+<a href=#108 id=108 data-nosnippet>108</a>//!
+<a href=#109 id=109 data-nosnippet>109</a>//! * Tracing type aliases. (E.g. `type Pair = (u32, u64)` will not create an entry "Pair".)
+<a href=#110 id=110 data-nosnippet>110</a>//!
+<a href=#111 id=111 data-nosnippet>111</a>//! * Mutually recursive types for which picking the first variant of each enum does not
+<a href=#112 id=112 data-nosnippet>112</a>//!   terminate. (Work around: re-order the variants. For instance `enum List {
+<a href=#113 id=113 data-nosnippet>113</a>//!   Some(Box&lt;List&gt;), None}` must be rewritten `enum List { None, Some(Box&lt;List&gt;)}`.)
+<a href=#114 id=114 data-nosnippet>114</a>//!
+<a href=#115 id=115 data-nosnippet>115</a>//! * Certain standard types such as `std::num::NonZeroU8` may not be tracked as a
+<a href=#116 id=116 data-nosnippet>116</a>//!   container and appear simply as their underlying primitive type (e.g. `u8`) in the
+<a href=#117 id=117 data-nosnippet>117</a>//!   formats. This loss of information makes it difficult to use `trace_value` to work
+<a href=#118 id=118 data-nosnippet>118</a>//!   around deserialization invariants (see example below). As a work around, you may
+<a href=#119 id=119 data-nosnippet>119</a>//!   override the default for the primitive type using `TracerConfig` (e.g. `let config =
+<a href=#120 id=120 data-nosnippet>120</a>//!   TracerConfig::default().default_u8_value(1);`).
+<a href=#121 id=121 data-nosnippet>121</a>//!
+<a href=#122 id=122 data-nosnippet>122</a>//! ## Security CAVEAT
+<a href=#123 id=123 data-nosnippet>123</a>//!
+<a href=#124 id=124 data-nosnippet>124</a>//! At this time, `HashSet&lt;T&gt;` and `BTreeSet&lt;T&gt;` are treated as sequences (i.e. vectors)
+<a href=#125 id=125 data-nosnippet>125</a>//! by Serde.
+<a href=#126 id=126 data-nosnippet>126</a>//!
+<a href=#127 id=127 data-nosnippet>127</a>//! Cryptographic applications using [BCS](https:/github.com/diem/bcs) **must** use
+<a href=#128 id=128 data-nosnippet>128</a>//! `HashMap&lt;T, ()&gt;` and `BTreeMap&lt;T, ()&gt;` instead. Using `HashSet&lt;T&gt;` or `BTreeSet&lt;T&gt;`
+<a href=#129 id=129 data-nosnippet>129</a>//! will compile but BCS-deserialization will not enforce canonicity (meaning unique,
+<a href=#130 id=130 data-nosnippet>130</a>//! well-ordered serialized elements in this case). In the case of `HashSet&lt;T&gt;`,
+<a href=#131 id=131 data-nosnippet>131</a>//! serialization will additionally be non-deterministic.
+<a href=#132 id=132 data-nosnippet>132</a>//!
+<a href=#133 id=133 data-nosnippet>133</a>//! # Troubleshooting
+<a href=#134 id=134 data-nosnippet>134</a>//!
+<a href=#135 id=135 data-nosnippet>135</a>//! The error type used in this crate provides a method `error.explanation()` to help with
+<a href=#136 id=136 data-nosnippet>136</a>//! troubleshooting during format tracing.
+<a href=#137 id=137 data-nosnippet>137</a>//!
+<a href=#138 id=138 data-nosnippet>138</a>//! # Detailed Example
+<a href=#139 id=139 data-nosnippet>139</a>//!
+<a href=#140 id=140 data-nosnippet>140</a>//! In the following, more complete example, we extract the Serde formats of two containers
+<a href=#141 id=141 data-nosnippet>141</a>//! `Name` and `Person` and demonstrate how to handle a custom implementation of `serde::Deserialize`
+<a href=#142 id=142 data-nosnippet>142</a>//! for `Name`.
+<a href=#143 id=143 data-nosnippet>143</a>//!
+<a href=#144 id=144 data-nosnippet>144</a>//! ```rust
+<a href=#145 id=145 data-nosnippet>145</a>//! # use serde::{Deserialize, Serialize};
+<a href=#146 id=146 data-nosnippet>146</a>//! use serde_reflection::{ContainerFormat, Error, Format, Samples, Tracer, TracerConfig};
+<a href=#147 id=147 data-nosnippet>147</a>//!
+<a href=#148 id=148 data-nosnippet>148</a>//! #[derive(Serialize, PartialEq, Eq, Debug, Clone)]
+<a href=#149 id=149 data-nosnippet>149</a>//! struct Name(String);
+<a href=#150 id=150 data-nosnippet>150</a>//! // impl&lt;'de&gt; Deserialize&lt;'de&gt; for Name { ... }
+<a href=#151 id=151 data-nosnippet>151</a>//! # impl&lt;'de&gt; Deserialize&lt;'de&gt; for Name {
+<a href=#152 id=152 data-nosnippet>152</a>//! #     fn deserialize&lt;D&gt;(deserializer: D) -&gt; std::result::Result&lt;Self, D::Error&gt;
+<a href=#153 id=153 data-nosnippet>153</a>//! #     where
+<a href=#154 id=154 data-nosnippet>154</a>//! #         D: ::serde::Deserializer&lt;'de&gt;,
+<a href=#155 id=155 data-nosnippet>155</a>//! #     {
+<a href=#156 id=156 data-nosnippet>156</a>//! #         // Make sure to wrap our value in a container with the same name
+<a href=#157 id=157 data-nosnippet>157</a>//! #         // as the original type.
+<a href=#158 id=158 data-nosnippet>158</a>//! #         #[derive(Deserialize)]
+<a href=#159 id=159 data-nosnippet>159</a>//! #         #[serde(rename = "Name")]
+<a href=#160 id=160 data-nosnippet>160</a>//! #         struct InternalValue(String);
+<a href=#161 id=161 data-nosnippet>161</a>//! #         let value = InternalValue::deserialize(deserializer)?.0;
+<a href=#162 id=162 data-nosnippet>162</a>//! #         // Enforce some custom invariant
+<a href=#163 id=163 data-nosnippet>163</a>//! #         if value.len() &gt;= 2 &amp;&amp; value.chars().all(char::is_alphabetic) {
+<a href=#164 id=164 data-nosnippet>164</a>//! #             Ok(Name(value))
+<a href=#165 id=165 data-nosnippet>165</a>//! #         } else {
+<a href=#166 id=166 data-nosnippet>166</a>//! #             Err(&lt;D::Error as ::serde::de::Error&gt;::custom(format!(
+<a href=#167 id=167 data-nosnippet>167</a>//! #                 "Invalid name {}",
+<a href=#168 id=168 data-nosnippet>168</a>//! #                 value
+<a href=#169 id=169 data-nosnippet>169</a>//! #             )))
+<a href=#170 id=170 data-nosnippet>170</a>//! #         }
+<a href=#171 id=171 data-nosnippet>171</a>//! #     }
+<a href=#172 id=172 data-nosnippet>172</a>//! # }
+<a href=#173 id=173 data-nosnippet>173</a>//!
+<a href=#174 id=174 data-nosnippet>174</a>//! #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+<a href=#175 id=175 data-nosnippet>175</a>//! enum Person {
+<a href=#176 id=176 data-nosnippet>176</a>//!     NickName(Name),
+<a href=#177 id=177 data-nosnippet>177</a>//!     FullName { first: Name, last: Name },
+<a href=#178 id=178 data-nosnippet>178</a>//! }
+<a href=#179 id=179 data-nosnippet>179</a>//!
+<a href=#180 id=180 data-nosnippet>180</a>//! # fn main() -&gt; Result&lt;(), Error&gt; {
+<a href=#181 id=181 data-nosnippet>181</a>//! // Start a session to trace formats.
+<a href=#182 id=182 data-nosnippet>182</a>//! let mut tracer = Tracer::new(TracerConfig::default());
+<a href=#183 id=183 data-nosnippet>183</a>//! // Create a store to hold samples of Rust values.
+<a href=#184 id=184 data-nosnippet>184</a>//! let mut samples = Samples::new();
+<a href=#185 id=185 data-nosnippet>185</a>//!
+<a href=#186 id=186 data-nosnippet>186</a>//! // For every type (here `Name`), if a user-defined implementation of `Deserialize` exists and
+<a href=#187 id=187 data-nosnippet>187</a>//! // is known to perform custom validation checks, use `trace_value` first so that `samples`
+<a href=#188 id=188 data-nosnippet>188</a>//! // contains a valid Rust value of this type.
+<a href=#189 id=189 data-nosnippet>189</a>//! let bob = Name("Bob".into());
+<a href=#190 id=190 data-nosnippet>190</a>//! tracer.trace_value(&amp;mut samples, &amp;bob)?;
+<a href=#191 id=191 data-nosnippet>191</a>//! assert!(samples.value("Name").is_some());
+<a href=#192 id=192 data-nosnippet>192</a>//!
+<a href=#193 id=193 data-nosnippet>193</a>//! // Now, let's trace deserialization for the top-level type `Person`.
+<a href=#194 id=194 data-nosnippet>194</a>//! // We pass a reference to `samples` so that sampled values are used for custom types.
+<a href=#195 id=195 data-nosnippet>195</a>//! let (format, values) = tracer.trace_type::&lt;Person&gt;(&amp;samples)?;
+<a href=#196 id=196 data-nosnippet>196</a>//! assert_eq!(format, Format::TypeName("Person".into()));
+<a href=#197 id=197 data-nosnippet>197</a>//!
+<a href=#198 id=198 data-nosnippet>198</a>//! // As a byproduct, we have also obtained sample values of type `Person`.
+<a href=#199 id=199 data-nosnippet>199</a>//! // We can see that the user-provided value `bob` was used consistently to pass
+<a href=#200 id=200 data-nosnippet>200</a>//! // validation checks for `Name`.
+<a href=#201 id=201 data-nosnippet>201</a>//! assert_eq!(values[0], Person::NickName(bob.clone()));
+<a href=#202 id=202 data-nosnippet>202</a>//! assert_eq!(values[1], Person::FullName { first: bob.clone(), last: bob.clone() });
+<a href=#203 id=203 data-nosnippet>203</a>//!
+<a href=#204 id=204 data-nosnippet>204</a>//! // We have no more top-level types to trace, so let's stop the tracing session and obtain
+<a href=#205 id=205 data-nosnippet>205</a>//! // a final registry of containers.
+<a href=#206 id=206 data-nosnippet>206</a>//! let registry = tracer.registry()?;
+<a href=#207 id=207 data-nosnippet>207</a>//!
+<a href=#208 id=208 data-nosnippet>208</a>//! // We have successfully extracted a format description of all Serde containers under `Person`.
+<a href=#209 id=209 data-nosnippet>209</a>//! assert_eq!(
+<a href=#210 id=210 data-nosnippet>210</a>//!     registry.get("Name").unwrap(),
+<a href=#211 id=211 data-nosnippet>211</a>//!     &amp;ContainerFormat::NewTypeStruct(Box::new(Format::Str)),
+<a href=#212 id=212 data-nosnippet>212</a>//! );
+<a href=#213 id=213 data-nosnippet>213</a>//! match registry.get("Person").unwrap() {
+<a href=#214 id=214 data-nosnippet>214</a>//!     ContainerFormat::Enum(variants) =&gt; assert_eq!(variants.len(), 2),
+<a href=#215 id=215 data-nosnippet>215</a>//!      _ =&gt; panic!(),
+<a href=#216 id=216 data-nosnippet>216</a>//! };
+<a href=#217 id=217 data-nosnippet>217</a>//!
+<a href=#218 id=218 data-nosnippet>218</a>//! // Export the registry in YAML.
+<a href=#219 id=219 data-nosnippet>219</a>//! let data = serde_yaml::to_string(&amp;registry).unwrap();
+<a href=#220 id=220 data-nosnippet>220</a>//! assert_eq!(&amp;data, r#"---
+<a href=#221 id=221 data-nosnippet>221</a>//! Name:
+<a href=#222 id=222 data-nosnippet>222</a>//!   NEWTYPESTRUCT: STR
+<a href=#223 id=223 data-nosnippet>223</a>//! Person:
+<a href=#224 id=224 data-nosnippet>224</a>//!   ENUM:
+<a href=#225 id=225 data-nosnippet>225</a>//!     0:
+<a href=#226 id=226 data-nosnippet>226</a>//!       NickName:
+<a href=#227 id=227 data-nosnippet>227</a>//!         NEWTYPE:
+<a href=#228 id=228 data-nosnippet>228</a>//!           TYPENAME: Name
+<a href=#229 id=229 data-nosnippet>229</a>//!     1:
+<a href=#230 id=230 data-nosnippet>230</a>//!       FullName:
+<a href=#231 id=231 data-nosnippet>231</a>//!         STRUCT:
+<a href=#232 id=232 data-nosnippet>232</a>//!           - first:
+<a href=#233 id=233 data-nosnippet>233</a>//!               TYPENAME: Name
+<a href=#234 id=234 data-nosnippet>234</a>//!           - last:
+<a href=#235 id=235 data-nosnippet>235</a>//!               TYPENAME: Name
+<a href=#236 id=236 data-nosnippet>236</a>//! "#);
+<a href=#237 id=237 data-nosnippet>237</a>//! # Ok(())
+<a href=#238 id=238 data-nosnippet>238</a>//! # }
+<a href=#239 id=239 data-nosnippet>239</a>//! ```
+<a href=#240 id=240 data-nosnippet>240</a>//!
+<a href=#241 id=241 data-nosnippet>241</a>//! # Tracing Serialization with `trace_value`
+<a href=#242 id=242 data-nosnippet>242</a>//!
+<a href=#243 id=243 data-nosnippet>243</a>//! Tracing the serialization of a Rust value `v` consists of visiting the structural
+<a href=#244 id=244 data-nosnippet>244</a>//! components of `v` in depth and recording Serde formats for all the visited types.
+<a href=#245 id=245 data-nosnippet>245</a>//!
+<a href=#246 id=246 data-nosnippet>246</a>//! ```rust
+<a href=#247 id=247 data-nosnippet>247</a>//! # use serde_reflection::*;
+<a href=#248 id=248 data-nosnippet>248</a>//! # use serde::Serialize;
+<a href=#249 id=249 data-nosnippet>249</a>//! #[derive(Serialize)]
+<a href=#250 id=250 data-nosnippet>250</a>//! struct FullName&lt;'a&gt; {
+<a href=#251 id=251 data-nosnippet>251</a>//!   first: &amp;'a str,
+<a href=#252 id=252 data-nosnippet>252</a>//!   middle: Option&lt;&amp;'a str&gt;,
+<a href=#253 id=253 data-nosnippet>253</a>//!   last: &amp;'a str,
+<a href=#254 id=254 data-nosnippet>254</a>//! }
+<a href=#255 id=255 data-nosnippet>255</a>//!
+<a href=#256 id=256 data-nosnippet>256</a>//! # fn main() -&gt; Result&lt;(), Error&gt; {
+<a href=#257 id=257 data-nosnippet>257</a>//! let mut tracer = Tracer::new(TracerConfig::default());
+<a href=#258 id=258 data-nosnippet>258</a>//! let mut samples = Samples::new();
+<a href=#259 id=259 data-nosnippet>259</a>//! tracer.trace_value(&amp;mut samples, &amp;FullName { first: "", middle: Some(""), last: "" })?;
+<a href=#260 id=260 data-nosnippet>260</a>//! let registry = tracer.registry()?;
+<a href=#261 id=261 data-nosnippet>261</a>//! match registry.get("FullName").unwrap() {
+<a href=#262 id=262 data-nosnippet>262</a>//!     ContainerFormat::Struct(fields) =&gt; assert_eq!(fields.len(), 3),
+<a href=#263 id=263 data-nosnippet>263</a>//!     _ =&gt; panic!(),
+<a href=#264 id=264 data-nosnippet>264</a>//! };
+<a href=#265 id=265 data-nosnippet>265</a>//! # Ok(())
+<a href=#266 id=266 data-nosnippet>266</a>//! # }
+<a href=#267 id=267 data-nosnippet>267</a>//! ```
+<a href=#268 id=268 data-nosnippet>268</a>//!
+<a href=#269 id=269 data-nosnippet>269</a>//! This approach works well but it can only recover the formats of datatypes for which
+<a href=#270 id=270 data-nosnippet>270</a>//! nontrivial samples have been provided:
+<a href=#271 id=271 data-nosnippet>271</a>//!
+<a href=#272 id=272 data-nosnippet>272</a>//! * In enums, only the variants explicitly covered by user samples will be recorded.
+<a href=#273 id=273 data-nosnippet>273</a>//!
+<a href=#274 id=274 data-nosnippet>274</a>//! * Providing a `None` value or an empty vector `[]` within a sample may result in
+<a href=#275 id=275 data-nosnippet>275</a>//!   formats that are partially unknown.
+<a href=#276 id=276 data-nosnippet>276</a>//!
+<a href=#277 id=277 data-nosnippet>277</a>//! ```rust
+<a href=#278 id=278 data-nosnippet>278</a>//! # use serde_reflection::*;
+<a href=#279 id=279 data-nosnippet>279</a>//! # use serde::Serialize;
+<a href=#280 id=280 data-nosnippet>280</a>//! # #[derive(Serialize)]
+<a href=#281 id=281 data-nosnippet>281</a>//! # struct FullName&lt;'a&gt; {
+<a href=#282 id=282 data-nosnippet>282</a>//! #   first: &amp;'a str,
+<a href=#283 id=283 data-nosnippet>283</a>//! #   middle: Option&lt;&amp;'a str&gt;,
+<a href=#284 id=284 data-nosnippet>284</a>//! #   last: &amp;'a str,
+<a href=#285 id=285 data-nosnippet>285</a>//! # }
+<a href=#286 id=286 data-nosnippet>286</a>//! # fn main() -&gt; Result&lt;(), Error&gt; {
+<a href=#287 id=287 data-nosnippet>287</a>//! let mut tracer = Tracer::new(TracerConfig::default());
+<a href=#288 id=288 data-nosnippet>288</a>//! let mut samples = Samples::new();
+<a href=#289 id=289 data-nosnippet>289</a>//! tracer.trace_value(&amp;mut samples, &amp;FullName { first: "", middle: None, last: "" })?;
+<a href=#290 id=290 data-nosnippet>290</a>//! assert_eq!(tracer.registry().unwrap_err(), Error::UnknownFormatInContainer("FullName".to_string()));
+<a href=#291 id=291 data-nosnippet>291</a>//! # Ok(())
+<a href=#292 id=292 data-nosnippet>292</a>//! # }
+<a href=#293 id=293 data-nosnippet>293</a>//! ```
+<a href=#294 id=294 data-nosnippet>294</a>//!
+<a href=#295 id=295 data-nosnippet>295</a>//! For this reason, we introduce a complementary set of APIs to trace deserialization of types.
+<a href=#296 id=296 data-nosnippet>296</a>//!
+<a href=#297 id=297 data-nosnippet>297</a>//! # Tracing Deserialization with `trace_type&lt;T&gt;`
+<a href=#298 id=298 data-nosnippet>298</a>//!
+<a href=#299 id=299 data-nosnippet>299</a>//! Deserialization-tracing APIs take a type `T`, the current tracing state, and a
+<a href=#300 id=300 data-nosnippet>300</a>//! reference to previously recorded samples as input.
+<a href=#301 id=301 data-nosnippet>301</a>//!
+<a href=#302 id=302 data-nosnippet>302</a>//! ## Core Algorithm and High-Level API
+<a href=#303 id=303 data-nosnippet>303</a>//!
+<a href=#304 id=304 data-nosnippet>304</a>//! The core algorithm `trace_type_once&lt;T&gt;`
+<a href=#305 id=305 data-nosnippet>305</a>//! attempts to reconstruct a witness value of type `T` by exploring the graph of all the types
+<a href=#306 id=306 data-nosnippet>306</a>//! occurring in the definition of `T`. At the same time, the algorithm records the
+<a href=#307 id=307 data-nosnippet>307</a>//! formats of all the visited structs and enum variants.
+<a href=#308 id=308 data-nosnippet>308</a>//!
+<a href=#309 id=309 data-nosnippet>309</a>//! For the exploration to be able to terminate, the core algorithm `trace_type_once&lt;T&gt;` explores
+<a href=#310 id=310 data-nosnippet>310</a>//! each possible recursion point only once (see paragraph below).
+<a href=#311 id=311 data-nosnippet>311</a>//! In particular, if `T` is an enum, `trace_type_once&lt;T&gt;` discovers only one variant of `T` at a time.
+<a href=#312 id=312 data-nosnippet>312</a>//!
+<a href=#313 id=313 data-nosnippet>313</a>//! For this reason, the high-level API `trace_type&lt;T&gt;`
+<a href=#314 id=314 data-nosnippet>314</a>//! will repeat calls to `trace_type_once&lt;T&gt;` until all the variants of `T` are known.
+<a href=#315 id=315 data-nosnippet>315</a>//! Variant cases of `T` are explored in sequential order, starting with index `0`.
+<a href=#316 id=316 data-nosnippet>316</a>//!
+<a href=#317 id=317 data-nosnippet>317</a>//! ## Coverage Guarantees
+<a href=#318 id=318 data-nosnippet>318</a>//!
+<a href=#319 id=319 data-nosnippet>319</a>//! Under the assumptions listed below, a single call to `trace_type&lt;T&gt;` is guaranteed to
+<a href=#320 id=320 data-nosnippet>320</a>//! record formats for all the types that `T` depends on. Besides, if `T` is an enum, it
+<a href=#321 id=321 data-nosnippet>321</a>//! will record all the variants of `T`.
+<a href=#322 id=322 data-nosnippet>322</a>//!
+<a href=#323 id=323 data-nosnippet>323</a>//! (0) Container names must not collide. If this happens, consider using `#[serde(rename = "name")]`,
+<a href=#324 id=324 data-nosnippet>324</a>//! or implementing serde traits manually.
+<a href=#325 id=325 data-nosnippet>325</a>//!
+<a href=#326 id=326 data-nosnippet>326</a>//! (1) The first variants of mutually recursive enums must be a "base case". That is,
+<a href=#327 id=327 data-nosnippet>327</a>//! defaulting to the first variant for every enum type (along with `None` for option values
+<a href=#328 id=328 data-nosnippet>328</a>//! and `[]` for sequences) must guarantee termination of depth-first traversals of the graph of type
+<a href=#329 id=329 data-nosnippet>329</a>//! declarations.
+<a href=#330 id=330 data-nosnippet>330</a>//!
+<a href=#331 id=331 data-nosnippet>331</a>//! (2) If a type runs custom validation checks during deserialization, sample values must have been provided
+<a href=#332 id=332 data-nosnippet>332</a>//! previously by calling `trace_value`. Besides, the corresponding registered formats
+<a href=#333 id=333 data-nosnippet>333</a>//! must not contain unknown parts.
+<a href=#334 id=334 data-nosnippet>334</a>//!
+<a href=#335 id=335 data-nosnippet>335</a>//! ## Design Considerations
+<a href=#336 id=336 data-nosnippet>336</a>//!
+<a href=#337 id=337 data-nosnippet>337</a>//! Whenever we traverse the graph of type declarations using deserialization callbacks, the type
+<a href=#338 id=338 data-nosnippet>338</a>//! system requires us to return valid Rust values of type `V::Value`, where `V` is the type of
+<a href=#339 id=339 data-nosnippet>339</a>//! a given `visitor`. This contraint limits the way we can stop graph traversal to only a few cases.
+<a href=#340 id=340 data-nosnippet>340</a>//!
+<a href=#341 id=341 data-nosnippet>341</a>//! The first 4 cases are what we have called *possible recursion points* above:
+<a href=#342 id=342 data-nosnippet>342</a>//!
+<a href=#343 id=343 data-nosnippet>343</a>//! * while visiting an `Option&lt;T&gt;` for the second time, we choose to return the value `None` to stop;
+<a href=#344 id=344 data-nosnippet>344</a>//! * while visiting an `Seq&lt;T&gt;` for the second time, we choose to return the empty sequence `[]`;
+<a href=#345 id=345 data-nosnippet>345</a>//! * while visiting an `Map&lt;K, V&gt;` for the second time, we choose to return the empty map `{}`;
+<a href=#346 id=346 data-nosnippet>346</a>//! * while visiting an `enum T` for the second time, we choose to return the first variant, i.e.
+<a href=#347 id=347 data-nosnippet>347</a>//!   a "base case" by assumption (1) above.
+<a href=#348 id=348 data-nosnippet>348</a>//!
+<a href=#349 id=349 data-nosnippet>349</a>//! In addition to the cases above,
+<a href=#350 id=350 data-nosnippet>350</a>//!
+<a href=#351 id=351 data-nosnippet>351</a>//! * while visiting a container, if the container's name is mapped to a recorded value,
+<a href=#352 id=352 data-nosnippet>352</a>//!   we MAY decide to use it.
+<a href=#353 id=353 data-nosnippet>353</a>//!
+<a href=#354 id=354 data-nosnippet>354</a>//! The default configuration `TracerConfig:default()` always picks the recorded value for a
+<a href=#355 id=355 data-nosnippet>355</a>//! `NewTypeStruct` and never does in the other cases.
+<a href=#356 id=356 data-nosnippet>356</a>//!
+<a href=#357 id=357 data-nosnippet>357</a>//! For efficiency reasons, the current algorithm does not attempt to scan the variants of enums
+<a href=#358 id=358 data-nosnippet>358</a>//! other than the parameter `T` of the main call `trace_type&lt;T&gt;`. As a consequence, each enum type must be
+<a href=#359 id=359 data-nosnippet>359</a>//! traced separately.
+<a href=#360 id=360 data-nosnippet>360</a>
+<a href=#361 id=361 data-nosnippet>361</a></span><span class="kw">mod </span>de;
+<a href=#362 id=362 data-nosnippet>362</a><span class="kw">mod </span>error;
+<a href=#363 id=363 data-nosnippet>363</a><span class="kw">mod </span>format;
+<a href=#364 id=364 data-nosnippet>364</a><span class="kw">mod </span>ser;
+<a href=#365 id=365 data-nosnippet>365</a><span class="kw">mod </span>trace;
+<a href=#366 id=366 data-nosnippet>366</a><span class="kw">mod </span>value;
+<a href=#367 id=367 data-nosnippet>367</a>
+<a href=#368 id=368 data-nosnippet>368</a><span class="attr">#[cfg(feature = <span class="string">"json"</span>)]
+<a href=#369 id=369 data-nosnippet>369</a></span><span class="kw">pub mod </span>json_converter;
+<a href=#370 id=370 data-nosnippet>370</a>
+<a href=#371 id=371 data-nosnippet>371</a><span class="kw">pub use </span>de::Deserializer;
+<a href=#372 id=372 data-nosnippet>372</a><span class="kw">pub use </span>error::{Error, <span class="prelude-ty">Result</span>};
+<a href=#373 id=373 data-nosnippet>373</a><span class="kw">pub use </span>format::{ContainerFormat, Format, FormatHolder, Named, Variable, VariantFormat};
+<a href=#374 id=374 data-nosnippet>374</a><span class="kw">pub use </span>ser::Serializer;
+<a href=#375 id=375 data-nosnippet>375</a><span class="kw">pub use </span>trace::{IncompleteEnumReason, Registry, Samples, Tracer, TracerConfig};
+<a href=#376 id=376 data-nosnippet>376</a><span class="kw">pub use </span>value::Value;
+</code></pre></div></section></main></body></html>

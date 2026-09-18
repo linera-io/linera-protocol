@@ -1,0 +1,57 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Theorem (Storage converges at equal heights). Take two correct validators that agree on the tip height of every chain. Once cross-chain delivery has quiesced at both — no bundle derivable from a committed block is still undelivered internally — their storage agrees on everything the protocol determines:"><title>StorageConvergesAtEqualHeights in linera_core::proof::storage - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="linera_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">StorageConvergesAtEqualHeights</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../linera_core/index.html">linera_<wbr>core</a><span class="version">0.16.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Storage<wbr>Converges<wbr>AtEqual<wbr>Heights</a></h2><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In linera_<wbr>core::<wbr>proof::<wbr>storage</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">linera_core</a>::<wbr><a href="../index.html">proof</a>::<wbr><a href="index.html">storage</a></div><h1>Trait <span class="trait">Storage<wbr>Converges<wbr>AtEqual<wbr>Heights</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/linera_core/proof/storage.rs.html#295">Source</a> </span></div><pre class="rust item-decl"><code>pub trait StorageConvergesAtEqualHeights: <a class="trait" href="trait.DerivedStateAgreesWithCertifiedPrefix.html" title="trait linera_core::proof::storage::DerivedStateAgreesWithCertifiedPrefix">DerivedStateAgreesWithCertifiedPrefix</a> { }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><strong>Theorem (Storage converges at equal heights).</strong> Take two correct validators that agree on the
+tip height of every chain. Once cross-chain delivery has quiesced at both — no bundle derivable
+from a committed block is still undelivered internally — their storage agrees on everything the
+protocol determines:</p>
+<div><table><thead><tr><th></th><th>agrees</th><th>why</th></tr></thead><tbody>
+<tr><td>execution state of every chain</td><td>yes, and <em>certifiably</em> so</td><td>it is a function of the committed prefix, and the last block’s <code>state_hash</code> attests the value</td></tr>
+<tr><td>committed blocks, their certificates, their events</td><td>yes</td><td>same prefix, and each is certified data</td></tr>
+<tr><td>blobs a committed block requires</td><td>yes</td><td>named by the blocks, which agree</td></tr>
+<tr><td>derived indexes and counters</td><td>yes</td><td>functions of the same prefix (<a href="trait.DerivedStateAgreesWithCertifiedPrefix.html" title="trait linera_core::proof::storage::DerivedStateAgreesWithCertifiedPrefix"><code>DerivedStateAgreesWithCertifiedPrefix</code></a>)</td></tr>
+<tr><td>inbox consumption boundaries</td><td>yes</td><td>fixed by which bundles the committed blocks consumed</td></tr>
+<tr><td>inbox queues and outbox queues</td><td>yes, <strong>only after quiescence</strong></td><td>they hold what is delivered but not yet consumed, which is a function of the prefix <em>plus</em> delivery progress</td></tr>
+</tbody></table>
+</div>
+<p>This is the first statement here about two validators rather than one, and it is what would make
+a divergence <em>detectable</em>: at equal heights, two correct validators cannot differ on any row
+above, so a difference convicts one of them of being faulty — which is the missing half of
+<a href="../../../linera_chain/justification/proof/trait.AccountabilityScope.html" title="trait linera_chain::justification::proof::AccountabilityScope"><code>AccountabilityScope</code></a>, where a mis-executed block leaves no forensic residue.</p>
+<p><em>Proof.</em> Fix a chain and a common tip height <code>h</code>.</p>
+<p><em>The prefixes coincide.</em> By <a href="../../../linera_chain/manager/proof/safety/trait.CommitAgreement.html" title="trait linera_chain::manager::proof::safety::CommitAgreement"><code>CommitAgreement</code></a> at most one block is certified per height, and by
+<code>UniqueChain</code> the committed sequence below <code>h</code> is unique. Both validators reached <code>h</code> only
+through valid certificates (<code>TipAdvancesOnlyOnValidCertificate</code>), so they hold the same blocks at
+every height below <code>h</code>. Note the hypothesis is only about <em>heights</em>: agreement on content follows
+rather than being assumed, and it is <a href="../../../linera_chain/manager/proof/model/trait.MaxByzantineWeight.html" title="trait linera_chain::manager::proof::model::MaxByzantineWeight"><code>MaxByzantineWeight</code></a> that makes it follow.</p>
+<p><em>Execution state follows the prefix.</em> By <a href="trait.DerivedStateAgreesWithCertifiedPrefix.html" title="trait linera_core::proof::storage::DerivedStateAgreesWithCertifiedPrefix"><code>DerivedStateAgreesWithCertifiedPrefix</code></a> each
+validator’s execution state equals the result of executing its committed prefix, and by
+<code>DeterministicExecution</code> executing the same prefix yields the same result. The equality is
+moreover <em>witnessed</em>: the <code>state_hash</code> in the block at <code>h - 1</code> is covered by that block’s hash and
+certified, so the agreed value is one a quorum attested rather than one each validator merely
+computed.</p>
+<p><em>Derived state follows too</em>, by the same lemma — the height indexes, outbox counters and
+<code>nonempty_*</code> sets are functions of the prefix.</p>
+<p><em>Message state needs the quiescence hypothesis.</em> What a chain has <em>consumed</em> is fixed by its
+committed blocks, so inbox consumption boundaries agree immediately. What is <em>queued</em> is not: a
+bundle is derived from a committed block of the sending chain and then delivered by that
+validator’s own worker for that chain (<a href="../availability/trait.InboxHoldsOnlySentBundles.html" title="trait linera_core::proof::availability::InboxHoldsOnlySentBundles"><code>InboxHoldsOnlySentBundles</code></a>), so at any instant one
+validator may have delivered internally what the other has not. Since the sending chains are at
+equal heights, both derive the same bundles (<a href="../availability/trait.EffectsSurviveRestart.html" title="trait linera_core::proof::availability::EffectsSurviveRestart"><code>EffectsSurviveRestart</code></a>, sender half); once
+delivery has quiesced both have delivered all of them, and by
+<a href="../availability/trait.BundleConsumedAtMostOnce.html" title="trait linera_core::proof::availability::BundleConsumedAtMostOnce"><code>BundleConsumedAtMostOnce</code></a> neither has consumed one twice. The queues therefore coincide. ∎</p>
+<p><strong>What does not converge, and need not.</strong> Three classes, all legitimate.</p>
+<p><em>Retained history.</em> A validator that bootstrapped from a checkpoint holds a pruned chain: it has
+the execution state without the blocks below the checkpoint, and events below a stream’s floor
+are gone (<a href="../../../linera_chain/proof/checkpoints/trait.EventFloorTracksCheckpoints.html" title="trait linera_chain::proof::checkpoints::EventFloorTracksCheckpoints"><code>EventFloorTracksCheckpoints</code></a>). So two validators at the same heights may hold
+genuinely different <em>sets</em> of blocks and events, and the theorem above claims agreement only on
+what they both retain. This is the sharpest limit on any consistency check built from it: a
+missing block is not evidence of a fault.</p>
+<p><em>Work ahead of the tip.</em> <code>next_height_to_preprocess</code> may exceed the tip by different amounts,
+since preprocessing a block does not advance it. One validator may hold certificates and outbox
+updates for blocks the other has not seen.</p>
+<p><em>Local fields.</em> <code>pending_proposed_blobs</code>, <code>pending_validated_blobs</code>, <code>pre_checkpoint_block_trust</code>
+and <code>received_log</code> are per-validator by construction — the last records the order in which
+certificates arrived, which is not a function of anything committed.</p>
+<p><strong>Quiescence is a hypothesis, not a guarantee.</strong> Nothing here says delivery ever quiesces; that
+would need the outbox to be drained, which no statement provides. So this is a conditional
+convergence result, and the condition is exactly the one the messaging theme has yet to
+discharge.</p>
+</div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../../trait.impl/linera_core/proof/storage/trait.StorageConvergesAtEqualHeights.js" async></script></section></div></main></body></html>

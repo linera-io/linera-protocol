@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["InsertError","MatchError"],"struct":["Match","Params","ParamsIter","Router"]};

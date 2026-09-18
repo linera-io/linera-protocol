@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"trait":["BlobAdmissionIsBounded","BlockOutputsArePersisted","BoundedCatchUp","BundleConsumedAtMostOnce","CertifiedBlockIsAvailable","DeliveryAndConsumptionAreOrdered","DeliveryIsRepairedOnDemand","EffectsSurviveRestart","InboxHoldsOnlySentBundles","LockingBlobsTravelWithTheLock","MissingDependenciesAreRecoverable"]};
