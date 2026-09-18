@@ -1,7 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
@@ -33,6 +39,11 @@ use crate::{
 
 struct ClientContext {
     client: Arc<Client<environment::Test>>,
+    /// Counts `timing_sender` calls. In this crate the only caller is the default
+    /// `make_chain_client`, and the background sync makes one chain client per pass, so this
+    /// counts sync passes. If that coupling ever breaks the count stops rising and
+    /// `background_sync_repeats` fails — it cannot silently pass.
+    chain_clients_made: Arc<AtomicUsize>,
 }
 
 impl chain_listener::ClientContext for ClientContext {
@@ -53,6 +64,7 @@ impl chain_listener::ClientContext for ClientContext {
     fn timing_sender(
         &self,
     ) -> Option<tokio::sync::mpsc::UnboundedSender<(u64, linera_core::client::TimingType)>> {
+        self.chain_clients_made.fetch_add(1, Ordering::Relaxed);
         None
     }
 
@@ -112,6 +124,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let storage = builder.make_storage().await?;
 
     let mut context = ClientContext {
+        chain_clients_made: Arc::new(AtomicUsize::new(0)),
         client: Arc::new(Client::new(
             environment::Impl {
                 storage: storage.clone(),
@@ -223,6 +236,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
     let chain_b_info = chain_b.chain_info().await?;
 
     let context = ClientContext {
+        chain_clients_made: Arc::new(AtomicUsize::new(0)),
         client: Arc::new(Client::new(
             environment::Impl {
                 storage: storage.clone(),
@@ -376,6 +390,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     let storage = builder.make_storage().await?;
 
     let context = ClientContext {
+        chain_clients_made: Arc::new(AtomicUsize::new(0)),
         client: Arc::new(Client::new(
             environment::Impl {
                 storage: storage.clone(),
@@ -454,6 +469,7 @@ async fn test_chain_listener_listen_command_adds_chains_to_wallet() -> anyhow::R
     let storage = builder.make_storage().await?;
 
     let context = ClientContext {
+        chain_clients_made: Arc::new(AtomicUsize::new(0)),
         client: Arc::new(Client::new(
             environment::Impl {
                 storage: storage.clone(),
@@ -572,6 +588,7 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
     let storage = builder.make_storage().await?;
 
     let mut context = ClientContext {
+        chain_clients_made: Arc::new(AtomicUsize::new(0)),
         client: Arc::new(Client::new(
             environment::Impl {
                 storage: storage.clone(),
@@ -774,6 +791,7 @@ async fn test_chain_listener_sparse_event_download() -> anyhow::Result<()> {
     let receiver_info = receiver.chain_info().await?;
 
     let context = ClientContext {
+        chain_clients_made: Arc::new(AtomicUsize::new(0)),
         client: Arc::new(Client::new(
             environment::Impl {
                 storage: storage.clone(),
@@ -925,6 +943,103 @@ async fn test_chain_listener_sparse_event_download() -> anyhow::Result<()> {
     cancellation_token.cancel();
     handle.await;
 
+    Ok(())
+}
+
+/// The background sync has to run MORE THAN ONCE.
+///
+/// It is the only thing that advances the per-validator received-certificate trackers, so if it
+/// only ran at startup — as it did before the interval was added — every restart would walk the
+/// entire backlog since the previous restart. On testnet_conway that reached 3.8M log entries and
+/// saturated validator storage for the length of the walk.
+///
+/// Every other test in this file constructs the listener with background sync DISABLED, so this
+/// is the only one that exercises the loop at all, let alone a second pass.
+#[test_log::test(tokio::test)]
+async fn background_sync_repeats() -> anyhow::Result<()> {
+    let mut signer = InMemorySigner::new(Some(37));
+    let key_pair = signer.generate_new();
+    let owner: AccountOwner = key_pair.into();
+    let config = ChainListenerConfig {
+        // Short enough that a few passes happen while the test waits; the production default is
+        // 15 minutes.
+        background_sync_interval_ms: 50,
+        ..ChainListenerConfig::default()
+    };
+    let storage_builder = MemoryStorageBuilder::default();
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
+    let client0 = builder.add_root_chain(0, Amount::ONE).await?;
+    let chain_id0 = client0.chain_id();
+    let genesis_config = GenesisConfig::new_for_testing(&builder);
+    let admin_chain_id = genesis_config.admin_chain_id();
+    let storage = builder.make_storage().await?;
+    let epoch0 = client0.chain_info().await?.epoch;
+
+    let mut context = ClientContext {
+        chain_clients_made: Arc::new(AtomicUsize::new(0)),
+        client: Arc::new(Client::new(
+            environment::Impl {
+                storage: storage.clone(),
+                network: builder.make_node_provider(),
+                signer,
+                wallet: environment::TestWallet::default(),
+            },
+            admin_chain_id,
+            false,
+            [(chain_id0, ListeningMode::FullChain)],
+            format!("Client node for {chain_id0:.8}"),
+            Some(Duration::from_secs(30)),
+            Some(Duration::from_secs(1)),
+            1000,
+            chain_client::Options::test_default(),
+            &linera_core::client::RequestsSchedulerConfig::default(),
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
+        )),
+    };
+    context
+        .update_wallet_for_new_chain(chain_id0, Some(owner), clock.current_time(), epoch0)
+        .await?;
+    let passes = context.chain_clients_made.clone();
+
+    let context = Arc::new(Mutex::new(context));
+    let cancellation_token = CancellationToken::new();
+    let child_token = cancellation_token.child_token();
+    let chain_listener = ChainListener::new(
+        config,
+        context,
+        storage,
+        child_token,
+        tokio::sync::mpsc::unbounded_channel().1,
+        true, // the point of this test
+    )
+    .run()
+    .await
+    .unwrap();
+    let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
+
+    // Assert on GROWTH, not on a total: startup makes several chain clients on its own, so any
+    // fixed threshold is reached without the loop ever repeating. Let startup settle, then
+    // require the count to keep climbing — only a repeating loop can do that.
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let baseline = passes.load(Ordering::Relaxed);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let made = passes.load(Ordering::Relaxed);
+        if made >= baseline + 2 {
+            break;
+        }
+        anyhow::ensure!(
+            tokio::time::Instant::now() < deadline,
+            "background sync did not repeat: {made} chain clients made, still at the {baseline} \
+             from startup",
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+
+    cancellation_token.cancel();
+    handle.await;
     Ok(())
 }
 
