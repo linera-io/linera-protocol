@@ -301,6 +301,7 @@ impl Serialize for Block {
             state_hash: self.header.state_hash,
             previous_block_hash: self.header.previous_block_hash,
             authenticated_owner: self.header.authenticated_owner,
+            previous_checkpoint: self.header.previous_checkpoint,
         };
         state.serialize_field("header", &header)?;
         state.serialize_field("body", &self.body)?;
@@ -339,6 +340,7 @@ impl<'de> Deserialize<'de> for Block {
             state_hash: inner.header.state_hash,
             previous_block_hash: inner.header.previous_block_hash,
             authenticated_owner: inner.header.authenticated_owner,
+            previous_checkpoint: inner.header.previous_checkpoint,
             transactions_hash,
             messages_hash,
             previous_message_blocks_hash,
@@ -390,6 +392,12 @@ pub struct BlockHeader {
     pub previous_message_blocks_hash: CryptoHash,
     /// Cryptographic hash of the lookup table for previous blocks publishing events.
     pub previous_event_blocks_hash: CryptoHash,
+    /// The height of the most recent checkpoint block strictly below this one, if any.
+    ///
+    /// A block that is itself a checkpoint points at the one before it, so a reader takes the
+    /// latest checkpoint at or below a block from this field, or from the block itself when
+    /// [`BlockBody::starts_with_checkpoint`].
+    pub previous_checkpoint: Option<BlockHeight>,
     /// Cryptographic hash of all the oracle responses in the block.
     pub oracle_responses_hash: CryptoHash,
     /// Cryptographic hash of all the events in the block.
@@ -485,6 +493,7 @@ impl Block {
             state_hash: outcome.state_hash,
             previous_block_hash: block.previous_block_hash,
             authenticated_owner: block.authenticated_owner,
+            previous_checkpoint: outcome.previous_checkpoint,
             transactions_hash,
             messages_hash,
             previous_message_blocks_hash,
@@ -677,6 +686,7 @@ impl Block {
             messages,
             previous_message_blocks,
             previous_event_blocks,
+            previous_checkpoint,
             oracle_responses,
             events,
             blobs,
@@ -686,6 +696,7 @@ impl Block {
             && self.body.messages == *messages
             && self.body.previous_message_blocks == *previous_message_blocks
             && self.body.previous_event_blocks == *previous_event_blocks
+            && self.header.previous_checkpoint == *previous_checkpoint
             && self.body.oracle_responses == *oracle_responses
             && self.body.events == *events
             && self.body.blobs == *blobs
@@ -708,6 +719,7 @@ impl Block {
             messages: self.body.messages,
             previous_message_blocks: self.body.previous_message_blocks,
             previous_event_blocks: self.body.previous_event_blocks,
+            previous_checkpoint: self.header.previous_checkpoint,
             oracle_responses: self.body.oracle_responses,
             events: self.body.events,
             blobs: self.body.blobs,
@@ -797,6 +809,7 @@ struct SerializedHeader {
     state_hash: CryptoHash,
     previous_block_hash: Option<CryptoHash>,
     authenticated_owner: Option<AccountOwner>,
+    previous_checkpoint: Option<BlockHeight>,
 }
 
 mod hashing {
