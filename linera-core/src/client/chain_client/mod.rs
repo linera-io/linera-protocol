@@ -132,6 +132,9 @@ pub struct Options {
     /// Maximum number of sender certificates we try to download and receive in one go
     /// when syncing sender chains.
     pub sender_certificate_download_batch_size: usize,
+    /// Number of full received-log pages a download may fetch back-to-back before it starts
+    /// pausing between pages. Set to 0 to pace from the first page.
+    pub received_log_pages_before_pacing: usize,
     /// Maximum number of certificate batches downloaded concurrently during chain sync.
     pub max_concurrent_batch_downloads: usize,
     /// Maximum number of tasks that can be joined concurrently using buffer_unordered.
@@ -262,6 +265,7 @@ impl Options {
         use super::{
             DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
             DEFAULT_MAX_CONCURRENT_BATCH_DOWNLOADS, DEFAULT_MAX_EVENT_STREAM_QUERIES,
+            DEFAULT_RECEIVED_LOG_PAGES_BEFORE_PACING,
             DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
         };
         use crate::DEFAULT_QUORUM_GRACE_PERIOD;
@@ -279,6 +283,7 @@ impl Options {
             certificate_download_batch_size: DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
             certificate_upload_batch_size: DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
             sender_certificate_download_batch_size: DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+            received_log_pages_before_pacing: DEFAULT_RECEIVED_LOG_PAGES_BEFORE_PACING,
             max_concurrent_batch_downloads: DEFAULT_MAX_CONCURRENT_BATCH_DOWNLOADS,
             max_joined_tasks: 100,
             allow_fast_blocks: false,
