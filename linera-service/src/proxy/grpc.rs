@@ -554,14 +554,18 @@ where
     /// Pre-configures the public server with no services attached.
     /// If a certificate and key are defined, creates a TLS server.
     fn public_server(&self) -> Result<Server> {
+        // Without this, `hyper`'s fixed defaults apply: a 1 MiB connection window that is
+        // also the per-stream window, so one large upload can consume a client's whole
+        // connection budget and stall its other requests.
+        let builder = || Server::builder().http2_adaptive_window(Some(true));
         match self.0.tls {
             TlsConfig::Tls => {
                 use linera_rpc::{CERT_PEM, KEY_PEM};
                 let identity = Identity::from_pem(CERT_PEM, KEY_PEM);
                 let tls_config = ServerTlsConfig::new().identity(identity);
-                Ok(Server::builder().tls_config(tls_config)?)
+                Ok(builder().tls_config(tls_config)?)
             }
-            TlsConfig::ClearText => Ok(Server::builder()),
+            TlsConfig::ClearText => Ok(builder()),
         }
     }
 

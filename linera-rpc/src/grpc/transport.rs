@@ -43,7 +43,12 @@ cfg_if::cfg_if! {
                 .tcp_keepalive(Some(std::time::Duration::from_secs(60)))
                 .http2_keep_alive_interval(std::time::Duration::from_secs(30))
                 .keep_alive_timeout(std::time::Duration::from_secs(10))
-                .keep_alive_while_idle(true);
+                .keep_alive_while_idle(true)
+                // Without this, `hyper`'s fixed defaults apply: a 2 MiB stream window and a
+                // 5 MiB connection window shared by every concurrent request to the
+                // validator. Since responses can be up to `GRPC_MAX_MESSAGE_SIZE`, that caps
+                // a download at roughly the window size per round trip.
+                .http2_adaptive_window(true);
 
             if let Some(timeout) = options.connect_timeout {
                 endpoint = endpoint.connect_timeout(timeout);
