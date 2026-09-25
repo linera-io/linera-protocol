@@ -9,6 +9,9 @@ pub static VERSION_INFO: VersionInfo = include!(env!("LINERA_VERSION_STATIC_PATH
 
 use crate::serde_pretty::Pretty;
 
+/// Shown in place of an API hash that could not be computed.
+pub const UNKNOWN_HASH: &str = "unknown";
+
 impl std::fmt::Display for VersionInfo {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
@@ -22,9 +25,9 @@ impl std::fmt::Display for VersionInfo {
             ",
             repo = env!("CARGO_PKG_REPOSITORY"),
             crate_version = self.crate_version,
-            rpc_hash = self.rpc_hash,
-            graphql_hash = self.graphql_hash,
-            wit_hash = self.wit_hash,
+            rpc_hash = self.rpc_hash.as_deref().unwrap_or(UNKNOWN_HASH),
+            graphql_hash = self.graphql_hash.as_deref().unwrap_or(UNKNOWN_HASH),
+            wit_hash = self.wit_hash.as_deref().unwrap_or(UNKNOWN_HASH),
             git_commit = self.git_commit,
             git_dirty = if self.git_dirty { " (dirty)" } else { "" }
         )
@@ -79,11 +82,19 @@ impl VersionInfo {
     /// Note that this relation _is not_ symmetric.
     /// It also may give false negatives.
     pub fn is_compatible_with(&self, other: &VersionInfo) -> bool {
-        self.api_hashes() == other.api_hashes()
+        let api_hashes = self.api_hashes();
+        api_hashes.are_known() && api_hashes == other.api_hashes()
             || self
                 .crate_version
                 .value
                 .is_compatible_with(&other.crate_version.value)
+    }
+}
+
+impl ApiHashes {
+    /// Whether every hash was computed.
+    pub fn are_known(&self) -> bool {
+        self.rpc.is_some() && self.graphql.is_some() && self.wit.is_some()
     }
 }
 

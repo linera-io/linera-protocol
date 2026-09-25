@@ -118,13 +118,31 @@ impl ValidatorQueryResults {
                     println!("Linera protocol: v{}", version_info.crate_version);
                 }
                 if ref_version.is_none_or(|ref_v| ref_v.rpc_hash != version_info.rpc_hash) {
-                    println!("RPC API hash: {}", version_info.rpc_hash);
+                    println!(
+                        "RPC API hash: {}",
+                        version_info
+                            .rpc_hash
+                            .as_deref()
+                            .unwrap_or(linera_version::UNKNOWN_HASH)
+                    );
                 }
                 if ref_version.is_none_or(|ref_v| ref_v.graphql_hash != version_info.graphql_hash) {
-                    println!("GraphQL API hash: {}", version_info.graphql_hash);
+                    println!(
+                        "GraphQL API hash: {}",
+                        version_info
+                            .graphql_hash
+                            .as_deref()
+                            .unwrap_or(linera_version::UNKNOWN_HASH)
+                    );
                 }
                 if ref_version.is_none_or(|ref_v| ref_v.wit_hash != version_info.wit_hash) {
-                    println!("WIT API hash: {}", version_info.wit_hash);
+                    println!(
+                        "WIT API hash: {}",
+                        version_info
+                            .wit_hash
+                            .as_deref()
+                            .unwrap_or(linera_version::UNKNOWN_HASH)
+                    );
                 }
                 if ref_version.is_none_or(|ref_v| {
                     (&ref_v.git_commit, ref_v.git_dirty)
