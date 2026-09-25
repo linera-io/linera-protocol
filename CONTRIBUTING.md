@@ -144,16 +144,23 @@ example `Block`, `Blob`, `ConfirmedBlockCertificate` — should be cached and
 passed around as `linera_cache::Arc<T>` (re-exported as `linera_storage::Arc`).
 
 `linera_cache::Arc<T>` is a newtype over `std::sync::Arc<T>` with **no public
-constructor**: the only way to obtain one is through `ValueCache::insert`,
-`ValueCache::insert_hashed`, or `ValueCache::get`. This makes the
-"one allocation per content" invariant a compile-time guarantee rather than a
-convention. Concretely:
+constructor**: the only way to obtain one is through `ValueCache::intern`,
+`ValueCache::insert`, `ValueCache::insert_hashed`, or `ValueCache::get`. This
+makes the "one allocation per content" invariant a compile-time guarantee rather
+than a convention.
+
+Which one to use depends on whether the value is in storage. `insert` and
+`insert_hashed` also record the value in the bounded cache, which is that cache's
+record of what storage holds and is what `ValueCache::is_stored` answers from —
+so use them only after reading the value from storage or confirming a write.
+Otherwise use `intern`, which shares the allocation and claims nothing.
+Concretely:
 
 - For freshly-constructed `ConfirmedBlockCertificate`s (e.g. from network or
-  proposal flows), call `Storage::cache_certificate`.
+  proposal flows), call `Storage::intern_certificate`.
 - For freshly-constructed `ConfirmedBlock`s, call
-  `Storage::cache_confirmed_block`.
-- For freshly-constructed `Blob`s, call `Storage::cache_blob`.
+  `Storage::intern_confirmed_block`.
+- For freshly-constructed `Blob`s, call `Storage::intern_blob`.
 - For values being re-inserted from a borrowed reference, use
   `ValueCache::insert_hashed`.
 

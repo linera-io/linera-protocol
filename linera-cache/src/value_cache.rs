@@ -108,13 +108,56 @@ where
         self.cache.is_empty()
     }
 
-    /// Inserts a value into the cache, returning the canonical [`crate::Arc`].
+    /// Records `value` in the bounded cache, returning the canonical [`crate::Arc`].
     ///
-    /// The value is wrapped in `Arc` internally. If a live `Arc` for this key
-    /// already exists (held by another consumer), the existing allocation is
-    /// reused and the new value is dropped.
+    /// The bounded cache is what [`Self::is_stored`] answers from. **In a cache whose
+    /// `is_stored` is relied on as a durability oracle, call this only after the value has
+    /// been read from storage or a write has been confirmed** — inserting an unwritten
+    /// value there makes `is_stored` wrong and can cause a write to be skipped that was
+    /// never performed. Not every cache is used that way: a cache that deliberately serves
+    /// values before they are persisted may insert freely, and simply must not have
+    /// `is_stored` used on it.
+    ///
+    /// To share an allocation without entering the bounded cache at all, use
+    /// [`Self::intern`].
+    ///
+    /// If a live `Arc` for this key already exists, that allocation is reused and the
+    /// passed-in `value` is dropped.
     pub fn insert(&self, key: &K, value: V) -> crate::Arc<V> {
-        self.dedup_insert(key, crate::Arc(Arc::new(value)))
+        let canonical_arc = self.canonicalize(key, crate::Arc(Arc::new(value)));
+        self.cache.insert(key.clone(), canonical_arc.clone());
+        canonical_arc
+    }
+
+    /// Returns the canonical [`crate::Arc`] for `value` without claiming it is in storage.
+    ///
+    /// This is interning in the usual sense: collapse equal content to a single shared
+    /// allocation, so that N holders of the same value share one `Arc` rather than N
+    /// copies. It is a memory optimization and says nothing about persistence — use it
+    /// for values that may not have been written, such as blobs belonging to a proposed
+    /// block, or certificates just downloaded from a validator.
+    ///
+    /// The value becomes reachable via [`Self::get`] and [`Self::contains`] for as long as
+    /// an `Arc` to it is alive, but never via [`Self::is_stored`].
+    pub fn intern(&self, key: &K, value: V) -> crate::Arc<V> {
+        self.canonicalize(key, crate::Arc(Arc::new(value)))
+    }
+
+    /// Returns `true` if this key is in the bounded cache.
+    ///
+    /// [`Self::intern`] never puts anything here, so this is only ever true of a value that
+    /// went through [`Self::insert`] or [`Self::insert_hashed`]. **Reading it as "this is in
+    /// storage" is therefore a property of the individual cache, not of `ValueCache`:** it
+    /// holds only where every insert site for that cache is known to be durable.
+    ///
+    /// It holds for `linera_storage`'s blob cache, which is what makes eliding a blob write
+    /// on a hit sound. It deliberately does **not** hold for the chain worker's
+    /// `block_values`, which caches blocks it has voted on but not yet persisted.
+    ///
+    /// `false` means "not known" — the entry may have been evicted, or only interned — so it
+    /// is safe to use to *skip* work but never to conclude that a value is absent.
+    pub fn is_stored(&self, key: &K) -> bool {
+        self.cache.peek(key).is_some()
     }
 
     /// Removes a value from the bounded cache.
@@ -139,14 +182,14 @@ where
             return self.track_cache_usage(Some(arc));
         }
 
-        // Tier 2: weak index (catches evicted-but-still-held entries)
+        // Tier 2: weak index (catches evicted-but-still-held entries). Deliberately not
+        // promoted into the bounded cache: the weak index also holds interned values that
+        // may never have been written, and promoting one would make `is_stored` claim it
+        // is in storage.
         let guard = self.weak_index.guard();
         if let Some(weak) = self.weak_index.get(key, &guard) {
             if let Some(arc) = weak.upgrade() {
-                let arc = crate::Arc(arc);
-                // Re-insert into bounded cache for future fast lookups
-                self.cache.insert(key.clone(), arc.clone());
-                return self.track_cache_usage(Some(arc));
+                return self.track_cache_usage(Some(crate::Arc(arc)));
             }
         }
 
@@ -209,7 +252,10 @@ where
     /// Core dedup logic: atomically checks the weak index for an existing
     /// live allocation. If found, reuses it. Otherwise inserts the new Arc.
     /// Returns the canonical `Arc`.
-    fn dedup_insert(&self, key: &K, new_arc: crate::Arc<V>) -> crate::Arc<V> {
+    ///
+    /// Touches only the weak index. The bounded cache is the record of what is
+    /// known to be in storage and is populated exclusively by [`Self::insert`].
+    fn canonicalize(&self, key: &K, new_arc: crate::Arc<V>) -> crate::Arc<V> {
         let guard = self.weak_index.guard();
         let weak = Arc::downgrade(&new_arc.0);
 
@@ -225,14 +271,11 @@ where
             &guard,
         );
 
-        let canonical_arc = match result {
+        match result {
             Compute::Inserted(..) | Compute::Updated { .. } => new_arc,
             Compute::Aborted(existing_arc) => crate::Arc(existing_arc),
             _ => unreachable!(),
-        };
-
-        self.cache.insert(key.clone(), canonical_arc.clone());
-        canonical_arc
+        }
     }
 
     fn track_cache_usage(&self, maybe_value: Option<crate::Arc<V>>) -> Option<crate::Arc<V>> {
@@ -258,6 +301,7 @@ impl<V: Clone + Send + Sync + 'static> ValueCache<CryptoHash, V> {
     ///
     /// The `value` is wrapped in a [`Cow`] so that it is only cloned if it
     /// needs to be inserted in the cache.
+    /// Carries the same durability requirement as [`ValueCache::insert`].
     pub fn insert_hashed<T>(&self, value: Cow<Hashed<T>>) -> crate::Arc<V>
     where
         T: Clone,
@@ -278,7 +322,10 @@ impl<V: Clone + Send + Sync + 'static> ValueCache<CryptoHash, V> {
             }
         }
         drop(guard);
-        self.dedup_insert(&hash, crate::Arc(Arc::new(value.into_owned().into())))
+        let canonical_arc =
+            self.canonicalize(&hash, crate::Arc(Arc::new(value.into_owned().into())));
+        self.cache.insert(hash, canonical_arc.clone());
+        canonical_arc
     }
 
     /// Inserts multiple values constructed from [`Hashed<T>`]s into the cache.
@@ -585,5 +632,66 @@ mod tests {
 
         // Key 1 still findable (we hold an Arc)
         assert!(cache.contains(&1));
+    }
+}
+
+#[cfg(test)]
+mod durability_tests {
+    use super::{ValueCache, DEFAULT_CLEANUP_INTERVAL_SECS};
+
+    fn cache() -> ValueCache<u64, String> {
+        ValueCache::new("durability_test", 10, DEFAULT_CLEANUP_INTERVAL_SECS)
+    }
+
+    #[tokio::test]
+    async fn insert_marks_the_value_as_stored() {
+        let cache = cache();
+        cache.insert(&1, "a".to_owned());
+        assert!(cache.is_stored(&1));
+    }
+
+    #[tokio::test]
+    async fn intern_does_not_mark_the_value_as_stored() {
+        let cache = cache();
+        let _held = cache.intern(&1, "a".to_owned());
+        assert!(!cache.is_stored(&1));
+    }
+
+    #[tokio::test]
+    async fn interned_values_are_deduplicated_and_readable() {
+        let cache = cache();
+        let first = cache.intern(&1, "a".to_owned());
+        let second = cache.intern(&1, "a".to_owned());
+        assert!(std::sync::Arc::ptr_eq(&first.0, &second.0));
+        assert!(cache.get(&1).is_some());
+        assert!(cache.contains(&1));
+        assert!(!cache.is_stored(&1));
+    }
+
+    #[tokio::test]
+    async fn reading_an_interned_value_does_not_make_it_look_stored() {
+        let cache = cache();
+        let _held = cache.intern(&1, "a".to_owned());
+        assert!(cache.get(&1).is_some());
+        assert!(
+            !cache.is_stored(&1),
+            "a weak-index hit must not be promoted into the stored set"
+        );
+    }
+
+    #[tokio::test]
+    async fn insert_after_intern_marks_the_value_as_stored() {
+        let cache = cache();
+        let _held = cache.intern(&1, "a".to_owned());
+        assert!(!cache.is_stored(&1));
+        cache.insert(&1, "a".to_owned());
+        assert!(cache.is_stored(&1));
+    }
+
+    #[tokio::test]
+    async fn is_stored_is_false_for_unknown_keys() {
+        let cache = cache();
+        cache.insert(&1, "a".to_owned());
+        assert!(!cache.is_stored(&2));
     }
 }
