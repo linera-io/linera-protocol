@@ -663,6 +663,7 @@ where
         bundle: MessageBundle,
         local_time: Timestamp,
         add_to_received_log: bool,
+        allow_sparse_catchup: bool,
     ) -> Result<(), ChainError> {
         assert!(!bundle.messages.is_empty());
         let chain_id = self.chain_id();
@@ -691,7 +692,7 @@ where
 
         // Process the inbox bundle and update the inbox state.
         let newly_added = inbox
-            .add_bundle(bundle)
+            .add_bundle(bundle, allow_sparse_catchup)
             .await
             .map_err(|error| match error {
                 InboxError::ViewError(error) => ChainError::ViewError(error),
@@ -1333,7 +1334,9 @@ where
             self.block_zero_executed_at.set(local_time);
         }
         self.execution_state_hash.set(Some(block.header.state_hash));
-        let recipients = self.process_outgoing_messages(block, tracked).await?;
+        let recipients = self
+            .process_outgoing_messages(block, tracked, false)
+            .await?;
 
         for recipient in recipients {
             self.previous_message_blocks
@@ -1368,6 +1371,7 @@ where
         &mut self,
         block: &ConfirmedBlock,
         tracked: Option<&ChainIdSet>,
+        allow_sparse_catchup: bool,
     ) -> Result<BTreeSet<StreamId>, ChainError> {
         let hash = block.inner().hash();
         let block = block.inner().inner();
@@ -1375,7 +1379,8 @@ where
         if height < self.tip_state.get().next_block_height {
             return Ok(BTreeSet::new());
         }
-        self.process_outgoing_messages(block, tracked).await?;
+        self.process_outgoing_messages(block, tracked, allow_sparse_catchup)
+            .await?;
         let updated_streams = self.process_emitted_events(block).await?;
         self.preprocessed_blocks.insert(&height, hash)?;
         Ok(updated_streams)
@@ -1496,6 +1501,7 @@ where
         &mut self,
         block: &Block,
         tracked: Option<&ChainIdSet>,
+        allow_sparse_catchup: bool,
     ) -> Result<Vec<ChainId>, ChainError> {
         // Record the messages of the execution. Messages are understood within an
         // application.
@@ -1559,14 +1565,19 @@ where
                         // We have no previously processed block in the outbox, but we are
                         // expecting one - this could be due to an empty outbox having been pruned.
                         // Only process the outbox if the height of the previous message block is
-                        // lower than the tip
-                        if *prev_msg_block_height >= next_height {
+                        // lower than the tip.
+                        //
+                        // Under sparse catch-up we schedule anyway: the recipient may already have
+                        // consumed past this predecessor, and only the recipient can tell. A
+                        // recipient that has *not* answers with `GapDetected`, whose `RevertConfirm`
+                        // repairs this outbox.
+                        if *prev_msg_block_height >= next_height && !allow_sparse_catchup {
                             continue;
                         }
                     }
                     (Some(ref prev_hash), Some((prev_msg_block_hash, _))) => {
-                        // Only process the outbox if the hashes match.
-                        if prev_hash != prev_msg_block_hash {
+                        // Only process the outbox if the hashes match. Same exception as above.
+                        if prev_hash != prev_msg_block_hash && !allow_sparse_catchup {
                             continue;
                         }
                     }
