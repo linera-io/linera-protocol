@@ -11,9 +11,14 @@
 //! This module is about where that knowledge comes from. The results here are what let the rest of
 //! the specification induct on epochs at all.
 //!
+//! [`goals`] states what committee *revocation* is meant to achieve and does not yet — the part of
+//! reconfiguration that is designed but not built.
+//!
 //! [`Epoch`]: linera_base::data_types::Epoch
 //! [`AdminOperation::CreateCommittee`]: linera_execution::system::AdminOperation::CreateCommittee
 //! [`AdminOperation::RemoveCommittee`]: linera_execution::system::AdminOperation::RemoveCommittee
+
+pub mod goals;
 
 use crate::manager::proof::model::CorrectValidator;
 
