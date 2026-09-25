@@ -232,13 +232,13 @@ Client implementation and command-line tool for the Linera blockchain
   Default value: `5000`
 * `--cache-ttl-ms <CACHE_TTL_MS>` — Time-to-live for cached responses in milliseconds
 
-  Default value: `2000`
+  Default value: `30000`
 * `--cache-max-size <CACHE_MAX_SIZE>` — Maximum number of entries in the cache
 
   Default value: `1000`
 * `--max-request-ttl-ms <MAX_REQUEST_TTL_MS>` — Maximum latency for an in-flight request before we stop deduplicating it (in milliseconds)
 
-  Default value: `200`
+  Default value: `5000`
 * `--alpha <ALPHA>` — Smoothing factor for Exponential Moving Averages (0 < alpha < 1). Higher values give more weight to recent observations. Typical values are between 0.01 and 0.5. A value of 0.1 means that 10% of the new observation is considered and 90% of the previous average is retained
 
   Default value: `0.1`
