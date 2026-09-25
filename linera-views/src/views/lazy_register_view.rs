@@ -300,3 +300,9 @@ mod graphql {
         }
     }
 }
+
+impl<C, T> crate::views::layout::DescribeLayout for LazyRegisterView<C, T> {
+    fn layout() -> crate::views::layout::ViewLayout {
+        crate::views::layout::ViewLayout::value::<T>()
+    }
+}

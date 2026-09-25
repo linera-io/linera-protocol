@@ -38,6 +38,9 @@ pub mod set_view;
 
 mod collection_entry;
 
+/// A description of the keys a view occupies.
+pub mod layout;
+
 /// The `CollectionView` implements a map structure whose keys are ordered and the values are views.
 pub mod collection_view;
 

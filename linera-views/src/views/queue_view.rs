@@ -545,3 +545,24 @@ mod graphql {
         }
     }
 }
+
+impl<C, T> crate::views::layout::DescribeLayout for QueueView<C, T> {
+    fn layout() -> crate::views::layout::ViewLayout {
+        use crate::views::layout::{TaggedArm, ValueFormat, ViewLayout};
+        ViewLayout::Tagged(vec![
+            TaggedArm {
+                tag: KeyTag::Store as u8,
+                name: "Store",
+                layout: ViewLayout::Value(ValueFormat::Bcs { type_name: "Range" }),
+            },
+            TaggedArm {
+                tag: KeyTag::Index as u8,
+                name: "Index",
+                layout: ViewLayout::Indexed {
+                    index: Some("u32"),
+                    layout: Box::new(ViewLayout::value::<T>()),
+                },
+            },
+        ])
+    }
+}

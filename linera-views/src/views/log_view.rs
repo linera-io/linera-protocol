@@ -473,3 +473,24 @@ mod graphql {
         }
     }
 }
+
+impl<C, T> crate::views::layout::DescribeLayout for LogView<C, T> {
+    fn layout() -> crate::views::layout::ViewLayout {
+        use crate::views::layout::{TaggedArm, ViewLayout};
+        ViewLayout::Tagged(vec![
+            TaggedArm {
+                tag: KeyTag::Count as u8,
+                name: "Count",
+                layout: ViewLayout::value::<u32>(),
+            },
+            TaggedArm {
+                tag: KeyTag::Index as u8,
+                name: "Index",
+                layout: ViewLayout::Indexed {
+                    index: Some("u32"),
+                    layout: Box::new(ViewLayout::value::<T>()),
+                },
+            },
+        ])
+    }
+}

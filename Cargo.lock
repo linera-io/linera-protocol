@@ -6045,6 +6045,7 @@ dependencies = [
  "gungraun",
  "hex",
  "indexed-db",
+ "insta",
  "itertools 0.14.0",
  "linera-base",
  "linera-views",

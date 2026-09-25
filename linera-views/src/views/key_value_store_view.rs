@@ -1180,3 +1180,27 @@ impl<C: Context> ViewContainer<C> {
         Ok(Self { view })
     }
 }
+
+impl<C> crate::views::layout::DescribeLayout for KeyValueStoreView<C> {
+    fn layout() -> crate::views::layout::ViewLayout {
+        use crate::views::layout::{TaggedArm, ValueFormat, ViewLayout};
+        ViewLayout::Tagged(vec![
+            TaggedArm {
+                tag: KeyTag::Index as u8,
+                name: "Index",
+                // The keys and the values below this point belong to whoever writes into the
+                // store, so nothing here describes them.
+                layout: ViewLayout::Opaque {
+                    description: "keys and values chosen by the caller",
+                },
+            },
+            TaggedArm {
+                tag: KeyTag::Hash as u8,
+                name: "Hash",
+                layout: ViewLayout::Value(ValueFormat::Bcs {
+                    type_name: "HasherOutput",
+                }),
+            },
+        ])
+    }
+}
