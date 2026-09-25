@@ -15,34 +15,28 @@ use std::{
     },
 };
 
-/// An atomically-updatable timestamp backed by microseconds since the Unix epoch.
+/// An atomically-updatable [`Timestamp`], read and written without the chain worker's lock.
 ///
-/// This wraps the raw `AtomicU64` microsecond encoding so that call sites work
-/// exclusively with [`Duration`] and never see the underlying representation.
+/// The times stored here come from the storage clock, the same one the keep-alive task
+/// sleeps on, so that the two agree even when that clock is simulated.
 pub(crate) struct AtomicTimestamp(AtomicU64);
 
 impl AtomicTimestamp {
-    /// Creates a new `AtomicTimestamp` set to the current time.
-    pub(crate) fn now() -> Self {
-        Self(AtomicU64::new(Self::current_micros()))
+    /// Creates a new `AtomicTimestamp` set to the given time.
+    pub(crate) fn new(time: Timestamp) -> Self {
+        Self(AtomicU64::new(time.micros()))
     }
 
-    /// Updates the stored timestamp to the current time.
-    pub(crate) fn store_now(&self) {
-        self.0.store(Self::current_micros(), Ordering::Relaxed);
+    /// Updates the stored timestamp.
+    pub(crate) fn store(&self, time: Timestamp) {
+        self.0.store(time.micros(), Ordering::Relaxed);
     }
 
-    /// Returns how long has passed since the stored timestamp.
-    pub(crate) fn elapsed(&self) -> Duration {
+    /// Returns how much of the clock's time has passed between the stored timestamp and
+    /// `now`, or zero if the clock has since moved backwards.
+    pub(crate) fn elapsed_until(&self, now: Timestamp) -> Duration {
         let last = self.0.load(Ordering::Relaxed);
-        let now = Self::current_micros();
-        Duration::from_micros(now.saturating_sub(last))
-    }
-
-    fn current_micros() -> u64 {
-        linera_base::time::SystemTime::now()
-            .duration_since(linera_base::time::UNIX_EPOCH)
-            .map_or(0, |d| u64::try_from(d.as_micros()).unwrap_or(u64::MAX))
+        Duration::from_micros(now.micros().saturating_sub(last))
     }
 }
 
@@ -52,7 +46,7 @@ use linera_base::{
     time::Duration,
 };
 use linera_execution::{QueryContext, ServiceRuntimeEndpoint, ServiceSyncRuntime};
-use linera_storage::Storage;
+use linera_storage::{Clock as _, Storage};
 use tokio::sync::{OwnedRwLockReadGuard, RwLock};
 
 use super::{config::ChainWorkerConfig, state::ChainWorkerState};
@@ -134,6 +128,7 @@ pub(crate) fn create_chain_worker<S: Storage + Clone + 'static>(
     config: &ChainWorkerConfig,
 ) -> Arc<RwLock<ChainWorkerState<S>>> {
     let last_access = state.last_access_arc();
+    let clock = state.clock().clone();
     let chain_id = state.chain().chain_id();
     let arc = Arc::new(RwLock::new(state));
     let ttl = if is_tracked {
@@ -142,7 +137,7 @@ pub(crate) fn create_chain_worker<S: Storage + Clone + 'static>(
         config.sender_chain_ttl
     };
     if let Some(ttl) = ttl {
-        spawn_keep_alive(chain_id, Arc::clone(&arc), last_access, ttl);
+        spawn_keep_alive(chain_id, Arc::clone(&arc), last_access, ttl, clock);
     }
     arc
 }
@@ -202,15 +197,16 @@ fn spawn_keep_alive<S: Storage + Clone + 'static>(
     mut state: Arc<RwLock<ChainWorkerState<S>>>,
     last_access: Arc<AtomicTimestamp>,
     ttl: Duration,
+    clock: S::Clock,
 ) {
     linera_base::Task::spawn(async move {
         loop {
             while let Some(remaining) = ttl
-                .checked_sub(last_access.elapsed())
+                .checked_sub(last_access.elapsed_until(clock.current_time()))
                 .filter(|remaining| *remaining > Duration::ZERO)
             {
                 // Touched recently — sleep for the remaining time.
-                linera_base::time::timer::sleep(remaining).await;
+                clock.sleep_for(remaining).await;
             }
             // Idle long enough. Drop our strong reference if it's the only one.
             match Arc::try_unwrap(state) {
