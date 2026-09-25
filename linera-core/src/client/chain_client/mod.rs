@@ -1102,6 +1102,7 @@ impl<Env: Environment> ChainClient<Env> {
                     .await
             },
             self.options.quorum_grace_period,
+            self.storage_client().clock(),
         )
         .await?;
         Ok(())
@@ -1154,6 +1155,7 @@ impl<Env: Environment> ChainClient<Env> {
                 })
             },
             self.options.quorum_grace_period,
+            self.storage_client().clock(),
         )
         .await;
 
@@ -2168,6 +2170,7 @@ impl<Env: Environment> ChainClient<Env> {
                 Ok(())
             },
             self.client.options.quorum_grace_period,
+            self.storage_client().clock(),
         )
         .await?;
         self.client
