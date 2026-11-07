@@ -20,6 +20,8 @@ pub type Context = linera_views::context::ViewContext<Parameters, KeyValueStore>
 pub type CustomCollectionView<K, V> =
     linera_views::collection_view::CustomCollectionView<Context, K, V>;
 
+pub type CustomMapView<K, V> = linera_views::map_view::CustomMapView<Context, K, V>;
+
 pub type MapView<K, V> = linera_views::map_view::MapView<Context, K, V>;
 
 pub type QueueView<T> = linera_views::queue_view::QueueView<Context, T>;
@@ -82,9 +84,9 @@ pub struct MatchingEngineState {
     /// the price. The order is from the best one (smallest asked price
     /// by seller) to the worst.
     pub asks: CustomCollectionView<PriceAsk, LevelView>,
-    /// The map with the list of orders giving for each order_id the
-    /// fundamental information on the order (price, nature, account)
-    pub orders: MapView<OrderId, KeyBook>,
+    /// The map with the list of orders giving for each order ID the fundamental information
+    /// (price, nature, account), ordered numerically.
+    pub orders: CustomMapView<OrderId, KeyBook>,
     /// The map giving for each account owner the set of order_id
     /// owned by that owner.
     pub account_info: MapView<AccountOwner, AccountInfo>,
