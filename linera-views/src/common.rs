@@ -303,6 +303,19 @@ impl CustomSerialize for u128 {
     }
 }
 
+impl CustomSerialize for u64 {
+    fn to_custom_bytes(&self) -> Result<Vec<u8>, ViewError> {
+        Ok(self.to_be_bytes().to_vec())
+    }
+
+    fn from_custom_bytes(bytes: &[u8]) -> Result<Self, ViewError> {
+        let bytes = bytes
+            .try_into()
+            .map_err(|_| ViewError::PostLoadValuesError)?;
+        Ok(Self::from_be_bytes(bytes))
+    }
+}
+
 impl CustomSerialize for linera_base::data_types::BlockHeight {
     fn to_custom_bytes(&self) -> Result<Vec<u8>, ViewError> {
         Ok(self.0.to_be_bytes().to_vec())
@@ -385,6 +398,17 @@ mod tests {
             let val_ret2 = u128::from_custom_bytes(&vec2).unwrap();
             assert_eq!(val1, val_ret1);
             assert_eq!(val2, val_ret2);
+        }
+    }
+
+    #[test]
+    fn test_u64_ordering_serialization() {
+        let values = [0, 1, 255, 256, u64::MAX];
+        let serialized = values.map(|value| value.to_custom_bytes().unwrap());
+
+        assert!(serialized.is_sorted());
+        for (value, bytes) in values.into_iter().zip(serialized) {
+            assert_eq!(u64::from_custom_bytes(&bytes).unwrap(), value);
         }
     }
 }

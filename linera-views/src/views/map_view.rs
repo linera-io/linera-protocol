@@ -1862,10 +1862,10 @@ where
     /// # use linera_views::map_view::CustomMapView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut map = CustomMapView::<_, u128, _>::load(context).await.unwrap();
-    /// map.insert(&(34 as u128), String::from("Hello"));
-    /// map.insert(&(37 as u128), String::from("Bonjour"));
-    /// assert_eq!(map.indices().await.unwrap(), vec![34 as u128, 37 as u128]);
+    /// let mut map = CustomMapView::<_, u64, _>::load(context).await.unwrap();
+    /// map.insert(&256, String::from("Hello")).unwrap();
+    /// map.insert(&255, String::from("Bonjour")).unwrap();
+    /// assert_eq!(map.indices().await.unwrap(), vec![255, 256]);
     /// # })
     /// ```
     pub async fn indices(&self) -> Result<Vec<I>, ViewError> {
